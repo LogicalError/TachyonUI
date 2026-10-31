@@ -7,6 +7,8 @@
 #include "gpu_test_harness.h"
 
 #include <gui_core/style/gui_style.h>
+#include <gui_core/style/gui_color_conversions.h>
+#include <gui_core/graphics/gui_renderer.h>
 #include <gui_core/graphics/vulkan/vk_text_atlas_manager.h>
 #include <gui_core/graphics/gui_pixel_snap.h>
 #include <gui_core/graphics/gui_primitive_renderer.h>
@@ -416,6 +418,136 @@ namespace
         for (int y = kY; y < kY + 8; ++y)
             for (int x = kX; x < kX + 8; ++x)
                 EXPECT_LE(redness(PixelAt(ctx, x, y)), limit) << "corner pixel " << x << "," << y << ": " << std::hex << (PixelAt(ctx, x, y) & 0xFFFFFF) << std::dec << " fill " << fill << " border " << border;
+    }
+
+    // ---- Blending between two states ----
+
+    // A plain box in one color, in every state.
+    tachyon::VisualBoxStyleIndex PlainBox(tachyon::StyleManager& sm, tachyon::color4b color)
+    {
+        tachyon::Style style{};
+        for (int i = 0; i < tachyon::Style::kStateCount; ++i)
+        {
+            style.states[i].backgroundColor = tachyon::ColorStyle::Create(color);
+            style.states[i].SetBorderColor(tachyon::ColorStyle::Create(color));
+        }
+        return sm.Register(style).visualBoxStyleIndex;
+    }
+
+    struct Rgb { float r, g, b; };
+    Rgb Unpack(uint32_t p) { return { float((p >> 16) & 0xFF), float((p >> 8) & 0xFF), float(p & 0xFF) }; }
+
+    // `t` of the way between two colors in Oklab, 0-255; OklabMid half way. SrgbMid half
+    // way in sRGB.
+    Rgb OklabAt(tachyon::color4b a, tachyon::color4b b, float t)
+    {
+        float l0, a0, b0, l1, a1, b1;
+        tachyon::ColorConvert::RGBtoOklab(a.r / 255.0f, a.g / 255.0f, a.b / 255.0f, l0, a0, b0);
+        tachyon::ColorConvert::RGBtoOklab(b.r / 255.0f, b.g / 255.0f, b.b / 255.0f, l1, a1, b1);
+        auto lerp = [t](float x, float y) { return x + (y - x) * t; };
+        const auto rgb = tachyon::ColorConvert::OklabToRGB(lerp(l0, l1), lerp(a0, a1), lerp(b0, b1));
+        return { rgb[0] * 255.0f, rgb[1] * 255.0f, rgb[2] * 255.0f };
+    }
+    Rgb OklabMid(tachyon::color4b a, tachyon::color4b b) { return OklabAt(a, b, 0.5f); }
+    Rgb SrgbMid(tachyon::color4b a, tachyon::color4b b)
+    {
+        return { 0.5f * (a.r + b.r), 0.5f * (a.g + b.g), 0.5f * (a.b + b.b) };
+    }
+    float Distance(Rgb a, Rgb b) { return std::abs(a.r - b.r) + std::abs(a.g - b.g) + std::abs(a.b - b.b); }
+
+    // From blue to red (hues apart) the middle is the Oklab one: about as light and saturated
+    // as the ends, not the darker, greyer sRGB average.
+    TEST_F(GpuReadbackTest, ABlendBetweenHuesIsInOklab)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        const tachyon::color4b blue{ 0x6B, 0x9B, 0xFF, 255 }, red{ 0xEF, 0x6A, 0x6A, 255 };
+        const uint32_t from = tachyon::GUIRenderer::StyleIndex(PlainBox(styleManager, blue), tachyon::ElementState::None);
+        const uint32_t to   = tachyon::GUIRenderer::StyleIndex(PlainBox(styleManager, red),  tachyon::ElementState::None);
+        ASSERT_GT(Distance(OklabMid(blue, red), SrgbMid(blue, red)), 12.0f) << "test setup: the two middles differ";
+
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderBox(tachyon::IntRect{ 20, 20, 80, 40 }, kFullClip, from, to, 0.5f);
+        });
+        const Rgb mid = Unpack(PixelAt(ctx, 60, 40));
+        EXPECT_LT(Distance(mid, OklabMid(blue, red)), 6.0f) << mid.r << "," << mid.g << "," << mid.b;
+
+        // A quarter of the way: nearer the "from" color.
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderBox(tachyon::IntRect{ 20, 20, 80, 40 }, kFullClip, from, to, 0.25f);
+        });
+        const Rgb quarter = Unpack(PixelAt(ctx, 60, 40));
+        EXPECT_LT(Distance(quarter, OklabAt(blue, red, 0.25f)), 6.0f) << quarter.r << "," << quarter.g << "," << quarter.b;
+
+        // The ends are the colors themselves.
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderBox(tachyon::IntRect{ 20, 20, 80, 40 }, kFullClip, from, to, 1.0f);
+        });
+        EXPECT_LT(Distance(Unpack(PixelAt(ctx, 60, 40)), Rgb{ float(red.r), float(red.g), float(red.b) }), 3.0f);
+    }
+
+    // Greys (no hue) and one hue in two strengths blend in sRGB.
+    TEST_F(GpuReadbackTest, ABlendWithinAHueIsInSrgb)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        const std::pair<tachyon::color4b, tachyon::color4b> pairs[] = {
+            { { 0x10, 0x10, 0x10, 255 }, { 0xC0, 0xC0, 0xC0, 255 } },
+            { { 0x1E, 0x2E, 0x50, 255 }, { 0x6B, 0x9B, 0xFF, 255 } },   // one blue, dark and light
+            { { 0x18, 0x18, 0x10, 255 }, { 0x20, 0x40, 0xFF, 255 } },   // a grey, a touch yellow, to blue: hardly a hue to keep
+        };
+        for (const auto& [a, b] : pairs)
+        {
+            ASSERT_GT(Distance(OklabMid(a, b), SrgbMid(a, b)), 6.0f) << "test setup: the two middles differ";
+            const uint32_t from = tachyon::GUIRenderer::StyleIndex(PlainBox(styleManager, a), tachyon::ElementState::None);
+            const uint32_t to   = tachyon::GUIRenderer::StyleIndex(PlainBox(styleManager, b), tachyon::ElementState::None);
+            RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+                r->RenderBox(tachyon::IntRect{ 20, 20, 80, 40 }, kFullClip, from, to, 0.5f);
+            });
+            const Rgb mid = Unpack(PixelAt(ctx, 60, 40));
+            EXPECT_LT(Distance(mid, SrgbMid(a, b)), 4.0f) << mid.r << "," << mid.g << "," << mid.b;
+        }
+    }
+
+    // Fading in from transparent adds no color of the transparent end: half way to blue over
+    // white is blue at half strength over white, not darker.
+    TEST_F(GpuReadbackTest, AFadeFromTransparentAddsNoColor)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        const tachyon::VisualColorStyleIndex white = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 255, 255, 255, 255 }));
+        const tachyon::color4b blue{ 0x6B, 0x9B, 0xFF, 255 };
+        const uint32_t from = tachyon::GUIRenderer::StyleIndex(PlainBox(styleManager, tachyon::color4b{ 0, 0, 0, 0 }), tachyon::ElementState::None);
+        const uint32_t to   = tachyon::GUIRenderer::StyleIndex(PlainBox(styleManager, blue), tachyon::ElementState::None);
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x, kSize.y }, kFullClip, white);
+            r->RenderBox(tachyon::IntRect{ 20, 20, 80, 40 }, kFullClip, from, to, 0.5f);
+        });
+        const Rgb px = Unpack(PixelAt(ctx, 60, 40));
+        const Rgb expected{ 0.5f * (blue.r + 255.0f), 0.5f * (blue.g + 255.0f), 0.5f * (blue.b + 255.0f) };
+        EXPECT_LT(Distance(px, expected), 6.0f) << px.r << "," << px.g << "," << px.b;
+    }
+
+    // A translucent color drawn over a box's background (a swatch) keeps its color: half
+    // red over black is half as bright, not full red.
+    TEST_F(GpuReadbackTest, ATranslucentColorOverrideKeepsItsColor)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        const tachyon::VisualColorStyleIndex black = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 0, 0, 0, 255 }));
+        const tachyon::VisualColorStyleIndex halfRed = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 255, 0, 0, 128 }));
+        const tachyon::VisualBoxStyleIndex box = PlainBox(styleManager, tachyon::color4b{ 0, 0, 0, 0 });
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x, kSize.y }, kFullClip, black);
+            r->RenderBox(tachyon::IntRect{ 20, 20, 80, 40 }, kFullClip, box, halfRed);
+        });
+        const Rgb px = Unpack(PixelAt(ctx, 60, 40));
+        EXPECT_NEAR(px.r, 128.0f, 3.0f);
+        EXPECT_NEAR(px.g, 0.0f, 2.0f);
     }
 
     // A box shadow fades across its edge over the blur: full inside, about half at the

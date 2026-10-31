@@ -110,8 +110,12 @@ void AddPreStyle(inout CurrentStyle currentStyle, float weight, int styleIndex)
     currentStyle.dashOffset   += weight * float(boxStyle.borderDashOffset);
 }
 
-void AddPostStyle(inout CurrentStyle currentStyle, vec2 uv, vec2 sdfUv, vec2 uvsize, float edgeDepth, float weight, int styleIndex, vec4 weights)
+// A state's border and background colors at this fragment, straight (not premultiplied).
+void StateColors(vec2 uv, vec2 sdfUv, vec2 uvsize, float edgeDepth, int styleIndex, vec4 weights,
+                 out vec4 border, out vec4 background)
 {
+    border = vec4(0);
+    background = vec4(0);
     if (styleIndex < 0) return;
 	BoxStyle boxStyle = PushConstants.boxStyleBuffer.boxStyles[styleIndex];
 
@@ -127,15 +131,8 @@ void AddPostStyle(inout CurrentStyle currentStyle, vec2 uv, vec2 sdfUv, vec2 uvs
         edgeColorIndex = (side.x > 0.0)  ? boxStyle.borderColorIndex.y   // right
                                          : boxStyle.borderColorIndex.w;  // left
 
-    // Premultiplied accumulation so a transparent endpoint adds no RGB (a fade from
-    // transparent doesn't pass through its black RGB). Divided back out after the loop.
-    vec4 borderC = getSDFColor(int(edgeColorIndex), uv, uvsize, edgeDepth, inSurface.textureIndex, inSurface.boxSize, weights);
-    currentStyle.borderColor.rgb += weight * borderC.a * borderC.rgb;
-    currentStyle.borderColor.a   += weight * borderC.a;
-
-    vec4 bgC = getSDFColor(int(boxStyle.backgroundColorIndex), uv, uvsize, edgeDepth, inSurface.textureIndex, inSurface.boxSize, weights);
-    currentStyle.backgroundColor.rgb += weight * bgC.a * bgC.rgb;
-    currentStyle.backgroundColor.a   += weight * bgC.a;
+    border     = getSDFColor(int(edgeColorIndex), uv, uvsize, edgeDepth, inSurface.textureIndex, inSurface.boxSize, weights);
+    background = getSDFColor(int(boxStyle.backgroundColorIndex), uv, uvsize, edgeDepth, inSurface.textureIndex, inSurface.boxSize, weights);
 }
 
 void main() 
@@ -229,22 +226,29 @@ void main()
     // Distances are in units of the box's smaller side, so its middle is half a unit deep.
     float edgeDepth = saturate(-outer_distance * 2.0);
 
-    // Blend colors across "from" and "to" states.
+    // Blend colors across "from" and "to" states (BlendStateColor); one state alone as it is.
+    vec4 borders[2], backgrounds[2];
     for (int i = 0; i < 2; i++)
         if (inSurface.blendFactors[i] > 0.0)
-            AddPostStyle(currentStyle, uv, sdfUv, uvsize, edgeDepth, inSurface.blendFactors[i], inSurface.styleIndex[i], weights);
+            StateColors(uv, sdfUv, uvsize, edgeDepth, inSurface.styleIndex[i], weights, borders[i], backgrounds[i]);
+    if (inSurface.blendFactors[0] > 0.0 && inSurface.blendFactors[1] > 0.0)
+    {
+        float t = inSurface.blendFactors[1] / (inSurface.blendFactors[0] + inSurface.blendFactors[1]);
+        currentStyle.borderColor     = BlendStateColor(borders[0], borders[1], t);
+        currentStyle.backgroundColor = BlendStateColor(backgrounds[0], backgrounds[1], t);
+    }
+    else
+    {
+        int only = inSurface.blendFactors[1] > 0.0 ? 1 : 0;
+        currentStyle.borderColor     = borders[only];
+        currentStyle.backgroundColor = backgrounds[only];
+    }
 
     // Per-element ColorStyle override: replaces the box style's background entirely so
     // a swatch element can paint a solid color or a gradient via colorIndex.
     if (inSurface.colorIndex != 0)
         currentStyle.backgroundColor = getSDFColor(inSurface.colorIndex, uv, uvsize, edgeDepth,
                                                    inSurface.textureIndex, inSurface.boxSize, weights);
-
-    // Un-premultiply RGB now that all weighted contributions are summed.
-    if (currentStyle.backgroundColor.a > 1e-5)
-        currentStyle.backgroundColor.rgb /= currentStyle.backgroundColor.a;
-    if (currentStyle.borderColor.a > 1e-5)
-        currentStyle.borderColor.rgb /= currentStyle.borderColor.a;
 
     // Mix border and background. Opaque colors mix in linear light; a translucent one
     // mixes premultiplied in sRGB, the space the result composites in, so where it meets
