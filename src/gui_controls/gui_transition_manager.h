@@ -49,6 +49,7 @@ namespace tachyon
         static constexpr TransitionTiming kRelease  { 0.120f, Easing::EaseOut };
         static constexpr TransitionTiming kFocus    { 0.100f, Easing::EaseOut };
         static constexpr TransitionTiming kToggle   { 0.120f, Easing::EaseInOut }; ///< a switch, check box or radio turning on or off
+        static constexpr TransitionTiming kInvalid  { 0.150f, Easing::EaseOut };   ///< the invalid halo growing in
 
         /// The timing of a change from `fromState` to `toState`. When several states change
         /// at once, the press counts first, then the hover, then the focus.
@@ -68,10 +69,13 @@ namespace tachyon
         void OnStateChange(ID id, ElementState fromState, ElementState toState,
                            TransitionTiming timing, float elapsedSecs);
 
-        /// For an element that animates its Selected flip (ElementFlags::AnimatesSelected), each
-        /// frame it's built: when Selected differs from the frame before, the change runs with
-        /// kToggle. An element that wasn't built the frame before starts without one.
-        void OnSelectedSeen(ID id, ElementState state, float elapsedSecs);
+        /// For an element whose `watched` bits change between frames rather than with input
+        /// (Selected for ElementFlags::AnimatesSelected, Invalid), each frame it's built: when
+        /// one differs from the frame before, the change runs, with kToggle for Selected and
+        /// kInvalid for Invalid. An element that wasn't built the frame before starts without one.
+        void OnStateSeen(ID id, ElementState state, ElementState watched, float elapsedSecs);
+        /// True when OnStateSeen saw the element the frame before or this one.
+        bool IsWatched(ID id) const { return !m_seen.empty() && m_seen.contains(id); }
 
         /// The element's running transition, or nothing when it has none.
         std::optional<Blend> Find(ID id, float elapsedSecs) const;
@@ -81,12 +85,12 @@ namespace tachyon
         TransitionState Resolve(ID id, VisualBoxStyleIndex base,
                                 ElementState currentState, float elapsedSecs) const;
 
-        /// Once a frame, after the build: removes transitions that have ended and forgets the
-        /// Selected of elements that weren't built this frame.
+        /// Once a frame, after the build: removes transitions that have ended and forgets what
+        /// OnStateSeen saw of elements that weren't built this frame.
         void Purge(float elapsedSecs);
 
         /// Removes all active transitions, for instance after a reorder invalidates ID mappings.
-        void Clear() { m_transitions.clear(); m_selected.clear(); }
+        void Clear() { m_transitions.clear(); m_seen.clear(); }
 
         /// Test/debug seam: when disabled, states snap instantly (deterministic rendering).
         /// Disabling drops the active transitions.
@@ -106,14 +110,14 @@ namespace tachyon
             float            startTime; ///< elapsedSecs when this transition started
             TransitionTiming timing;
         };
-        struct SelectedSeen
+        struct Seen
         {
-            bool     selected;
-            uint32_t frame;     ///< the frame it was last built in
+            ElementState state;     ///< the watched bits
+            uint32_t     frame;     ///< the frame it was last built in
         };
 
         std::unordered_map<ID, TransitionEntry> m_transitions;
-        std::unordered_map<ID, SelectedSeen>    m_selected;
+        std::unordered_map<ID, Seen>            m_seen;
         uint32_t m_frame         = 0;
         bool     m_enabled       = true;
         bool     m_reducedMotion = false;

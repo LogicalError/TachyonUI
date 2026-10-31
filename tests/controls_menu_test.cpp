@@ -707,5 +707,14 @@ namespace tachyon
             EXPECT_LT(app.styleManager.GetOpacity(label), 0.0f) << "the row fades its parts";
         }
 
+        // An invalid control's border and halo come from --error and --invalid-halo.
+        TEST_F(ControlsMenuTest, TheThemeSetsHowInvalidThingsLook)
+        {
+            EXPECT_EQ(app.theme.invalidColor, (color4b{ 0xEF, 0x6A, 0x6A, 255 }));
+            EXPECT_EQ(app.theme.invalidHalo.spread, app.styleManager.Px(3));
+            EXPECT_EQ(app.theme.invalidHalo.blur, 0);
+            EXPECT_NE(app.theme.invalidHalo.color, VisualColorStyleIndex::Invalid);
+        }
+
     } // namespace
 } // namespace tachyon

@@ -74,6 +74,7 @@ own timing. Ease-out is `cubic-bezier(0.2, 0, 0, 1)`, ease-in-out is `cubic-bezi
 | Selected (a row) | at once | |
 | A switch, check box or toggle turning on or off | 120 ms | ease-in-out |
 | Disabled | at once | |
+| Invalid (`BeginInvalid`) | the border at once, the halo 150 ms | ease-out |
 
 A change that comes back before the blend has finished (out again during a hover in) carries
 on from what is shown, in the new change's timing. A control part blends its on / off flip

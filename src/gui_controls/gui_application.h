@@ -1034,6 +1034,12 @@ namespace tachyon
         bool BeginDisabled() { guiStateManager.Construction().PushDisabled(); return true; }
         /// Closes BeginDisabled.
         void EndDisabled()   { guiStateManager.Construction().PopDisabled(); }
+        /// Controls emitted in between show that their value isn't accepted: the theme's error
+        /// border (--error) and halo (--invalid-halo) over whatever state they're in. The halo
+        /// grows in over 150 ms.
+        bool BeginInvalid() { guiStateManager.Construction().PushInvalid(); return true; }
+        /// Closes BeginInvalid.
+        void EndInvalid()   { guiStateManager.Construction().PopInvalid(); }
 
         ///@}
 
@@ -2133,6 +2139,7 @@ namespace tachyon
         template<class... A> auto ReorderableGroup(A&&... a) { return Scope<&GUIApplication::EndReorderableGroup>(*this, BeginReorderableGroup(std::forward<A>(a)...)); }
         template<class... A> auto ReorderableItem(A&&... a)  { return Scope<&GUIApplication::EndReorderableItem>(*this, BeginReorderableItem(std::forward<A>(a)...)); }
         template<class... A> auto Disabled(A&&... a)         { return Scope<&GUIApplication::EndDisabled>(*this, BeginDisabled(std::forward<A>(a)...)); }
+        template<class... A> auto Invalid(A&&... a)          { return Scope<&GUIApplication::EndInvalid>(*this, BeginInvalid(std::forward<A>(a)...)); }
         template<class... A> auto Selected(A&&... a)         { return Scope<&GUIApplication::EndSelected>(*this, BeginSelected(std::forward<A>(a)...)); }
         template<class... A> auto Indeterminate(A&&... a)    { return Scope<&GUIApplication::EndIndeterminate>(*this, BeginIndeterminate(std::forward<A>(a)...)); }
         template<class... A> auto DockingContainer(A&&... a) { return Scope<&GUIApplication::EndDockingContainer>(*this, BeginDockingContainer(std::forward<A>(a)...)); }
@@ -2458,6 +2465,13 @@ namespace tachyon
         void OnRender(float elapsedTimeSecs);
         /// The box style's CSS shadows (and the focus ring when `ring`), blended as the box is.
         void RenderBoxShadows(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, bool ring);
+        /// One shadow layer around a box with corner `radius`; nothing for one hidden under it.
+        void RenderShadowLayer(IntRect rectLayout, IntRect clipRectScreen, const VisualShadow& s, float radius);
+        /// An invalid element's error halo, `grown` (0 to 1) of the way in; drawn before its box.
+        void RenderInvalidHalo(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, float grown);
+        /// An invalid element's error border, in its own border widths (at least one pixel) and
+        /// corners; drawn over its box.
+        void RenderInvalidBorder(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, IntRect snappedPx);
         /// The part of a box drawn with `ts` that its opaque background surely covers: inside its
         /// borders and corners, a little in from where it snaps to pixels. Empty when the
         /// background isn't opaque.

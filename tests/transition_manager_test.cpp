@@ -68,6 +68,8 @@ namespace tachyon
             EXPECT_EQ(timing(S::Hover, S::Disabled).duration, 0.0f);
             EXPECT_EQ(timing(S::None, S::Hover | S::Active).duration, 0.0f) << "the press counts over the hover";
             EXPECT_EQ(timing(S::Hover, S::Focused), TransitionManager::kHoverOut) << "the hover counts over the focus";
+            EXPECT_EQ(timing(S::Focused, S::Focused | S::Invalid), TransitionManager::kInvalid) << "the halo grows in";
+            EXPECT_EQ(timing(S::Invalid, S::None).duration, 0.0f) << "and goes at once";
             EXPECT_EQ(TransitionManager::kToggle.easing, Easing::EaseInOut);
             EXPECT_EQ(TransitionManager::kHoverIn.easing, Easing::EaseOut);
         }
@@ -172,9 +174,9 @@ namespace tachyon
             EXPECT_FALSE(transitions.Find(kElement, 0.01f).has_value()) << "the running one ends";
             transitions.OnStateChange(kElement, ElementState::Hover, ElementState::None, 0.02f);
             EXPECT_FALSE(transitions.Find(kElement, 0.02f).has_value());
-            transitions.OnSelectedSeen(kElement, ElementState::None, 0.03f);
+            transitions.OnStateSeen(kElement, ElementState::None, ElementState::Selected, 0.03f);
             transitions.Purge(0.03f);
-            transitions.OnSelectedSeen(kElement, ElementState::Selected, 0.04f);
+            transitions.OnStateSeen(kElement, ElementState::Selected, ElementState::Selected, 0.04f);
             EXPECT_FALSE(transitions.Find(kElement, 0.04f).has_value()) << "a toggle too";
 
             transitions.SetReducedMotion(false);
@@ -187,11 +189,11 @@ namespace tachyon
         TEST(TransitionManager, ASelectedFlipBlendsLikeAToggle)
         {
             TransitionManager transitions;
-            transitions.OnSelectedSeen(kElement, ElementState::Selected, 0.0f);
+            transitions.OnStateSeen(kElement, ElementState::Selected, ElementState::Selected, 0.0f);
             EXPECT_FALSE(transitions.Find(kElement, 0.0f).has_value()) << "first seen";
             transitions.Purge(0.0f);
 
-            transitions.OnSelectedSeen(kElement, ElementState::None, 0.1f);
+            transitions.OnStateSeen(kElement, ElementState::None, ElementState::Selected, 0.1f);
             const auto blend = transitions.Find(kElement, 0.1f + TransitionManager::kToggle.duration / 2);
             ASSERT_TRUE(blend.has_value());
             EXPECT_EQ(blend->fromState, ElementState::Selected);
@@ -199,13 +201,40 @@ namespace tachyon
             EXPECT_NEAR(blend->t, Easing::EaseInOut(0.5f), 1e-4f);
             transitions.Purge(0.1f);
 
-            transitions.OnSelectedSeen(kElement, ElementState::None, 0.12f);
+            transitions.OnStateSeen(kElement, ElementState::None, ElementState::Selected, 0.12f);
             EXPECT_TRUE(transitions.Find(kElement, 0.12f).has_value()) << "same value: carries on";
             transitions.Purge(0.12f);
             transitions.Purge(0.13f);   // a frame it wasn't built
             transitions.Purge(0.5f);
-            transitions.OnSelectedSeen(kElement, ElementState::Selected, 0.5f);
+            transitions.OnStateSeen(kElement, ElementState::Selected, ElementState::Selected, 0.5f);
             EXPECT_FALSE(transitions.Find(kElement, 0.5f).has_value()) << "not built the frame before";
+        }
+
+        // Invalid is watched for every element: turning invalid runs kInvalid, turning valid
+        // ends at once. A Selected flip on an element that doesn't animate it isn't watched.
+        TEST(TransitionManager, AnInvalidFlipGrowsItsHalo)
+        {
+            TransitionManager transitions;
+            transitions.OnStateSeen(kElement, ElementState::Hover, ElementState::Invalid, 0.0f);
+            transitions.Purge(0.0f);
+            transitions.OnStateSeen(kElement, ElementState::Hover | ElementState::Invalid, ElementState::Invalid, 0.1f);
+            const auto blend = transitions.Find(kElement, 0.1f + TransitionManager::kInvalid.duration / 2);
+            ASSERT_TRUE(blend.has_value());
+            EXPECT_EQ(blend->fromState, ElementState::Hover);
+            EXPECT_EQ(blend->toState, ElementState::Hover | ElementState::Invalid);
+            EXPECT_NEAR(blend->t, Easing::EaseOut(0.5f), 1e-4f);
+            EXPECT_TRUE(transitions.IsWatched(kElement));
+            transitions.Purge(0.1f);
+
+            transitions.OnStateSeen(kElement, ElementState::Hover, ElementState::Invalid, 0.12f);
+            EXPECT_FALSE(transitions.Find(kElement, 0.12f).has_value()) << "valid again: at once";
+            transitions.Purge(0.12f);
+
+            transitions.OnStateSeen(kElement, ElementState::Selected, ElementState::Invalid, 0.13f);
+            EXPECT_FALSE(transitions.Find(kElement, 0.13f).has_value()) << "Selected isn't watched here";
+            transitions.Purge(0.13f);
+            transitions.Purge(0.14f);
+            EXPECT_FALSE(transitions.IsWatched(kElement)) << "forgotten once not built";
         }
 
         // ---- In the controls ----
@@ -381,6 +410,43 @@ namespace tachyon
 
             app.SetReducedMotion(std::nullopt);
             EXPECT_FALSE(app.IsReducedMotion()) << "a headless app has no OS setting";
+        }
+        // Inside BeginInvalid every element is invalid; the field's box is watched, so turning
+        // it invalid grows the halo in.
+        TEST_F(ToggleTransitionTest, AFieldTurningInvalidBlends)
+        {
+            std::string text = "abc", after = "def";
+            const ID field = app.idManager.CreateStaticID();
+            const ID next  = app.idManager.CreateStaticID();
+            bool invalid = false;
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    if (invalid) app.BeginInvalid();
+                    app.Field(field, text, TextEditBehavior::None);
+                    if (invalid) app.EndInvalid();
+                    app.Field(next, after, TextEditBehavior::None);
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            frame();
+            EXPECT_EQ(app.guiStateManager.GetCurrentState(field) & ElementState::Invalid, ElementState::None);
+            invalid = true;
+            frame();
+            const ElementRef ref = app.elementStorage.FindElementRefByID(field);
+            ASSERT_TRUE(ref.IsValid());
+            EXPECT_NE(app.elementStorage.GetElementUnsafe(ref).state & ElementState::Invalid, ElementState::None);
+            const ElementRef nextRef = app.elementStorage.FindElementRefByID(next);
+            ASSERT_TRUE(nextRef.IsValid());
+            EXPECT_EQ(app.elementStorage.GetElementUnsafe(nextRef).state & ElementState::Invalid, ElementState::None)
+                << "valid again after EndInvalid";
+            const auto blend = app.transitionManager.Find(field, Now());
+            ASSERT_TRUE(blend.has_value());
+            EXPECT_NE(blend->toState & ElementState::Invalid, ElementState::None);
+            app.AdvanceTime(151);
+            frame();
+            EXPECT_FALSE(app.transitionManager.Find(field, Now()).has_value());
         }
     }
 }
