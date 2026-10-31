@@ -189,6 +189,60 @@ vec4 linearToSrgb(vec4 linear) {
 
 float saturate(float val) { return clamp(val,0.0,1.0); }
 
+// ---- Oklab (perceptual: equal steps look equal) -----------------------------
+vec3 cbrt3(vec3 v) { return sign(v) * pow(abs(v), vec3(1.0 / 3.0)); }
+
+vec3 linearSrgbToOklab(vec3 c)
+{
+    vec3 lms = vec3(0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b,
+                    0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b,
+                    0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b);
+    vec3 l = cbrt3(lms);
+    return vec3(0.2104542553 * l.x + 0.7936177850 * l.y - 0.0040720468 * l.z,
+                1.9779984951 * l.x - 2.4285922050 * l.y + 0.4505937099 * l.z,
+                0.0259040371 * l.x + 0.7827717662 * l.y - 0.8086757660 * l.z);
+}
+
+vec3 oklabToLinearSrgb(vec3 lab)
+{
+    vec3 l = vec3(lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z,
+                  lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z,
+                  lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z);
+    l = l * l * l;
+    return vec3( 4.0767416621 * l.x - 3.3077115913 * l.y + 0.2309699292 * l.z,
+                -1.2684380046 * l.x + 2.6097574011 * l.y - 0.3413193965 * l.z,
+                -0.0041960863 * l.x - 0.7034186147 * l.y + 1.7076147010 * l.z);
+}
+
+// Two colors whose hues differ (both have some chroma, and their hues are more than
+// 20 degrees apart) blend in Oklab.
+const float kHueChroma = 0.03;
+const float kHueCos    = 0.9397; // cos(20 degrees)
+
+// A state's color `t` of the way from `from` to `to`, both straight (not premultiplied)
+// sRGB. Hues that differ blend in Oklab, where the middle keeps the ends' lightness and
+// saturation (in sRGB it goes dark and grey); others blend in sRGB. A transparent end
+// adds no color, only its alpha.
+vec4 BlendStateColor(vec4 from, vec4 to, float t)
+{
+    float alpha = mix(from.a, to.a, t);
+    float wFrom = (1.0 - t) * from.a;
+    float wTo   = t * to.a;
+    if (wFrom + wTo <= 1e-5)
+        return vec4(0.0);
+    vec3 labFrom = linearSrgbToOklab(srgbToLinear(from.rgb));
+    vec3 labTo   = linearSrgbToOklab(srgbToLinear(to.rgb));
+    float cFrom = length(labFrom.yz);
+    float cTo   = length(labTo.yz);
+    bool  hues  = cFrom > kHueChroma && cTo > kHueChroma && dot(labFrom.yz, labTo.yz) < kHueCos * cFrom * cTo;
+    vec3 rgb;
+    if (hues)
+        rgb = linearToSrgb(clamp(oklabToLinearSrgb((wFrom * labFrom + wTo * labTo) / (wFrom + wTo)), 0.0, 1.0));
+    else
+        rgb = (wFrom * from.rgb + wTo * to.rgb) / (wFrom + wTo);
+    return vec4(rgb, alpha);
+}
+
 // A vertex at window pixel `position` of the primitive drawn `order`-th (its transform0.w):
 // the world matrix maps the order to depth, later nearer, and past the depth range all
 // stay at the nearest depth.
