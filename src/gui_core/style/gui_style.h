@@ -47,6 +47,9 @@ namespace tachyon
         Selected  = 1 << 3,  ///< selected item (CSS: :selected)
         Selection = 1 << 4,  ///< text-selection highlight; combines with Active, Hover, Focused, Selected
         Disabled  = 1 << 5,  ///< exclusive: overrides every other visual bit
+        /// Its value isn't accepted (BeginInvalid). Not a style slot: the topmost invalid
+        /// element gets the theme's error border and halo over whatever state it's in.
+        Invalid   = 1 << 6,
 
         VisualMask = Active | Hover | Focused | Selected | Selection | Disabled
     };

@@ -28,10 +28,17 @@ namespace tachyon
         const bool animatesSelected = (element.flags & ElementFlags::AnimatesSelected) != ElementFlags::None;
         auto addRes = elementStorage.Add(std::move(element), std::move(constraints));
         VERIFY(addRes.status);
-        if (animatesSelected && addRes.ref.IsValid())
+        // Selected (for a toggle's parts) and Invalid change between frames, not with input:
+        // watched here, so turning one on or off blends. Controls are watched while valid
+        // too, so they blend as they turn invalid; other elements only once they have been.
+        if (addRes.ref.IsValid())
         {
             const Element& added = elementStorage.GetElementUnsafe(addRes.ref);
-            transitionManager.OnSelectedSeen(added.id, added.state, guiStateManager.Interaction().GetFrameTime());
+            if (animatesSelected || (added.flags & ElementFlags::IsControl) != ElementFlags::None ||
+                (added.state & ElementState::Invalid) != ElementState::None || transitionManager.IsWatched(added.id))
+                transitionManager.OnStateSeen(added.id, added.state,
+                                              ElementState::Invalid | (animatesSelected ? ElementState::Selected : ElementState::None),
+                                              guiStateManager.Interaction().GetFrameTime());
         }
         VERIFY(windowRegistry.Add(addRes.ref));
         return addRes.ref;
