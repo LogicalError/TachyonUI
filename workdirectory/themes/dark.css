@@ -48,6 +48,7 @@
     --divider-hover: #6B9BFF; /* a hovered or dragged divider: panel splitters, column and label sizers */
     --accent-soft: #202A3D;   /* accent at 16% over --bg-panel, opaque so stacked rows and cells do not darken */
     --on-accent: #0B0C0F;     /* text and icons on accent fills */
+    --on-accent-muted: #0B0C0F9E; /* secondary text on accent fills: --on-accent at 62% */
     /* ---- Semantic --------------------------------------------------------- */
     --ok: #4FC48A;
     --warn: #E5B454;          /* also NaN values, over-budget frames */
@@ -91,6 +92,13 @@
     --node-generator: #E0716B;
     --node-input: #4FC48A;
     --node-output: #A98BFF;   /* operators use --accent */
+    /* ---- Document types: an inactive tab at 14% (hover 22%, pressed 30%), the active one solid */
+    --bg-document-bar: #08090B;
+    --doc-level-rest: #6B9BFF24;      --doc-level-hover: #6B9BFF38;      --doc-level-pressed: #6B9BFF4D;      --doc-level-solid: #6B9BFF;
+    --doc-material-rest: #34D1BF24;   --doc-material-hover: #34D1BF38;   --doc-material-pressed: #34D1BF4D;   --doc-material-solid: #34D1BF;
+    --doc-layout-rest: #F59E4B24;     --doc-layout-hover: #F59E4B38;     --doc-layout-pressed: #F59E4B4D;     --doc-layout-solid: #F59E4B;
+    --doc-prefab-rest: #A98BFF24;     --doc-prefab-hover: #A98BFF38;     --doc-prefab-pressed: #A98BFF4D;     --doc-prefab-solid: #A98BFF;
+    --doc-animation-rest: #F472B624;  --doc-animation-hover: #F472B638;  --doc-animation-pressed: #F472B64D;  --doc-animation-solid: #F472B6;
     /* ---- Profiler --------------------------------------------------------- */
     --flame-frame: #2B303B;
     --flame-build: #5A3B2E;   /* Build, Layout */

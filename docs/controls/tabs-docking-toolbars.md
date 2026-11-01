@@ -28,16 +28,27 @@ session. A docked tab group keeps it on its dock node, in the saved layout. `onD
 `dragVisualizer` work as in the reorderable group. The content under the bar is up to the
 app.
 
+`TabBarOptions` changes the rest: `closeLabel` names the context menu's close item ("Close
+Panel"), `listHidden = false` leaves out the "+N" button (the caller lists the hidden tabs
+another way), and `layoutMenu = false` leaves out "Collapse Rows" / "Multiple Rows".
+
 ```cpp
 bool BeginTabBar(ID id, int* selectedIndex, std::function<void(int, int)> onReorder,
                  std::function<void(int)> onClose = nullptr,
                  std::function<void(int, int2)> onDragOut = nullptr,
                  std::function<void(int, int2)> dragVisualizer = nullptr,
                  StyleRef style = {}, LayoutOverride&& constraints = {},
-                 TabBarLayout* layout = nullptr);
+                 TabBarLayout* layout = nullptr, const TabBarOptions& options = {});
 void EndTabBar();
 bool Tab(ID id, const GUIContent& content, StyleRef style, LayoutOverride&& constraints = {});
+bool BeginTab(ID id, const GUIContent& content, StyleRef style, StyleRef contentStyle,
+              LayoutOverride&& constraints = {});
+void EndTab();
 ```
+
+`BeginTab` / `EndTab` is a tab with more in it: its icon and text (in `contentStyle`, or
+`tab-content`), then whatever is added before `EndTab`. Every `BeginTab` needs its `EndTab`;
+when it returns false the tab is in the "+N" list and nothing should be added to it.
 
 The form without an ID uses the call site. Classes: `tab-bar`, `tab`, `tab-content`,
 `tab-overflow` (the "+N" button; its list uses the menu classes). On several rows the bar's
@@ -101,6 +112,54 @@ if (BeginWindow(windowID, "Docking", theme.mainWindowStyleRef, LayoutOverride::F
     EmitFloatingDockWindows();
 }
 EndWindow();
+```
+
+### Documents
+
+The level above panels: documents (levels, prefabs, material graphs, layouts, animations),
+each with its own `DockingLayout`. A bar of document tabs sits under the title bar; the
+active document's panels fill the window below it, and clicking another tab swaps the whole
+workspace. Only the active document's panels are built (the others' get `onDisable`) and
+only they are drop targets.
+
+Each tab shows the document's icon, its name and, muted, its extension ("Forest" + ".level"),
+then its close button on the active or hovered tab, or a dot while `dirty`. Its colors come
+from its `kind`: the classes `document-tab-<kind>` (tinted, solid when active),
+`document-name-<kind>` (the icon's color) and `document-line-<kind>` (the line under the
+bar, in the active document's color). The themes have `level`, `material`, `layout`,
+`prefab` and `animation`; a kind without classes uses `document-tab`, `document-name` and
+`document-line`. Tabs are reordered by dragging; ones that don't fit are left out, and the
+"N open" list on the right names every document. "+" after the tabs calls `onNew` (none
+without it).
+
+The close button, "Close Document" in a tab's context menu and Ctrl+W ask `onClose`, then
+close the document on the next frame; `onClose` returning false keeps it (to ask about
+unsaved changes, then call `CloseDocument`). Closing a document destroys its panels and
+closes its torn-off panel windows.
+
+```cpp
+Document& CreateDocument(DocumentSet& set, std::string name, std::string extension,
+                         std::string kind, IconID icon);
+void      CloseDocument(DocumentSet& set, int index);
+void      Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
+```
+
+`DocumentSet` holds the documents in tab order, `active`, `onNew` and `onClose`;
+`Active()` is the shown document. Name the active document in the window's title or status
+bar. Other classes: `documents`, `document-bar`, `document-row`, `document-tab-bar`,
+`document-extension`, `document-mark`, `document-close`, `document-dirty`, `document-new`,
+`document-list`.
+
+```cpp
+// Once:
+Document& forest = CreateDocument(documents, "Forest", ".level", "level", levelIcon);
+forest.layout.root = MakeLeaf({ CreatePanel(forest.layout.panels, "Scene", IconID::Invalid, [this] { ScenePanel(); }) });
+Document& terrain = CreateDocument(documents, "Terrain", ".mat", "material", materialIcon);
+terrain.layout.root = MakeLeaf({ CreatePanel(terrain.layout.panels, "Graph", IconID::Invalid, [this] { GraphPanel(); }) });
+
+// Each frame, under the title bar:
+Documents(documentsID, documents);
+EmitFloatingDockWindows();
 ```
 
 

@@ -45,6 +45,7 @@ knob, a table's header) have their own classes, listed with the control above.
 | `VirtualGridView` | `grid-view-scroll`, `grid-view-row` |
 | `BeginTabBar`, `Tab` | `tab-bar`, `tab`, `tab-overflow` |
 | `BeginDockingContainer` | `dock-container` |
+| `Documents` | `documents`, `document-bar`, `document-tab-<kind>`, `document-name-<kind>`, `document-line-<kind>` (plain: `document-tab`, `document-name`, `document-line`) |
 | `BeginToolbar` | controls inside use `toolbar-*` variants |
 | `Breadcrumb` | `breadcrumb` |
 | `BeginStatusBar`, `StatusText` | `status-bar`, `status-text` |

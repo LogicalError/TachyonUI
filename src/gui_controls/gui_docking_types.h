@@ -10,6 +10,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -23,6 +24,15 @@ namespace tachyon
 
 
     // ---- TabBar: reorderable tabs ----
+    /// What a tab bar offers besides its tabs.
+    struct TabBarOptions {
+        std::string_view closeLabel = "Close Panel"; ///< the item of a tab's context menu that closes it
+        /// "+N" after the tabs that fit lists the rest. Without it the caller lists them another
+        /// way; what it adds after the tabs is left room for (TabBarMemory::trailingWidth).
+        bool listHidden = true;
+        bool layoutMenu = true;  ///< the context menus offer Collapse Rows / Multiple Rows
+    };
+
     /// Construction state of the current tab bar; internal.
     struct TabBarState {
         tachyon::ID barID = tachyon::ID::Invalid();
@@ -31,9 +41,19 @@ namespace tachyon
         std::function<void(int)>               onClose;    ///< tab index, when its close button is clicked
         std::function<void(int, tachyon::int2)>    onDragOut;  ///< tab index and mouse release pos
         TabBarLayout* layout = nullptr;         ///< the bar's layout, which its context menu sets
+        TabBarOptions options;
         std::vector<bool> shown;                ///< by tab index; empty: every tab is shown
         struct HiddenTab { int index = 0; tachyon::IconID icon = tachyon::IconID::Invalid; std::string text; };
         std::vector<HiddenTab> hidden;          ///< the tabs left out, listed by the overflow button
+    };
+
+    /// Construction state of the current tab, between BeginTab and EndTab; internal.
+    struct TabState {
+        bool        open     = false;  ///< BeginTab built it (it wasn't left out)
+        tachyon::ID id       = tachyon::ID::Invalid();
+        tachyon::ID bodyID   = tachyon::ID::Invalid();
+        int         index    = 0;
+        bool        selected = false;
     };
 
     /// What a tab bar keeps across frames (element data store, by bar ID): its keyboard
@@ -46,6 +66,7 @@ namespace tachyon
         std::vector<int32_t> widths;        ///< by tab index; a hidden tab keeps its last width
         int32_t              barWidth = 0;  ///< the bar's inner width
         int32_t              overflowWidth = 0; ///< the overflow button's width
+        int32_t              trailingWidth = 0; ///< what the caller adds after the tabs, always shown
     };
 
     // ---- Panel + DockingContainer ----
@@ -140,6 +161,53 @@ namespace tachyon
         DockingLayout*  home       = nullptr;                ///< layout Dock returns the panels to
         tachyon::ID  homeLeafID = tachyon::ID::Invalid(); ///< leaf the panels were torn from
         bool            dockRequested = false;                ///< Dock clicked; done next frame
+    };
+
+    // ---- Documents ----
+    // The level above panels: each document owns a whole panel layout, and the document bar
+    // swaps the workspace below it.
+    /// A document: a level, prefab, material graph, ... with its own panels.
+    struct Document {
+        tachyon::ID     id   = tachyon::ID::Invalid();   ///< its tab's; CreateDocument makes a static one
+        std::string     name;                            ///< "Forest"
+        std::string     extension;                       ///< ".level", after the name, muted
+        /// The type, which picks its colors: the classes .document-tab-<kind>,
+        /// .document-name-<kind> and .document-line-<kind>, or the plain .document-tab,
+        /// .document-name and .document-line when the theme has none for it.
+        std::string     kind;
+        tachyon::IconID icon  = tachyon::IconID::Invalid;
+        bool            dirty = false;                   ///< unsaved changes: a dot on its tab
+        DockingLayout   layout;                          ///< its panels
+
+        /// Kept by the documents; not part of the API.
+        struct Internal
+        {
+            tachyon::ID dockID       = tachyon::ID::Invalid(); ///< its docking container
+            bool        closeAsked   = false;  ///< its tab asked to close it; done at the next Documents
+        } internal;  ///< not part of the API
+    };
+
+    /// The documents one main window shows, in tab order, and which one is active.
+    ///
+    ///     Document& forest = CreateDocument(documents, "Forest", ".level", "level", levelIcon);
+    ///     CreatePanel(forest.layout.panels, ...);   forest.layout.root = MakeLeaf({ ... });
+    ///
+    ///     // In OnGUI, under the title bar:
+    ///     Documents(documentsID, documents);
+    struct DocumentSet {
+        /// Boxed, so a document's layout keeps its address (torn-off panels refer to it).
+        std::vector<std::unique_ptr<Document>> documents;
+        int active = 0;   ///< index of the shown document
+
+        /// The "+" after the last tab; none when unset.
+        std::function<void()> onNew;
+        /// Asked before a document is closed from its tab: false keeps it open (to ask about
+        /// unsaved changes first, then CloseDocument). Unset: it closes.
+        std::function<bool(Document&)> onClose;
+
+        /// The shown document; null when there are none.
+        Document*       Active()       { return active >= 0 && active < int(documents.size()) ? documents[size_t(active)].get() : nullptr; }
+        const Document* Active() const { return active >= 0 && active < int(documents.size()) ? documents[size_t(active)].get() : nullptr; }
     };
 
     /// @}

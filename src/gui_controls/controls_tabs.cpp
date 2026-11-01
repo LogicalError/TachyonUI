@@ -14,19 +14,21 @@ namespace tachyon
     {
         // Which tabs fit in the bar, from last frame's sizes: the first ones, in order, and the
         // selected one in place of the last ones that fit when it isn't among them. Room is left
-        // for the overflow button. Empty: every tab fits.
-        std::vector<bool> ShownTabs(const TabBarMemory& fit, int selected, int32_t gap)
+        // for the overflow button (when the bar has one) and for what follows the tabs. Empty:
+        // every tab fits.
+        std::vector<bool> ShownTabs(const TabBarMemory& fit, int selected, int32_t gap, bool overflowButton)
         {
             const int count = int(fit.widths.size());
             if (count == 0 || fit.barWidth <= 0)
                 return {};
-            int64_t total = int64_t(gap) * (count - 1);
+            const int64_t trailing = fit.trailingWidth > 0 ? int64_t(fit.trailingWidth) + gap : 0;
+            int64_t total = int64_t(gap) * (count - 1) + trailing;
             for (const int32_t w : fit.widths)
                 total += w;
             if (total <= fit.barWidth)
                 return {};
 
-            const int64_t room = int64_t(fit.barWidth) - fit.overflowWidth - gap;
+            const int64_t room = int64_t(fit.barWidth) - trailing - (overflowButton ? int64_t(fit.overflowWidth) + gap : 0);
             std::vector<int> taken;
             int64_t used = 0;
             auto widthWith = [&](int index) { return used + (taken.empty() ? 0 : gap) + fit.widths[size_t(index)]; };
@@ -80,12 +82,14 @@ namespace tachyon
                                   std::function<void(int)> onClose,
                                   std::function<void(int, tachyon::int2)> onDragOut,
                                   std::function<void(int, tachyon::int2)> dragVisualizer,
-                                  StyleRef style, LayoutOverride&& constraints, TabBarLayout* layout)
+                                  StyleRef style, LayoutOverride&& constraints, TabBarLayout* layout,
+                                  const TabBarOptions& options)
     {
         m_tabBarState = {};
         m_tabBarState.barID         = id;
         m_tabBarState.selectedIndex = selectedIndex;
         m_tabBarState.layout        = layout;
+        m_tabBarState.options       = options;
         m_tabBarState.onClose       = std::move(onClose);
         m_tabBarState.onDragOut     = onDragOut; // keep a copy for bookkeeping
 
@@ -104,7 +108,7 @@ namespace tachyon
                 fit.overflowWidth = styleManager.Px(48);   // until it has been laid out once
             const LayoutStyle* barLayout = styleManager.GetLayoutStyle(style.layoutStyleIndex);
             const int32_t gap = barLayout ? int32_t(barLayout->layoutData.flex.gap) : 0;
-            m_tabBarState.shown = ShownTabs(fit, selectedIndex ? *selectedIndex : -1, gap);
+            m_tabBarState.shown = ShownTabs(fit, selectedIndex ? *selectedIndex : -1, gap, options.listHidden);
         }
 
         // The reorderable group counts only the tabs it holds: map its indices to the tabs'.
@@ -146,7 +150,7 @@ namespace tachyon
 
         // "+N" after the tabs that fit: a menu of the rest; picking one selects it, and then
         // it's shown in the bar.
-        if (barID != ID::Invalid() && !m_tabBarState.hidden.empty())
+        if (barID != ID::Invalid() && !m_tabBarState.hidden.empty() && m_tabBarState.options.listHidden)
         {
             [[maybe_unused]] const bool pushed = idManager.PushParent(barID);
             const ID overflowID = idManager.AllocateDynamicID("tab_overflow");
@@ -161,9 +165,12 @@ namespace tachyon
             }
             EndMenu();
             // Right-click it -> the layouts, as on the strip.
-            if (BeginContextMenu(overflowID))
-                TabLayoutMenuItems(*this, barID, m_tabBarState.layout);
-            EndContextMenu();
+            if (m_tabBarState.options.layoutMenu)
+            {
+                if (BeginContextMenu(overflowID))
+                    TabLayoutMenuItems(*this, barID, m_tabBarState.layout);
+                EndContextMenu();
+            }
             if (const ElementRef ref = elementStorage.FindElementRefByID(overflowID); ref.IsValid())
                 [[maybe_unused]] auto added = elementStorage.AddPostLayout(ref, [this, barID](PostLayoutContext& ctx)
                     { guiStateManager.GetElementDataStore().GetOrCreate<TabBarMemory>(barID).overflowWidth = ctx.ElementRect().w; });
@@ -172,7 +179,7 @@ namespace tachyon
         EndReorderableGroup();
 
         // Right-click the strip -> the layouts.
-        if (barID != ID::Invalid())
+        if (barID != ID::Invalid() && m_tabBarState.options.layoutMenu)
         {
             if (BeginContextMenu(barID))
                 TabLayoutMenuItems(*this, barID, m_tabBarState.layout);
@@ -181,8 +188,10 @@ namespace tachyon
         m_tabBarState = {};
     }
 
-    bool GUIApplication::Tab(ID id, const GUIContent& content, StyleRef style, LayoutOverride&& constraints)
+    bool GUIApplication::BeginTab(ID id, const GUIContent& content, StyleRef style, StyleRef contentStyle,
+                                  LayoutOverride&& constraints)
     {
+        m_tabState = {};
         const IconID           icon = content.icon;
         const std::string_view text = content.text;
         ShowContentTooltip(id, content);
@@ -191,10 +200,11 @@ namespace tachyon
             ReportMisuse("GUIApplication: Tab outside a tab bar (ignored)");
             return false;
         }
+        if (contentStyle == StyleRef{})
+            contentStyle = theme.tabContentStyleRef;
         int         tabIndex      = m_tabBarState.nextTabIndex++;
         int*        selectedIndex = m_tabBarState.selectedIndex;
         const auto& onClose       = m_tabBarState.onClose;
-        TabBarLayout* const layout = m_tabBarState.layout;
         bool        isSelected    = selectedIndex && *selectedIndex == tabIndex;
 
         auto capturedIndex = tabIndex;
@@ -214,10 +224,13 @@ namespace tachyon
         {
             if (fit.widths[size_t(tabIndex)] <= 0)
             {
-                const TextID measured = textSystem->RegisterText(contentID, icon, text, theme.tabContentStyleRef, ElementState::None);
+                const TextID measured = textSystem->RegisterText(contentID, icon, text, contentStyle, ElementState::None);
                 int32_t width = textSystem->GetTextMeasurement(measured).maxWidth;
                 if (const LayoutStyle* tabLayout = styleManager.GetLayoutStyle(style.layoutStyleIndex))
+                {
                     width += int32_t(tabLayout->padding.Horizontal() + tabLayout->borderWidths.Horizontal());
+                    width = std::max(width, tabLayout->layoutData.minWidth);
+                }
                 fit.widths[size_t(tabIndex)] = width;
             }
             m_tabBarState.hidden.push_back({ tabIndex, icon, std::string(text) });
@@ -258,12 +271,12 @@ namespace tachyon
                         if (selectedIndex)
                             *selectedIndex = capturedIndex;
                         guiStateManager.Interaction().SetClicked(id);
-					    // Not consumed, so MouseUp still arrives for drag-out detection.
+                        // Not consumed, so MouseUp still arrives for drag-out detection.
                     }
                     if (event.type == tachyon::EventType::KeyDown &&
                         (guiStateManager.GetCurrentState(event.id) & ElementState::Focused) != ElementState::None)
                     {
-                        // Ctrl+W or Ctrl+F4 closes the focused tab, as "Close Panel" does.
+                        // Ctrl+W or Ctrl+F4 closes the focused tab, as the context menu's close does.
                         if (onClose && (event.state.modifiers & KeyModifier::Control) != KeyModifier::None &&
                             (event.state.lastKey == KeyCode::KeyW || event.state.lastKey == KeyCode::F4))
                         {
@@ -306,37 +319,61 @@ namespace tachyon
             tachyon::Element
             {
                 .id       = contentID,
-                .textID   = textSystem->RegisterText(contentID, icon, text, theme.tabContentStyleRef, state),
-                .styleRef = theme.tabContentStyleRef,
+                .textID   = textSystem->RegisterText(contentID, icon, text, contentStyle, state),
+                .styleRef = contentStyle,
                 .flags    = ElementFlags::NoInput,
                 .state    = state
             }, LayoutOverride::Auto());
 
+        m_tabState = { .open = true, .id = id, .bodyID = bodyID, .index = tabIndex, .selected = isSelected };
+        return true;
+    }
+
+    void GUIApplication::EndTab()
+    {
+        const TabState tab = m_tabState;
+        m_tabState = {};
+        if (!tab.open)
+            return;
+        const ID barID = m_tabBarState.barID;
+        const auto& onClose = m_tabBarState.onClose;
+        TabBarLayout* const layout = m_tabBarState.layout;
+        const TabBarOptions& options = m_tabBarState.options;
+
         VERIFY(elementStorage.EndChildren());
 
         EndReorderableItem();
-        if (const ElementRef itemRef = elementStorage.FindElementRefByID(id); itemRef.IsValid())
-            [[maybe_unused]] auto added = elementStorage.AddPostLayout(itemRef, [this, barID, tabIndex](PostLayoutContext& ctx)
+        if (const ElementRef itemRef = elementStorage.FindElementRefByID(tab.id); itemRef.IsValid())
+            [[maybe_unused]] auto added = elementStorage.AddPostLayout(itemRef, [this, barID, tabIndex = tab.index](PostLayoutContext& ctx)
             {
                 auto& widths = guiStateManager.GetElementDataStore().GetOrCreate<TabBarMemory>(barID).widths;
                 if (widths.size() > size_t(tabIndex))
                     widths[size_t(tabIndex)] = ctx.ElementRect().w;
             });
 
-        // Right-click a tab -> "Close Panel" (when tabs close) and the bar's layouts.
-        if (BeginContextMenu(bodyID))
+        // Right-click a tab -> its close item (when tabs close) and the bar's layouts.
+        if ((onClose != nullptr || options.layoutMenu) && BeginContextMenu(tab.bodyID))
         {
             if (onClose != nullptr)
             {
-                MenuItem("Close Panel", [onClose, capturedIndex]() { onClose(capturedIndex); });
-                MenuSeparator();
+                MenuItem(options.closeLabel, [onClose, index = tab.index]() { onClose(index); });
+                if (options.layoutMenu)
+                    MenuSeparator();
             }
-            TabLayoutMenuItems(*this, barID, layout);
+            if (options.layoutMenu)
+                TabLayoutMenuItems(*this, barID, layout);
         }
-        EndContextMenu();
+        if (onClose != nullptr || options.layoutMenu)
+            EndContextMenu();
 
-        if (isSelected) guiStateManager.Construction().PopSelected();
+        if (tab.selected) guiStateManager.Construction().PopSelected();
+    }
 
+    bool GUIApplication::Tab(ID id, const GUIContent& content, StyleRef style, LayoutOverride&& constraints)
+    {
+        if (!BeginTab(id, content, style, {}, std::move(constraints)))
+            return false;
+        EndTab();
         return guiStateManager.Interaction().HasBeenClicked(id);
     }
 

@@ -335,6 +335,17 @@ namespace tachyon
         /// Closes the panel at `tabIndex` of a docked leaf, as the tab's Close action does.
         void CloseDockedPanel(DockingLayout& layout, DockNode& leaf, int tabIndex);
 
+        /// Adds a document at the end of `set`, with new static IDs and an empty layout, which
+        /// the caller fills (CreatePanel, MakeLeaf). The first one added becomes the active one.
+        Document& CreateDocument(DocumentSet& set, std::string name, std::string extension, std::string kind,
+                                 tachyon::IconID icon);
+        /// Closes `set`'s document at `index` for good: its panels are disabled and destroyed,
+        /// its torn-off panel windows closed, its IDs released and its layout no longer saved
+        /// (PersistDocking). The active document stays
+        /// active; when it's the one closed, the next one (else the one before) takes over.
+        /// Call from OnGUI, not from an input handler.
+        void CloseDocument(DocumentSet& set, int index);
+
         /// Moves a panel from sourceNode/sourceLayout to targetLayout, fixing up selectedTab.
         static void TransferPanel(tachyon::ID panelID, tachyon::DockNode* sourceNode,
                                   DockingLayout* sourceLayout,
@@ -1291,7 +1302,8 @@ namespace tachyon
         /// runs on a drop, onClose(index) closes a tab (none when null); onDragOut and
         /// dragVisualizer as for BeginReorderableGroup. `layout` says what happens to tabs that
         /// don't fit on one row (TabBarLayout); the bar's context menu changes it. Null keeps it
-        /// with the bar, by its ID.
+        /// with the bar, by its ID. `options`: the close item's label, the "+N" list, the
+        /// layout menu.
         bool BeginTabBar(ID id, int* selectedIndex,
                          std::function<void(int, int)> onReorder,
                          std::function<void(int)> onClose = nullptr,
@@ -1299,7 +1311,8 @@ namespace tachyon
                          std::function<void(int, tachyon::int2)> dragVisualizer = nullptr,
                          StyleRef style = {},
                          LayoutOverride&& constraints = {},
-                         TabBarLayout* layout = nullptr);
+                         TabBarLayout* layout = nullptr,
+                         const TabBarOptions& options = {});
         /// As above, with the call site as the ID.
         inline bool BeginTabBar(int* selectedIndex,
                                 std::function<void(int, int)> onReorder,
@@ -1315,6 +1328,13 @@ namespace tachyon
 
         /// One tab of the tab bar; a click selects it. True when clicked.
         bool        Tab(ID id, const GUIContent& content, StyleRef style, LayoutOverride&& constraints = {});
+        /// A tab with more in it: its icon and text in `contentStyle` (the theme's when invalid),
+        /// then whatever is added up to EndTab, which every BeginTab needs. False when the tab
+        /// doesn't fit the bar (it's listed by "+N"): add nothing to it then.
+        bool BeginTab(ID id, const GUIContent& content, StyleRef style, StyleRef contentStyle,
+                      LayoutOverride&& constraints = {});
+        /// Closes BeginTab.
+        void EndTab();
         /// As above, in the theme's tab style.
         inline bool Tab(ID id, const GUIContent& content, LayoutOverride&& constraints = {}) { return Tab(id, content, theme.tabStyleRef, std::move(constraints)); }
         /// As above, with the call site as the ID.
@@ -1342,6 +1362,12 @@ namespace tachyon
             { return BeginDockingContainer(idManager.AllocateDynamicID(site), layout, theme.dockContainerStyleRef, std::move(constraints)); }
         /// Closes BeginDockingContainer.
         void EndDockingContainer();
+
+        /// The document bar of `set`, under the title bar, and below it the active document's
+        /// panels, filling the rest of the window's column. Each tab is in its document type's
+        /// colors; a click shows that document, its close button (or Ctrl+W) asks
+        /// DocumentSet::onClose and closes it on the next frame. Then call EmitFloatingDockWindows.
+        void Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
 
         ///@}
 
@@ -2409,6 +2435,7 @@ namespace tachyon
         }
 
         TabBarState m_tabBarState;
+        TabState    m_tabState;
 
         /// Enables the panels reachable from layout.root; called by BeginDockingContainer each frame.
         void EnableVisiblePanels(DockingLayout& layout);
@@ -2434,6 +2461,11 @@ namespace tachyon
         tachyon::DockNode* FindDockLeafTabBarCachedAtScreenPos(tachyon::int2 screenPos);
 
         std::vector<std::unique_ptr<FloatingDockWindow>> m_floatingDockWindows;
+
+        /// Document sets built this frame (cleared at frame start), for ActivateDocumentOf.
+        std::vector<DocumentSet*> m_documentSetsThisFrame{};
+        /// Shows the document of a set built this frame that owns `layout`; false when none does.
+        bool ActivateDocumentOf(const DockingLayout* layout);
 
         /// Debug asserts for Begin*/End* stacks left unbalanced at frame end. Also used by the headless tests.
         void RegisterFrameHooks();   // per-frame stage hooks; Initialize (and test harnesses) call it

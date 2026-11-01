@@ -71,6 +71,9 @@ public:
     // The window with the keyboard, which alone builds a Tab order; Invalid: the root.
     // A modal dialog's window has it in the real app.
     tachyon::ID activeWindow = tachyon::ID::Invalid();
+    // The window the mouse is over, which alone is hit-tested; Invalid: the root. A popup
+    // is its own OS window in the real app, over whatever its parent builds after it.
+    tachyon::ID mouseWindow = tachyon::ID::Invalid();
 
     // Emit a root "window" element filling the monitor area. Widgets
     // emitted between BeginRootWindow/EndRootWindow become its children

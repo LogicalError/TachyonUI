@@ -391,6 +391,7 @@ list(APPEND GUI_CONTROLS_FILES
   gui_controls/controls_table_virtual.cpp
   gui_controls/controls_table_internal.h
   gui_controls/controls_tabs.cpp
+  gui_controls/controls_documents.cpp
   gui_controls/controls_docking.cpp
   gui_controls/controls_settings.cpp
   gui_controls/gui_ui_state.cpp
