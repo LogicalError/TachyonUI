@@ -699,24 +699,48 @@ namespace tachyon
 
         const auto  boxStyles = styleManager.GetVisualBoxStylesSpan();
         const float radius    = ts.toStyleIndex < boxStyles.size() ? float(boxStyles[ts.toStyleIndex].borderRadius.topLeft) : 0.0f;
-        auto draw = [&](const VisualShadow& s) {
-            if (s.IsNone() || (s.blur == 0 && s.spread <= 0 && s.x == 0 && s.y == 0))
-                return; // under the box
-            IntRect r = rectLayout;
-            r.x = int16_t(r.x + s.x - s.spread);
-            r.y = int16_t(r.y + s.y - s.spread);
-            r.w = int16_t(r.w + 2 * s.spread);
-            r.h = int16_t(r.h + 2 * s.spread);
-            if (r.w <= 0 || r.h <= 0)
-                return;
-            // Offsets are in LAYOUT space, so they scale with the content transform (zoom).
-            guiRenderer->RenderShadow(r, clipRectScreen, s.color, std::max(0.0f, radius + float(s.spread)), s.blur);
-        };
+        auto draw = [&](const VisualShadow& s) { RenderShadowLayer(rectLayout, clipRectScreen, s, radius); };
         // The first layer is on top, as in CSS; the focus ring over all of them.
         for (int i = kMaxBoxShadows - 1; i >= 0; --i)
             draw(BlendShadow(from->layers[i], to->layers[i], ts.blendT));
         if (ring)
             draw(BlendShadow(from->ring, to->ring, ts.blendT));
+    }
+
+    void GUIApplication::RenderShadowLayer(IntRect rectLayout, IntRect clipRectScreen, const VisualShadow& s, float radius)
+    {
+        if (s.IsNone() || (s.blur == 0 && s.spread <= 0 && s.x == 0 && s.y == 0))
+            return; // under the box
+        IntRect r = rectLayout;
+        r.x = int16_t(r.x + s.x - s.spread);
+        r.y = int16_t(r.y + s.y - s.spread);
+        r.w = int16_t(r.w + 2 * s.spread);
+        r.h = int16_t(r.h + 2 * s.spread);
+        if (r.w <= 0 || r.h <= 0)
+            return;
+        // Offsets are in LAYOUT space, so they scale with the content transform (zoom).
+        guiRenderer->RenderShadow(r, clipRectScreen, s.color, std::max(0.0f, radius + float(s.spread)), s.blur);
+    }
+
+    void GUIApplication::RenderInvalidHalo(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, float grown)
+    {
+        const VisualBoxStyle* box = styleManager.GetVisualBoxStyleAt(ts.toStyleIndex);
+        VisualShadow halo = theme.invalidHalo;
+        halo.spread = int16_t(std::lround(float(halo.spread) * grown));
+        halo.blur   = uint16_t(std::lround(float(halo.blur) * grown));
+        RenderShadowLayer(rectLayout, clipRectScreen, halo, box ? float(box->borderRadius.topLeft) : 0.0f);
+    }
+
+    void GUIApplication::RenderInvalidBorder(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, IntRect snappedPx)
+    {
+        const VisualBoxStyle* box = styleManager.GetVisualBoxStyleAt(ts.toStyleIndex);
+        BoxEdges   widths = box ? box->borderWidths : BoxEdges{};
+        const BoxCorners radius = box ? box->borderRadius : BoxCorners{};
+        if (widths.top == 0 && widths.right == 0 && widths.bottom == 0 && widths.left == 0)
+            widths = BoxEdges(uint16_t(std::max(1, styleManager.Px(1))));
+        const VisualBoxStyleIndex outline = styleManager.RegisterOutline(widths, radius, theme.invalidColor);
+        const uint32_t style = ComputeGPUStyleIndex(outline, ElementState::None);
+        guiRenderer->RenderBox(rectLayout, clipRectScreen, style, style, 1.0f, {}, ImageIndex::Invalid, snappedPx);
     }
 
     void GUIApplication::OnRender(float elapsedTimeSecs)
@@ -731,6 +755,9 @@ namespace tachyon
             bool     hasTransform         = false;  // contentTransformAccum != identity
             float4   pixelRect            {};  // this element's border box in window pixels, before snapping
             IntRect  snappedPixelRect     {};  // ...and snapped (children snap relative to it; gui_pixel_snap.h)
+            float    opacity              = 1.0f;   // how opaque this element and its subtree are drawn
+            bool     disabled             = false;  // the element is disabled
+            bool     invalid              = false;  // the element is invalid
         };
         constexpr uint32_t kMaxRenderDepth = 64;
         RenderDepthState depthStates[kMaxRenderDepth]{};
@@ -746,6 +773,7 @@ namespace tachyon
                 continue;
 
             guiRenderer->SetTransform(tachyon::float3x2::Identity());
+            guiRenderer->SetOpacity(1.0f);
 
             // Element state plus OS window state: Focused = OS-active window, Hover = window under the mouse.
             ElementState windowState = guiStateManager.GetCurrentState(windowElement.id);
@@ -777,6 +805,9 @@ namespace tachyon
             depthStates[windowDepth].hasTransform          = !windowElementRect.contentTransform.IsIdentity();
             depthStates[windowDepth].pixelRect             = windowPixelRect;
             depthStates[windowDepth].snappedPixelRect      = windowSnappedRect;
+            depthStates[windowDepth].opacity               = 1.0f;
+            depthStates[windowDepth].disabled              = false;
+            depthStates[windowDepth].invalid               = false;
 
             const auto& nodes = windowEntry.members;
             // While capturing, a cached scope's children render into its capture (until captureEndIdx).
@@ -799,6 +830,7 @@ namespace tachyon
                 windowDraw.afterDrawRenderTransform   = float3x2::Identity();
                 windowDraw.afterDrawPixelRect         = windowPixelRect;
                 windowDraw.afterDrawSnappedRect       = windowSnappedRect;
+                windowDraw.afterDrawOpacity           = 1.0f;
                 pendingAfter.push_back({ static_cast<uint32_t>(nodes.size()), windowRef });
             }
             auto fireAfterDraws = [&](uint32_t passed, size_t keep)
@@ -809,6 +841,7 @@ namespace tachyon
                     pendingAfter.pop_back();
                     const auto& ownerDraw = elementStorage.GetElementCustomDrawUnsafe(owner);
                     guiRenderer->SetTransform(ownerDraw.afterDrawRenderTransform);
+                    guiRenderer->SetOpacity(ownerDraw.afterDrawOpacity);
                     for (uint32_t idx = ownerDraw.afterHead; idx != UINT32_MAX; )
                     {
                         auto& entry = elementStorage.GetPostDrawEntryUnsafe(idx);
@@ -926,6 +959,19 @@ namespace tachyon
                                                             : innerRectLayout.position;
                 depthStates[depth].hasTransform          = !childContentTransformAccum.IsIdentity();
 
+                // Opacity multiplies down the tree. A disabled control fades as a whole: its
+                // topmost disabled element takes --disabled-opacity, unless its style sets one.
+                {
+                    const Element& element = elementStorage.GetElementUnsafe(childRef);
+                    const bool disabled = (element.state & ElementState::Disabled) != ElementState::None;
+                    float own = styleManager.GetOpacity(ComputeGPUStyleIndex(element.styleRef.visualBoxStyleIndex, element.state));
+                    if (own < 0.0f)
+                        own = disabled && !parentState.disabled ? theme.disabledOpacity : 1.0f;
+                    depthStates[depth].opacity  = parentState.opacity * own;
+                    depthStates[depth].disabled = disabled;
+                    depthStates[depth].invalid  = (element.state & ElementState::Invalid) != ElementState::None;
+                }
+
                 // LAYOUT -> SCREEN: T(pivot) * contentTransformAccum * T(-pivot), for the element's own box and text.
                 float3x2 elementRenderTransform = float3x2::Identity();
                 if (parentState.hasTransform)
@@ -947,6 +993,7 @@ namespace tachyon
                 if (!displayNone)
                 {
                     guiRenderer->SetTransform(elementRenderTransform);
+                    guiRenderer->SetOpacity(depthStates[depth].opacity);
 
                     // The box clips to the parent scissor; content additionally clips to the padding box.
                     // innerRectLayout may carry a leaf-scroll offset, so the clip inner rect is
@@ -976,6 +1023,19 @@ namespace tachyon
                                               guiStateManager.Interaction().IsFocusVisible();
                         if (!isWindow)
                             RenderBoxShadows(rectLayout, parentClipRectScreen, ts, ring);
+                        // The topmost invalid element: an error halo, growing in as it turns invalid.
+                        const bool invalid = depthStates[depth].invalid && !parentState.invalid && !isWindow;
+                        if (invalid)
+                        {
+                            float grown = 1.0f;
+                            if (const auto blend = transitionManager.Find(childElement.id, elapsedTimeSecs);
+                                blend && ((blend->fromState ^ blend->toState) & ElementState::Invalid) != ElementState::None &&
+                                (blend->toState & ElementState::Invalid) != ElementState::None)
+                                grown = blend->t;
+                            if (capturing && grown < 1.0f)
+                                m_uiCache->Invalidate(captureScopeId);
+                            RenderInvalidHalo(rectLayout, parentClipRectScreen, ts, grown);
+                        }
                         // What the box's opaque middle covers, drawn before it, isn't shaded on the GPU.
                         // Under a zoom the box snaps in screen pixels, which a layout inset can't bound.
                         if (!isWindow && !parentState.hasTransform && childElement.colorStyleIndex == VisualColorStyleIndex::Invalid &&
@@ -990,6 +1050,9 @@ namespace tachyon
                             if (const VisualShadowStyle* s = styleManager.GetVisualShadowStyle(ts.toStyleIndex); s && s->insetRing != 0)
                                 guiRenderer->RenderBox(rectLayout, parentClipRectScreen, s->insetRing - 1, s->insetRing - 1, 1.0f,
                                                        {}, ImageIndex::Invalid, elementSnappedRect);
+                        // ... and its error border, over the box's own in whatever state it's in.
+                        if (invalid)
+                            RenderInvalidBorder(rectLayout, parentClipRectScreen, ts, elementSnappedRect);
                     }
 
                     // RenderText handles plain text, rich text with inline icons, and TextEditor rendering.
@@ -1069,6 +1132,7 @@ namespace tachyon
                             draw.afterDrawRenderTransform   = customDrawRenderTransform;
                             draw.afterDrawPixelRect         = elementPixelRect;
                             draw.afterDrawSnappedRect       = elementSnappedRect;
+                            draw.afterDrawOpacity           = depthStates[depth].opacity;
                         }
                     }
                 }
@@ -1134,6 +1198,7 @@ namespace tachyon
             }
             fireAfterDraws(end, 0);
 
+            guiRenderer->SetOpacity(1.0f);
             guiRenderer->EndWindow();
         }
     }

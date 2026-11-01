@@ -31,7 +31,7 @@ include the selector's bits:
 | `:focus` | Has keyboard focus |
 | `:selected` or `::highlight(selected)` | Selected or checked (a selected row, a toggle that is on) |
 | `::selection` | Selected text in the element (its `background-color` is the highlight) |
-| `:disabled` | Disabled. Exclusive: it can't combine with other states |
+| `:disabled` | Disabled. Exclusive: it can't combine with other states. A disabled control is also drawn faded (see `opacity`) |
 | `:not(:hover)`, `:not(:active)`, `:not(:focus)`, `:not(:selected)` | Slots without that bit |
 | `:focus-visible` | The focus ring, shown while focus came from the keyboard. Only `box-shadow`, see below |
 | `:normal` | Same as no pseudo-class |
@@ -74,6 +74,7 @@ own timing. Ease-out is `cubic-bezier(0.2, 0, 0, 1)`, ease-in-out is `cubic-bezi
 | Selected (a row) | at once | |
 | A switch, check box or toggle turning on or off | 120 ms | ease-in-out |
 | Disabled | at once | |
+| Invalid (`BeginInvalid`) | the border at once, the halo 150 ms | ease-out |
 
 A change that comes back before the blend has finished (out again during a hover in) carries
 on from what is shown, in the new change's timing. A control part blends its on / off flip

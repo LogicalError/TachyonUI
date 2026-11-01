@@ -106,6 +106,11 @@ namespace tachyon
         const VisualTextStyle*       GetVisualTextStyle(VisualTextStyleIndex index, tachyon::ElementState state) const noexcept;
         /// The shadows of a box style by its flat GPU index (ComputeGPUStyleIndex); nullptr if none.
         const VisualShadowStyle*     GetVisualShadowStyle(uint32_t gpuStyleIndex) const noexcept;
+        /// A border-only box style in pixels: `widths` and `radius` with a `color` border and no
+        /// background, registered once (until ClearAll).
+        VisualBoxStyleIndex RegisterOutline(BoxEdges widths, BoxCorners radius, color4b color) noexcept;
+        /// The CSS opacity of a flat GPU style index (style and state); below 0 when not set.
+        float                        GetOpacity(uint32_t gpuStyleIndex) const noexcept;
         /// A box style's state by its flat GPU index; nullptr out of range.
         const VisualBoxStyle*        GetVisualBoxStyleAt(uint32_t gpuStyleIndex) const noexcept;
         /// Whether the box style's background, by its flat GPU index, hides what's under it:
@@ -204,7 +209,8 @@ namespace tachyon
         VisualTextStyleIndex RegisterVisualTextStyles(const VisualTextStyle (&states)[Style::kStateCount],
                                                       uint64_t hash) noexcept;
         /// 1-based index of the deduplicated shadow style, 0 when there are no shadows.
-        uint16_t RegisterShadows(const BoxShadow (&layers)[kMaxBoxShadows], const BoxShadow& ring, BoxCorners radius) noexcept;
+        uint16_t RegisterShadows(const BoxShadow (&layers)[kMaxBoxShadows], const BoxShadow& ring, BoxCorners radius,
+                                 float opacity) noexcept;
 
         GradientManager&             m_gradientManager;
         uint32_t                     m_generation = 0;
@@ -217,6 +223,8 @@ namespace tachyon
         std::vector<VisualTextStyle>  m_visualTextStyles;
         std::vector<VisualColorStyle> m_visualColorStyles;
         std::vector<VisualShadowStyle> m_visualShadowStyles; ///< few: searched linearly at registration
+        struct Outline { BoxEdges widths; BoxCorners radius; color4b color; VisualBoxStyleIndex index; };
+        std::vector<Outline>           m_outlines;           ///< RegisterOutline's; few, searched linearly
 
         /// Parallel to m_visualColorStyles; invalid for texture-only entries.
         std::vector<GradientHandle>   m_visualColorStyleHandles;

@@ -27,7 +27,6 @@
     --line-section: #1E2128; /* section divider */
     /* ---- Text ------------------------------------------------------------- */
     --text-1: #E8EAEF;      /* values, active labels, titles */
-    --text-disabled: #77797F; /* text-1 at 45% over a menu: disabled items */
     --text-2: #AEB4C0;      /* default UI text, property labels */
     --text-3: #8E96A7;      /* captions, placeholders, column headers */
     --text-link: #8FB3FF;
@@ -54,6 +53,7 @@
     --warn: #E5B454;          /* also NaN values, over-budget frames */
     --warn-text: #E5B454;
     --error: #EF6A6A;
+    --invalid-halo: 0 0 0 3px #EF6A6A2B;  /* around an invalid control: the error color at 17% */
     --danger: #EF6A6A;      /* destructive buttons */
     --on-danger: #0B0C0F;
     --warn-soft: #E5B45424; /* severity circles: the severity at 14-16% */

@@ -15,10 +15,12 @@ namespace tachyon
 
     TransitionTiming TransitionManager::TimingFor(ElementState fromState, ElementState toState)
     {
-        const ElementState changed = (fromState ^ toState) & ElementState::VisualMask;
+        const ElementState changed = (fromState ^ toState) & (ElementState::VisualMask | ElementState::Invalid);
         auto has = [](ElementState s, ElementState bit) { return (s & bit) != ElementState::None; };
         if (has(changed, ElementState::Disabled))
             return {};
+        if (has(changed, ElementState::Invalid))
+            return has(toState, ElementState::Invalid) ? kInvalid : TransitionTiming{};
         if (has(changed, ElementState::Active))
             return has(toState, ElementState::Active) ? TransitionTiming{} : kRelease;
         if (has(changed, ElementState::Hover))
@@ -80,16 +82,22 @@ namespace tachyon
         };
     }
 
-    void TransitionManager::OnSelectedSeen(ID id, ElementState state, float elapsedSecs)
+    void TransitionManager::OnStateSeen(ID id, ElementState state, ElementState watched, float elapsedSecs)
     {
-        const bool selected = (state & ElementState::Selected) != ElementState::None;
-        const auto [it, added] = m_selected.try_emplace(id, SelectedSeen{ selected, m_frame });
+        const ElementState now = state & watched;
+        const auto [it, added] = m_seen.try_emplace(id, Seen{ now, m_frame });
         if (added)
             return;
-        const bool was = it->second.selected;
-        it->second = SelectedSeen{ selected, m_frame };
-        if (was != selected)
-            OnStateChange(id, state ^ ElementState::Selected, state, kToggle, elapsedSecs);
+        const ElementState was = it->second.state;
+        it->second = Seen{ now, m_frame };
+        const ElementState flipped = was ^ now;
+        if (flipped == ElementState::None)
+            return;
+        const ElementState before = (state & ~watched) | was;
+        if ((flipped & ElementState::Selected) != ElementState::None)
+            OnStateChange(id, before, state, kToggle, elapsedSecs);
+        else
+            OnStateChange(id, before, state, TimingFor(before, state), elapsedSecs);
     }
 
     std::optional<TransitionManager::Blend> TransitionManager::Find(ID id, float elapsedSecs) const
@@ -130,7 +138,7 @@ namespace tachyon
             else
                 ++it;
         }
-        std::erase_if(m_selected, [this](const auto& seen) { return seen.second.frame != m_frame; });
+        std::erase_if(m_seen, [this](const auto& seen) { return seen.second.frame != m_frame; });
         ++m_frame;
     }
 

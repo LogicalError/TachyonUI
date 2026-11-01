@@ -277,7 +277,7 @@ namespace tachyon
                 .borderDashOffset     = (uint16_t)std::clamp((int)style.borderDashOffset, 0, 65535),
                 .shadowIndex          = RegisterShadows(styleState.boxShadow,
                                                         (ElementState(i) & ElementState::Focused) != ElementState::None ? style.focusRing : BoxShadow{},
-                                                        style.borderRadius),
+                                                        style.borderRadius, styleState.opacity),
             };
             visualBoxHash = Hash::Combine(visualBoxHash, visualBoxStyle[i].GetHashCode());
             opaqueBackground[i] = IsOpaque(styleState.backgroundColor);
@@ -591,6 +591,7 @@ namespace tachyon
         m_opaqueBoxBackgrounds.clear();
         m_visualBoxHashMap.clear();
         m_visualShadowStyles.clear();
+        m_outlines.clear();
 
         m_visualTextStyles.clear();
         m_visualTextHashMap.clear();
@@ -682,7 +683,32 @@ namespace tachyon
         return shadow == 0 ? nullptr : &m_visualShadowStyles[shadow - 1u];
     }
 
-    uint16_t StyleManager::RegisterShadows(const BoxShadow (&layers)[kMaxBoxShadows], const BoxShadow& ring, BoxCorners radius) noexcept
+    VisualBoxStyleIndex StyleManager::RegisterOutline(BoxEdges widths, BoxCorners radius, color4b color) noexcept
+    {
+        for (const Outline& o : m_outlines)
+            if (o.widths == widths && o.radius == radius && o.color == color)
+                return o.index;
+        Style outline{};
+        outline.borderWidths = widths;
+        outline.borderRadius = radius;
+        for (StyleState& state : outline.states)
+        {
+            state.backgroundColor = ColorStyle::Create(color4b{});
+            state.SetBorderColor(ColorStyle::Create(color));
+        }
+        const VisualBoxStyleIndex index = Register(outline, StyleUnits::Pixels).visualBoxStyleIndex;
+        m_outlines.push_back({ widths, radius, color, index });
+        return index;
+    }
+
+    float StyleManager::GetOpacity(uint32_t gpuStyleIndex) const noexcept
+    {
+        const VisualShadowStyle* extras = GetVisualShadowStyle(gpuStyleIndex);
+        return extras ? extras->opacity : -1.0f;
+    }
+
+    uint16_t StyleManager::RegisterShadows(const BoxShadow (&layers)[kMaxBoxShadows], const BoxShadow& ring, BoxCorners radius,
+                                           float opacity) noexcept
     {
         auto visual = [this](const BoxShadow& b) {
             if (b.IsNone()) return VisualShadow{};
@@ -691,7 +717,8 @@ namespace tachyon
         };
 
         VisualShadowStyle s;
-        bool any = !ring.IsNone();
+        s.opacity = opacity < 0.0f ? -1.0f : std::min(opacity, 1.0f);
+        bool any = !ring.IsNone() || opacity >= 0.0f;
         for (int i = 0; i < kMaxBoxShadows; ++i)
         {
             s.layers[i] = visual(layers[i]);
@@ -701,15 +728,7 @@ namespace tachyon
         if (ring.inset)
         {
             // The outline is a border-only box with the element's corners (already in pixels).
-            Style outline{};
-            outline.borderWidths = BoxEdges(uint16_t(std::max<int>(1, ring.spread)));
-            outline.borderRadius = radius;
-            for (StyleState& state : outline.states)
-            {
-                state.backgroundColor = ColorStyle::Create(color4b{});
-                state.SetBorderColor(ColorStyle::Create(ring.color));
-            }
-            const VisualBoxStyleIndex box = Register(outline, StyleUnits::Pixels).visualBoxStyleIndex;
+            const VisualBoxStyleIndex box = RegisterOutline(BoxEdges(uint16_t(std::max<int>(1, ring.spread))), radius, ring.color);
             s.insetRing = 1u + uint32_t(int(box) - 1) * Style::kStateCount;
         }
         else

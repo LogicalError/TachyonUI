@@ -17,6 +17,7 @@ namespace tachyon
         ElementState s = ElementState::None;
         if (m_construction.IsDisabled()) s |= ElementState::Disabled;
         if (m_construction.IsSelected()) s |= ElementState::Selected;
+        if (m_construction.IsInvalid())  s |= ElementState::Invalid;
 
         // Transient states come from the previous frame's hit-test.
         const ID hoveredID      = m_interaction.GetHoveredID();
@@ -54,7 +55,7 @@ namespace tachyon
         if (forceFocus)
             s |= ElementState::Focused;
 
-        return (s & ElementState::VisualMask);
+        return (s & (ElementState::VisualMask | ElementState::Invalid));
     }
 
     bool GUIStateManager::BeginFrame()
@@ -123,7 +124,7 @@ namespace tachyon
         if (!m_construction.IsBalanced())
         {
             Diagnostics::ReportMisuse(Diagnostics::MakeLogCategory("state"),
-                "GUIStateManager: PushDisabled/PushSelected/PushIndeterminate left unpopped at EndFrame (reset)");
+                "GUIStateManager: PushDisabled/PushSelected/PushIndeterminate/PushInvalid left unpopped at EndFrame (reset)");
             m_construction.Reset();
         }
 

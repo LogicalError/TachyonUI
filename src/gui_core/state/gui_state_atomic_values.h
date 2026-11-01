@@ -51,6 +51,7 @@ namespace tachyon
         uint32_t m_disabledLevel      = 0;
         uint32_t m_selectedLevel      = 0;
         uint32_t m_indeterminateLevel = 0;
+        uint32_t m_invalidLevel       = 0;
 
     public:
         void PushDisabled() { m_disabledLevel++; }
@@ -59,15 +60,19 @@ namespace tachyon
         void PushSelected() { m_selectedLevel++; }
         void PopSelected()  { if (m_selectedLevel > 0) m_selectedLevel--; else ReportUnmatchedPop("ConstructionScopes: PopSelected without PushSelected (ignored)"); }
 
+        void PushInvalid() { m_invalidLevel++; }
+        void PopInvalid()  { if (m_invalidLevel > 0) m_invalidLevel--; else ReportUnmatchedPop("ConstructionScopes: PopInvalid without PushInvalid (ignored)"); }
+
         void PushIndeterminate() { m_indeterminateLevel++; }
         void PopIndeterminate()  { if (m_indeterminateLevel > 0) m_indeterminateLevel--; else ReportUnmatchedPop("ConstructionScopes: PopIndeterminate without PushIndeterminate (ignored)"); }
 
         bool IsDisabled()      const { return m_disabledLevel      > 0; }
         bool IsSelected()      const { return m_selectedLevel      > 0; }
         bool IsIndeterminate() const { return m_indeterminateLevel > 0; }
+        bool IsInvalid()       const { return m_invalidLevel       > 0; }
 
-        void Reset()            { m_disabledLevel = 0; m_selectedLevel = 0; m_indeterminateLevel = 0; }
-        bool IsBalanced() const { return m_disabledLevel == 0 && m_selectedLevel == 0 && m_indeterminateLevel == 0; }
+        void Reset()            { m_disabledLevel = 0; m_selectedLevel = 0; m_indeterminateLevel = 0; m_invalidLevel = 0; }
+        bool IsBalanced() const { return m_disabledLevel == 0 && m_selectedLevel == 0 && m_indeterminateLevel == 0 && m_invalidLevel == 0; }
 
     private:
         /// A Pop without its Push is reported and ignored.

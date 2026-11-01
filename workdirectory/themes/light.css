@@ -26,7 +26,6 @@
     --line-section: #E9EBEF;
     /* ---- Text ------------------------------------------------------------- */
     --text-1: #1A1D23;
-    --text-disabled: #98999C;
     --text-2: #464C57;
     --text-3: #5F6673;
     --text-link: #2459C9;
@@ -53,6 +52,7 @@
     --warn: #D99A2B;
     --warn-text: #8E5D11;
     --error: #D64545;
+    --invalid-halo: 0 0 0 3px #D645452E;  /* around an invalid control: the error color at 18% */
     --danger: #C93C3C;
     --on-danger: #FFFFFF;
     --warn-soft: #D99A2B29;

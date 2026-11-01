@@ -57,9 +57,10 @@ pixels when given as `Pixels{ n }` or an `int2`. The builders are in
 
 | Pair | Effect |
 | --- | --- |
-| `BeginDisabled()` / `EndDisabled()` | Dimmed, no input; menu items can't be chosen |
+| `BeginDisabled()` / `EndDisabled()` | Drawn at 40% opacity (menu items 45%), no input; menu items can't be chosen |
 | `BeginSelected()` / `EndSelected()` | Drawn selected; a menu item shows a check mark |
 | `BeginIndeterminate()` / `EndIndeterminate()` | Fields show a dash for mixed values and return `false` |
+| `BeginInvalid()` / `EndInvalid()` | The value isn't accepted: an error border and halo (`--error`, `--invalid-halo`) over the control in any state; the halo grows in over 150 ms |
 
 **Scope objects.** Each Begin / End pair also has a scope object that calls the End
 when it leaves, taking the Begin's arguments: `Window`, `GhostWindow`,
@@ -67,7 +68,7 @@ when it leaves, taking the Begin's arguments: `Window`, `GhostWindow`,
 `Horizontal`, `Vertical`, `HorizontalWrap`, `VerticalWrap`, `Area`, `LabelGroup`,
 `ButtonGroup`, `ToggleGroup`, `Table`, `Row`, `ListView`, `GridView`, `TabBar`,
 `Toolbar`, `StatusBar`, `TitleBar`, `ReorderableGroup`, `ReorderableItem`, `Disabled`,
-`Selected`, `Indeterminate`, `DockingContainer`. See [Scopes](../overview/begin-end.md#scopes).
+`Selected`, `Indeterminate`, `Invalid`, `DockingContainer`. See [Scopes](../overview/begin-end.md#scopes).
 
 ```cpp
 if (auto menu = Menu("File"))

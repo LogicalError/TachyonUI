@@ -47,6 +47,9 @@ namespace tachyon
         Selected  = 1 << 3,  ///< selected item (CSS: :selected)
         Selection = 1 << 4,  ///< text-selection highlight; combines with Active, Hover, Focused, Selected
         Disabled  = 1 << 5,  ///< exclusive: overrides every other visual bit
+        /// Its value isn't accepted (BeginInvalid). Not a style slot: the topmost invalid
+        /// element gets the theme's error border and halo over whatever state it's in.
+        Invalid   = 1 << 6,
 
         VisualMask = Active | Hover | Focused | Selected | Selection | Disabled
     };
@@ -657,6 +660,9 @@ namespace tachyon
         /// CSS: text-shadow, under the text, its decorations and its icon; the first is drawn
         /// on top. No spread, never inset.
         BoxShadow  textShadow[kMaxTextShadows] {};
+        /// CSS: opacity, 0 to 1: the element and everything in it drawn that much opaque.
+        /// Below 0 is not set: 1, or the theme's --disabled-opacity for a disabled control.
+        float      opacity = -1.0f;
 
         /// Sets all four border colors to `c`.
         void SetBorderColor(const ColorStyle& c) { borderColors[0] = borderColors[1] = borderColors[2] = borderColors[3] = c; }
@@ -898,13 +904,15 @@ namespace tachyon
         bool operator==(const VisualShadow&) const noexcept = default;
     };
 
-    /// A state's shadows; the ring is drawn only while focus is from the keyboard, outside
-    /// the box or, for an inset ring, as a border-only box style over it.
+    /// What a state draws on the CPU only: its shadows and its opacity. The ring is drawn
+    /// only while focus is from the keyboard, outside the box or, for an inset ring, as a
+    /// border-only box style over it.
     struct VisualShadowStyle
     {
         VisualShadow layers[kMaxBoxShadows] {}; ///< the state's box-shadow layers
         VisualShadow ring {};                   ///< the focus ring (Style::focusRing)
         uint32_t     insetRing = 0; ///< 1 + flat GPU index of the outline's box style, 0 = none
+        float        opacity   = -1.0f; ///< StyleState::opacity; below 0 = not set
 
         bool operator==(const VisualShadowStyle&) const noexcept = default;
     };
@@ -924,7 +932,8 @@ namespace tachyon
         VisualColorStyleIndex backgroundColorIndex = VisualColorStyleIndex::Invalid; ///< background color
         uint16_t borderDashSize   = 0;                                     ///< dash length in pixels; 0 = solid
         uint16_t borderDashOffset = 0;                                     ///< offset into the dash pattern, pixels
-        /// 1-based index of the state's VisualShadowStyle, 0 = none; read on the CPU only.
+        /// 1-based index of the state's VisualShadowStyle (shadows, opacity), 0 = none; read
+        /// on the CPU only.
         uint16_t shadowIndex      = 0;
         // Total: 32 bytes
 

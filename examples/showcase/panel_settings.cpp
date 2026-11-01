@@ -86,8 +86,12 @@ namespace tachyon
         Text(idManager.AllocateDynamicID("settingsTitle"), "General", settingsTitleStyleRef);
         BeginLabelGroup(140);
 
+        // Empty isn't accepted: the field shows it until a name is typed.
         Label("User name");
+        const bool noName = showcase.settingsUserName.empty();
+        if (noName) BeginInvalid();
         Field(showcase.settingsUserName, TextEditBehavior::None);
+        if (noName) EndInvalid();
 
         Label("Autosave");
         Switch(showcase.settingsAutosave, showcase.settingsAutosave ? "On" : "Off");

@@ -93,6 +93,7 @@ namespace
         MisuseCase{ "EndWindow",           [](HeadlessGUIApp& a) { a.EndWindow(); } },
         MisuseCase{ "EndGhostWindow",      [](HeadlessGUIApp& a) { a.EndGhostWindow(); } },
         MisuseCase{ "EndDisabled",         [](HeadlessGUIApp& a) { a.EndDisabled(); } },
+        MisuseCase{ "EndInvalid",          [](HeadlessGUIApp& a) { a.EndInvalid(); } },
         MisuseCase{ "EndSelected",         [](HeadlessGUIApp& a) { a.EndSelected(); } },
         MisuseCase{ "EndIndeterminate",    [](HeadlessGUIApp& a) { a.EndIndeterminate(); } },
         MisuseCase{ "PopParent",           [](HeadlessGUIApp& a) { (void)a.idManager.PopParent(); } }
@@ -130,6 +131,7 @@ namespace
         MisuseCase{ "BeginTabBar",           [](HeadlessGUIApp& a) { a.BeginTabBar(a.idManager.CreateStaticID(), &g_selected, [](int, int) {}); } },
         MisuseCase{ "BeginDockingContainer", [](HeadlessGUIApp& a) { a.BeginDockingContainer(a.idManager.CreateStaticID(), &g_dockingLayout); } },
         MisuseCase{ "BeginDisabled",         [](HeadlessGUIApp& a) { a.BeginDisabled(); } },
+        MisuseCase{ "BeginInvalid",          [](HeadlessGUIApp& a) { a.BeginInvalid(); } },
         MisuseCase{ "BeginSelected",         [](HeadlessGUIApp& a) { a.BeginSelected(); } },
         MisuseCase{ "BeginIndeterminate",    [](HeadlessGUIApp& a) { a.BeginIndeterminate(); } },
         MisuseCase{ "PushParent",            [](HeadlessGUIApp& a) { (void)a.idManager.PushParent(a.idManager.CreateStaticID()); } }

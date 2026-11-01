@@ -471,6 +471,12 @@ namespace tachyon
         tachyon::VisualColorStyleIndex dividerHoverLineStyle; ///< a hovered divider drawn as a line (label sizer)
         tachyon::VisualColorStyleIndex nanTextColor;          ///< a number field's NaN
         tachyon::color4b               scrim {};              ///< dims a window under its modal dialog (fading in and out)
+        /// --disabled-opacity: a disabled control, with all its parts, is drawn this opaque,
+        /// unless its style sets an opacity for :disabled.
+        float                          disabledOpacity = 0.4f;
+        /// An invalid control's border color (--error) and the halo around it (--invalid-halo).
+        tachyon::color4b               invalidColor {};
+        tachyon::VisualShadow          invalidHalo {};
         /// The .link class: its color, :hover color and cursor, for a ContentRun's linkStyle.
         /// The LinkStyle defaults when the theme has no such class.
         tachyon::LinkStyle             linkStyle {};

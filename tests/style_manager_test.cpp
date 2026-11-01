@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 
 #include <gui_core/elements/gui_element_storage.h>
+#include <gui_core/graphics/gui_renderer.h>
 
 #include <gui_core/style/gui_style_manager.h>
 #include <gui_core/style/gui_gradient_manager.h>
@@ -555,5 +556,42 @@ namespace tachyon
         EXPECT_EQ(sm.WithFlexWrap(base, FlexWrap::Wrap).layoutStyleIndex, wrapped.layoutStyleIndex) << "registered once";
         EXPECT_EQ(sm.WithFlexWrap(base, FlexWrap::NoWrap), base) << "already that way";
         EXPECT_EQ(sm.WithFlexWrap(wrapped, FlexWrap::NoWrap).layoutStyleIndex, base.layoutStyleIndex) << "and back to the base";
+    }
+    // A state's opacity is kept with the style; two styles that differ only in it stay apart.
+    TEST(StyleManagerTest, OpacityIsKeptPerState)
+    {
+        GradientManager gm(16);
+        StyleManager sm(gm);
+        Style faded{};
+        faded.states[ElementState::Disabled].opacity = 0.45f;
+        Style plain{};
+        const StyleRef fadedRef = sm.Register(faded);
+        const StyleRef plainRef = sm.Register(plain);
+        EXPECT_NE(fadedRef.visualBoxStyleIndex, plainRef.visualBoxStyleIndex);
+        EXPECT_FLOAT_EQ(sm.GetOpacity(GUIRenderer::StyleIndex(fadedRef.visualBoxStyleIndex, ElementState::Disabled)), 0.45f);
+        EXPECT_LT(sm.GetOpacity(GUIRenderer::StyleIndex(fadedRef.visualBoxStyleIndex, ElementState::None)), 0.0f);
+        EXPECT_LT(sm.GetOpacity(GUIRenderer::StyleIndex(plainRef.visualBoxStyleIndex, ElementState::Disabled)), 0.0f);
+        EXPECT_FLOAT_EQ(sm.GetOpacity(GUIRenderer::StyleIndex(fadedRef.visualBoxStyleIndex, ElementState::Disabled | ElementState::Hover)), 0.45f)
+            << "disabled stands for every state it's in";
+    }
+    // An outline is registered once per look; ClearAll forgets it.
+    TEST(StyleManagerTest, OutlinesAreRegisteredOnce)
+    {
+        GradientManager gm(16);
+        StyleManager sm(gm);
+        const color4b red{ 255, 0, 0, 255 };
+        const VisualBoxStyleIndex a = sm.RegisterOutline(BoxEdges(1), BoxCorners(4), red);
+        EXPECT_EQ(sm.RegisterOutline(BoxEdges(1), BoxCorners(4), red), a);
+        EXPECT_NE(sm.RegisterOutline(BoxEdges(2), BoxCorners(4), red), a);
+        EXPECT_NE(sm.RegisterOutline(BoxEdges(1), BoxCorners(4), color4b{ 0, 0, 255, 255 }), a);
+        const VisualBoxStyle* box = sm.GetVisualBoxStyle(a, ElementState::Hover);
+        ASSERT_NE(box, nullptr);
+        EXPECT_EQ(box->borderWidths, BoxEdges(1));
+        EXPECT_EQ(box->borderRadius, BoxCorners(4));
+        EXPECT_FALSE(sm.IsBoxBackgroundOpaque(GUIRenderer::StyleIndex(a, ElementState::None))) << "no background";
+
+        sm.ClearAll();
+        const VisualBoxStyleIndex again = sm.RegisterOutline(BoxEdges(1), BoxCorners(4), red);
+        ASSERT_NE(sm.GetVisualBoxStyle(again, ElementState::None), nullptr) << "registered anew";
     }
 }
