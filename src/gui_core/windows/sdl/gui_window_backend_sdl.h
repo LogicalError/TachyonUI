@@ -2,6 +2,7 @@
 
 #include <gui_core/gui_base_types.h>
 #include <gui_core/windows/gui_window_backend.h>
+#include <gui_core/windows/gui_layered_fade.h>
 #include <gui_core/input/gui_input_enums.h>
 #include <gui_core/memory/gui_allocation_hooks.h>
 
@@ -75,6 +76,9 @@ namespace tachyon
         bool TakeCloseRequest(OSWindowHandle window) override;
         MouseButtons GetMouseButtons() override;
         float GetDoubleClickMilliseconds() override;
+        uint32_t ShowFade(OSWindowHandle window, IWindowContext* context, IntRect screenRect, float opacity) override;
+        void     MoveFade(uint32_t fade, IntRect screenRect, float opacity) override;
+        void     EndFade(uint32_t fade) override;
         bool PrefersReducedMotion() override;
         
         void SetCursor(MouseCursor cursor) override;
@@ -148,6 +152,7 @@ namespace tachyon
         bool m_checkFocusLeftApp = false;  ///< a window lost focus: did the app?
         bool m_suppressLiveResize = false; ///< no live-resize render during code changes
         SDL_Window* m_lastFocusableWindow = nullptr; ///< reroutes tooltip input
+        LayeredFades m_fades;               ///< stand-ins for fading popups
         
         SDL_Window* GetTopModalWindowSDL() const;
     public:

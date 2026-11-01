@@ -304,6 +304,7 @@ void VulkanWindowContext::ResizeSwapchain(tachyon::int2 size)
         windowExtent.width = size.x;
         windowExtent.height = size.y;
 
+        readbackBuffer = {};   // the old one goes below; CreateSwapchain makes one where it reads back every frame
         CreateSwapchain();
     }
 
@@ -646,11 +647,28 @@ void VulkanWindowContext::PerformReadback(const VulkanImage& drawImage)
 
 bool VulkanWindowContext::ReadPixels(std::span<uint8_t> bgra)
 {
-    if (!renderToImage || frameNumber == 0 || freeze_rendering)
+    if (frameNumber == 0 || freeze_rendering)
         return false;
     FrameData& last = GetLastFrame();
-    if (bgra.size() < size_t(drawExtent.width) * drawExtent.height * 4 || readbackBuffer.buffer == VK_NULL_HANDLE)
+    if (bgra.size() < size_t(drawExtent.width) * drawExtent.height * 4)
         return false;
+    // A window with a swapchain reads back only now and then (a popup's fade): its buffer
+    // is made the first time.
+    if (readbackBuffer.buffer == VK_NULL_HANDLE)
+    {
+        const VkDeviceSize bufferSize = VkDeviceSize(windowExtent.width) * windowExtent.height * 4;
+        VkBufferCreateInfo bufferInfo = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        bufferInfo.size  = bufferSize;
+        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        VmaAllocationCreateInfo allocInfo = {};
+        allocInfo.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+        allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT;
+        if (vmaCreateBuffer(deviceContext->allocator, &bufferInfo, &allocInfo,
+                            &readbackBuffer.buffer, &readbackBuffer.allocation, nullptr) != VK_SUCCESS)
+            return false;
+        vmaSetAllocationName(deviceContext->allocator, readbackBuffer.allocation, "Window::ReadbackBuffer");
+        cachedBitmap.resize(bufferSize);
+    }
     WaitForFence(deviceContext->device, last.renderFence);
     PerformReadback(last.drawImage);
     std::memcpy(bgra.data(), cachedBitmap.data(), size_t(drawExtent.width) * drawExtent.height * 4);

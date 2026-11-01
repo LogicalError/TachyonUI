@@ -445,6 +445,8 @@ namespace tachyon
         /// follows the OS (on Windows, "Animation effects" turned off); true or false sets it,
         /// nullopt follows the OS again.
         void SetReducedMotion(std::optional<bool> reduced);
+        /// True while a theme switch is crossfading (the old look fading out over the new).
+        bool IsThemeCrossfading() const { return !m_crossfades.empty(); }
         /// Whether changes of state show at once now.
         bool IsReducedMotion() const { return transitionManager.IsReducedMotion(); }
 
@@ -2529,6 +2531,23 @@ namespace tachyon
         float       m_globalFontScale { 1.0f };
         float       m_uiScale { 1.0f };
         std::optional<bool> m_reducedMotion;   ///< set by SetReducedMotion; else the OS's
+
+        /// A theme switch crossfades: each window's last frame in the old theme, drawn over the
+        /// new one and fading out over kThemeCrossfadeSecs.
+        struct ThemeCrossfade
+        {
+            ID         window = ID::Invalid();
+            tachyon::Image* image = nullptr;
+            ImageIndex index  = ImageIndex::Invalid;
+        };
+        static constexpr float kThemeCrossfadeSecs = 0.2f;
+        std::vector<ThemeCrossfade> m_crossfades;
+        float                       m_crossfadeStart = 0.0f;           ///< frame clock seconds
+        VisualBoxStyleIndex         m_crossfadeStyle = VisualBoxStyleIndex::Invalid; ///< a borderless box filled by its texture
+        /// Reads each window's last frame, before a theme switch replaces its styles.
+        void CaptureThemeCrossfade();
+        /// Releases the captured frames.
+        void EndThemeCrossfade();
         float       m_displayScale { 1.0f };
         FrameClock  m_frameClock;   ///< animation time, vsync-paced
         bool        m_themeReloadPending { false };

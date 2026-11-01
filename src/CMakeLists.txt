@@ -4,6 +4,7 @@ list(APPEND GUI_FILES
   gui_core/gui_base_types.h
   gui_core/gui_base_types.cpp
 
+  gui_core/gui_easing.h
   gui_core/gui_enum_operators.h
   gui_core/gui_hash.h
 
@@ -115,6 +116,8 @@ list(APPEND GUI_FILES
   gui_core/windows/gui_window_registry.h
   gui_core/windows/gui_window_flags.h
   gui_core/windows/gui_window_backend.h
+  gui_core/windows/gui_layered_fade.h
+  gui_core/windows/gui_layered_fade.cpp
   gui_core/windows/gui_os_window_manager.cpp
   gui_core/windows/gui_image_window_backend.h
   gui_core/windows/gui_image_window_backend.cpp
@@ -362,7 +365,6 @@ list(APPEND GUI_CONTROLS_FILES
   gui_controls/gui_label_binding.h
   gui_controls/gui_label_binding.cpp
 
-  gui_controls/gui_easing.h
   gui_controls/gui_transition_manager.h
   gui_controls/gui_transition_manager.cpp
 

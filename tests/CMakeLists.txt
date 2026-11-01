@@ -6,6 +6,7 @@ list(APPEND GUI_CORE_TEST_FILES
   controls_grid_view_test.cpp
   controls_menu_test.cpp
   transition_manager_test.cpp
+  layered_fade_test.cpp
   controls_scrollbar_test.cpp
   controls_slider_integration_test.cpp
   controls_tabs_test.cpp
@@ -186,6 +187,7 @@ if(TACHYON_SDL)
     gpu/gpu_application_init_test.cpp
     gpu/gpu_disabled_opacity_test.cpp
     gpu/gpu_invalid_test.cpp
+    gpu/gpu_theme_crossfade_test.cpp
     gpu/gpu_sdl_host_event_loop_test.cpp
     gpu/gpu_sdl_single_copy_test.cpp
     gpu/gpu_zero_setup_test.cpp

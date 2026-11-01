@@ -2,6 +2,8 @@
 
 ## Tooltips
 
+A tooltip fades in over 100 ms and out over 80 ms (not with reduced motion).
+
 ```cpp
 void SetTooltip(ID targetID, std::string_view text);
 void SetTooltip(ID targetID, IconID icon, std::string_view text);

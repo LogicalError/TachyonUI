@@ -420,6 +420,47 @@ namespace
                 EXPECT_LE(redness(PixelAt(ctx, x, y)), limit) << "corner pixel " << x << "," << y << ": " << std::hex << (PixelAt(ctx, x, y) & 0xFFFFFF) << std::dec << " fill " << fill << " border " << border;
     }
 
+    // A window with a swapchain reads back what it drew too (a popup's last frame, for the
+    // stand-in that fades it).
+    TEST_F(GpuReadbackTest, AWindowWithASwapchainReadsBack)
+    {
+        auto* ctx = CreateHiddenWindowContext(kSize, tachyon::WindowFlags::None);
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan surface available";
+        const tachyon::VisualColorStyleIndex color = styleManager.RegisterColorStyle(
+            tachyon::ColorStyle::Create(tachyon::color4b{ 30, 160, 90, 255 }));
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x, kSize.y }, kFullClip, color);
+        });
+        const uint32_t px = PixelAt(ctx, kSize.x / 2, kSize.y / 2);   // BGRA8
+        EXPECT_NEAR(int((px >> 16) & 0xFF), 30, 2);
+        EXPECT_NEAR(int((px >> 8) & 0xFF), 160, 2);
+        EXPECT_NEAR(int(px & 0xFF), 90, 2);
+        EXPECT_EQ(int(px >> 24), 255);
+    }
+
+    // The backend shows a stand-in for a drawn window with its last frame, and takes it away.
+    TEST_F(GpuReadbackTest, TheBackendShowsAStandInForADrawnWindow)
+    {
+        auto* ctx = CreateHiddenWindowContext(kSize, tachyon::WindowFlags::None);
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan surface available";
+        RegisterColorStyles();
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x, kSize.y }, kFullClip, solidColor);
+        });
+        const tachyon::OSWindowHandle handle = ctx->GetWindowHandle();
+        const uint32_t fade = windowBackend->ShowFade(handle, ctx, tachyon::IntRect{ -20000, -20000, kSize.x, kSize.y }, 0.5f);
+#ifdef _WIN32
+        ASSERT_NE(fade, 0u);
+        windowBackend->MoveFade(fade, tachyon::IntRect{ -19990, -20000, kSize.x, kSize.y }, 1.0f);
+        windowBackend->EndFade(fade);
+        EXPECT_EQ(windowBackend->ShowFade(handle, nullptr, tachyon::IntRect{ 0, 0, 10, 10 }, 1.0f), 0u) << "nothing to show";
+#else
+        EXPECT_EQ(fade, 0u);
+#endif
+    }
+
     // ---- Blending between two states ----
 
     // A plain box in one color, in every state.

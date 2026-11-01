@@ -85,6 +85,15 @@ A change that comes back before the blend has finished (out again during a hover
 on from what is shown, in the new change's timing. A control part blends its on / off flip
 only when it has `ElementFlags::AnimatesSelected`; other selection changes are instant.
 
+Popups and theme switches move too:
+
+| Change | Time | Easing |
+| --- | --- | --- |
+| A menu or popup opening | 120 ms, fading in and sliding 4px away from what it opens from | ease-out |
+| A tooltip appearing | 100 ms, fading in | ease-out |
+| Either closing | 80 ms, fading out | ease-out |
+| Another palette (`RequestReloadTheme`) | 200 ms: the old look fades out over the new | ease-in-out |
+
 With reduced motion every change is instant. It follows the OS setting (on Windows, the
 "Animation effects" switch); `GUIApplication::SetReducedMotion` sets it for the app.
 
