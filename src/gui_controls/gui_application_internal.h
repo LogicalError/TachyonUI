@@ -22,6 +22,7 @@ namespace tachyon
         using GUIApplication::m_dockTabDragSub;
         using GUIApplication::m_toolbarWindowDrag;
         using GUIApplication::m_uiCache;
+        using GUIApplication::FireStateTransitions;
 
         using GUIApplication::controlStylesStack;
         using GUIApplication::tooltipWindowID;

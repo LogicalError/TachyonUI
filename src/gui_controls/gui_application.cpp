@@ -797,6 +797,49 @@ namespace tachyon
         guiRenderer->RenderBox(rectLayout, clipRectScreen, style, style, 1.0f, {}, ImageIndex::Invalid, snappedPx);
     }
 
+    void GUIApplication::FireStateTransitions(float elapsedTimeSecs)
+    {
+        // Hover and Focused cover the leaf plus its PropagatesDescendantState ancestors, so
+        // moving within such an ancestor doesn't start one again.
+        auto& interaction = guiStateManager.Interaction();
+        std::vector<ID> hoverProp   = CollectPropagatedAncestors(elementStorage, interaction.GetHoveredID());
+        std::vector<ID> focusedProp = CollectPropagatedAncestors(elementStorage, interaction.GetFocusedID());
+        auto withLeaf = [](std::vector<ID> v, ID leaf) {
+            if (leaf != ID::Invalid()) v.push_back(leaf);
+            return v;
+        };
+        std::vector<ID> hover   = withLeaf(hoverProp,   interaction.GetHoveredID());
+        std::vector<ID> focused = withLeaf(focusedProp, interaction.GetFocusedID());
+        const ID        active  = interaction.GetActiveID();
+
+        // Against what the last call saw, not what the frame began with: the focus also moves
+        // while the UI is built (a menu item hovered takes it) and in handlers.
+        // No hover transitions while keyboard-navigating: a keyboard scroll moves elements
+        // under a stationary cursor, which would otherwise animate them.
+        if (!interaction.IsHoverSuppressed())
+            FireEffectiveSetTransitions(m_transitionsSeen.hover, hover, ElementState::Hover,
+                                        elementStorage, transitionManager, elapsedTimeSecs);
+        FireEffectiveSetTransitions(m_transitionsSeen.focused, focused, ElementState::Focused,
+                                    elementStorage, transitionManager, elapsedTimeSecs);
+        if (m_transitionsSeen.active != active)
+        {
+            auto change = [&](ID id, bool pressed) {
+                const ElementRef ref = elementStorage.FindElementRefByID(id);
+                if (id == ID::Invalid() || !ref.IsValid())
+                    return;
+                const ElementState oldState = elementStorage.GetElementUnsafe(ref).state;
+                transitionManager.OnStateChange(id, oldState, pressed ? oldState | ElementState::Active : oldState & ~ElementState::Active,
+                                                elapsedTimeSecs);
+            };
+            change(m_transitionsSeen.active, false);
+            change(active, true);
+        }
+        m_transitionsSeen = { hover, focused, active };
+
+        interaction.SetPropagatedHoverIDs(std::move(hoverProp));
+        interaction.SetPropagatedFocusedIDs(std::move(focusedProp));
+    }
+
     void GUIApplication::OnRender(float elapsedTimeSecs)
     {
         // Per-depth render state, indexed by ElementRef.depth (parent = depth - 1).
@@ -1499,12 +1542,7 @@ namespace tachyon
             if (inputManager)
                 inputManager->UpdatePreHover(guiStateManager);
 
-            // Captured before EndFrame to detect state changes.
-            const ID prevHoverID   = guiStateManager.Interaction().GetHoveredID();
-            const ID prevActiveID  = guiStateManager.Interaction().GetActiveID();
-            const ID prevFocusedID = guiStateManager.Interaction().GetFocusedID();
-            std::vector<ID> prevHoverProp   = guiStateManager.Interaction().GetPropagatedHoverIDs();
-            std::vector<ID> prevFocusedProp = guiStateManager.Interaction().GetPropagatedFocusedIDs();
+            const ID prevHoverID = guiStateManager.Interaction().GetHoveredID();
 
             const tachyon::int2 mousePosition = windowManager->GetScreenMousePos();
             FrameInput frameInput
@@ -1529,67 +1567,11 @@ namespace tachyon
             const tachyon::ID hoverID       = frameHover.hoverID;
             const tachyon::ID hoverWindowID = frameHover.hoverWindowID;
 
-            // Start transitions for state changes. Hover/Focused diff the leaf plus its
-            // PropagatesDescendantState ancestors, so moving within such an ancestor doesn't retrigger it.
-            const ID newHoverID   = guiStateManager.Interaction().GetHoveredID();
-            const ID newActiveID  = guiStateManager.Interaction().GetActiveID();
-            const ID newFocusedID = guiStateManager.Interaction().GetFocusedID();
-
-            std::vector<ID> newHoverProp   = CollectPropagatedAncestors(elementStorage, newHoverID);
-            std::vector<ID> newFocusedProp = CollectPropagatedAncestors(elementStorage, newFocusedID);
-
-            auto withLeaf = [](std::vector<ID> v, ID leaf) {
-                if (leaf != ID::Invalid()) v.push_back(leaf);
-                return v;
-            };
-            const std::vector<ID> prevHoverEff   = withLeaf(prevHoverProp,   prevHoverID);
-            const std::vector<ID> newHoverEff    = withLeaf(newHoverProp,    newHoverID);
-            const std::vector<ID> prevFocusedEff = withLeaf(prevFocusedProp, prevFocusedID);
-            const std::vector<ID> newFocusedEff  = withLeaf(newFocusedProp,  newFocusedID);
-
             // Nothing under the cursor anymore (widget vanished, window blur): end suppression.
-            if (newHoverID == ID::Invalid() && prevHoverID != ID::Invalid())
+            if (guiStateManager.Interaction().GetHoveredID() == ID::Invalid() && prevHoverID != ID::Invalid())
                 guiStateManager.Interaction().ClearHoverSuppression();
 
-            // No hover transitions while keyboard-navigating: a keyboard scroll moves
-            // elements under a stationary cursor, which would otherwise animate them.
-            if (!guiStateManager.Interaction().IsHoverSuppressed())
-            {
-                FireEffectiveSetTransitions(prevHoverEff, newHoverEff,
-                                            ElementState::Hover,
-                                            elementStorage, transitionManager, elapsedTimeSecs);
-            }
-
-            FireEffectiveSetTransitions(prevFocusedEff, newFocusedEff,
-                                        ElementState::Focused,
-                                        elementStorage, transitionManager, elapsedTimeSecs);
-
-            if (prevActiveID != newActiveID)
-            {
-                if (prevActiveID != ID::Invalid())
-                {
-                    ElementRef ref = elementStorage.FindElementRefByID(prevActiveID);
-                    if (ref != ElementRef::Invalid())
-                    {
-                        ElementState oldState = elementStorage.GetElementUnsafe(ref).state;
-                        ElementState newState = oldState & ~ElementState::Active;
-                        transitionManager.OnStateChange(prevActiveID, oldState, newState, elapsedTimeSecs);
-                    }
-                }
-                if (newActiveID != ID::Invalid())
-                {
-                    ElementRef ref = elementStorage.FindElementRefByID(newActiveID);
-                    if (ref != ElementRef::Invalid())
-                    {
-                        ElementState oldState = elementStorage.GetElementUnsafe(ref).state;
-                        ElementState newState = oldState | ElementState::Active;
-                        transitionManager.OnStateChange(newActiveID, oldState, newState, elapsedTimeSecs);
-                    }
-                }
-            }
-
-            guiStateManager.Interaction().SetPropagatedHoverIDs(std::move(newHoverProp));
-            guiStateManager.Interaction().SetPropagatedFocusedIDs(std::move(newFocusedProp));
+            FireStateTransitions(elapsedTimeSecs);
             
             UpdateMouseCursor(hoverID, hoverWindowID, mousePosition);
 

@@ -2465,6 +2465,18 @@ namespace tachyon
         void UpdateMouseCursor(ID hoverID, ID hoverWindowID, int2 mousePosition);
 
         void OnRender(float elapsedTimeSecs);
+        /// After EndFrame: starts the transitions of the elements whose hover, focus or press
+        /// changed since the last call, and sets the propagated hover and focus.
+        void FireStateTransitions(float elapsedTimeSecs);
+        /// What FireStateTransitions saw last: hovered and focused (each with the ancestors
+        /// that take their state), and pressed.
+        struct TransitionsSeen
+        {
+            std::vector<ID> hover;
+            std::vector<ID> focused;
+            ID              active = ID::Invalid();
+        };
+        TransitionsSeen m_transitionsSeen;
         /// The box style's CSS shadows (and the focus ring when `ring`), blended as the box is.
         void RenderBoxShadows(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, bool ring);
         /// One shadow layer around a box with corner `radius`; nothing for one hidden under it.
