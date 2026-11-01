@@ -1356,6 +1356,29 @@ namespace tachyon
 #endif
     }
 
+    uint32_t SDLWindowBackend::ShowFade(OSWindowHandle window, IWindowContext* context, IntRect screenRect, float opacity)
+    {
+        if (context == nullptr || window == nullptr)
+            return 0;
+        const IntRect pixels = GetWindowPixelRect(window);
+        if (pixels.w <= 0 || pixels.h <= 0)
+            return 0;
+        std::vector<uint8_t> bgra(size_t(pixels.w) * size_t(pixels.h) * 4);
+        if (!context->ReadPixels(bgra))
+            return 0;
+        return m_fades.Show(bgra, pixels.size, screenRect, opacity);
+    }
+
+    void SDLWindowBackend::MoveFade(uint32_t fade, IntRect screenRect, float opacity)
+    {
+        m_fades.Move(fade, screenRect, opacity);
+    }
+
+    void SDLWindowBackend::EndFade(uint32_t fade)
+    {
+        m_fades.End(fade);
+    }
+
     bool SDLWindowBackend::PrefersReducedMotion()
     {
 #ifdef _WIN32

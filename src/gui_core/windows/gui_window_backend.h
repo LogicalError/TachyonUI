@@ -207,6 +207,16 @@ namespace tachyon
         /// drawn instead).
         virtual bool SetWindowCloaked(OSWindowHandle, bool /*cloaked*/) { return false; }
 
+        /// A layered stand-in for `window` showing what `context` drew last, at `screenRect`
+        /// (screen pixels) and `opacity` (0 to 1), so the window itself can be hidden or
+        /// cloaked while it fades in or out. Returns the stand-in, or 0 where there are none:
+        /// then the window shows and hides at once.
+        virtual uint32_t ShowFade(OSWindowHandle /*window*/, IWindowContext* /*context*/, IntRect /*screenRect*/, float /*opacity*/) { return 0; }
+        /// Moves a stand-in and sets its opacity.
+        virtual void MoveFade(uint32_t /*fade*/, IntRect /*screenRect*/, float /*opacity*/) {}
+        /// Removes a stand-in.
+        virtual void EndFade(uint32_t /*fade*/) {}
+
         /// Every monitor, the primary first.
         virtual std::vector<MonitorInfo> GetMonitors() const = 0;
         /// Index into GetMonitors of the monitor holding the screen point `pos`; 0 (the

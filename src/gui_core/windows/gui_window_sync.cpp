@@ -124,6 +124,26 @@ namespace tachyon
             assert(addResult == AddWindowResult::SuccessCreate ||
                    addResult == AddWindowResult::SuccessRecycle ||
                    addResult == AddWindowResult::WindowUserClosed);
+
+            // A popup slides in away from what it's anchored to (below it, unless it flipped).
+            if ((winElement.flags & ElementFlags::WindowIsPopup) != ElementFlags::None)
+            {
+                const auto& c = winRect.constraints;
+                const ID anchor = c.y.type == PositionType::Anchored ? c.y.anchorTarget
+                                : c.x.type == PositionType::Anchored ? c.x.anchorTarget : ID::Invalid();
+                int2 away{ 0, 1 };
+                if (const ElementRef anchorRef = anchor != ID::Invalid() ? elementStorage.FindElementRefByID(anchor) : ElementRef::Invalid();
+                    elementStorage.IsValidRef(anchorRef))
+                {
+                    const IntRect a = elementStorage.GetElementRectUnsafe(anchorRef).rect;
+                    const IntRect r = winRect.rect;
+                    if      (r.y >= a.y + a.h) away = {  0,  1 };
+                    else if (r.y + r.h <= a.y) away = {  0, -1 };
+                    else if (r.x >= a.x + a.w) away = {  1,  0 };
+                    else if (r.x + r.w <= a.x) away = { -1,  0 };
+                }
+                windowManager.SetPopupSlide(windowEntry.id, away);
+            }
         }
     }
 }

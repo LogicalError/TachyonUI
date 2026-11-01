@@ -76,9 +76,23 @@ own timing. Ease-out is `cubic-bezier(0.2, 0, 0, 1)`, ease-in-out is `cubic-bezi
 | Disabled | at once | |
 | Invalid (`BeginInvalid`) | the border at once, the halo 150 ms | ease-out |
 
+Colors of different hues (both with some color, more than 20 degrees of hue apart: blue
+to red, ok to warning to error) blend in Oklab, so the middle keeps the ends' lightness and
+saturation; in sRGB it goes dark and grey. Greys and shades of one hue blend in sRGB. A
+transparent end adds no color, only its alpha.
+
 A change that comes back before the blend has finished (out again during a hover in) carries
 on from what is shown, in the new change's timing. A control part blends its on / off flip
 only when it has `ElementFlags::AnimatesSelected`; other selection changes are instant.
+
+Popups and theme switches move too:
+
+| Change | Time | Easing |
+| --- | --- | --- |
+| A menu or popup opening | 120 ms, fading in and sliding 4px away from what it opens from | ease-out |
+| A tooltip appearing | 100 ms, fading in | ease-out |
+| Either closing | 80 ms, fading out | ease-out |
+| Another palette (`RequestReloadTheme`) | 200 ms: the old look fades out over the new | ease-in-out |
 
 With reduced motion every change is instant. It follows the OS setting (on Windows, the
 "Animation effects" switch); `GUIApplication::SetReducedMotion` sets it for the app.

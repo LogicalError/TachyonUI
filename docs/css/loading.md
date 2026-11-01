@@ -23,7 +23,7 @@ The application picks the files:
 | --- | --- |
 | `SetResourceRoot(dir)` | Folder that relative theme and font paths load from; a file missing there comes from the library's built-in copy when it has one. Empty = the working directory. Call before `Initialize`. |
 | `SetStyleFiles(files)` | The style files loaded after the palette, in order. Default: `{ "styles.css" }`. Relative paths are next to the palette file. Call before `Initialize`, or follow with `RequestReloadTheme`. |
-| `RequestReloadTheme(path, fontScale)` | Load another palette and/or font scale at the start of the next frame. Before `Initialize`, it picks the starting palette. A no-op when nothing changed. |
+| `RequestReloadTheme(path, fontScale)` | Load another palette and/or font scale at the start of the next frame. Before `Initialize`, it picks the starting palette. A no-op when nothing changed. Another palette crossfades: the old look fades out over the new one in 200 ms (not with reduced motion). |
 | `GetThemePath()`, `GetGlobalFontScale()` | The current palette path (default `themes/dark.css`) and font scale. |
 | `ThemeReloadResult()` | How the last reload went. On an error (a file that can't be opened) the previous theme stays. |
 | `OnStylesReloaded()` | Virtual, called after each reload. Re-fetch or re-register your `StyleRef`s here. |

@@ -62,6 +62,10 @@ public:
     MOCK_METHOD(void, SetTextInputArea, (tachyon::OSWindowHandle, tachyon::IntRect), (override));
     MOCK_METHOD(float, GetWindowDisplayScale, (tachyon::OSWindowHandle), (override));
     MOCK_METHOD(tachyon::IntRect, GetWindowPixelRect, (tachyon::OSWindowHandle), (override));
+    MOCK_METHOD(bool, SetWindowCloaked, (tachyon::OSWindowHandle, bool), (override));
+    MOCK_METHOD(uint32_t, ShowFade, (tachyon::OSWindowHandle, tachyon::IWindowContext*, tachyon::IntRect, float), (override));
+    MOCK_METHOD(void, MoveFade, (uint32_t, tachyon::IntRect, float), (override));
+    MOCK_METHOD(void, EndFade, (uint32_t), (override));
 };
 
 } // namespace GUITest
