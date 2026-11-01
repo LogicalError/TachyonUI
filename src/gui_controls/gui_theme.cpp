@@ -696,6 +696,7 @@ namespace tachyon
         menuHeaderStyleRef                = registerCSS("menu-header");
         reorderDropSlotStyleRef           = registerCSS("reorder-drop-slot");
         reorderLiftedStyleRef             = registerCSS("reorder-lifted");
+        reorderLiftedRingStyleRef         = registerCSS("reorder-lifted-ring");
         menuItemDestructiveLabelStyleRef  = registerCSS("menu-item-label-destructive");
         menuItemDestructiveIconStyleRef   = registerCSS("menu-item-icon-destructive");
         menuItemRowStyleRef               = registerCSS("menu-item-row");

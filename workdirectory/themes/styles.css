@@ -2353,13 +2353,22 @@
     -tachyon-border-dash-size: 3px;
     background-color: var(--accent-soft);
 }
+/* The lifted row's fill goes under its parts; its ring over them, or its field would hide it. */
 .reorder-lifted {
     margin: 0px;
     padding: 0px;
     border-width: 1px;
     border-radius: var(--radius-md);
-    border-color: var(--accent);
+    border-color: transparent;
     background-color: var(--bg-control);
+}
+.reorder-lifted-ring {
+    margin: 0px;
+    padding: 0px;
+    border-width: 1px;
+    border-radius: var(--radius-md);
+    border-color: var(--accent);
+    background-color: transparent;
 }
 .collection-index {
     width: 14px;
