@@ -134,7 +134,9 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
-        app.quitAt = app.switchAt + 2;
+        // The switch applies at the start of the next frame, which starts the crossfade on that
+        // frame's clock, so it can't run out before the frame ends however slow it is.
+        app.quitAt = app.switchAt + 1;
         app.windowID = app.idManager.CreateStaticID();
         ASSERT_TRUE(app.Run());
         EXPECT_TRUE(app.IsThemeCrossfading()) << "test setup: still crossfading";
