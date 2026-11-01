@@ -234,7 +234,7 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
     tachyon::FrameInput frameInput
     {
         .activeWindowID   = activeWindow != tachyon::ID::Invalid() ? activeWindow : m_rootWindowID,
-        .windowUnderMouse = m_rootWindowID,
+        .windowUnderMouse = mouseWindow != tachyon::ID::Invalid() ? mouseWindow : m_rootWindowID,
         .mousePos         = m_mousePos,
         .mouseButtons     = m_buttonsHeld,
         .hitTest = [this](tachyon::ID window, tachyon::int2 pos)

@@ -413,6 +413,26 @@ namespace tachyon
         StyleRef tabCloseStyleRef {};
         ///@}
 
+        /// @name Documents
+        /// The document bar and the workspace under it. A document's tab, name and line take
+        /// their colors from its type's classes (.document-tab-level, ...); these are the plain
+        /// ones, for a type the theme has none for.
+        ///@{
+        StyleRef documentsStyleRef {};          ///< the bar and the active document's panels, a column
+        StyleRef documentBarStyleRef {};        ///< the bar: its row over the line
+        StyleRef documentRowStyleRef {};        ///< the tabs, "+" and the list
+        StyleRef documentTabBarStyleRef {};     ///< the tabs and "+"
+        StyleRef documentTabStyleRef {};
+        StyleRef documentNameStyleRef {};       ///< a tab's icon and name
+        StyleRef documentExtensionStyleRef {};  ///< ".level", after the name
+        StyleRef documentMarkStyleRef {};       ///< the slot for the close button or the unsaved dot
+        StyleRef documentCloseStyleRef {};
+        StyleRef documentDirtyStyleRef {};      ///< the unsaved-changes dot
+        StyleRef documentLineStyleRef {};       ///< under the bar, in the active document's color
+        StyleRef documentNewStyleRef {};        ///< "+"
+        StyleRef documentListStyleRef {};       ///< "N open", listing every document
+        ///@}
+
         StyleRef dockContainerStyleRef {};       ///< a docking container
         StyleRef dockContainerMainStyleRef {};   ///< a main window's docking area, with a side gutter
         StyleRef dockSplitHorzStyleRef {};   ///< horizontal flex row (split into left / right)

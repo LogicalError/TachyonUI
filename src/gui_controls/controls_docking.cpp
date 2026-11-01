@@ -642,6 +642,7 @@ namespace tachyon
     bool GUIApplication::BeginDockingFrame()
     {
         m_dockingLayoutsThisFrame.clear();
+        m_documentSetsThisFrame.clear();
         m_toolbarDocksThisFrame.clear();
         if (!m_reorderable->Drag().IsPressed())
             m_dockTabDragSub->Info() = {};
@@ -957,8 +958,16 @@ namespace tachyon
         fw.dockRequested = false;
         // Its home must still be docked this frame (not a closed window's layout).
         DockingLayout* home = fw.home;
-        if (std::find(m_dockingLayoutsThisFrame.begin(), m_dockingLayoutsThisFrame.end(), home) == m_dockingLayoutsThisFrame.end()
-            || home == &fw.layout || !home->root)
+        if (home == &fw.layout)
+            return;
+        if (std::find(m_dockingLayoutsThisFrame.begin(), m_dockingLayoutsThisFrame.end(), home) == m_dockingLayoutsThisFrame.end())
+        {
+            // A document that's open but not shown: show it, and dock once it's built.
+            if (ActivateDocumentOf(home))
+                fw.dockRequested = true;
+            return;
+        }
+        if (!home->root)
             return;
 
         // The leaf it came from, else the first one.

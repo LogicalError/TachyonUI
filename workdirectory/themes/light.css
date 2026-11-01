@@ -47,6 +47,7 @@
     --divider-hover: #2F6FEB;
     --accent-soft: #E2EAFA;   /* accent at 12% over --bg-panel, opaque like dark.css */
     --on-accent: #FFFFFF;
+    --on-accent-muted: #FFFFFFC7; /* secondary text on accent fills: --on-accent at 78% */
     /* ---- Semantic --------------------------------------------------------- */
     --ok: #1E9E62;
     --warn: #D99A2B;
@@ -89,6 +90,14 @@
     --node-generator: #D9534F;
     --node-input: #1E9E62;
     --node-output: #7C5CE0;
+    /* ---- Document types: an inactive tab in the type color at 12% (hover 18%, pressed 24%);
+       the active one solid, darkened so white text on it passes 4.5:1 */
+    --bg-document-bar: #DADDE2;
+    --doc-level-rest: #6B9BFF1F;      --doc-level-hover: #6B9BFF2E;      --doc-level-pressed: #6B9BFF3D;      --doc-level-solid: #2F6FEB;
+    --doc-material-rest: #34D1BF1F;   --doc-material-hover: #34D1BF2E;   --doc-material-pressed: #34D1BF3D;   --doc-material-solid: #0B7A6F;
+    --doc-layout-rest: #F59E4B1F;     --doc-layout-hover: #F59E4B2E;     --doc-layout-pressed: #F59E4B3D;     --doc-layout-solid: #B35F0E;
+    --doc-prefab-rest: #A98BFF1F;     --doc-prefab-hover: #A98BFF2E;     --doc-prefab-pressed: #A98BFF3D;     --doc-prefab-solid: #7C5CE0;
+    --doc-animation-rest: #F472B61F;  --doc-animation-hover: #F472B62E;  --doc-animation-pressed: #F472B63D;  --doc-animation-solid: #B8306F;
     /* ---- Profiler --------------------------------------------------------- */
     --flame-frame: #E3E6EB;
     --flame-build: #F4DCCF;

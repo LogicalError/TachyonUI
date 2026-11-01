@@ -624,6 +624,20 @@ namespace tachyon
         tabContentStyleRef                = registerCSS("tab-content");
         tabCloseStyleRef                  = registerCSS("tab-close");
 
+        documentsStyleRef                 = registerCSS("documents");
+        documentBarStyleRef               = registerCSS("document-bar");
+        documentRowStyleRef               = registerCSS("document-row");
+        documentTabBarStyleRef            = registerCSS("document-tab-bar");
+        documentTabStyleRef               = registerCSS("document-tab");
+        documentNameStyleRef              = registerCSS("document-name");
+        documentExtensionStyleRef         = registerCSS("document-extension");
+        documentMarkStyleRef              = registerCSS("document-mark");
+        documentCloseStyleRef             = registerCSS("document-close");
+        documentDirtyStyleRef             = registerCSS("document-dirty");
+        documentLineStyleRef              = registerCSS("document-line");
+        documentNewStyleRef               = registerCSS("document-new");
+        documentListStyleRef              = registerCSS("document-list");
+
         // Docking container styles
         dockContainerStyleRef             = registerCSS("dock-container");
         dockContainerMainStyleRef         = registerCSS("dock-container-main");

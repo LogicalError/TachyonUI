@@ -92,6 +92,7 @@ list(APPEND GUI_CORE_TEST_FILES
   controls_reorderable_test.cpp
   color_field_test.cpp
   controls_docking_test.cpp
+  controls_documents_test.cpp
   skribidi_shaping_test.cpp
   font_set_test.cpp
   built_in_resources_test.cpp

@@ -295,6 +295,12 @@ namespace tachyon
 			IconID panelSettingsIcon   = IconID::Invalid;
 			IconID panelViewportIcon   = IconID::Invalid;
             IconID panelMiscIcon       = IconID::Invalid;
+
+            IconID documentLevelIcon     = IconID::Invalid;
+            IconID documentMaterialIcon  = IconID::Invalid;
+            IconID documentLayoutIcon    = IconID::Invalid;
+            IconID documentPrefabIcon    = IconID::Invalid;
+            IconID documentAnimationIcon = IconID::Invalid;
                                        
             IconID objectIcon          = IconID::Invalid;
             IconID object2Icon         = IconID::Invalid;
@@ -392,9 +398,13 @@ namespace tachyon
             std::vector<std::string> tabNames = { "File", "Edit", "View", "Help" };
             ID tabBarID { ID::Invalid() };
 
-            // DockingContainer demo
-            ID            dockContainerID { ID::Invalid() };
-            DockingLayout dockingLayout;
+            // Documents, each with its own panels; the first holds the full DockingContainer demo
+            ID            documentsID { ID::Invalid() };
+            DocumentSet   documents;
+            Document*     forest = nullptr;          // the first document, whose layout is saved
+            Document*     closingDocument = nullptr; // asked about its unsaved changes
+            ID            closeDocumentDialogID { ID::Invalid() };
+            int           untitledCount = 0;
             std::string   dockNotes;
             bool          dockToggle = false;
             bool          dockInitialized = false;
@@ -496,6 +506,13 @@ namespace tachyon
         void RenderStatusBar();
         void RequestExit();
         void AskBeforeExit();
+
+        /// A panel the showcase knows by its title ("Viewport", "Inspector", ...), added to `layout`.
+        ID   CreateShowcasePanel(DockingLayout& layout, std::string_view title);
+        /// A document's panels: `main`, and `side` docked to its right.
+        void FillDocument(Document& document, std::string_view main, std::string_view side);
+        /// While an unsaved document waits to close: asks whether to discard its changes.
+        void AskBeforeClosingDocument();
         // Into `fullscreen` (Fullscreen or ExclusiveFullscreen), or out of fullscreen when in it.
         void ToggleFullscreen(WindowMode fullscreen);
 

@@ -3196,6 +3196,277 @@
 .tab-close:hover  { color: var(--text-1); }
 .tab-close:active { color: var(--text-1); }
 
+/* ---- Documents: a bar of document tabs over the active document's panels -- */
+/* Each tab is tinted in its document type's color and the active one is solid; the
+   line under the bar takes the active document's color. A type is a set of classes:
+   .document-tab-<kind>, .document-name-<kind> (its icon color) and .document-line-<kind>;
+   a type without them uses the plain .document-tab, .document-name and .document-line. */
+.documents {
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    overflow: hidden;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.document-bar {
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px 0px 4px 0px;   /* the panels start a gutter below the line */
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0px;
+    background-color: var(--bg-document-bar);
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-row {
+    border-width: 0px;
+    height: 34px;
+    padding: 0px 8px;
+    margin: 0px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: flex-end;
+    gap: 4px;
+    background-color: transparent;
+    border-color: transparent;
+    overflow: visible;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-tab-bar {
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;   /* the tabs that don't fit are in "N open" */
+    align-items: flex-end;
+    gap: 3px;
+    background-color: transparent;
+    border-color: transparent;
+    overflow: visible;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.document-tab, .document-tab-level, .document-tab-material, .document-tab-layout,
+.document-tab-prefab, .document-tab-animation {
+    height: 30px;
+    min-width: 150px;
+    border-width: 0px;
+    border-radius: 6px 6px 0px 0px;
+    padding: 0px 8px 0px 12px;
+    margin: 0px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0px;
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-tab { background-color: var(--bg-control); }
+.document-tab:hover  { background-color: var(--bg-active); }
+.document-tab:active { background-color: var(--bg-pressed); }
+.document-tab::highlight(selected) { background-color: var(--accent); }
+.document-tab-level { background-color: var(--doc-level-rest); }
+.document-tab-level:hover  { background-color: var(--doc-level-hover); }
+.document-tab-level:active { background-color: var(--doc-level-pressed); }
+.document-tab-level::highlight(selected) { background-color: var(--doc-level-solid); }
+.document-tab-material { background-color: var(--doc-material-rest); }
+.document-tab-material:hover  { background-color: var(--doc-material-hover); }
+.document-tab-material:active { background-color: var(--doc-material-pressed); }
+.document-tab-material::highlight(selected) { background-color: var(--doc-material-solid); }
+.document-tab-layout { background-color: var(--doc-layout-rest); }
+.document-tab-layout:hover  { background-color: var(--doc-layout-hover); }
+.document-tab-layout:active { background-color: var(--doc-layout-pressed); }
+.document-tab-layout::highlight(selected) { background-color: var(--doc-layout-solid); }
+.document-tab-prefab { background-color: var(--doc-prefab-rest); }
+.document-tab-prefab:hover  { background-color: var(--doc-prefab-hover); }
+.document-tab-prefab:active { background-color: var(--doc-prefab-pressed); }
+.document-tab-prefab::highlight(selected) { background-color: var(--doc-prefab-solid); }
+.document-tab-animation { background-color: var(--doc-animation-rest); }
+.document-tab-animation:hover  { background-color: var(--doc-animation-hover); }
+.document-tab-animation:active { background-color: var(--doc-animation-pressed); }
+.document-tab-animation::highlight(selected) { background-color: var(--doc-animation-solid); }
+
+/* A tab's icon and name; the icon in the type's color, on the solid tab as the text. */
+.document-name, .document-name-level, .document-name-material, .document-name-layout,
+.document-name-prefab, .document-name-animation {
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    font-weight: 400;
+    text-wrap: nowrap;
+    text-align: start;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    -tachyon-icon-side: left;
+    -tachyon-icon-size: 14px;
+    -tachyon-icon-text-gap: 8px;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-name           { -tachyon-icon-color: var(--accent); }
+.document-name-level     { -tachyon-icon-color: var(--doc-level-solid); }
+.document-name-material  { -tachyon-icon-color: var(--doc-material-solid); }
+.document-name-layout    { -tachyon-icon-color: var(--doc-layout-solid); }
+.document-name-prefab    { -tachyon-icon-color: var(--doc-prefab-solid); }
+.document-name-animation { -tachyon-icon-color: var(--doc-animation-solid); }
+.document-name::highlight(selected), .document-name-level::highlight(selected),
+.document-name-material::highlight(selected), .document-name-layout::highlight(selected),
+.document-name-prefab::highlight(selected), .document-name-animation::highlight(selected) {
+    color: var(--on-accent);
+    font-weight: 600;
+    -tachyon-icon-color: var(--on-accent);
+}
+
+.document-extension {
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-3);
+    font-size: var(--font-size);
+    font-weight: 400;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-extension::highlight(selected) { color: var(--on-accent-muted); }
+
+/* The close button or the unsaved dot, in a slot that keeps its size. */
+.document-mark {
+    width: 16px;
+    height: 16px;
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px 0px 0px 8px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-close {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
+    width: 16px;
+    height: 16px;
+    border-width: 0px;
+    border-radius: 3px;
+    padding: 0px;
+    margin: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-2);
+    text-align: center;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    -tachyon-icon-size: 11px;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-close::highlight(selected) { color: var(--on-accent); }
+.document-dirty {
+    width: 6px;
+    height: 6px;
+    border-width: 0px;
+    border-radius: 3px;
+    padding: 0px;
+    margin: 0px;
+    background-color: var(--text-2);
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-dirty::highlight(selected) { background-color: var(--on-accent); }
+
+.document-line, .document-line-level, .document-line-material, .document-line-layout,
+.document-line-prefab, .document-line-animation {
+    height: 2px;
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px;
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-line           { background-color: var(--accent); }
+.document-line-level     { background-color: var(--doc-level-solid); }
+.document-line-material  { background-color: var(--doc-material-solid); }
+.document-line-layout    { background-color: var(--doc-layout-solid); }
+.document-line-prefab    { background-color: var(--doc-prefab-solid); }
+.document-line-animation { background-color: var(--doc-animation-solid); }
+
+.document-new {
+    -tachyon-state-layer: content;
+    width: 26px;
+    height: 26px;
+    border-width: 0px;
+    border-radius: 4px;
+    padding: 0px;
+    margin: 0px 0px 3px 1px;   /* 4px after the last tab, with the bar's gap */
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-3);
+    text-align: center;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    -tachyon-icon-size: 14px;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-new:hover  { color: var(--text-1); }
+.document-new:active { color: var(--text-1); }
+.document-list {
+    -tachyon-state-layer: content;
+    height: 24px;
+    border-width: 0px;
+    border-radius: 4px;
+    padding: 0px 8px;
+    margin: 0px 0px 5px 0px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-3);
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+    text-align: start;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    -tachyon-icon-side: right;   /* the dropdown arrow */
+    -tachyon-icon-size: 12px;
+    -tachyon-icon-text-gap: 6px;
+    -tachyon-icon-color: var(--text-3);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.document-list:hover  { color: var(--text-1); }
+.document-list:active { color: var(--text-1); }
+.document-list::highlight(selected) { color: var(--text-1); }   /* open */
+
 /* ---- Docking container ---------------------------------------------------- */
 /* Fills its parent (the main window) via flex-grow:1, and shrinks back down
    via flex-shrink:1 when panel content would otherwise push the tree past the
@@ -5205,6 +5476,9 @@
 
 /* Tabs, rows and menu items sit flush with their neighbours: an outline inside them instead. */
 .tab:focus-visible, .title-bar-tab:focus-visible, .tab-overflow:focus-visible, .table-header:focus-visible,
+.document-tab:focus-visible, .document-tab-level:focus-visible, .document-tab-material:focus-visible,
+.document-tab-layout:focus-visible, .document-tab-prefab:focus-visible, .document-tab-animation:focus-visible,
+.document-close:focus-visible, .document-new:focus-visible, .document-list:focus-visible,
 .list-item:focus-visible, .list-item-row:focus-visible,
 .menu-item:focus-visible, .menu-item-row:focus-visible, .menu-bar-trigger:focus-visible,
 .title-bar-button:focus-visible, .title-bar-close-button:focus-visible,

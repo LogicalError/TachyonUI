@@ -45,7 +45,7 @@ namespace tachyon
         // toolbars and the dock, which is applied again once the dock exists.
         PersistWindow("main", showcase.windowLayoutID2);
         PersistToolbars("toolbars", toolbars.sides);
-        PersistDocking("dock", showcase.dockingLayout);
+        PersistDocking("dock", showcase.forest->layout);
         if (std::ifstream file(ResourceFile(kUIStateFile), std::ios::binary); file)
         {
             showcase.savedUIState.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
@@ -114,6 +114,29 @@ namespace tachyon
         showcase.windowLayoutID2 = idManager.CreateStaticID();
         showcase.exitDialogID    = idManager.CreateStaticID();
         showcase.dragGhostWindowID = idManager.CreateStaticID();
+
+        // Documents: their panels are made with the dock, on the first frame.
+        showcase.documentsID           = idManager.CreateStaticID();
+        showcase.closeDocumentDialogID = idManager.CreateStaticID();
+        showcase.forest = &CreateDocument(showcase.documents, "Forest", ".level", "level", showcase.documentLevelIcon);
+        CreateDocument(showcase.documents, "Desert", ".level", "level", showcase.documentLevelIcon).dirty = true;
+        CreateDocument(showcase.documents, "Terrain", ".mat", "material", showcase.documentMaterialIcon);
+        CreateDocument(showcase.documents, "Hud", ".layout", "layout", showcase.documentLayoutIcon);
+        CreateDocument(showcase.documents, "Rock", ".prefab", "prefab", showcase.documentPrefabIcon);
+        CreateDocument(showcase.documents, "Walk", ".anim", "animation", showcase.documentAnimationIcon);
+        showcase.documents.onNew = [this] {
+            Document& created = CreateDocument(showcase.documents, std::format("Untitled {}", ++showcase.untitledCount),
+                                               ".level", "level", showcase.documentLevelIcon);
+            FillDocument(created, "Viewport", "Inspector");
+            showcase.documents.active = int(showcase.documents.documents.size()) - 1;
+        };
+        // An unsaved document asks first; the dialog closes it (AskBeforeClosingDocument).
+        showcase.documents.onClose = [this](Document& document) {
+            if (!document.dirty)
+                return true;
+            showcase.closingDocument = &document;
+            return false;
+        };
 
         showcase.smallMenuID = idManager.CreateStaticID();
         showcase.bigMenuID = idManager.CreateStaticID();
@@ -856,6 +879,19 @@ namespace tachyon
 
             // Register icons from SVG
             {
+                // Document types: drawn in the tab's colors (stroke currentColor).
+                auto documentIcon = [this](const char* name, const char* paths)
+                {
+                    const std::string svg = std::string(R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">)")
+                                          + paths + "</svg>";
+                    return textSystem->RegisterIconFromSVG(name, svg.c_str(), svg.size());
+                };
+                showcase.documentLevelIcon     = documentIcon("document-level",     R"(<path d="M3 20 9 8l4 7 3-4 5 9Z"/>)");
+                showcase.documentMaterialIcon  = documentIcon("document-material",  R"(<path d="M3 3h8v8H3ZM13 13h8v8h-8ZM7 11v4a2 2 0 0 0 2 2h4"/>)");
+                showcase.documentLayoutIcon    = documentIcon("document-layout",    R"(<path d="M3 3h18v18H3ZM3 9h18M9 9v12"/>)");
+                showcase.documentPrefabIcon    = documentIcon("document-prefab",    R"(<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5M12 22V12"/>)");
+                showcase.documentAnimationIcon = documentIcon("document-animation", R"(<path d="M3 4h18v16H3ZM7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>)");
+
                 // Simple circle icon (using path with arc)
                 const char* circleSvg = R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M 12 2 A 10 10 0 1 1 12 22 A 10 10 0 1 1 12 2 Z" fill="#4A90E2"/></svg>)";
                 showcase.circleIcon = textSystem->RegisterIconFromSVG("circle", circleSvg, strlen(circleSvg));
@@ -1158,6 +1194,66 @@ namespace tachyon
         if (choice >= 0) showcase.exitRequested = false;
     }
 
+    ID Application::CreateShowcasePanel(DockingLayout& layout, std::string_view title)
+    {
+        auto& panels = layout.panels;
+        const std::string name(title);
+        if (title == "Viewport")  return CreatePanel(panels, name, showcase.panelViewportIcon, [this] { RenderViewportPanel(); });
+        if (title == "NodeView")  return CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderNodeViewPanel(); });
+        if (title == "BoxTest")   return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderBoxTestPanel(); });
+        if (title == "Inspector")
+            return CreatePanel(panels, name, showcase.panelInspectorIcon, [this] { RenderInspectorPanel(); }, {},
+                               [this] { EnableInspectorPanel(); }, [this] { DisableInspectorPanel(); });
+        if (title == "Hierarchy")
+            return CreatePanel(panels, name, showcase.panelHierarchyIcon, [this] { RenderHierarchyPanel(); }, {},
+                               [this] { EnableHierarchyPanel(); }, [this] { DisableHierarchyPanel(); });
+        if (title == "Profiler")
+        {
+            const ID id = CreatePanel(panels, name, showcase.panelProfilerIcon, [this] { RenderProfilerTreePanel(); }, {},
+                                      [this] { EnableProfilerTreePanel(); });
+            panels[id].cacheSignature = []() -> std::optional<uint64_t> {
+                return Diagnostics::IsProfilingEnabled() ? std::nullopt : std::optional<uint64_t>(0); };
+            return id;
+        }
+        // Misc animates while it's built, so it's never cached.
+        const ID id = CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderMiscPanel(); });
+        panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
+        return id;
+    }
+
+    void Application::FillDocument(Document& document, std::string_view main, std::string_view side)
+    {
+        const ID mainID = CreateShowcasePanel(document.layout, main);
+        const ID sideID = CreateShowcasePanel(document.layout, side);
+        document.layout.root = MakeSplit(DockSplitMode::RightPinned, 420, MakeLeaf({ mainID }), MakeLeaf({ sideID }));
+    }
+
+    void Application::AskBeforeClosingDocument()
+    {
+        Document* const document = showcase.closingDocument;
+        if (!document)
+            return;
+        auto& documents = showcase.documents.documents;
+        const auto it = std::find_if(documents.begin(), documents.end(), [document](const auto& d) { return d.get() == document; });
+        if (it == documents.end())
+        {
+            showcase.closingDocument = nullptr;
+            return;
+        }
+        static constexpr MessageButton kButtons[] = {
+            { .label = "Cancel" },
+            { .label = "Discard", .kind = MessageButtonKind::Danger },
+        };
+        const std::string title = std::format("Close {}{}?", document->name, document->extension);
+        const int choice = MessageDialog(showcase.closeDocumentDialogID, MessageDialogDesc{
+            .icon = MessageIcon::Warning, .title = title, .message = "It has unsaved changes. Closing it discards them.",
+            .buttons = kButtons, .defaultButton = 0, .cancelButton = 0 });
+        if (choice == 1)
+            CloseDocument(showcase.documents, int(it - documents.begin()));
+        if (choice >= 0)
+            showcase.closingDocument = nullptr;
+    }
+
     // Status bar: state on the left, frame time on the right.
     void Application::RenderStatusBar()
     {
@@ -1170,7 +1266,9 @@ namespace tachyon
         const float frameMs = totalMs / float(kAveraged);
 
         BeginStatusBar(idManager.AllocateDynamicID("statusBar"));
-        StatusText("Ready", LayoutOverride::Auto().FlexGrow(1));
+        StatusText("Ready");
+        const Document* document = showcase.documents.Active();
+        StatusText(document ? document->name + document->extension : std::string(), LayoutOverride::Auto().FlexGrow(1));
         StatusText(std::format("{:.2f} ms \u00B7 {:.0f} fps", frameMs, frameMs > 0.0f ? 1000.0f / frameMs : 0.0f));
         EndStatusBar();
     }
@@ -1184,7 +1282,10 @@ namespace tachyon
             // Closed by the user; reset mainWindowClosed to reopen.
             if (!mainWindowClosed)
             {
-                if (BeginWindow(showcase.windowLayoutID2, "Test", theme.mainWindowStyleRef, std::move(sizeConstraints.Centered()),
+                // The window's title names the active document.
+                const Document* document = showcase.documents.Active();
+                const std::string windowTitle = document ? document->name + document->extension + " - Test" : std::string("Test");
+                if (BeginWindow(showcase.windowLayoutID2, windowTitle, theme.mainWindowStyleRef, std::move(sizeConstraints.Centered()),
                                 ElementFlags::WindowUserControlled | ElementFlags::WindowIsCentered | ElementFlags::WindowCustomTitleBar
                                 | ElementFlags::WindowConfirmClose))
                 {
@@ -1194,34 +1295,35 @@ namespace tachyon
 
                     RenderMainMenu();
 
-                    // ---- DockingContainer demo ----
+                    // ---- Documents, the first with the DockingContainer demo ----
                     {
                         if (!showcase.dockInitialized)
                         {
-                            auto hierarchyPanelID   = CreatePanel(showcase.dockingLayout.panels, "Hierarchy",   showcase.panelHierarchyIcon, [this]() { RenderHierarchyPanel(); }, {}, [this]() { EnableHierarchyPanel(); }, [this]() { DisableHierarchyPanel(); });
-                            auto inspectorPanelID   = CreatePanel(showcase.dockingLayout.panels, "Inspector",   showcase.panelInspectorIcon, [this]() { RenderInspectorPanel(); }, {}, [this]() { EnableInspectorPanel(); }, [this]() { DisableInspectorPanel(); });
-                            auto consolePanelID     = CreatePanel(showcase.dockingLayout.panels, "Log",         showcase.panelLogIcon,       [this]() { RenderLogPanel(); },       {}, [this]() { EnableLogPanel(); },       [this]() { DisableLogPanel(); });
-                            auto filesPanelID       = CreatePanel(showcase.dockingLayout.panels, "Files",       showcase.panelFilesIcon,     [this]() { RenderFilesPanel(); }, {}, [this]() { EnableFilesPanel(); }, [this]() { DisableFilesPanel(); });
-                            auto nodeViewPanelID    = CreatePanel(showcase.dockingLayout.panels, "NodeView",    showcase.panelNodeViewIcon,  [this]() { RenderNodeViewPanel(); });
-                            auto viewportPanelID    = CreatePanel(showcase.dockingLayout.panels, "Viewport",    showcase.panelViewportIcon,  [this]() { RenderViewportPanel(); });
-                            auto profilerPanelID    = CreatePanel(showcase.dockingLayout.panels, "Profiler",    showcase.panelProfilerIcon,  [this]() { RenderProfilerTreePanel(); }, {}, [this]() { EnableProfilerTreePanel(); });
+                            DockingLayout& dock = showcase.forest->layout;
+                            auto hierarchyPanelID   = CreatePanel(dock.panels, "Hierarchy",   showcase.panelHierarchyIcon, [this]() { RenderHierarchyPanel(); }, {}, [this]() { EnableHierarchyPanel(); }, [this]() { DisableHierarchyPanel(); });
+                            auto inspectorPanelID   = CreatePanel(dock.panels, "Inspector",   showcase.panelInspectorIcon, [this]() { RenderInspectorPanel(); }, {}, [this]() { EnableInspectorPanel(); }, [this]() { DisableInspectorPanel(); });
+                            auto consolePanelID     = CreatePanel(dock.panels, "Log",         showcase.panelLogIcon,       [this]() { RenderLogPanel(); },       {}, [this]() { EnableLogPanel(); },       [this]() { DisableLogPanel(); });
+                            auto filesPanelID       = CreatePanel(dock.panels, "Files",       showcase.panelFilesIcon,     [this]() { RenderFilesPanel(); }, {}, [this]() { EnableFilesPanel(); }, [this]() { DisableFilesPanel(); });
+                            auto nodeViewPanelID    = CreatePanel(dock.panels, "NodeView",    showcase.panelNodeViewIcon,  [this]() { RenderNodeViewPanel(); });
+                            auto viewportPanelID    = CreatePanel(dock.panels, "Viewport",    showcase.panelViewportIcon,  [this]() { RenderViewportPanel(); });
+                            auto profilerPanelID    = CreatePanel(dock.panels, "Profiler",    showcase.panelProfilerIcon,  [this]() { RenderProfilerTreePanel(); }, {}, [this]() { EnableProfilerTreePanel(); });
                             // Panels are cached by default; the profiler opts out while profiling is on.
-                            showcase.dockingLayout.panels[profilerPanelID].cacheSignature =
+                            dock.panels[profilerPanelID].cacheSignature =
                                 []() -> std::optional<uint64_t> { return Diagnostics::IsProfilingEnabled() ? std::nullopt : std::optional<uint64_t>(0); };
 
-                            auto treeTablePanelID   = CreatePanel(showcase.dockingLayout.panels, "TreeTable",   showcase.panelMiscIcon, [this]() { RenderTreeTablePanel(); });
-                            auto tablePanelID       = CreatePanel(showcase.dockingLayout.panels, "Table",       showcase.panelMiscIcon, [this]() { RenderTablePanel(); });
-                            auto splitScrollPanelID = CreatePanel(showcase.dockingLayout.panels, "FrozenTable", showcase.panelMiscIcon, [this]() { RenderSplitScrollPanel(); });
-                            auto reorderablePanelID = CreatePanel(showcase.dockingLayout.panels, "Reorderable", showcase.panelMiscIcon, [this]() { RenderReorderablePanel(); });
-                            auto boxTestPanelID     = CreatePanel(showcase.dockingLayout.panels, "BoxTest",     showcase.panelMiscIcon, [this]() { RenderBoxTestPanel(); });
-                            auto miscPanelID        = CreatePanel(showcase.dockingLayout.panels, "Misc",        showcase.panelMiscIcon, [this]() { RenderMiscPanel(); });
+                            auto treeTablePanelID   = CreatePanel(dock.panels, "TreeTable",   showcase.panelMiscIcon, [this]() { RenderTreeTablePanel(); });
+                            auto tablePanelID       = CreatePanel(dock.panels, "Table",       showcase.panelMiscIcon, [this]() { RenderTablePanel(); });
+                            auto splitScrollPanelID = CreatePanel(dock.panels, "FrozenTable", showcase.panelMiscIcon, [this]() { RenderSplitScrollPanel(); });
+                            auto reorderablePanelID = CreatePanel(dock.panels, "Reorderable", showcase.panelMiscIcon, [this]() { RenderReorderablePanel(); });
+                            auto boxTestPanelID     = CreatePanel(dock.panels, "BoxTest",     showcase.panelMiscIcon, [this]() { RenderBoxTestPanel(); });
+                            auto miscPanelID        = CreatePanel(dock.panels, "Misc",        showcase.panelMiscIcon, [this]() { RenderMiscPanel(); });
                             // Misc animates during construction (rotating triangle, cycling hue), so it
                             // must rebuild every frame - opt out of caching.
-                            showcase.dockingLayout.panels[miscPanelID].cacheSignature =
+                            dock.panels[miscPanelID].cacheSignature =
                                 []() -> std::optional<uint64_t> { return std::nullopt; };
 
                             // Pages are registered once in InitSettingsPages.
-                            auto settingsPanelID    = CreatePanel(showcase.dockingLayout.panels, "Settings", showcase.panelSettingsIcon, [this]() { RenderSettingsPanel(showcase.settings); });
+                            auto settingsPanelID    = CreatePanel(dock.panels, "Settings", showcase.panelSettingsIcon, [this]() { RenderSettingsPanel(showcase.settings); });
                         
                             // bottom
                             auto&& filesLeaf         = MakeLeaf({ filesPanelID });
@@ -1239,7 +1341,7 @@ namespace tachyon
                             //  - top Hsplit:    left pinned       -> (center+right) absorbs horizontal resize
                             //  - inner Hsplit:  right pinned      -> center absorbs horizontal resize
                             //  - bottom Hsplit: left (files) pinned
-                            showcase.dockingLayout.root =
+                            dock.root =
                                 MakeSplit(DockSplitMode::BottomPinned, 280,
                                     MakeSplit(DockSplitMode::LeftPinned, 320,
                                         // left panel group
@@ -1259,17 +1361,23 @@ namespace tachyon
                                     120, // minFirst
                                     160  // minSecond
                                 );
+                            FillDocument(*showcase.documents.documents[1], "Viewport", "Inspector");
+                            FillDocument(*showcase.documents.documents[2], "NodeView", "Inspector");
+                            FillDocument(*showcase.documents.documents[3], "BoxTest", "Misc");
+                            FillDocument(*showcase.documents.documents[4], "Viewport", "Hierarchy");
+                            FillDocument(*showcase.documents.documents[5], "Viewport", "Profiler");
                             showcase.dockInitialized = true;
+                            showcase.forest = nullptr;   // the first frame's: the document may be closed
                             if (!showcase.savedUIState.empty())
                                 (void)RestoreUIState(showcase.savedUIState);   // now with the dock's panels
 
                             // --panel: bring that panel to the front of its tab group.
-                            auto selectStartPanel = [this](auto& self, DockNode* node) -> void {
+                            auto selectStartPanel = [this, &dock](auto& self, DockNode* node) -> void {
                                 if (!node) return;
                                 for (size_t t = 0; t < node->panelIds.size(); ++t)
                                 {
-                                    const auto it = showcase.dockingLayout.panels.find(node->panelIds[t]);
-                                    if (it != showcase.dockingLayout.panels.end()
+                                    const auto it = dock.panels.find(node->panelIds[t]);
+                                    if (it != dock.panels.end()
                                         && std::find(m_startPanels.begin(), m_startPanels.end(), it->second.title) != m_startPanels.end())
                                         node->selectedTab = int(t);
                                 }
@@ -1277,24 +1385,22 @@ namespace tachyon
                                 self(self, node->second.get());
                             };
                             if (!m_startPanels.empty())
-                                selectStartPanel(selectStartPanel, showcase.dockingLayout.root.get());
+                                selectStartPanel(selectStartPanel, dock.root.get());
 
                             // --float: those panels start in their own windows.
                             int2 floatAt{ styleManager.Px(200), styleManager.Px(200) };
                             for (const std::string& title : m_floatPanels)
-                                for (const auto& [id, panel] : showcase.dockingLayout.panels)
+                                for (const auto& [id, panel] : dock.panels)
                                     if (panel.title == title)
                                     {
-                                        (void)FloatPanel(showcase.dockingLayout, id, floatAt);
+                                        (void)FloatPanel(dock, id, floatAt);
                                         floatAt += int2{ styleManager.Px(40), styleManager.Px(40) };
                                         break;
                                     }
                         }
 
-                        showcase.dockContainerID = idManager.AllocateDynamicID("dockDemo");
-                        BeginDockingContainer(showcase.dockContainerID, &showcase.dockingLayout,
-                            theme.dockContainerMainStyleRef, LayoutOverride::Auto());
-                        EndDockingContainer();
+                        AskBeforeClosingDocument();
+                        Documents(showcase.documentsID, showcase.documents);
                     }
 
                     RenderStatusBar();
