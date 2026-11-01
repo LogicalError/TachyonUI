@@ -361,6 +361,12 @@ bool Parser::ParseDeclValue(StyleDecl& d)
         else if (ICEq(v,"space-evenly"))                 { d.enumVal=(int)AlignContent::SpaceEvenly;  return true; }
         Error("Unknown align-content '"+v+"'"); return false;
     }
+    if (ICEq(p,"-tachyon-state-layer"))
+    {
+        if      (ICEq(v,"none"))    { d.enumVal=(int)StateLayer::None;    return true; }
+        else if (ICEq(v,"content")) { d.enumVal=(int)StateLayer::Content; return true; }
+        Error("Unknown -tachyon-state-layer '"+v+"' (none or content)"); return false;
+    }
     if (ICEq(p,"cursor"))
     {
         if      (ICEq(v,"default"))     { d.enumVal=(int)MouseCursor::Default;      return true; }
@@ -633,6 +639,7 @@ void Parser::ApplyDecl(Style& s, int si, const StyleDecl& d)
     if (ICEq(p,"overflow-y")) { s.overflowY  = (Overflow)d.enumVal;    return; }
     if (ICEq(p,"visibility")) { s.visibility = (Visibility)d.enumVal;  return; }
     if (ICEq(p,"cursor"))     { s.cursor     = (MouseCursor)d.enumVal; return; }
+    if (ICEq(p,"-tachyon-state-layer")) { s.stateLayer = (StateLayer)d.enumVal; return; }
     if (ICEq(p,"-tachyon-icon-side"))  { s.iconSide   = (IconSide)d.enumVal;    return; }
 
     if (ICEq(p,"-tachyon-icon-text-gap"))

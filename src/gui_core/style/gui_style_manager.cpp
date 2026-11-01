@@ -190,9 +190,51 @@ namespace tachyon
         return it != m_childStyles.end() ? &it->second : nullptr;
     }
 
+    namespace
+    {
+        // `layer` at `strength` (times its own alpha) over `base`, in sRGB.
+        color4b Over(color4b base, color4b layer, float strength)
+        {
+            const float a  = strength * float(layer.a) / 255.0f;
+            const float ba = float(base.a) / 255.0f;
+            const float oa = a + ba * (1.0f - a);
+            if (oa <= 0.0f)
+                return color4b{ 0, 0, 0, 0 };
+            auto mix = [&](uint8_t l, uint8_t b) {
+                return uint8_t(std::lround((float(l) * a + float(b) * ba * (1.0f - a)) / oa));
+            };
+            return color4b{ mix(layer.r, base.r), mix(layer.g, base.g), mix(layer.b, base.b), uint8_t(std::lround(oa * 255.0f)) };
+        }
+
+        bool IsSolid(const ColorStyle& c) { return c.gradient.stopCount == 0 || c.type == ColorType::SolidColor; }
+    }
+
+    void StyleManager::ApplyStateLayer(Style& style) noexcept
+    {
+        // Each hovered or pressed slot (not text selection, not disabled) gets its text color over
+        // the background of the same slot without hover and press: what a dark button lightens
+        // by and a primary one (dark text on the accent) darkens by.
+        constexpr float kHover = 0.08f, kPressed = 0.14f;
+        const int hoverOrPress = int(ElementState::Hover | ElementState::Active);
+        for (int i = 0; i < int(ElementState::Disabled); ++i)
+        {
+            if ((i & hoverOrPress) == 0 || (i & int(ElementState::Selection)) != 0)
+                continue;
+            const StyleState& base = style.states[i & ~hoverOrPress];
+            StyleState&       slot = style.states[i];
+            if (!IsSolid(base.backgroundColor) || !IsSolid(slot.textColor) || slot.textColor.gradient.stopCount == 0)
+                continue;
+            const color4b under = base.backgroundColor.gradient.stopCount != 0 ? base.backgroundColor.GetFirstColor() : color4b{ 0, 0, 0, 0 };
+            const float strength = (i & int(ElementState::Active)) != 0 ? kPressed : kHover;
+            slot.backgroundColor = ColorStyle::Create(Over(under, slot.textColor.GetFirstColor(), strength));
+        }
+    }
+
     StyleRef StyleManager::RegisterImpl(const Style &given, StyleUnits units, bool distinct) noexcept
     {
-        const Style style = units == StyleUnits::Pixels ? given : ToPixels(given);
+        Style style = units == StyleUnits::Pixels ? given : ToPixels(given);
+        if (style.stateLayer == StateLayer::Content)
+            ApplyStateLayer(style);
 
         LayoutStyle layoutStyle
         {

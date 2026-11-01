@@ -716,5 +716,22 @@ namespace tachyon
             EXPECT_NE(app.theme.invalidHalo.color, VisualColorStyleIndex::Invalid);
         }
 
+        // The theme's buttons compute their hover and pressed backgrounds (a state layer):
+        // each differs from the one before it.
+        TEST_F(ControlsMenuTest, TheThemesButtonsHaveStateLayers)
+        {
+            for (const char* name : { "button", "toggle", "dialog-button" })
+            {
+                const StyleRef style = app.theme.GetStyle(name);
+                auto background = [&](ElementState s) {
+                    const VisualBoxStyle* box = app.styleManager.GetVisualBoxStyle(style.visualBoxStyleIndex, s);
+                    return box ? box->backgroundColorIndex : VisualColorStyleIndex::Invalid;
+                };
+                EXPECT_NE(background(ElementState::Hover), background(ElementState::None)) << name;
+                EXPECT_NE(background(ElementState::Hover | ElementState::Active), background(ElementState::Hover)) << name;
+                EXPECT_NE(background(ElementState::Hover | ElementState::Selected), background(ElementState::Selected)) << name;
+            }
+        }
+
     } // namespace
 } // namespace tachyon
