@@ -1,5 +1,6 @@
 #include <gui_core/graphics/gui_graphics_context.h>
 #include <gui_core/windows/gui_os_window_manager.h>
+#include <gui_core/gui_easing.h>
 
 #include <assert.h>
 
@@ -164,6 +165,8 @@ namespace tachyon
         // or resolution changed.
         RefreshMonitors();
 
+        AnimateFades();
+
         // New popups show after this frame's present once they've been drawn enough.
         for (auto& window : windows)
         {
@@ -174,6 +177,10 @@ namespace tachyon
                 continue;
             window.framesHidden = 0;
             if (window.GetWindowHandle() == nullptr)
+                continue;
+            // Drawn enough: it fades in, cloaked while its stand-in shows it.
+            if (window.state == WindowState::Alive && window.cloaked && MayFade(window) &&
+                BeginFadeIn(window, windowBackendManager->GetTicks()))
                 continue;
             if (std::exchange(window.cloaked, false))
                 windowBackendManager->SetWindowCloaked(window.GetWindowHandle(), false);
@@ -219,6 +226,7 @@ namespace tachyon
             }
 
             // Safe to remove window now
+            EndFadeOf(window);
             RemoveWindow(window_index);
 
             // No increment: the last window was moved into this slot.
@@ -296,12 +304,121 @@ namespace tachyon
             if ((window.flags & WindowFlags::PopupMenu) != WindowFlags::None)
             {
                 window.state = WindowState::Hidden;
-                windowBackendManager->SetWindowVisible(window.GetWindowHandle(), false);
+                OSWindowHandle handle = window.GetWindowHandle();
+                // Shown, it fades out: its stand-in shows its last frame while it hides. One
+                // fading in turns around where it is; one never shown just hides.
+                const bool shown = window.fadeWait < 0 && window.framesHidden == 0;
+                window.fadeWait = -1;
+                if (shown && MayFade(window))
+                {
+                    const uint32_t now = windowBackendManager->GetTicks();
+                    if (window.fade != 0)
+                        window.fadeFrom = FadeProgress(window, now);
+                    else
+                    {
+                        window.fade     = windowBackendManager->ShowFade(handle, window.context, FadeRect(window, 1.0f), 1.0f);
+                        window.fadeFrom = 1.0f;
+                    }
+                    window.fadingIn    = false;
+                    window.fadeStartMs = now;
+                }
+                else
+                    EndFadeOf(window);
+                windowBackendManager->SetWindowVisible(handle, false);
+                if (std::exchange(window.cloaked, false))
+                    windowBackendManager->SetWindowCloaked(handle, false);
                 continue;
             }
 
             // A programmatic close, not the user's, so the window may be reopened.
             RequestCloseAllowReopen(window.id);
+        }
+    }
+
+    void OSWindowManager::SetPopupSlide(ID id, int2 away)
+    {
+        if (Window* window = FindWindow(id))
+            window->slide = away;
+    }
+
+    bool OSWindowManager::MayFade(const Window& window) const
+    {
+        return !m_reducedMotion && (window.flags & WindowFlags::PopupMenu) != WindowFlags::None;
+    }
+
+    float OSWindowManager::FadeProgress(const Window& window, uint32_t nowMs) const
+    {
+        const bool     tooltip  = (window.flags & WindowFlags::NotFocusable) != WindowFlags::None;
+        const uint32_t duration = window.fadingIn ? (tooltip ? kTooltipInMs : kPopupInMs) : kPopupOutMs;
+        const float    moved    = float(nowMs - window.fadeStartMs) / float(duration);
+        return window.fadingIn ? std::min(1.0f, window.fadeFrom + moved) : std::max(0.0f, window.fadeFrom - moved);
+    }
+
+    IntRect OSWindowManager::FadeRect(const Window& window, float shown) const
+    {
+        // Tooltips only fade.
+        if ((window.flags & WindowFlags::NotFocusable) != WindowFlags::None)
+            return window.rect;
+        const float back = float(std::lround(float(kPopupSlide) * window.displayScale)) * (1.0f - Easing::EaseOut(shown));
+        IntRect r = window.rect;
+        r.x -= int32_t(std::lround(float(window.slide.x) * back));
+        r.y -= int32_t(std::lround(float(window.slide.y) * back));
+        return r;
+    }
+
+    bool OSWindowManager::BeginFadeIn(Window& window, uint32_t nowMs)
+    {
+        window.fade = windowBackendManager->ShowFade(window.GetWindowHandle(), window.context, FadeRect(window, 0.0f), 0.0f);
+        if (window.fade == 0)
+            return false;
+        window.fadingIn    = true;
+        window.fadeFrom    = 0.0f;
+        window.fadeStartMs = nowMs;
+        RaisePopup(window);
+        return true;
+    }
+
+    void OSWindowManager::EndFadeOf(Window& window)
+    {
+        if (window.fade != 0)
+            windowBackendManager->EndFade(std::exchange(window.fade, 0u));
+        window.fadeWait = -1;
+    }
+
+    void OSWindowManager::AnimateFades()
+    {
+        const uint32_t now = windowBackendManager->GetTicks();
+        for (auto& window : windows)
+        {
+            OSWindowHandle handle = window.GetWindowHandle();
+            // Reopened: once drawn, its stand-in shows what it drew, or it just shows.
+            if (window.fadeWait >= 0 && window.state == WindowState::Alive)
+            {
+                if (window.fadeWait-- > 0)
+                    continue;
+                window.fadeWait = -1;
+                if (!BeginFadeIn(window, now))
+                {
+                    if (std::exchange(window.cloaked, false))
+                        windowBackendManager->SetWindowCloaked(handle, false);
+                    RaisePopup(window);
+                }
+                continue;
+            }
+            if (window.fade == 0)
+                continue;
+            const float shown = FadeProgress(window, now);
+            windowBackendManager->MoveFade(window.fade, FadeRect(window, shown), Easing::EaseOut(shown));
+            if (window.fadingIn && shown >= 1.0f)
+            {
+                // In: the window itself takes over.
+                if (std::exchange(window.cloaked, false))
+                    windowBackendManager->SetWindowCloaked(handle, false);
+                EndFadeOf(window);
+                RaisePopup(window);
+            }
+            else if (!window.fadingIn && shown <= 0.0f)
+                EndFadeOf(window);
         }
     }
 
@@ -354,14 +471,35 @@ namespace tachyon
             {
                 existing_window->state = WindowState::Alive;
                 // Reposition/resize before showing - the menu may have moved
-                if (existing_window->GetWindowHandle() != nullptr)
+                OSWindowHandle handle = existing_window->GetWindowHandle();
+                if (handle != nullptr)
                 {
-                    windowBackendManager->SetWindowRect(existing_window->GetWindowHandle(), rect);
+                    windowBackendManager->SetWindowRect(handle, rect);
                     existing_window->lastRect = rect;
                     existing_window->rect = rect;
                 }
-                windowBackendManager->SetWindowVisible(existing_window->GetWindowHandle(), true);
-                RaisePopup(*existing_window);
+                // It fades in: cloaked while its stand-in shows it. Still fading out, it turns
+                // around where it is; otherwise its stand-in waits until it has been drawn.
+                if (handle != nullptr && MayFade(*existing_window) && windowBackendManager->SetWindowCloaked(handle, true))
+                {
+                    existing_window->cloaked = true;
+                    windowBackendManager->SetWindowVisible(handle, true);
+                    const uint32_t now = windowBackendManager->GetTicks();
+                    if (existing_window->fade != 0)
+                    {
+                        existing_window->fadeFrom    = FadeProgress(*existing_window, now);
+                        existing_window->fadingIn    = true;
+                        existing_window->fadeStartMs = now;
+                    }
+                    else
+                        existing_window->fadeWait = 1;
+                }
+                else
+                {
+                    EndFadeOf(*existing_window);
+                    windowBackendManager->SetWindowVisible(handle, true);
+                    RaisePopup(*existing_window);
+                }
             }
 
             // this is safe since the windows list cannot be reallocated while we have

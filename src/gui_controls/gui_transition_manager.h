@@ -1,6 +1,6 @@
 #pragma once
 
-#include <gui_controls/gui_easing.h>
+#include <gui_core/gui_easing.h>
 #include <gui_core/gui_id.h>
 
 #include <optional>

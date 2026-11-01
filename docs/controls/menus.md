@@ -4,7 +4,9 @@
 
 Outside a menu, `BeginMenu` is a dropdown button that opens a menu. Inside a menu it is a
 submenu item. Inside a menu bar it is a bar trigger. Returns whether the menu is open;
-call `EndMenu` either way. To pick one value from a list, use
+call `EndMenu` either way. A menu fades in over 120 ms, sliding 4px out from what it opens
+from, and fades out over 80 ms (not with reduced motion; see
+[Changing state](../css/syntax.md#changing-state)). To pick one value from a list, use
 [`Dropdown`](fields.md#dropdown) instead.
 
 ```cpp

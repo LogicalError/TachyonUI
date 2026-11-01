@@ -6,7 +6,7 @@
 #include "headless_gui_app.h"
 #include "skribidi_test_fixture.h"
 
-#include <gui_controls/gui_easing.h>
+#include <gui_core/gui_easing.h>
 #include <gui_controls/gui_transition_manager.h>
 #include <gui_core/graphics/gui_custom_draw_context.h>
 #include <gui_core/style/gui_style.h>

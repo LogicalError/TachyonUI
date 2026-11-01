@@ -12,6 +12,8 @@
 #include <gui_core/elements/gui_element_storage.h>
 #include <gui_core/windows/gui_os_window_manager.h>
 
+#include <gui_core/gui_easing.h>
+
 #include "mock_window_backend.h"
 
 namespace tachyon
@@ -1317,5 +1319,204 @@ namespace tachyon
         wm.BeginFrame();
         EXPECT_FLOAT_EQ(wm.MainRefreshRate(), 144.0f);
         wm.EndFrame();
+    }
+
+    // ============================================================================
+    // Popups fading in and out
+    // ============================================================================
+
+    // A layered stand-in shows a popup while it fades: the mock records what it's asked.
+    class PopupFadeTest : public OSWindowManagerTest
+    {
+    protected:
+        struct Move { IntRect rect; float opacity; };
+        uint32_t now = 1000;
+        uint32_t nextFade = 0;
+        std::vector<std::pair<IntRect, float>> shown;   // ShowFade's rect and opacity
+        std::vector<Move> moves;
+        std::vector<uint32_t> ended;
+        std::vector<bool> cloaks;                      // SetWindowCloaked's argument, in order
+        const ID mainId  = CreateTestID(1);
+        const ID popupId = CreateTestID(2);
+        const IntRect popupRect{ 100, 100, 120, 80 };
+        WindowFlags popupFlags = WindowFlags::DefaultFlags | WindowFlags::PopupMenu;
+        bool standIns = true;
+
+        void SetUp() override
+        {
+            OSWindowManagerTest::SetUp();
+            ON_CALL(*mockBackend, GetTicks()).WillByDefault([this] { return now; });
+            ON_CALL(*mockBackend, GetWindowDisplayScale(_)).WillByDefault(Return(1.0f));
+            ON_CALL(*mockBackend, GetWindowRect(_)).WillByDefault([this](OSWindowHandle h) {
+                return h == manager->GetWindowHandle(mainId) ? IntRect{ 0, 0, 800, 600 } : popupRect;
+            });
+            ON_CALL(*mockBackend, SetWindowCloaked(_, _)).WillByDefault([this](OSWindowHandle, bool c) { cloaks.push_back(c); return true; });
+            ON_CALL(*mockBackend, ShowFade(_, _, _, _)).WillByDefault([this](OSWindowHandle, IWindowContext*, IntRect r, float o) {
+                if (!standIns) return 0u;
+                shown.push_back({ r, o });
+                return ++nextFade;
+            });
+            ON_CALL(*mockBackend, MoveFade(_, _, _)).WillByDefault([this](uint32_t, IntRect r, float o) { moves.push_back({ r, o }); });
+            ON_CALL(*mockBackend, EndFade(_)).WillByDefault([this](uint32_t f) { ended.push_back(f); });
+        }
+
+        // One frame; the popup is declared when `open`.
+        void Frame(bool open)
+        {
+            manager->BeginFrame();
+            manager->GetOrCreateWindow(mainId, "Main", IntRect{ 0, 0, 800, 600 }, nullptr);
+            if (open)
+                manager->GetOrCreateWindow(popupId, "Popup", popupRect, nullptr, popupFlags, mainId);
+            manager->ReleaseUndeclaredWindows([&](ID id) { return id == mainId || (open && id == popupId); });
+            manager->EndFrame();
+        }
+
+        // Opens the popup and runs its fade in to the end.
+        void OpenFully()
+        {
+            for (int i = 0; i < 6; ++i)
+                Frame(true);
+            now += OSWindowManager::kPopupInMs + 1;
+            Frame(true);
+        }
+    };
+
+    // A new popup fades in once it has been drawn: its stand-in starts clear, 4px towards
+    // the anchor, and comes in over 120 ms; then the popup itself is uncloaked.
+    TEST_F(PopupFadeTest, ANewPopupFadesAndSlidesIn)
+    {
+        for (int i = 0; i < 5 && shown.empty(); ++i)
+            Frame(true);
+        ASSERT_EQ(shown.size(), 1u) << "a stand-in once drawn";
+        EXPECT_FLOAT_EQ(shown[0].second, 0.0f);
+        EXPECT_EQ(shown[0].first.y, popupRect.y - OSWindowManager::kPopupSlide) << "from the anchor's side";
+        EXPECT_EQ(shown[0].first.x, popupRect.x);
+        EXPECT_TRUE(ended.empty());
+
+        now += OSWindowManager::kPopupInMs / 2;
+        Frame(true);
+        ASSERT_FALSE(moves.empty());
+        EXPECT_NEAR(moves.back().opacity, Easing::EaseOut(0.5f), 1e-3f);
+        EXPECT_GT(moves.back().rect.y, popupRect.y - OSWindowManager::kPopupSlide);
+        EXPECT_LE(moves.back().rect.y, popupRect.y);
+        cloaks.clear();
+
+        now += OSWindowManager::kPopupInMs / 2 + 1;
+        Frame(true);
+        EXPECT_EQ(ended, std::vector<uint32_t>{ 1u }) << "done: the stand-in goes";
+        EXPECT_EQ(cloaks, std::vector<bool>{ false }) << "and the popup shows itself";
+    }
+
+    // Closed, a popup hides at once while its stand-in fades its last frame out over 80 ms.
+    TEST_F(PopupFadeTest, AClosedPopupFadesOut)
+    {
+        OpenFully();
+        shown.clear(); moves.clear(); ended.clear();
+        EXPECT_CALL(*mockBackend, SetWindowVisible(manager->GetWindowHandle(popupId), false)).Times(1);
+        Frame(false);
+        EXPECT_EQ(manager->GetWindowState(popupId), WindowState::Hidden);
+        ASSERT_EQ(shown.size(), 1u);
+        EXPECT_FLOAT_EQ(shown[0].second, 1.0f);
+        EXPECT_EQ(shown[0].first, popupRect);
+
+        now += OSWindowManager::kPopupOutMs / 2;
+        Frame(false);
+        ASSERT_FALSE(moves.empty());
+        EXPECT_NEAR(moves.back().opacity, Easing::EaseOut(0.5f), 1e-3f);
+        EXPECT_TRUE(ended.empty());
+        now += OSWindowManager::kPopupOutMs / 2 + 1;
+        Frame(false);
+        EXPECT_EQ(ended.size(), 1u);
+    }
+
+    // Reopened while fading out, it turns around where it is, with the same stand-in.
+    TEST_F(PopupFadeTest, ReopeningMidFadeTurnsAround)
+    {
+        OpenFully();
+        Frame(false);
+        now += OSWindowManager::kPopupOutMs / 2;
+        Frame(false);
+        const float atTurn = moves.back().opacity;
+        const size_t shownBefore = shown.size();
+        moves.clear();
+        Frame(true);
+        EXPECT_EQ(manager->GetWindowState(popupId), WindowState::Alive);
+        EXPECT_EQ(shown.size(), shownBefore) << "no new stand-in";
+        ASSERT_FALSE(moves.empty());
+        EXPECT_NEAR(moves.back().opacity, atTurn, 0.02f) << "no jump";
+        now += OSWindowManager::kPopupInMs;
+        Frame(true);
+        EXPECT_FLOAT_EQ(moves.back().opacity, 1.0f);
+    }
+
+    // Reopened from hidden, it waits a frame to be drawn, then fades in.
+    TEST_F(PopupFadeTest, AReopenedPopupFadesInOnceDrawn)
+    {
+        OpenFully();
+        Frame(false);
+        now += OSWindowManager::kPopupOutMs + 1;
+        Frame(false);
+        shown.clear();
+        Frame(true);
+        EXPECT_TRUE(shown.empty()) << "not drawn yet";
+        Frame(true);
+        ASSERT_EQ(shown.size(), 1u);
+        EXPECT_FLOAT_EQ(shown[0].second, 0.0f);
+    }
+
+    // A popup opening upwards slides up into place; a tooltip only fades, in 100 ms.
+    TEST_F(PopupFadeTest, ItSlidesAwayFromItsAnchorAndTooltipsDont)
+    {
+        manager->BeginFrame();
+        manager->GetOrCreateWindow(mainId, "Main", IntRect{ 0, 0, 800, 600 }, nullptr);
+        manager->GetOrCreateWindow(popupId, "Popup", popupRect, nullptr, popupFlags, mainId);
+        manager->SetPopupSlide(popupId, { 0, -1 });
+        manager->EndFrame();
+        for (int i = 0; i < 5 && shown.empty(); ++i)
+            Frame(true);
+        ASSERT_EQ(shown.size(), 1u);
+        EXPECT_EQ(shown[0].first.y, popupRect.y + OSWindowManager::kPopupSlide);
+
+        const ID tipId = CreateTestID(3);
+        const WindowFlags tipFlags = popupFlags | WindowFlags::NotFocusable;
+        shown.clear(); ended.clear();
+        for (int i = 0; i < 6 && shown.empty(); ++i)
+        {
+            manager->BeginFrame();
+            manager->GetOrCreateWindow(mainId, "Main", IntRect{ 0, 0, 800, 600 }, nullptr);
+            manager->GetOrCreateWindow(tipId, "Tip", popupRect, nullptr, tipFlags, mainId);
+            manager->EndFrame();
+        }
+        ASSERT_EQ(shown.size(), 1u);
+        EXPECT_EQ(shown[0].first, popupRect) << "no slide";
+        now += OSWindowManager::kTooltipInMs + 1;
+        manager->BeginFrame();
+        manager->GetOrCreateWindow(mainId, "Main", IntRect{ 0, 0, 800, 600 }, nullptr);
+        manager->GetOrCreateWindow(tipId, "Tip", popupRect, nullptr, tipFlags, mainId);
+        manager->EndFrame();
+        EXPECT_EQ(ended.size(), 1u) << "in after 100 ms";
+    }
+
+    // With reduced motion, or where there are no stand-ins, popups show and hide at once.
+    TEST_F(PopupFadeTest, NoFadeWithReducedMotionOrWithoutStandIns)
+    {
+        for (const bool reduced : { true, false })
+        {
+            TearDown();
+            SetUp();
+            shown.clear(); moves.clear(); ended.clear();
+            manager->SetReducedMotion(reduced);
+            standIns = reduced;
+            OpenFully();
+            Frame(false);
+            Frame(true);
+            Frame(true);
+            Frame(false);
+            if (reduced)
+                EXPECT_TRUE(shown.empty() && moves.empty()) << "reduced motion";
+            else
+                EXPECT_TRUE(moves.empty()) << "no stand-ins";
+            EXPECT_EQ(manager->GetWindowState(popupId), WindowState::Hidden);
+        }
     }
 }

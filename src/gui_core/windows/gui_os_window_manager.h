@@ -83,6 +83,15 @@ namespace tachyon
             int32_t         framesHidden  = 0;    ///< a new popup's frames still drawn before it shows
             bool            cloaked       = false; ///< shown but cloaked meanwhile, rather than hidden
 
+            // A popup fading in or out is shown by a layered stand-in (IWindowBackend::ShowFade)
+            // while the window itself is cloaked (in) or hidden (out).
+            uint32_t        fade          = 0;     ///< the stand-in; 0 = none
+            int32_t         fadeWait      = -1;    ///< reopened: frames until it has been drawn; -1 = not waiting
+            bool            fadingIn      = false; ///< else out
+            float           fadeFrom      = 0.0f;  ///< how far shown (0 to 1) when this fade started
+            uint32_t        fadeStartMs   = 0;
+            int2            slide         { 0, 1 }; ///< the way it opens, away from its anchor
+
             OSWindowHandle  osHandle = nullptr;
             IWindowContext* context  = nullptr;
             OnGuiFunc       onGui;              ///< the context's, to make it again
@@ -118,6 +127,19 @@ namespace tachyon
         OSWindowManager(GraphicsContext* graphicsContext, IWindowBackend* backendWindowManager,
                         IPlatformInputHandler* inputHandler, StyleManager& styleManager, GradientManager& gradientManager);
 
+
+        // ---------------- Popup motion ----------------
+
+        static constexpr uint32_t kPopupInMs   = 120; ///< a menu or popup fading in
+        static constexpr uint32_t kTooltipInMs = 100; ///< a tooltip fading in
+        static constexpr uint32_t kPopupOutMs  = 80;  ///< either fading out
+        static constexpr int      kPopupSlide  = 4;   ///< CSS px a popup slides in from its anchor
+
+        /// The way popup `id` opens, away from its anchor (one step on one axis, e.g. { 0, 1 }
+        /// below it): it slides in that way. Set each frame by whoever places it.
+        void SetPopupSlide(ID id, int2 away);
+        /// Reduced motion: popups show and hide at once.
+        void SetReducedMotion(bool reduced) { m_reducedMotion = reduced; }
 
         // ---------------- Frame Lifecycle ---------------- 
 
@@ -529,6 +551,19 @@ namespace tachyon
         void RemoveWindowFromSiblingList(int32_t window_index);
         float QueryDisplayScale(OSWindowHandle handle) const;
         void RaisePopup(const Window& window);
+        /// Popups fade unless motion is reduced; tooltips fade without sliding.
+        bool    MayFade(const Window& window) const;
+        /// How far a fading popup is shown now, 0 to 1 (linear in time).
+        float   FadeProgress(const Window& window, uint32_t nowMs) const;
+        /// Where a popup `shown` (0 to 1) of the way in is: short of its rect, towards its anchor.
+        IntRect FadeRect(const Window& window, float shown) const;
+        /// Starts the stand-in of a cloaked popup that has been drawn; false when there can't be one.
+        bool    BeginFadeIn(Window& window, uint32_t nowMs);
+        /// Removes a popup's stand-in.
+        void    EndFadeOf(Window& window);
+        /// Moves the stand-ins, and ends the fades that are done.
+        void    AnimateFades();
+        bool    m_reducedMotion = false;
         /// First top-level window still open; null when there is none.
         const Window* MainWindow() const;
         void LinkToParent(int32_t window_index, ID parentID);

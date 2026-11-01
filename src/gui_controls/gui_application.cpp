@@ -335,6 +335,9 @@ namespace tachyon
 
     void GUIApplication::Cleanup()
     {
+        // A theme switch still crossfading holds images of its windows.
+        if (graphicsContext != nullptr)
+            EndThemeCrossfade();
         gradientManager.ReleaseAll(graphicsContext);
         layoutEngine.reset();
         inputManager.reset();
@@ -455,13 +458,46 @@ namespace tachyon
         }
     }
 
+    void GUIApplication::CaptureThemeCrossfade()
+    {
+        EndThemeCrossfade();
+        if (!windowManager || !graphicsContext)
+            return;
+        windowManager->ForEachAliveWindowContext([this](IWindowContext* context, IntRect pixels)
+        {
+            if (pixels.w <= 0 || pixels.h <= 0)
+                return;
+            std::vector<uint8_t> rgba(size_t(pixels.w) * size_t(pixels.h) * 4);
+            if (!context->ReadPixels(rgba))
+                return;
+            for (size_t i = 0; i < rgba.size(); i += 4)
+                std::swap(rgba[i], rgba[i + 2]);   // BGRA, as read, to RGBA
+            tachyon::Image* image = graphicsContext->CreateImage(rgba.data(), uint2{ uint32_t(pixels.w), uint32_t(pixels.h) },
+                                                        ImageFormat::R8G8B8A8, Sampler::LinearClampToEdge);
+            if (image == nullptr)
+                return;
+            m_crossfades.push_back({ context->GetID(), image, graphicsContext->RegisterImage(image) });
+        });
+    }
+
+    void GUIApplication::EndThemeCrossfade()
+    {
+        for (const ThemeCrossfade& fade : m_crossfades)
+        {
+            if (fade.index != ImageIndex::Invalid)
+                graphicsContext->UnregisterImage(fade.index);
+            graphicsContext->DestroyImageAtEnd(fade.image, DeviceScope::Frame);
+        }
+        m_crossfades.clear();
+    }
+
     Result<void> GUIApplication::ReadWindowPixels(ID windowID, std::span<uint8_t> bgra)
     {
         IWindowContext* context = windowManager ? windowManager->GetWindowContext(windowID) : nullptr;
         if (context == nullptr)
             return Error{ ErrorCode::NotFound, "no window with that ID" };
         if (!context->ReadPixels(bgra))
-            return Error{ ErrorCode::Unsupported, "not a render-to-image window with a rendered frame, or the span is too small" };
+            return Error{ ErrorCode::Unsupported, "the window has no rendered frame yet, or the span is too small" };
         return {};
     }
 
@@ -494,6 +530,10 @@ namespace tachyon
             return;
         m_themeReloadPending = false;
 
+        // Another palette (not just another scale or font size): the old look crossfades out.
+        if (m_themePath != m_loadedThemePath && !m_loadedThemePath.empty() && !transitionManager.IsReducedMotion())
+            CaptureThemeCrossfade();
+
         // Tear down panel resources before their styles disappear; m_dockingLayoutsThisFrame
         // still holds last frame's layouts here. EnableVisiblePanels rebuilds them next frame.
         for (DockingLayout* layout : m_dockingLayoutsThisFrame)
@@ -520,6 +560,17 @@ namespace tachyon
             OnStylesReloaded();
         else
             TACHYON_LOG_ERROR(kLogApp, "theme reload failed for {}; styles stay cleared", m_themePath);
+
+        if (!m_crossfades.empty())
+        {
+            // Registered after the reload, which clears the styles.
+            Style fill{};
+            for (StyleState& state : fill.states)
+                state.backgroundColor = ColorStyle::Create(color4b(255, 255, 255, 255), color4b(255, 255, 255, 255),
+                                                           ColorType::StretchedTexture);
+            m_crossfadeStyle = styleManager.Register(fill, StyleUnits::Pixels).visualBoxStyleIndex;
+            m_crossfadeStart = static_cast<float>(m_frameClock.Seconds());
+        }
 
         // Captured draws reference the old styles and glyph atlas.
         if (m_uiCache) m_uiCache->InvalidateAll();
@@ -635,7 +686,10 @@ namespace tachyon
     void GUIApplication::SetReducedMotion(std::optional<bool> reduced)
     {
         m_reducedMotion = reduced;
-        transitionManager.SetReducedMotion(reduced.value_or(windowBackend && windowBackend->PrefersReducedMotion()));
+        const bool on = reduced.value_or(windowBackend && windowBackend->PrefersReducedMotion());
+        transitionManager.SetReducedMotion(on);
+        if (windowManager)
+            windowManager->SetReducedMotion(on);
     }
 
     void GUIApplication::SetUIScale(float scale)
@@ -1198,6 +1252,20 @@ namespace tachyon
             }
             fireAfterDraws(end, 0);
 
+            // A theme switch: the window's last frame in the old theme, fading out over it.
+            if (!m_crossfades.empty())
+            {
+                const float t = (elapsedTimeSecs - m_crossfadeStart) / kThemeCrossfadeSecs;
+                for (const ThemeCrossfade& fade : m_crossfades)
+                    if (fade.window == windowElement.id && t < 1.0f)
+                    {
+                        guiRenderer->SetTransform(tachyon::float3x2::Identity());
+                        guiRenderer->SetOpacity(1.0f - Easing::EaseInOut(std::max(t, 0.0f)));
+                        const uint32_t style = ComputeGPUStyleIndex(m_crossfadeStyle, ElementState::None);
+                        guiRenderer->RenderBox(windowRect, windowRect, style, style, 1.0f, {}, fade.index, windowSnappedRect);
+                    }
+            }
+
             guiRenderer->SetOpacity(1.0f);
             guiRenderer->EndWindow();
         }
@@ -1561,6 +1629,8 @@ namespace tachyon
         m_frame.RunStage(FrameStage::PostRender, ctx);
 
         transitionManager.Purge(elapsedTimeSecs);
+        if (!m_crossfades.empty() && elapsedTimeSecs - m_crossfadeStart >= kThemeCrossfadeSecs)
+            EndThemeCrossfade();
 
         m_frame.RunStage(FrameStage::EndFrame, ctx);
 
