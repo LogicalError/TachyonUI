@@ -707,6 +707,46 @@ namespace tachyon
             EXPECT_LT(app.styleManager.GetOpacity(label), 0.0f) << "the row fades its parts";
         }
 
+        // Moving the pointer from one menu item to the next: the focus follows it as the menu is
+        // built, and the item left blends all the way out, not only out of hover (hovered and
+        // focused look the same, so it stayed lit, then snapped off).
+        TEST_F(ControlsMenuTest, AnItemLeftBlendsOutOfHoverAndFocus)
+        {
+            const ID menuID = app.idManager.CreateStaticID();
+            const ID first  = app.idManager.CreateStaticID();
+            const ID second = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow();
+                if (app.BeginMenu(menuID, "File"))
+                {
+                    app.MenuItem(first, "First", [] {});
+                    app.MenuItem(second, "Second", [] {});
+                }
+                app.EndMenu();
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.ClickAt(app.CenterOf(menuID));
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.IsOpen());
+            app.transitionManager.SetEnabled(true);
+
+            app.InjectMouseMove(app.CenterOf(first));
+            for (int i = 0; i < 3; ++i) app.Frame(draw);
+            ASSERT_EQ(app.guiStateManager.Interaction().GetFocusedID(), first) << "test setup: hovering focuses";
+            app.AdvanceTime(500);
+            app.Frame(draw);
+
+            app.InjectMouseMove(app.CenterOf(second));
+            for (int i = 0; i < 3; ++i) app.Frame(draw);
+            ASSERT_EQ(app.guiStateManager.Interaction().GetFocusedID(), second);
+            const auto blend = app.transitionManager.Find(first, app.guiStateManager.Interaction().GetFrameTime());
+            ASSERT_TRUE(blend.has_value()) << "the item left blends out";
+            EXPECT_EQ(blend->toState & (ElementState::Hover | ElementState::Focused), ElementState::None)
+                << "to neither hovered nor focused";
+        }
+
         // An invalid control's border and halo come from --error and --invalid-halo.
         TEST_F(ControlsMenuTest, TheThemeSetsHowInvalidThingsLook)
         {

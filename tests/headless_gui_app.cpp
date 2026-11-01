@@ -248,10 +248,8 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
 
     // The PropagatesDescendantState ancestors of the hovered and focused elements, as in
     // GUIApplication::Frame (without its transitions).
-    guiStateManager.Interaction().SetPropagatedHoverIDs(
-        CollectPropagatedAncestors(elementStorage, guiStateManager.Interaction().GetHoveredID()));
-    guiStateManager.Interaction().SetPropagatedFocusedIDs(
-        CollectPropagatedAncestors(elementStorage, guiStateManager.Interaction().GetFocusedID()));
+    // As OnFrame: state transitions, and the propagated hover and focus.
+    FireStateTransitions(static_cast<float>(m_timeMs) / 1000.0f);
     UpdateMouseCursor(guiStateManager.Interaction().GetHoveredID(), m_rootWindowID, m_mousePos);
 
     menuManager.CloseOnInputOutside(*inputManager, elementStorage, guiStateManager);
