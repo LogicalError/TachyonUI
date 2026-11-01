@@ -536,15 +536,20 @@ namespace tachyon
                     const int2 inGroup = slot.position - drag.groupRect.position;
                     const VisualBoxStyleIndex slotStyle   = theme.reorderDropSlotStyleRef.visualBoxStyleIndex;
                     const VisualBoxStyleIndex liftedStyle = theme.reorderLiftedStyleRef.visualBoxStyleIndex;
+                    const VisualBoxStyleIndex ringStyle   = theme.reorderLiftedRingStyleRef.visualBoxStyleIndex;
                     VERIFY(elementStorage.AddCustomDraw(m_reorderable->Construction().groupRef,
                         [inGroup, size = slot.size, slotStyle](CustomDrawContext& ctx)
                         {
                             const IntRect group = ctx.ElementRect();
                             ctx.RenderBox(IntRect{ .position = group.position + inGroup, .size = size }, slotStyle);
                         }));
+                    // Its fill under its parts, its ring over them: a row's field fills its height
+                    // and would hide a ring drawn first.
                     if (!elementStorage.GetElementCustomDrawUnsafe(draggedRef).callback)
                         VERIFY(elementStorage.AddCustomDraw(draggedRef, [liftedStyle](CustomDrawContext& ctx)
                             { ctx.RenderBox(ctx.ElementRect(), liftedStyle); }));
+                    VERIFY(elementStorage.AddCustomDrawAfter(draggedRef, [ringStyle](CustomDrawContext& ctx)
+                        { ctx.RenderBox(ctx.ElementRect(), ringStyle); }));
                 }
 
                 // Render dragged item on top

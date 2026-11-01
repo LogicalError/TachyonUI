@@ -4,6 +4,9 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "skribidi_test_fixture.h"
+
+#include <gui_core/graphics/gui_custom_draw_context.h>
 
 #include <gui_core/elements/gui_element_storage.h>
 
@@ -91,6 +94,41 @@ namespace tachyon
                 app.Frame([&] { EmitGroup(); });
             }
         };
+
+        // A dragged row is drawn lifted: its fill under its parts and its ring over them, so a
+        // field filling the row doesn't hide the ring.
+        TEST_F(ReorderableTest, ADraggedRowsRingIsDrawnOverItsParts)
+        {
+            app.Frame([&] { EmitGroup(); });
+            const auto thumb = ThumbCenter(itemIDs[1]);
+            app.InjectMouseMove(thumb);
+            app.InjectMouseDown(thumb);
+            app.Frame([&] { EmitGroup(); });
+            app.InjectMouseMove({ thumb.x, thumb.y + 20 }, tachyon::MouseButtons::Left);
+            app.Frame([&] { EmitGroup(); });
+            app.Frame([&] { EmitGroup(); }); // the drag shows on the frame after the move is dispatched
+
+            const tachyon::ElementRef row = app.elementStorage.FindElementRefByID(itemIDs[1]);
+            ASSERT_TRUE(row.IsValid());
+            const tachyon::ElementCustomDraw* draw = app.elementStorage.GetCustomDraw(row);
+            ASSERT_NE(draw, nullptr);
+            const tachyon::IntRect rect = app.GetElementRect(itemIDs[1]);
+            auto styleDrawn = [&](const tachyon::CustomDrawCallback& callback) {
+                GUITest::StubGUIRenderer r;
+                tachyon::CustomDrawContext ctx{ r, app.elementStorage, row, rect, rect, tachyon::IntRect{ 0, 0, 4000, 4000 },
+                                                tachyon::float3x2{}, tachyon::int2{ 0, 0 } };
+                callback(ctx);
+                return r.lastBoxStyle;
+            };
+            auto style = [](tachyon::StyleRef s) { return tachyon::GUIRenderer::StyleIndex(s.visualBoxStyleIndex, tachyon::ElementState::None); };
+            ASSERT_TRUE(draw->callback) << "the fill, before its parts";
+            EXPECT_EQ(styleDrawn(draw->callback), style(app.theme.reorderLiftedStyleRef));
+            ASSERT_NE(draw->afterHead, UINT32_MAX) << "the ring, after its parts";
+            EXPECT_EQ(styleDrawn(app.elementStorage.GetPostDrawEntryUnsafe(draw->afterHead).callback), style(app.theme.reorderLiftedRingStyleRef));
+
+            app.InjectMouseUp({ thumb.x, thumb.y + 20 });
+            app.Frame([&] { EmitGroup(); });
+        }
 
         TEST_F(ReorderableTest, ItemsRenderInDeclaredOrder)
         {
