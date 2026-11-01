@@ -34,6 +34,19 @@ There is no `border` shorthand; set width, color and style separately.
 | `background-color` | color or gradient | state |
 | `color` | color or gradient: the text color | state |
 | `-tachyon-icon-color` | color or gradient: the icon color. Unset = the text color | state |
+| `-tachyon-state-layer` | `none` (default) or `content`: the hovered and pressed backgrounds are made from the text color, see below | |
+
+With `-tachyon-state-layer: content` a control's hovered background is its text color at 8%
+over its background without the hover, and its pressed one the same at 14%, in every state
+that has them (also when it's on or focused; not for selected text, not when disabled). So a
+dark button lightens, a primary button (dark text on the accent) darkens, and the light theme
+darkens. It takes the place of any `background-color` in `:hover` and `:active` rules; a
+background that is a gradient or an image stays as it is.
+
+```css
+.button       { color: var(--text-1); background-color: var(--bg-control); -tachyon-state-layer: content; }
+.button:hover { border-color: var(--line-strong); }   /* the background comes from the layer */
+```
 
 ## Opacity
 

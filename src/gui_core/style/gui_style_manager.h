@@ -109,6 +109,9 @@ namespace tachyon
         /// A border-only box style in pixels: `widths` and `radius` with a `color` border and no
         /// background, registered once (until ClearAll).
         VisualBoxStyleIndex RegisterOutline(BoxEdges widths, BoxCorners radius, color4b color) noexcept;
+        /// For Style::stateLayer Content (Register does it): each hovered and pressed slot gets the
+        /// slot's text color over its background without hover and press, 8% and 14%.
+        static void ApplyStateLayer(Style& style) noexcept;
         /// The CSS opacity of a flat GPU style index (style and state); below 0 when not set.
         float                        GetOpacity(uint32_t gpuStyleIndex) const noexcept;
         /// A box style's state by its flat GPU index; nullptr out of range.

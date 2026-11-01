@@ -594,4 +594,88 @@ namespace tachyon
         const VisualBoxStyleIndex again = sm.RegisterOutline(BoxEdges(1), BoxCorners(4), red);
         ASSERT_NE(sm.GetVisualBoxStyle(again, ElementState::None), nullptr) << "registered anew";
     }
+    // With a content state layer, the hovered and pressed backgrounds are the state's text
+    // color over its background without hover and press: 8% and 14%.
+    TEST(StyleManagerTest, AStateLayerMakesTheHoveredAndPressedBackgrounds)
+    {
+        const color4b base{ 0x1E, 0x21, 0x28, 255 }, text{ 0xE6, 0xE8, 0xEC, 255 };
+        const color4b selected{ 0x2A, 0x2F, 0x39, 255 }, hoverText{ 255, 255, 255, 255 };
+        Style s{};
+        s.stateLayer = StateLayer::Content;
+        for (StyleState& state : s.states)
+        {
+            state.backgroundColor = ColorStyle::Create(base);
+            state.textColor       = ColorStyle::Create(text);
+        }
+        s.states[ElementState::Hover].backgroundColor = ColorStyle::Create(color4b{ 1, 2, 3, 255 });   // replaced
+        s.states[ElementState::Hover].textColor       = ColorStyle::Create(hoverText);
+        for (int i = 0; i < Style::kStateCount; ++i)
+            if ((i & int(ElementState::Selected)) != 0)
+                s.states[i].backgroundColor = ColorStyle::Create(selected);
+        Style copy = s;
+        StyleManager::ApplyStateLayer(copy);
+
+        auto over = [](color4b b, color4b l, float a) {
+            auto mix = [&](uint8_t x, uint8_t y) { return uint8_t(std::lround(float(x) * a + float(y) * (1.0f - a))); };
+            return color4b{ mix(l.r, b.r), mix(l.g, b.g), mix(l.b, b.b), 255 };
+        };
+        auto bg = [&](ElementState st) { return copy.states[st].backgroundColor.GetFirstColor(); };
+        EXPECT_EQ(bg(ElementState::None), base) << "untouched";
+        EXPECT_EQ(bg(ElementState::Focused), base);
+        EXPECT_EQ(bg(ElementState::Hover), over(base, hoverText, 0.08f)) << "the hovered state's own text color";
+        EXPECT_EQ(bg(ElementState::Hover | ElementState::Active), over(base, text, 0.14f)) << "pressed";
+        EXPECT_EQ(bg(ElementState::Active), over(base, text, 0.14f));
+        EXPECT_EQ(bg(ElementState::Hover | ElementState::Focused), over(base, text, 0.08f));
+        EXPECT_EQ(bg(ElementState::Hover | ElementState::Selected), over(selected, text, 0.08f)) << "over the selected background";
+        EXPECT_EQ(bg(ElementState::Hover | ElementState::Selection), base) << "text selection isn't a state layer";
+        EXPECT_EQ(bg(ElementState::Disabled), base) << "disabled has none";
+
+        // Registered, the hovered slot draws that color.
+        GradientManager gm(16);
+        StyleManager sm(gm);
+        const StyleRef ref = sm.Register(s);
+        const VisualBoxStyle* hovered = sm.GetVisualBoxStyle(ref.visualBoxStyleIndex, ElementState::Hover);
+        ASSERT_NE(hovered, nullptr);
+        EXPECT_EQ(hovered->backgroundColorIndex, sm.RegisterColorStyle(ColorStyle::Create(over(base, hoverText, 0.08f))));
+    }
+
+    // Over a transparent background the layer is the text color, 8% opaque; a gradient
+    // background is left as it is.
+    TEST(StyleManagerTest, AStateLayerOverTransparentOrGradient)
+    {
+        const color4b text{ 200, 100, 50, 255 };
+        Style s{};
+        s.stateLayer = StateLayer::Content;
+        for (StyleState& state : s.states)
+            state.textColor = ColorStyle::Create(text);
+        Style clear = s;
+        StyleManager::ApplyStateLayer(clear);
+        EXPECT_EQ(clear.states[ElementState::Hover].backgroundColor.GetFirstColor(),
+                  (color4b{ 200, 100, 50, uint8_t(std::lround(0.08f * 255.0f)) }));
+
+        // A translucent text color makes a fainter layer.
+        Style faint = s;
+        for (StyleState& state : faint.states)
+            state.textColor = ColorStyle::Create(color4b{ 200, 100, 50, 128 });
+        StyleManager::ApplyStateLayer(faint);
+        EXPECT_EQ(faint.states[ElementState::Hover].backgroundColor.GetFirstColor().a,
+                  uint8_t(std::lround(0.08f * 128.0f / 255.0f * 255.0f)));
+
+        for (StyleState& state : s.states)
+            state.backgroundColor = ColorStyle::Create(color4b{ 0, 0, 0, 255 }, color4b{ 255, 255, 255, 255 }, ColorType::LinearGradient);
+        Style ramp = s;
+        StyleManager::ApplyStateLayer(ramp);
+        EXPECT_EQ(ramp.states[ElementState::Hover].backgroundColor.type, ColorType::LinearGradient) << "left alone";
+
+        s.stateLayer = StateLayer::None;
+        GradientManager gm(16);
+        StyleManager sm(gm);
+        Style none{};
+        for (StyleState& state : none.states)
+            state.textColor = ColorStyle::Create(text);
+        const StyleRef ref = sm.Register(none);
+        EXPECT_EQ(sm.GetVisualBoxStyle(ref.visualBoxStyleIndex, ElementState::Hover)->backgroundColorIndex,
+                  sm.GetVisualBoxStyle(ref.visualBoxStyleIndex, ElementState::None)->backgroundColorIndex)
+            << "without it, nothing is made";
+    }
 }

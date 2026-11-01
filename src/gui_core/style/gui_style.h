@@ -643,6 +643,13 @@ namespace tachyon
     // Complete Style Definition
     // ------------------------------------------------------------------------
 
+    /// How a style's hover and pressed backgrounds are made.
+    enum class StateLayer : uint8_t
+    {
+        None,    ///< as the CSS gives them
+        Content, ///< the state's text color over its background: 8% hovered, 14% pressed
+    };
+
     /// The visual properties of one element state (normal, :hover, :active, ...).
     /// Lengths are in CSS px.
     struct StyleState
@@ -711,6 +718,9 @@ namespace tachyon
         float           borderDashSize   = 0.0f; ///< dash length in CSS px; 0 = solid
         float           borderDashOffset = 0.0f; ///< offset into the dash pattern, CSS px
         BoxShadow       focusRing {};            ///< :focus-visible box-shadow, over the state's shadows
+        /// -tachyon-state-layer: Content makes the hovered and pressed backgrounds from the
+        /// state's text color over its background, in place of the :hover / :active ones.
+        StateLayer      stateLayer = StateLayer::None;
 
         LayoutData      layoutData {}; ///< flex, grid and size properties
 

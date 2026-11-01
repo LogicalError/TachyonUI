@@ -67,6 +67,7 @@
 
 /* ---- textStyle ------------------------------------------------------------ */
 .text-style {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: var(--border);
     border-radius: var(--radius-md);
     overflow: auto;
@@ -79,8 +80,8 @@
     background-color: var(--bg-control);
     border-color: var(--line-strong);
 }
-.text-style:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.text-style:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.text-style:hover  { border-color: var(--line-strong); }
+.text-style:active { border-color: var(--accent); }
 .text-style:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .text-style::highlight(selected) { color: var(--text-1); border-color: var(--accent); background-color: var(--accent-soft); }
 
@@ -411,6 +412,7 @@
 
 /* ---- buttonStyle ---------------------------------------------------------- */
 .button {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     -tachyon-icon-size: 14px;
     border-width: var(--border);
     border-radius: var(--radius-md);
@@ -428,8 +430,8 @@
     flex-grow: 1;
     cursor: pointer;
 }
-.button:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.button:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.button:hover  { border-color: var(--line-strong); }
+.button:active { border-color: var(--accent); }
 .button:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .button::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
 
@@ -438,6 +440,7 @@
    glyph until hovered. Centres the glyph on both axes and pins its render size so
    the button can be stretched to a row's height without the icon drifting up. */
 .icon-button {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: 0px;
     border-radius: var(--radius-md);
     border-color: transparent;
@@ -453,14 +456,13 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.icon-button:hover  { background-color: var(--bg-active); }
-.icon-button:active { background-color: var(--bg-pressed); }
 .icon-button:focus  { background-color: var(--bg-active); }
 
 /* .icon-button-end: same flat icon button, pinned to the end of the cross axis
    so the trailing add button sits at the bottom-right of the list / dictionary
    area rather than the bottom-left. */
 .icon-button-end {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: 0px;
     border-radius: var(--radius-md);
     border-color: transparent;
@@ -477,8 +479,6 @@
     align-self: flex-end;
     cursor: pointer;
 }
-.icon-button-end:hover  { background-color: var(--bg-active); }
-.icon-button-end:active { background-color: var(--bg-pressed); }
 .icon-button-end:focus  { background-color: var(--bg-active); }
 
 /* Flat button: looks like plain left-aligned text (no border/background), but
@@ -526,6 +526,7 @@
 
 /* A segment of a button group; :first-child / :last-child rules can shape the group's ends. */
 .group-button {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     -tachyon-icon-size: 14px;
     height: 20px;
     border-width: 0px;
@@ -546,8 +547,8 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.group-button:hover  { background-color: var(--bg-active); color: var(--text-1); }
-.group-button:active { background-color: var(--bg-pressed); color: var(--text-1); }
+.group-button:hover  { color: var(--text-1); }
+.group-button:active { color: var(--text-1); }
 .group-button::highlight(selected) { background-color: var(--bg-pressed); color: var(--text-1); }
 
 /* ---- menuTriggerStyle ----------------------------------------------------- */
@@ -555,6 +556,7 @@
    aligned (text-align: start) because dropdowns display a current value that
    should read from the left edge - a centered label looks like a plain button. */
 .menu-trigger {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     min-width: 160px;
     height: 24px;
     border-width: var(--border);
@@ -578,8 +580,8 @@
     flex-grow: 1;
     cursor: pointer;
 }
-.menu-trigger:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.menu-trigger:active { border-color: var(--accent); background-color: var(--bg-control); }
+.menu-trigger:hover  { border-color: var(--line-strong); }
+.menu-trigger:active { border-color: var(--accent); }
 .menu-trigger:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 /* Open: an accent border. */
 .menu-trigger::highlight(selected) { border-color: var(--accent); background-color: var(--bg-control); }
@@ -587,6 +589,7 @@
 
 /* ---- dashedStyle ---------------------------------------------------------- */
 .dashed {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: var(--border);
     border-radius: var(--radius-lg);
     margin: 0px;
@@ -601,8 +604,8 @@
     border-color: var(--line-strong);
     border-style: dashed;
 }
-.dashed:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.dashed:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.dashed:hover  { border-color: var(--line-strong); }
+.dashed:active { border-color: var(--accent); }
 .dashed:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .dashed::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
 
@@ -715,6 +718,7 @@
 }
 
 .table-header {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     margin: 0px;
     padding: 6px 8px;
     overflow: hidden;
@@ -728,13 +732,14 @@
     -tachyon-icon-side: right;
     -tachyon-icon-text-gap: 4px;
 }
-.table-header:hover { background-color: var(--bg-active); cursor: pointer; }
+.table-header:hover { cursor: pointer; }
 
 /* Locked-column header variant. Same look as .table-header but with a
    default arrow cursor (not pointer) since the column can't be dragged.
    Sort still toggles on click for sortable locked columns - the hover
    background highlight stays so the click affordance isn't lost. */
 .table-header-locked {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     margin: 0px;
     padding: 2px 8px;
     overflow: hidden;
@@ -749,7 +754,7 @@
     -tachyon-icon-text-gap: 4px;
     cursor: default;
 }
-.table-header-locked:hover { background-color: var(--bg-active); cursor: default; }
+.table-header-locked:hover { cursor: default; }
 
 .table-cell {
     margin: 0px;
@@ -1046,6 +1051,7 @@
 
 /* ---- toggleStyle ---------------------------------------------------------- */
 .toggle {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     -tachyon-icon-size: 14px;
     border-width: var(--border);
     border-radius: var(--radius-md);
@@ -1063,16 +1069,17 @@
     flex-grow: 1;
     cursor: pointer;
 }
-.toggle:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.toggle:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.toggle:hover  { border-color: var(--line-strong); }
+.toggle:active { border-color: var(--accent); }
 .toggle:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .toggle       ::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
-.toggle:hover ::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
-.toggle:active::highlight(selected) { border-color: var(--accent); background-color: var(--bg-pressed); }
+.toggle:hover ::highlight(selected) { border-color: var(--line-strong); }
+.toggle:active::highlight(selected) { border-color: var(--accent); }
 .toggle:focus ::highlight(selected) { border-color: var(--accent); background-color: var(--bg-pressed); }
 
 /* A segment of a toggle group; :first-child / :last-child rules can shape the group's ends. */
 .group-toggle {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     -tachyon-icon-size: 14px;
     height: 20px;
     border-width: 0px;
@@ -1093,8 +1100,8 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.group-toggle:hover  { background-color: var(--bg-active); color: var(--text-1); }
-.group-toggle:active { background-color: var(--bg-pressed); color: var(--text-1); }
+.group-toggle:hover  { color: var(--text-1); }
+.group-toggle:active { color: var(--text-1); }
 .group-toggle::highlight(selected) { background-color: var(--bg-pressed); color: var(--text-1); }
 
 /* ---- button-group / toggle-group containers ------------------------------ */
@@ -1149,6 +1156,7 @@
 
 /* ---- knobStyle ------------------------------------------------------------ */
 .knob {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: var(--border);
     border-radius: var(--radius-lg);
     padding: 0px;
@@ -1161,13 +1169,14 @@
     background-color: var(--bg-control);
     border-color: var(--line-strong);
 }
-.knob:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.knob:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.knob:hover  { border-color: var(--line-strong); }
+.knob:active { border-color: var(--accent); }
 .knob:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .knob::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
 
 /* ---- firstIconStyle ------------------------------------------------------- */
 .first-icon {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: var(--border);
     border-radius: var(--radius-lg);
     margin: 0px;
@@ -1182,13 +1191,14 @@
     border-color: var(--line-strong);
     break-after: left;
 }
-.first-icon:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.first-icon:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.first-icon:hover  { border-color: var(--line-strong); }
+.first-icon:active { border-color: var(--accent); }
 .first-icon:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .first-icon::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
 
 /* ---- iconLeftStyle -------------------------------------------------------- */
 .icon-left {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: var(--border);
     border-radius: var(--radius-lg);
     margin: 0px;
@@ -1205,13 +1215,14 @@
     background-color: var(--bg-control);
     border-color: var(--line-strong);
 }
-.icon-left:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.icon-left:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.icon-left:hover  { border-color: var(--line-strong); }
+.icon-left:active { border-color: var(--accent); }
 .icon-left:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .icon-left::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
 
 /* ---- iconRightStyle ------------------------------------------------------- */
 .icon-right {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: var(--border);
     border-radius: var(--radius-lg);
     margin: 0px;
@@ -1228,13 +1239,14 @@
     background-color: var(--bg-control);
     border-color: var(--line-strong);
 }
-.icon-right:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.icon-right:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.icon-right:hover  { border-color: var(--line-strong); }
+.icon-right:active { border-color: var(--accent); }
 .icon-right:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .icon-right::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
 
 /* ---- iconTopStyle --------------------------------------------------------- */
 .icon-top {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: var(--border);
     border-radius: var(--radius-lg);
     margin: 0px;
@@ -1251,13 +1263,14 @@
     background-color: var(--bg-control);
     border-color: var(--line-strong);
 }
-.icon-top:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.icon-top:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.icon-top:hover  { border-color: var(--line-strong); }
+.icon-top:active { border-color: var(--accent); }
 .icon-top:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .icon-top::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
 
 /* ---- iconBottomStyle ------------------------------------------------------ */
 .icon-bottom {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: var(--border);
     border-radius: var(--radius-lg);
     margin: 0px;
@@ -1274,8 +1287,8 @@
     background-color: var(--bg-control);
     border-color: var(--line-strong);
 }
-.icon-bottom:hover  { border-color: var(--line-strong); background-color: var(--bg-active); }
-.icon-bottom:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.icon-bottom:hover  { border-color: var(--line-strong); }
+.icon-bottom:active { border-color: var(--accent); }
 .icon-bottom:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .icon-bottom::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
 
@@ -1445,6 +1458,7 @@
     font-size: var(--font-size);
 }
 .node-view-overlay-button {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     -tachyon-icon-size: 14px;
     border-width: 0px;
     border-radius: var(--radius-md);
@@ -1458,8 +1472,8 @@
     color: var(--text-2);
     font-size: var(--font-size);
 }
-.node-view-overlay-button:hover  { background-color: var(--bg-active); color: var(--text-1); }
-.node-view-overlay-button:active { background-color: var(--bg-pressed); color: var(--text-1); }
+.node-view-overlay-button:hover  { color: var(--text-1); }
+.node-view-overlay-button:active { color: var(--text-1); }
 .node-view-minimap {
     border-width: var(--border);
     border-radius: var(--radius-lg);
@@ -1486,6 +1500,7 @@
     font-size: var(--font-size);
 }
 .breadcrumb-segment {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: 0px;
     border-radius: var(--radius-md);
     border-color: transparent;
@@ -1497,8 +1512,8 @@
     color: var(--text-3);
     font-size: var(--font-size);
 }
-.breadcrumb-segment:hover  { background-color: var(--bg-active); color: var(--text-1); }
-.breadcrumb-segment:active { background-color: var(--bg-pressed); color: var(--text-1); }
+.breadcrumb-segment:hover  { color: var(--text-1); }
+.breadcrumb-segment:active { color: var(--text-1); }
 .breadcrumb-current {
     border-width: 0px;
     background-color: transparent;
@@ -1910,6 +1925,7 @@
     -tachyon-vertical-text-align: middle;
 }
 .title-bar-text-button {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     height: 26px;
     margin: 0px 6px 0px 0px;
     padding: 0px 8px;
@@ -1929,8 +1945,8 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.title-bar-text-button:hover  { background-color: var(--bg-active); color: var(--text-1); }
-.title-bar-text-button:active { background-color: var(--bg-pressed); color: var(--text-1); }
+.title-bar-text-button:hover  { color: var(--text-1); }
+.title-bar-text-button:active { color: var(--text-1); }
 
 /* ---- menuStyle ------------------------------------------------------------ */
 /* A menu's popup: 264 wide, 4 px inside, rounded. */
@@ -2156,6 +2172,7 @@
 /* Flat top-level trigger - no border/background until hover, so the bar reads
    as a strip of labels rather than a row of buttons. */
 .menu-bar-trigger {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: var(--border-thin);
     border-radius: var(--radius-sm);
     border-color: transparent;
@@ -2172,8 +2189,6 @@
     flex-grow: 0;
     flex-shrink: 0;
 }
-.menu-bar-trigger:hover  { background-color: var(--bg-active); }
-.menu-bar-trigger:active { background-color: var(--bg-pressed); }
 .menu-bar-trigger:focus  { background-color: var(--bg-control); }
 .menu-bar-trigger::highlight(selected) { background-color: var(--bg-pressed); }
 
@@ -2194,6 +2209,7 @@
     border-width: 0px;
 }
 .title-bar-button {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     width: 44px;
     align-self: stretch;
     border-width: 0px;
@@ -2208,8 +2224,8 @@
     flex-grow: 0;
     flex-shrink: 0;
 }
-.title-bar-button:hover  { background-color: var(--bg-active); color: var(--text-1); }
-.title-bar-button:active { background-color: var(--bg-pressed); color: var(--text-1); }
+.title-bar-button:hover  { color: var(--text-1); }
+.title-bar-button:active { color: var(--text-1); }
 .title-bar-close-button {
     width: 44px;
     align-self: stretch;
@@ -3152,6 +3168,7 @@
 
 /* ---- tabCloseStyle: small close button in a tab --------------------------- */
 .tab-close {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     border-width: 0px;
     padding: 2px 0px 0px 0px;
     margin: 0px 0px 0px 4px;
@@ -3167,8 +3184,8 @@
     flex-grow: 0;
     flex-shrink: 0;
 }
-.tab-close:hover  { color: var(--text-1); background-color: var(--bg-active); }
-.tab-close:active { color: var(--text-1); background-color: var(--bg-pressed); }
+.tab-close:hover  { color: var(--text-1); }
+.tab-close:active { color: var(--text-1); }
 
 /* ---- Docking container ---------------------------------------------------- */
 /* Fills its parent (the main window) via flex-grow:1, and shrinks back down
@@ -3787,6 +3804,7 @@
     border-color: transparent;
 }
 .color-picker-range {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     height: 26px;
     margin: 0px;
     padding: 0px 8px;
@@ -3804,7 +3822,7 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.color-picker-range:hover { background-color: var(--bg-active); color: var(--text-1); }
+.color-picker-range:hover { color: var(--text-1); }
 .color-picker-channels {
     display: flex;
     flex-direction: column;
@@ -4001,6 +4019,7 @@
 .color-picker-swatch:focus, .color-picker-recent:focus { border-color: var(--accent); }
 /* Adds the current color to the swatches. */
 .color-picker-new {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     width: 22px;
     height: 22px;
     padding: 0px;
@@ -4019,7 +4038,7 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.color-picker-new:hover { background-color: var(--bg-active); color: var(--text-1); }
+.color-picker-new:hover { color: var(--text-1); }
 
 /* ---- Dialogs: a title row, the content, and a footer with the buttons ------ */
 .dialog-header {
@@ -4060,6 +4079,7 @@
     font-size: var(--font-size);
 }
 .dialog-close {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     width: 28px;
     height: 28px;
     margin: 0px;
@@ -4075,7 +4095,7 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.dialog-close:hover { background-color: var(--bg-active); color: var(--text-1); }
+.dialog-close:hover { color: var(--text-1); }
 .dialog-footer {
     display: flex;
     flex-direction: row;
@@ -4112,6 +4132,7 @@
     flex-shrink: 0;
 }
 .dialog-button {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     height: 28px;
     margin: 0px;
     padding: 0px 14px;
@@ -4131,8 +4152,6 @@
     text-underline-color: var(--text-1);
     text-underline-offset: 2px;
 }
-.dialog-button:hover  { background-color: var(--bg-active); }
-.dialog-button:active { background-color: var(--bg-pressed); }
 .dialog-button-primary {
     height: 28px;
     margin: 0px;
@@ -4197,6 +4216,7 @@
     overflow: hidden;
 }
 .message-box-close {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     width: 24px;
     height: 24px;
     margin: 0px;
@@ -4211,7 +4231,7 @@
     -tachyon-icon-size: 14px;
     cursor: pointer;
 }
-.message-box-close:hover { background-color: var(--bg-active); color: var(--text-1); }
+.message-box-close:hover { color: var(--text-1); }
 .message-box-body {
     display: flex;
     flex-direction: row;
@@ -4801,6 +4821,7 @@
 
 /* Dialog buttons: 24 high with a label, square icon ones, a delete one. */
 .dialog-small-button {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     height: 24px;
     margin: 0px;
     padding: 0px 10px;
@@ -4820,9 +4841,8 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.dialog-small-button:hover  { background-color: var(--bg-active); }
-.dialog-small-button:active { background-color: var(--bg-pressed); }
 .dialog-icon-button {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     width: 24px;
     height: 24px;
     margin: 0px;
@@ -4838,7 +4858,7 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.dialog-icon-button:hover { background-color: var(--bg-active); color: var(--text-1); }
+.dialog-icon-button:hover { color: var(--text-1); }
 .dialog-square-button {
     width: 24px;
     height: 24px;

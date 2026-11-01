@@ -1905,4 +1905,12 @@ namespace tachyon
         EXPECT_TRUE(ParseStyleSheet(".a { opacity: red; }").HasErrors());
         EXPECT_FALSE(ParseStyleSheet(".a { opacity: 0; } .b { opacity: 1; }").HasErrors());
     }
+    TEST(StyleSheet, StateLayerIsNoneOrContent)
+    {
+        auto s = ParseStyleSheet(".a { -tachyon-state-layer: content; } .b { -tachyon-state-layer: none; }");
+        ASSERT_FALSE(s.HasErrors()) << s.errors[0].message;
+        EXPECT_EQ(s.GetStyle("a")->stateLayer, StateLayer::Content);
+        EXPECT_EQ(s.GetStyle("b")->stateLayer, StateLayer::None);
+        EXPECT_TRUE(ParseStyleSheet(".a { -tachyon-state-layer: accent; }").HasErrors());
+    }
 }
