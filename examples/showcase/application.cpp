@@ -1131,6 +1131,8 @@ namespace tachyon
         {
             MenuItem(showcase.cmdDocumentation);
             MenuItem(showcase.cmdAbout);
+            MenuSeparator();
+            MenuItem("Show Notifications", [this] { ShowDemoToasts(); });
         }
         EndMenu();
 
@@ -1384,6 +1386,38 @@ namespace tachyon
                 }
     }
 
+    // A toast of each kind, as a build tool might send them.
+    void Application::ShowDemoToasts()
+    {
+        ShowToast(ToastDesc{ .severity = Severity::Success, .title = "Build succeeded", .body = "Windows x64 \u00B7 1 m 42 s",
+                             .actions = { { "Open folder", {} }, { "Run", {} } },
+                             .age = 4.0f * 60.0f });
+        ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Shader compile failed",
+                             .body = "Terrain.shader:118 \u2014 undeclared identifier 'uv2'", .monospaceBody = true,
+                             .actions = { { "Show log", {} }, { "Copy error", {} } },
+                             .age = 2.0f * 60.0f });
+        ShowToast(ToastDesc{ .severity = Severity::Warning, .title = "3 textures exceed 4K", .body = "They will be downscaled on import.",
+                             .actions = { { "Review", {} }, { "Ignore", {} } },
+                             .age = 60.0f });
+        showcase.uploadStart = guiStateManager.Interaction().GetFrameTime();
+        showcase.uploadToast = ShowToast(ToastDesc{ .severity = Severity::Info, .title = "Uploading build",
+                                                    .body = "build-0.8.3-win64.zip \u00B7 0%", .progress = 0.0f,
+                                                    .actions = { { "Cancel", {} } } });
+    }
+
+    // The upload's progress, over about 20 s.
+    void Application::UpdateDemoToasts()
+    {
+        ToastDesc* upload = FindToast(showcase.uploadToast);
+        if (!upload || !upload->progress)
+            return;
+        const float done = std::min(1.0f, (guiStateManager.Interaction().GetFrameTime() - showcase.uploadStart) / 20.0f);
+        upload->progress = done;
+        upload->body = std::format("build-0.8.3-win64.zip \u00B7 {}%", int(done * 100.0f));
+        if (done >= 1.0f)
+            upload->title = "Uploaded build";
+    }
+
     void Application::SetUpDocuments(DocumentSet& documents)
     {
         DocumentSet* const set = &documents;
@@ -1441,6 +1475,8 @@ namespace tachyon
                     Documents(window.documentsID, window.documents);
                     RenderStatusBar(window.documents);
                     EmitFloatingDockWindows(window.documents);
+                    if (!showcase.mainWindowOpen)
+                        Toasts();   // in the first document window while the main one is closed
                 }
                 EndWindow();
             }
@@ -1555,6 +1591,8 @@ namespace tachyon
                     // die when it is torn down. The other windows emit their documents' own.
                     EmitFloatingDockWindows(showcase.documents);
                     EmitFloatingToolbarWindows(toolbars.floatingItems, &toolbarOpts);
+                    UpdateDemoToasts();
+                    Toasts();
                 } else
                 {
                     // BeginWindow returned false - window is closing

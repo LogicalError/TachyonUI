@@ -4686,6 +4686,261 @@
     text-wrap: wrap;
 }
 
+/* ---- Toasts: bottom-right of a window, newest nearest the corner ----------- */
+/* No colored stripes: the severity is in the circle only. */
+.toast-stack {
+    width: 380px;   /* a toast's */
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-end;
+    gap: 8px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    overflow: visible;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.toast {
+    width: 380px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0px;
+    padding: 12px;
+    border-width: 1px;
+    border-radius: 8px;
+    background-color: var(--bg-popup);
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-node);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.toast-circle-info, .toast-circle-success, .toast-circle-warning, .toast-circle-error {
+    width: 24px;
+    height: 24px;
+    margin: 0px;
+    padding: 5px;   /* a 14 px glyph */
+    border-width: 0px;
+    border-radius: 12px;
+    -tachyon-icon-size: 14px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.toast-circle-info    { background-color: var(--info-soft);    -tachyon-icon-color: var(--info); }
+.toast-circle-success { background-color: var(--ok-soft);      -tachyon-icon-color: var(--ok); }
+.toast-circle-warning { background-color: var(--warn-soft);    -tachyon-icon-color: var(--warn); }
+.toast-circle-error   { background-color: var(--error-circle); -tachyon-icon-color: var(--error); }
+.toast-content {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin: 0px;
+    padding: 2px 0px 0px 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.toast-header {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+.toast-title {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    font-weight: 600;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+}
+.toast-time {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 11px;
+    text-wrap: nowrap;
+    flex-shrink: 0;
+}
+/* As many lines as it takes; the title stays on one, cut short with its tooltip. */
+.toast-body, .toast-body-mono {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    text-wrap: wrap;
+    flex-shrink: 1;
+}
+.toast-body-mono { font-family: monospace; font-size: 11px; }
+.toast-progress {
+    height: 4px;
+    margin: 4px 0px 2px 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 2px;
+    background-color: var(--line-subtle);
+    border-color: transparent;
+}
+.toast-progress-fill {
+    border-width: 0px;
+    border-radius: 2px;
+    background-color: var(--accent);
+    border-color: transparent;
+}
+.toast-actions {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    margin: 4px 0px 0px 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+.toast-action, .toast-action-secondary {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.toast-action           { color: var(--text-link); }
+.toast-action:hover     { color: var(--text-link-hover); }
+.toast-action-secondary { color: var(--text-2); }
+.toast-action-secondary:hover { color: var(--text-1); }
+.toast-dismiss {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
+    width: 22px;
+    height: 22px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 4px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-3);
+    -tachyon-icon-size: 12px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.toast-dismiss:hover { color: var(--text-1); }
+.toast-earlier {
+    -tachyon-state-layer: content;
+    height: 24px;
+    margin: 0px;
+    padding: 0px 10px;
+    border-width: 1px;
+    border-radius: 12px;
+    background-color: var(--bg-popup);
+    border-color: var(--line-strong);
+    color: var(--text-2);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+
+/* ---- Banners: across the top of a panel ------------------------------------ */
+.banner-info, .banner-success, .banner-warning, .banner-error {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0px;
+    padding: 8px 12px;
+    border-width: 0px 0px 1px 0px;
+    border-radius: 0px;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.banner-info    { background-color: var(--info-banner);  border-color: var(--info-banner-line); }
+.banner-success { background-color: var(--ok-banner);    border-color: var(--ok-banner-line); }
+.banner-warning { background-color: var(--warn-banner);  border-color: var(--warn-banner-line); }
+.banner-error   { background-color: var(--error-banner); border-color: var(--error-banner-line); }
+.banner-message-info, .banner-message-success, .banner-message-warning, .banner-message-error {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    text-wrap: wrap;
+    -tachyon-icon-side: left;
+    -tachyon-icon-size: 14px;
+    -tachyon-icon-text-gap: 10px;
+    -tachyon-vertical-text-align: middle;
+}
+.banner-message-info    { -tachyon-icon-color: var(--info); }
+.banner-message-success { -tachyon-icon-color: var(--ok); }
+.banner-message-warning { -tachyon-icon-color: var(--warn); }
+.banner-message-error   { -tachyon-icon-color: var(--error); }
+.banner-primary, .banner-secondary {
+    -tachyon-state-layer: content;
+    height: 24px;
+    margin: 0px;
+    padding: 0px 12px;
+    border-radius: var(--radius-md);
+    font-size: var(--font-size);
+    text-align: center;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.banner-primary   { border-width: 0px; border-color: transparent; background-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.banner-secondary { border-width: 1px; border-color: var(--line-strong); background-color: var(--bg-control); color: var(--text-1); }
+.banner-link {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-link);
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.banner-link:hover { color: var(--text-link-hover); }
+
 /* ---- Checkbox: a box with a tick when checked, and its label ---------------- */
 .checkbox {
     display: flex;
@@ -5470,7 +5725,9 @@
 .dialog-close:focus-visible, .dialog-small-button:focus-visible, .dialog-icon-button:focus-visible,
 .dialog-square-button:focus-visible, .dialog-delete-button:focus-visible, .gradient-editor-preset:focus-visible,
 .color-picker-strip:focus-visible, .color-picker-track:focus-visible, .color-picker-swatch:focus-visible,
-.color-picker-recent:focus-visible, .color-picker-range:focus-visible, .color-picker-new:focus-visible {
+.color-picker-recent:focus-visible, .color-picker-range:focus-visible, .color-picker-new:focus-visible,
+.toast-action:focus-visible, .toast-action-secondary:focus-visible, .toast-dismiss:focus-visible, .toast-earlier:focus-visible,
+.banner-primary:focus-visible, .banner-secondary:focus-visible, .banner-link:focus-visible {
     box-shadow: var(--focus-ring);
 }
 

@@ -71,6 +71,66 @@ if (choice >= 0) asking = false;
 The color picker and gradient editor are the library's other dialogs; they open from
 `ColorField` and `GradientField`.
 
+### Toasts
+
+Telling the user something without a dialog. `ShowToast` adds a toast; `Toasts()`, called
+last in a window, shows them in its bottom-right corner, 16 px from the edges, over what the
+window holds. The newest is nearest the corner; past four, the older ones fold into a "+N
+earlier" pill, which shows them all. A toast slides in from the right (180 ms) and out
+(140 ms), or doesn't move with reduced motion.
+
+An error stays until it's dismissed (its close button, or `DismissToast`); the rest go after
+about 6 s, counted while the pointer isn't over the toasts. A toast with a `progress` short
+of 1 stays until it's done. `FindToast` returns a shown toast's `ToastDesc` to change (its
+progress, body, title); null once it's gone. An action runs, then the toast goes. The body
+wraps onto as many lines as it takes; the title stays on one, and one too long for the toast
+ends in an ellipsis and shows all of it in its tooltip. `age` gives a toast about something
+earlier the time it happened ("4 min").
+
+```cpp
+ToastID    ShowToast(ToastDesc desc);
+ToastDesc* FindToast(ToastID toast);
+void       DismissToast(ToastID toast);
+void       Toasts();
+```
+
+`ToastDesc`: `severity` (`Severity::Info`, `Success`, `Warning`, `Error`: its circle's icon
+and color), `title`, `body`, `monospaceBody` (code or file locations), `progress` (an
+optional 0..1 bar), `actions` (`ToastAction`: `label`, `onClick`; the first in the link
+color).
+
+Classes: `toast-stack`, `toast`, `toast-circle-<severity>`, `toast-title`, `toast-time`,
+`toast-body`, `toast-body-mono`, `toast-progress`, `toast-progress-fill`, `toast-action`,
+`toast-action-secondary`, `toast-dismiss`, `toast-earlier`.
+
+```cpp
+ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Shader compile failed",
+                     .body = "Terrain.shader:118", .monospaceBody = true,
+                     .actions = { { "Show log", [this] { ShowLog(); } } } });
+```
+
+### Banner
+
+A message across the top of a panel: the severity's tint with a line along its bottom, the
+message with its icon (`message.icon`, else the severity's), and actions on the right:
+`BannerActionKind::Primary` (an accent button), `Secondary` (a button) or `Link`.
+
+```cpp
+void Banner(ID id, Severity severity, const GUIContent& message, std::span<const BannerAction> actions = {},
+            LayoutOverride&& constraints = {});
+```
+
+Classes: `banner-<severity>`, `banner-message-<severity>`, `banner-primary`,
+`banner-secondary`, `banner-link`.
+
+```cpp
+const BannerAction actions[] = {
+    { "Discard", [this] { Discard(); } },
+    { "Save",    [this] { Save(); }, BannerActionKind::Primary },
+};
+Banner(idManager.AllocateDynamicID("unsaved"), Severity::Warning, "Scene has unsaved changes", actions);
+```
+
 ---
 
 [← Menus](menus.md) · [Controls](../controls.md) · [Lists and reorderable groups →](lists.md)

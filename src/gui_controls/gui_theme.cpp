@@ -624,6 +624,34 @@ namespace tachyon
         tabContentStyleRef                = registerCSS("tab-content");
         tabCloseStyleRef                  = registerCSS("tab-close");
 
+        toastStackStyleRef                = registerCSS("toast-stack");
+        toastStyleRef                     = registerCSS("toast");
+        toastContentStyleRef              = registerCSS("toast-content");
+        toastHeaderStyleRef               = registerCSS("toast-header");
+        toastTitleStyleRef                = registerCSS("toast-title");
+        toastTimeStyleRef                 = registerCSS("toast-time");
+        toastBodyStyleRef                 = registerCSS("toast-body");
+        toastBodyMonoStyleRef             = registerCSS("toast-body-mono");
+        toastProgressStyleRef             = registerCSS("toast-progress");
+        toastProgressFillStyleRef         = registerCSS("toast-progress-fill");
+        toastActionsStyleRef              = registerCSS("toast-actions");
+        toastActionStyleRef               = registerCSS("toast-action");
+        toastActionSecondaryStyleRef      = registerCSS("toast-action-secondary");
+        toastDismissStyleRef              = registerCSS("toast-dismiss");
+        toastEarlierStyleRef              = registerCSS("toast-earlier");
+        bannerPrimaryStyleRef             = registerCSS("banner-primary");
+        bannerSecondaryStyleRef           = registerCSS("banner-secondary");
+        bannerLinkStyleRef                = registerCSS("banner-link");
+        {
+            static constexpr const char* kSeverities[] = { "info", "success", "warning", "error" };
+            for (int s = 0; s < 4; ++s)
+            {
+                toastCircleStyleRefs[s]   = registerCSS(std::string("toast-circle-") + kSeverities[s]);
+                bannerStyleRefs[s]        = registerCSS(std::string("banner-") + kSeverities[s]);
+                bannerMessageStyleRefs[s] = registerCSS(std::string("banner-message-") + kSeverities[s]);
+            }
+        }
+
         documentsStyleRef                 = registerCSS("documents");
         documentBarStyleRef               = registerCSS("document-bar");
         documentRowStyleRef               = registerCSS("document-row");

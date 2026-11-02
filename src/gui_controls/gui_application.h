@@ -71,6 +71,7 @@
 #include <gui_controls/gui_table_types.h>
 #include <gui_controls/gui_tree_grid_types.h>
 #include <gui_controls/gui_docking_types.h>
+#include <gui_controls/gui_notification_types.h>
 
 #include <gui_controls/subsystems/gui_subsystem_state.h>
 #include <gui_controls/subsystems/gui_label_group_subsystem.h>
@@ -664,6 +665,27 @@ namespace tachyon
         inline int  MessageDialog(       const MessageDialogDesc& desc, StyleRef style, std::source_location site = std::source_location::current()) { return MessageDialog(idManager.AllocateDynamicID(site), desc, style); }
         /// As above, with the call site as the ID, in the theme's message box style.
         inline int  MessageDialog(       const MessageDialogDesc& desc, std::source_location site = std::source_location::current()) { return MessageDialog(idManager.AllocateDynamicID(site), desc, theme.messageBoxStyleRef); }
+
+        /// Shows a toast in the corner of the window that builds Toasts. Errors stay until
+        /// dismissed; the rest go after about 6 s (not while the pointer is over the toasts, nor
+        /// while a progress bar is short of 1).
+        ToastID     ShowToast(ToastDesc desc);
+        /// A shown toast's description, to change (its progress, its body); null once it's gone.
+        ToastDesc*  FindToast(ToastID toast);
+        /// Takes a toast away, as its close button does.
+        void        DismissToast(ToastID toast);
+        /// The toasts, in the current window's bottom-right corner over what's built before;
+        /// call it last in the window. The newest is nearest the corner; ones past the fourth
+        /// fold into a "+N earlier" pill, which shows them all.
+        void        Toasts();
+        /// A banner across the top of a panel: the message (`message.icon`, else the
+        /// severity's) on the severity's tint, then `actions`, right-aligned.
+        void        Banner(ID id, Severity severity, const GUIContent& message, std::span<const BannerAction> actions = {},
+                           LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline void Banner(Severity severity, const GUIContent& message, std::span<const BannerAction> actions = {},
+                           LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current())
+            { Banner(idManager.AllocateDynamicID(site), severity, message, actions, std::move(constraints)); }
         /// Whether the user asked to close a window flagged WindowConfirmClose (its close
         /// button, Alt+F4, the OS quitting) since last asked. The window stays until the app
         /// closes it, e.g. after asking with a MessageDialog.
@@ -2489,6 +2511,23 @@ namespace tachyon
         std::vector<DocumentSet*> m_documentSetsThisFrame{};
         /// Shows the document of a set built this frame that owns `layout`; false when none does.
         bool ActivateDocumentOf(const DockingLayout* layout);
+        /// A toast shown: what it says, when it came and went, and its elements' parent ID.
+        struct ShownToast
+        {
+            ToastID   handle = 0;
+            ToastDesc desc;
+            ID        id = ID::Invalid();   ///< static, released when it's gone
+            float     shownAt = 0.0f;       ///< frame time, seconds
+            float     leftAt  = -1.0f;      ///< when it started going; negative while it stays
+            float     shownFor = 0.0f;      ///< seconds it has been shown without the pointer over the stack
+        };
+        std::vector<ShownToast> m_toasts;
+        ToastID     m_nextToast = 0;
+        float       m_toastsTime = -1.0f;   ///< the frame time Toasts last ran at
+        bool        m_toastsExpanded = false;   ///< "+N earlier" clicked: every toast shown
+        ID          m_toastStackID = ID::Invalid();
+        bool        m_toastsBuilt  = false;   ///< built this frame: moved over its window after OnGUI
+
         DocumentDrag m_documentDrag;   ///< the document tab being dragged, if any
         std::vector<IntRect> m_documentBarRects;   ///< last frame's document bars, screen pixels
         std::optional<DocumentMove> m_documentMove;   ///< a drop, done at the next frame's start

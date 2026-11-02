@@ -60,6 +60,12 @@
     --warn-soft: #E5B45424; /* severity circles: the severity at 14-16% */
     --info-soft: #6B9BFF29;
     --error-circle: #EF6A6A29;
+    --ok-soft: #4FC48A29;
+    /* Banners: the severity at 12% under the message, at 32% along its bottom */
+    --info-banner: #6B9BFF1F;    --info-banner-line: #6B9BFF52;
+    --ok-banner: #4FC48A1F;      --ok-banner-line: #4FC48A52;
+    --warn-banner: #E5B4541F;    --warn-banner-line: #E5B45452;
+    --error-banner: #EF6A6A1F;   --error-banner-line: #EF6A6A52;
     --bg-well: #0D0F12;     /* recessed lists and details in a dialog */
     /* Dialogs: their own surface, a step lighter than the panels, so they stand out. */
     --dialog-bg: #1B1E25;

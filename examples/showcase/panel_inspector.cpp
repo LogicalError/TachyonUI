@@ -278,6 +278,26 @@ namespace tachyon
 
     void Application::RenderInspectorPanel()
     {
+        // ---- Banners: what the user should know about the object -------------
+        if (showcase.inspectorUnsaved)
+        {
+            const BannerAction actions[] = {
+                { "Discard", [this] { showcase.inspectorUnsaved = false; } },
+                { "Save",    [this] { showcase.inspectorUnsaved = false; }, BannerActionKind::Primary },
+            };
+            Banner(idManager.AllocateDynamicID("inspectorUnsaved"), Severity::Warning, "Scene has unsaved changes", actions,
+                   tachyon::LayoutOverride::Auto().NoShrink());
+        }
+        if (showcase.inspectorReadOnly)
+        {
+            const BannerAction actions[] = {
+                { "Make editable", [this] { showcase.inspectorReadOnly = false; }, BannerActionKind::Link },
+            };
+            Banner(idManager.AllocateDynamicID("inspectorReadOnly"), Severity::Info,
+                   { showcase.visibilityLockIcon, "Read-only \u2014 this asset comes from a package" }, actions,
+                   tachyon::LayoutOverride::Auto().NoShrink());
+        }
+
         // ---- The inspected object: icon, name and where it is ----------------
         BeginHorizontal(idManager.AllocateDynamicID("inspectorHeader"), inspectorHeaderStyleRef,
                         tachyon::LayoutOverride::Auto().NoShrink());

@@ -413,6 +413,32 @@ namespace tachyon
         StyleRef tabCloseStyleRef {};
         ///@}
 
+        /// @name Toasts and banners
+        /// The circle, banner and banner message come per severity, indexed by Severity.
+        ///@{
+        StyleRef toastStackStyleRef {};       ///< the toasts, a column in the window's corner
+        StyleRef toastStyleRef {};            ///< one toast, on the popup surface
+        StyleRef toastCircleStyleRefs[4] {};  ///< .toast-circle-info, -success, -warning, -error
+        StyleRef toastContentStyleRef {};     ///< title row, body, progress and actions
+        StyleRef toastHeaderStyleRef {};      ///< the title and its time
+        StyleRef toastTitleStyleRef {};
+        StyleRef toastTimeStyleRef {};        ///< "now", "4 min"
+        StyleRef toastBodyStyleRef {};
+        StyleRef toastBodyMonoStyleRef {};    ///< a body of code or file locations
+        StyleRef toastProgressStyleRef {};    ///< the progress bar's track
+        StyleRef toastProgressFillStyleRef {};
+        StyleRef toastActionsStyleRef {};     ///< the row of actions
+        StyleRef toastActionStyleRef {};      ///< the first action, in the link color
+        StyleRef toastActionSecondaryStyleRef {};
+        StyleRef toastDismissStyleRef {};
+        StyleRef toastEarlierStyleRef {};     ///< "+N earlier"
+        StyleRef bannerStyleRefs[4] {};       ///< .banner-info, -success, -warning, -error
+        StyleRef bannerMessageStyleRefs[4] {}; ///< .banner-message-info, ...: the icon in the severity's color
+        StyleRef bannerPrimaryStyleRef {};    ///< BannerActionKind::Primary
+        StyleRef bannerSecondaryStyleRef {};
+        StyleRef bannerLinkStyleRef {};
+        ///@}
+
         /// @name Documents
         /// The document bar and the workspace under it. A document's tab, name and line take
         /// their colors from its type's classes (.document-tab-level, ...); these are the plain
