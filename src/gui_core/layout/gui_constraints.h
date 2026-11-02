@@ -80,7 +80,7 @@ namespace tachyon
         AutoFlipMode        autoFlip        = AutoFlipMode::None;        ///< Anchored only
         ID                  anchorTarget    = ID::Invalid();             ///< Anchored only: the element to anchor to
         int16_t             near = kAuto;  ///< left/top inset, or anchor offset (pixels)
-        int16_t             far  = kAuto;  ///< right/bottom inset (unused for anchored)
+        int16_t             far  = kAuto;  ///< right/bottom inset; anchored: how far it may reach past the work area
 
         /// Relative, Centered and Sticky take part in the parent's flex/grid flow.
         constexpr bool IsInFlow() const { return type == PositionType::Relative || type == PositionType::Centered || type == PositionType::Sticky; }
@@ -281,6 +281,10 @@ namespace tachyon
         TACHYON_LO_BUILDER(Anchored(ID target, AnchorPlacement pl, const int2& off = {}, AutoFlipMode af = AutoFlipMode::None), x = PositionConstraintAxis::Anchored(target, GetHorizontalAxis(pl), int16_t(off.x), af); y = PositionConstraintAxis::Anchored(target, GetVerticalAxis(pl), int16_t(off.y), af);)
         TACHYON_LO_BUILDER(Anchored(ID target, AnchorPlacement pl, int32_t ox, int32_t oy, AutoFlipMode af = AutoFlipMode::None), x = PositionConstraintAxis::Anchored(target, GetHorizontalAxis(pl), int16_t(ox), af); y = PositionConstraintAxis::Anchored(target, GetVerticalAxis(pl), int16_t(oy), af);)
         TACHYON_LO_BUILDER(Anchored(ID target, AnchorPlacementAxis px, int32_t ox, AnchorPlacementAxis py, int32_t oy, AutoFlipMode af = AutoFlipMode::None), x = PositionConstraintAxis::Anchored(target, px, int16_t(ox), af); y = PositionConstraintAxis::Anchored(target, py, int16_t(oy), af);)
+        /// After Anchored: how far past the work area the element may reach on each axis, for
+        /// see-through room around what it shows (a shadow): flips and clamps keep only the
+        /// rest on the screen.
+        TACHYON_LO_BUILDER(Overhang(const int2& o),                              x.far = int16_t(o.x); y.far = int16_t(o.y);)
         ///@}
 
         /// Sets one axis's constraint, or only its PositionType.

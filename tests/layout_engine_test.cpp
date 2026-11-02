@@ -1251,7 +1251,7 @@ namespace tachyon
     // A popup window anchored `gap` px beside a target, laid out on a 1000x600 monitor.
     static IntRect LayOutPopupBeside(MockWindowBackend& backend, OSWindowManager& windows,
                                      ElementStorage& storage, LayoutEngine& engine, Element target, int2 targetPos,
-                                     AnchorPlacement placement, int2 gap)
+                                     AnchorPlacement placement, int2 gap, int2 overhang = {})
     {
         Mock::AllowLeak(&backend);   // the fixture never deletes it
         ON_CALL(backend, GetMonitors()).WillByDefault(Return(std::vector<MonitorInfo>{
@@ -1267,7 +1267,7 @@ namespace tachyon
         EXPECT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
         (void)storage.Add(std::move(target), LayoutOverride{}.Position(targetPos).Size(100, 20));
         const ElementRef ref = storage.Add(std::move(popup),
-            LayoutOverride{}.Anchored(targetID, placement, gap, AutoFlipMode::FlipAvoidTarget).Size(100, 50)).ref;
+            LayoutOverride{}.Anchored(targetID, placement, gap, AutoFlipMode::FlipAvoidTarget).Overhang(overhang).Size(100, 50)).ref;
         EXPECT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
         engine.Layout(windows, storage);
         return storage.GetElementRectUnsafe(ref).rect;
@@ -1294,6 +1294,27 @@ namespace tachyon
         const IntRect left = LayOutPopupBeside(*mockBackend, *osWindowManager, storage, layoutEngine,
             CreateElement(defaultStyleIndex), { 850, 100 }, AnchorPlacement::OutsideRight | AnchorPlacement::InsideTop, { 6, 0 });
         EXPECT_EQ(left.x, 850 - 6 - 100) << "no room right: 6 px left of it";
+    }
+
+    // A popup with see-through room around it may reach past the screen by that room: placed
+    // 20 px left of a target 5 px from the screen's edge, it stays there.
+    TEST_F(LayoutEngineTest, APopupMayReachPastTheScreenByItsOverhang)
+    {
+        const IntRect kept = LayOutPopupBeside(*mockBackend, *osWindowManager, storage, layoutEngine,
+            CreateElement(defaultStyleIndex), { 5, 100 }, AnchorPlacement::OutsideBottom | AnchorPlacement::InsideLeft,
+            { -20, 0 }, { 20, 0 });
+        EXPECT_EQ(kept.x, -15);
+
+        const IntRect flipped = LayOutPopupBeside(*mockBackend, *osWindowManager, storage, layoutEngine,
+            CreateElement(defaultStyleIndex), { 5, 100 }, AnchorPlacement::OutsideBottom | AnchorPlacement::InsideLeft,
+            { -20, 0 });
+        EXPECT_EQ(flipped.x, 5 + 100 - 100 + 20) << "without: flipped onto the screen, lined up with its other side";
+
+        // Down: 20 px of room below lets it hang off the bottom by that much, not flip.
+        const IntRect below = LayOutPopupBeside(*mockBackend, *osWindowManager, storage, layoutEngine,
+            CreateElement(defaultStyleIndex), { 100, 520 }, AnchorPlacement::OutsideBottom | AnchorPlacement::InsideLeft,
+            { 0, 0 }, { 0, 20 });
+        EXPECT_EQ(below.y, 540) << "past the bottom by 10, inside its room";
     }
 
 

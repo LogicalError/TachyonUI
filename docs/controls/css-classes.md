@@ -34,7 +34,7 @@ knob, a table's header) have their own classes, listed with the control above.
 | `MenuSeparator`, `MenuHeader` | `menu-separator`, `menu-header` |
 | `BeginMenuBar`, `BeginTitleBar` | `menu-bar`, `title-bar` |
 | `BeginContextMenu` | `menu` |
-| `SetTooltip`, `BeginTooltip` | window `tooltip-frame`, box `tooltip` (text: `tooltip-text`, shortcut: `tooltip-shortcut`) |
+| `SetTooltip`, `BeginTooltip` | window `tooltip-frame`, box `tooltip` (text: `tooltip-text`, shortcut: `tooltip-shortcut`); property help `tooltip-rich` (`tooltip-title`, `tooltip-description`, `tooltip-footer`), its label `label-help` (or `group-label-help`, `drag-label-help`, `group-drag-label-help`) |
 | `MessageDialog` | `message-box` |
 | `Toasts` | `toast-stack`, `toast`, `toast-circle-<severity>` |
 | `Banner` | `banner-<severity>`, `banner-message-<severity>` |

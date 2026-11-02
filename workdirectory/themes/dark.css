@@ -123,6 +123,8 @@
 /* ---- Shadows and focus rings (box-shadow values) -------------------------- */
 :root {
     --shadow-node: 0 8px 20px rgba(0, 0, 0, 0.35);
+    --shadow-tooltip: 0 6px 16px rgba(0, 0, 0, 0.45);
+    --shadow-popup: 0 16px 40px rgba(0, 0, 0, 0.55);   /* a rich tooltip */
     --shadow-control: none;          /* buttons */
     --shadow-chip: none;             /* the raised segment of a segmented control */
     --focus-ring: 0 0 0 3px #6B9BFF4D;      /* keyboard focus: the accent at 30% */

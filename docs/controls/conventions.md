@@ -44,6 +44,7 @@ BeginWindow(windowID, "Tool", LayoutOverride::FixedSize(900, 600).Centered());
 | `FlexGrow(n)`, `FlexShrink(n)`, `NoGrow()`, `NoShrink()` | Flex factors |
 | `Position(x, y)`, `Centered()`, `Relative(...)`, `Absolute(...)` | Position |
 | `Anchored(target, placement, offset)` | Position next to another element |
+| `Overhang(int2)` (after `Anchored`) | How far it may reach past the edge of the screen: see-through room around what it shows |
 | `StickyX()`, `StickyY()`, `Sticky()` | Stick while scrolling |
 | `BreakBefore()`, `BreakAfter()`, `KeepWithNext()` | Line breaks in wrapping containers |
 | `GridColumn(start, span)`, `GridRow(start, span)`, `ColumnTrack`, `RowTrack` | Grid placement |

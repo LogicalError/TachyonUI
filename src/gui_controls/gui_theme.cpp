@@ -258,6 +258,8 @@ namespace tachyon
         dividerHoverLineStyle = lineColorFromCSS("--divider-hover", color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
         tooltipArrowFill      = lineColorFromCSS("--tooltip-bg", color4f{ 0.16f, 0.18f, 0.22f, 1.0f });
         tooltipArrowLine      = lineColorFromCSS("--tooltip-border", color4f{ 0.21f, 0.24f, 0.28f, 1.0f });
+        popupArrowFill        = lineColorFromCSS("--bg-popup", color4f{ 0.10f, 0.11f, 0.14f, 1.0f });
+        popupArrowLine        = lineColorFromCSS("--line-strong", color4f{ 0.18f, 0.20f, 0.24f, 1.0f });
         if (textSystem)
             textSystem->SetCaretColor(lineColorFromCSS("--caret", color4f{ 0.42f, 0.61f, 1.0f, 1.0f }));
         nanTextColor          = lineColorFromCSS("--warn-text", color4f{ 0.9f, 0.7f, 0.33f, 1.0f });
@@ -364,6 +366,10 @@ namespace tachyon
         }
 
         groupLabelStyleRef                = registerCSS("group-label");
+        labelHelpStyleRef                 = registerCSS("label-help");
+        groupLabelHelpStyleRef            = registerCSS("group-label-help");
+        dragLabelHelpStyleRef             = registerCSS("drag-label-help");
+        groupDragLabelHelpStyleRef        = registerCSS("group-drag-label-help");
         groupDragLabelStyleRef            = registerCSS("group-drag-label");
 
         dashedStyleRef                    = registerCSS("dashed");
@@ -752,6 +758,10 @@ namespace tachyon
         tooltipStyleRef                   = registerCSS("tooltip");
         tooltipTextStyleRef               = registerCSS("tooltip-text");
         tooltipShortcutStyleRef           = registerCSS("tooltip-shortcut");
+        tooltipRichStyleRef               = registerCSS("tooltip-rich");
+        tooltipTitleStyleRef              = registerCSS("tooltip-title");
+        tooltipDescriptionStyleRef        = registerCSS("tooltip-description");
+        tooltipFooterStyleRef             = registerCSS("tooltip-footer");
         settingsPageSelectionRef          = registerCSS("settings-page-selection");
         settingsPageStyleRef              = registerCSS("settings-page");
 

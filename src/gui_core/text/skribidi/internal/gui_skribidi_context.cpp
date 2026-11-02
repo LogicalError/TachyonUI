@@ -479,11 +479,14 @@ namespace tachyon
 								const TextStyle* selectedTextStyle,
 								std::string_view text)
 	{
+		// The default language first; style_to_attributes counts only what it adds after it.
 		skb_attribute_t textAttributes[32] = {};
-		int textAttributeCount = style_to_attributes(textStyle, textAttributes, ctx->PushDefaultLanguage(textAttributes), ctx->m_fontIdToFamilyId);
+		const int textLanguages = ctx->PushDefaultLanguage(textAttributes);
+		int textAttributeCount = textLanguages + style_to_attributes(textStyle, textAttributes, textLanguages, ctx->m_fontIdToFamilyId);
 
 		skb_attribute_t compositionAttributes[32] = {};
-		int compositionAttributesCount = style_to_attributes(selectedTextStyle, compositionAttributes, ctx->PushDefaultLanguage(compositionAttributes), ctx->m_fontIdToFamilyId);
+		const int compositionLanguages = ctx->PushDefaultLanguage(compositionAttributes);
+		int compositionAttributesCount = compositionLanguages + style_to_attributes(selectedTextStyle, compositionAttributes, compositionLanguages, ctx->m_fontIdToFamilyId);
 
 		skb_attribute_t layout_attributes[32] = {};
 		style_to_attributes(textLayoutStyle, layout_attributes, 0);

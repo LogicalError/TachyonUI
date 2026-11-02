@@ -344,8 +344,10 @@ namespace tachyon
 		m_skribidiContext->ResetLayout(entry);
 
 		entry->layout_attribute_count = style_to_attributes(&textLayout, entry->layout_attributes, 0);
-		entry->text_attribute_count   = style_to_attributes(&text.textStyle, entry->text_attributes,
-		                                                    m_skribidiContext->PushDefaultLanguage(entry->text_attributes), m_skribidiContext->m_fontIdToFamilyId);
+		// The default language first; style_to_attributes counts only what it adds after it.
+		const int languages           = m_skribidiContext->PushDefaultLanguage(entry->text_attributes);
+		entry->text_attribute_count   = languages + style_to_attributes(&text.textStyle, entry->text_attributes,
+		                                                                languages, m_skribidiContext->m_fontIdToFamilyId);
 		entry->lineHeight			  = std::max(1, static_cast<int32_t>(std::ceil(text.textStyle.CalcLineHeight())));
 		entry->iconSide				  = text.iconSide;
 		entry->iconTextGap			  = text.iconTextGap;
