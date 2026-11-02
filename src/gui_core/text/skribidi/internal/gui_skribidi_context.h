@@ -409,6 +409,7 @@ namespace tachyon
 
 	skb_text_overflow_t toSKBTextOverflow(TextOverflow overflow);
 
+	// Both write from attribute_offset on and return how many they wrote, not the total.
 	// fontIdToFamilyId resolves TextStyle::fontId (SkribidiContext::m_fontIdToFamilyId).
 	int style_to_attributes(const TextStyle* textStyle, std::span<skb_attribute_t> attributes, int attribute_offset,
 	                        const std::unordered_map<uint32_t, uint8_t>& fontIdToFamilyId);

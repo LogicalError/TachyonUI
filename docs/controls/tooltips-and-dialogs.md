@@ -4,8 +4,10 @@
 
 A tooltip is a small box below its target, or above it when there's no room below, lined
 up with the target's left side (its right side at the right edge of the screen), with an
-arrow toward the target near that end. It fades in over 100 ms and out over 80 ms (not
-with reduced motion).
+arrow toward the target near that end, and a soft shadow. It fades in over 100 ms and out
+over 80 ms (not with reduced motion). Its window is see-through around the box, room for
+the arrow and the shadow that may reach past the edge of the screen, so the box itself
+lines up with the target there too.
 
 ```cpp
 void SetTooltip(ID targetID, std::string_view text);
@@ -14,6 +16,8 @@ void SetTooltip(ID targetID, std::string_view text, std::string_view shortcut);
 void SetTooltip(ID targetID, IconID icon, std::string_view text, std::string_view shortcut);
 void SetTooltip(std::string_view text);           // the control just drawn
 void SetTooltip(std::string_view text, std::string_view shortcut);
+void SetTooltip(ID targetID, const PropertyHelp& help);
+void SetTooltip(const PropertyHelp& help);        // the control just drawn
 bool BeginTooltip(ID targetID);
 bool BeginTooltip();                              // the control just drawn
 void EndTooltip();
@@ -25,7 +29,7 @@ the target. A `shortcut` (the keys that do the same) goes in a chip after the te
 while the tooltip shows, and `EndTooltip` is called either way. A `GUIContent` with a
 tooltip sets it too. Classes: `tooltip-frame` (the see-through window), `tooltip` (the box),
 `tooltip-text`, `tooltip-shortcut`; colors `--tooltip-bg`, `--tooltip-border`,
-`--tooltip-text`, `--tooltip-chip`, `--tooltip-chip-text`.
+`--tooltip-text`, `--tooltip-chip`, `--tooltip-chip-text`, `--shadow-tooltip`.
 
 Timing, on `TooltipManager` (`tooltipManager`):
 
@@ -53,6 +57,26 @@ set right after it, over its row's.
 ```cpp
 Button(gridIcon, [this] { showGrid = !showGrid; });
 SetTooltip(showGrid ? "Grid on" : "Grid off");
+```
+
+### Property help
+
+A `PropertyHelp` (`title`, `description`, `footer`) shows in a larger tooltip on the popup
+surface, 268 px wide: the title, the description wrapping under it, and the footer under a
+line, in a monospace font, saying where the property lives in the API and its type. Empty
+parts are left out. A `Label` or `DragLabel` given help is underlined, dotted, so it's
+clear there is help to see; a label in a style of your own keeps it as it is. (The
+underline sits just under the text: a label alone on a line, only as tall as its text,
+cuts it off; in a row it has the row's height.) Classes: `tooltip-rich`, `tooltip-title`,
+`tooltip-description`, `tooltip-footer`; the labels' `label-help`, `group-label-help`,
+`drag-label-help`, `group-drag-label-help`; shadow `--shadow-popup`.
+
+```cpp
+Label("Cast shadows");
+SetTooltip(PropertyHelp{ "Cast shadows",
+                         "Whether this mesh casts shadows from directional, spot and point lights.",
+                         "MeshRenderer.castShadows (bool)" });
+Checkbox(castShadows);
 ```
 
 

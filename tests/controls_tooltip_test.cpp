@@ -196,7 +196,7 @@ namespace tachyon
         }
 
         // A button `top` px down the screen (and `left` px across), hovered until its tooltip
-        // shows: the two rects.
+        // shows: the tooltip's box and the button.
         std::pair<IntRect, IntRect> TooltipAndTarget(HeadlessGUIApp& app, int top, int left = 0,
                                                      std::string_view text = "Save scene")
         {
@@ -223,16 +223,19 @@ namespace tachyon
             frame();
             app.InjectMouseMove(app.CenterOf(button));
             for (int i = 0; i < 8; ++i) { app.AdvanceTime(100); frame(); }
-            if (!app.HasElement(app.tooltipWindowID))
+            // The box: the text's parent (the window around it is see-through room for its shadow).
+            const ElementRef textRef = app.elementStorage.FindElementRefByID(app.FindByText(text));
+            if (!textRef.IsValid())
                 return {};
-            return { app.GetElementRect(app.tooltipWindowID), app.GetElementRect(button) };
+            const ElementRef boxRef = app.elementStorage.GetParentRef(textRef);
+            return { app.elementStorage.GetElementRectPtr(boxRef)->rect, app.GetElementRect(button) };
         }
 
         TEST_F(ControlsTooltipTest, BelowATargetWithAGap)
         {
             const auto [tip, target] = TooltipAndTarget(app, 0);
             ASSERT_GT(tip.h, 0);
-            EXPECT_EQ(tip.y - target.Max(1), 2);
+            EXPECT_EQ(tip.y - target.Max(1), 9);
         }
 
         // At the bottom of the screen it goes above, the same gap away.
@@ -240,7 +243,56 @@ namespace tachyon
         {
             const auto [tip, target] = TooltipAndTarget(app, 1040);
             ASSERT_GT(tip.h, 0);
-            EXPECT_EQ(target.y - tip.Max(1), 2);
+            EXPECT_EQ(target.y - tip.Max(1), 9);
+        }
+
+        // A label given property help is underlined, dotted; its help shows a title, a
+        // description and a footer, in that order.
+        TEST_F(ControlsTooltipTest, PropertyHelpUnderlinesItsLabelAndShowsItsParts)
+        {
+            ID label = ID::Invalid();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.Label("Cast shadows");
+                    label = app.elementStorage.GetLastItemID();
+                    app.SetTooltip(PropertyHelp{ "Shadow casting", "Whether this mesh casts shadows.", "MeshRenderer.castShadows" });
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            const ElementRef ref = app.elementStorage.FindElementRefByID(label);
+            ASSERT_TRUE(ref.IsValid());
+            EXPECT_EQ(app.elementStorage.GetElementUnsafe(ref).styleRef, app.theme.labelHelpStyleRef);
+            EXPECT_EQ(app.ownedTextSystem.StyleOf(app.elementStorage.GetElementUnsafe(ref).textID), app.theme.labelHelpStyleRef)
+                << "its text is drawn in the underlined style too";
+            const VisualTextStyleStates* text = app.styleManager.GetVisualTextStyles(app.theme.labelHelpStyleRef.visualTextStyleIndex);
+            ASSERT_NE(text, nullptr);
+            for (int s = 0; s < Style::kStateCount; ++s)   // hovered and focused too
+            {
+                EXPECT_GT((*text)[s].textStyle.underLine.thickness, 0) << "state " << s;
+                EXPECT_EQ((*text)[s].textStyle.underLine.style, DecorationStyle::Dotted) << "state " << s;
+            }
+
+            app.InjectMouseMove(app.CenterOf(label));
+            for (int i = 0; i < 8; ++i) { app.AdvanceTime(100); frame(); }
+            const ID title = app.FindByText("Shadow casting");
+            const ID description = app.FindByText("Whether this mesh casts shadows.");
+            const ID footer = app.FindByText("MeshRenderer.castShadows");
+            ASSERT_NE(title, ID::Invalid());
+            ASSERT_NE(description, ID::Invalid());
+            ASSERT_NE(footer, ID::Invalid());
+            EXPECT_LT(app.GetElementRect(description).y, app.GetElementRect(footer).y);
+            EXPECT_LT(app.GetElementRect(title).y, app.GetElementRect(description).y);
+        }
+
+        // At the left edge of the screen too, the box lines up with its target: the room for
+        // its shadow may reach past the screen.
+        TEST_F(ControlsTooltipTest, AtTheLeftEdgeTheBoxLinesUpWithItsTarget)
+        {
+            const auto [tip, target] = TooltipAndTarget(app, 0);
+            ASSERT_GT(tip.w, 0);
+            EXPECT_EQ(tip.x, target.x);
         }
 
         // At the right edge of the screen it lines up with its target's right edge instead.

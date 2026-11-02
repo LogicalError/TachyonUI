@@ -17,7 +17,7 @@ namespace tachyon
 
     namespace
     {
-        constexpr int kTooltipGap = 2;   // CSS px from the target to the window; the box's margin holds its arrow
+        constexpr int kTooltipGap = 9;   // CSS px from the target to the box
     }
 
     void GUIApplication::SetTooltip(ID targetID, std::string_view text)
@@ -49,6 +49,38 @@ namespace tachyon
         CloseTooltip();
     }
 
+    void GUIApplication::SetTooltip(ID targetID, const PropertyHelp& help)
+    {
+        // A label with help is underlined, dotted, whether or not its help shows. Its text was
+        // registered in the plain style: registered again, it takes the new one.
+        if (const ElementRef ref = elementStorage.FindElementRefByID(targetID); ref.IsValid())
+        {
+            Element& label = elementStorage.GetElementUnsafe(ref);
+            const StyleRef underlined = label.styleRef == theme.labelStyleRef          ? theme.labelHelpStyleRef
+                                : label.styleRef == theme.groupLabelStyleRef     ? theme.groupLabelHelpStyleRef
+                                : label.styleRef == theme.dragLabelStyleRef      ? theme.dragLabelHelpStyleRef
+                                : label.styleRef == theme.groupDragLabelStyleRef ? theme.groupDragLabelHelpStyleRef
+                                : StyleRef{};
+            if (underlined != StyleRef{})
+            {
+                label.styleRef = underlined;
+                if (label.textID != TextID::Invalid)
+                    label.textID = textSystem->RegisterText(label.id, label.iconID, textSystem->GetText(label.textID), underlined, label.state);
+            }
+        }
+        if (!OpenTooltip(targetID, true))
+            return;
+        auto part = [this](std::string_view text, StyleRef style) {
+            if (!text.empty())
+                RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID(), .styleRef = style,
+                                                  .flags = ElementFlags::NoInput }, text, LayoutOverride{});
+        };
+        part(help.title, theme.tooltipTitleStyleRef);
+        part(help.description, theme.tooltipDescriptionStyleRef);
+        part(help.footer, theme.tooltipFooterStyleRef);
+        CloseTooltip();
+    }
+
     bool GUIApplication::BeginTooltip(ID targetID)
     {
         const bool open = OpenTooltip(targetID);
@@ -56,16 +88,23 @@ namespace tachyon
         return open;
     }
 
-    bool GUIApplication::OpenTooltip(ID targetID)
+    bool GUIApplication::OpenTooltip(ID targetID, bool rich)
     {
         if (!tooltipManager.ShouldShow(targetID))
             return false;
 
-        // Below the target (above when there's no room), its arrow pointing at it: the window
-        // is see-through, with room above and below the box for the arrow.
+        const StyleRef boxStyle = rich ? theme.tooltipRichStyleRef : theme.tooltipStyleRef;
+        // Below the target (above when there's no room), its arrow pointing at it. The window
+        // is see-through, the box's margin room for its arrow and shadow: the window is placed
+        // so the box lines up with the target, the gap away, and that room may reach past the
+        // screen's edges.
+        const LayoutStyle* boxLayout = styleManager.GetLayoutStyle(boxStyle.layoutStyleIndex);
+        const int marginLeft = boxLayout ? boxLayout->margin.left : 0;
+        const int marginTop  = boxLayout ? boxLayout->margin.top : 0;
         auto pos = LayoutOverride{}.Anchored(targetID,
             AnchorPlacement::OutsideBottom | AnchorPlacement::InsideLeft,
-            {0, int16_t(styleManager.Px(kTooltipGap))}, AutoFlipMode::FlipAvoidTarget);
+            { int16_t(-marginLeft), int16_t(styleManager.Px(kTooltipGap) - marginTop) }, AutoFlipMode::FlipAvoidTarget)
+            .Overhang({ marginLeft, marginTop });
 
         ElementFlags flags = ElementFlags::WindowNoCaption | ElementFlags::WindowIsPopup | ElementFlags::WindowIsTransparent
                            | ElementFlags::WindowNotFocusable;
@@ -79,12 +118,15 @@ namespace tachyon
             elementStorage.GetElementUnsafe(winRef).flags |= ElementFlags::NoInput;
 
         const ID boxID = idManager.AllocateDynamicID("tooltip_box");
-        const ElementRef box = RegisterElement(tachyon::Element{ .id = boxID, .styleRef = theme.tooltipStyleRef,
+        const ElementRef box = RegisterElement(tachyon::Element{ .id = boxID, .styleRef = boxStyle,
                                                                  .flags = ElementFlags::NoInput }, LayoutOverride{});
-        const VisualColorStyleIndex fill = theme.tooltipArrowFill, line = theme.tooltipArrowLine;
+        const VisualColorStyleIndex fill = rich ? theme.popupArrowFill : theme.tooltipArrowFill;
+        const VisualColorStyleIndex line = rich ? theme.popupArrowLine : theme.tooltipArrowLine;
         const float px = styleManager.GetUIScale();
+        // The tip from the side the box lines up on, and the box's corner radius.
+        const float fromEdgeCss = rich ? 45.5f : 17.5f, cornerCss = rich ? 8.0f : 6.0f;
         // Drawn before the box's children, not after them: an after-draw clips to the box itself.
-        VERIFY(elementStorage.AddCustomDraw(box, [this, targetID, fill, line, px](CustomDrawContext& ctx)
+        VERIFY(elementStorage.AddCustomDraw(box, [this, targetID, fill, line, px, fromEdgeCss, cornerCss](CustomDrawContext& ctx)
         {
             // A bordered square turned on its corner, the half out of the box pointing at the
             // target: a triangle in the border's color, and the fill's inside it one border
@@ -99,8 +141,8 @@ namespace tachyon
             const IntRect laid = self->rect;
             const float height = std::round(6.0f * px);      // the tip, out from the box's edge
             const float inner  = height - 1.41421356f * px;  // the fill's: one border in, at 45 degrees
-            const float fromEdge = 17.5f * px;               // the tip from the side the box lines up on
-            const float inset = 6.0f * px + height + px;     // clear of the rounded corner
+            const float fromEdge = fromEdgeCss * px;
+            const float inset = cornerCss * px + height + px;   // clear of the rounded corner
 
             // Near the side the box is lined up with the target on (its left, or its right
             // when it was kept on the screen), but not past the target's middle.

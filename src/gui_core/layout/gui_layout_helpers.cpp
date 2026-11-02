@@ -203,6 +203,17 @@ namespace tachyon
     }
 
 
+    // The work area an anchored element is kept in, `overhang` wider on `axis` each side: the
+    // see-through room it may reach past the screen with.
+    static IntRect Overhung(IntRect area, int16_t overhang, int axis)
+    {
+        if (overhang == PositionConstraintAxis::kAuto || overhang <= 0)
+            return area;
+        area.position[axis] -= overhang;
+        area.size[axis] += 2 * overhang;
+        return area;
+    }
+
     void LayoutHelpers::ApplyHorizontalPositionConstraints(OSWindowManager& osWindowManager, ElementStorage& storage, ElementRect& elementRect, const ElementRef& elementRef)
     {
         //TACHYON_PROFILE_SCOPE("LayoutHelpers::ApplyHorizontalPositionConstraints");
@@ -238,7 +249,7 @@ namespace tachyon
             positionConstraints.x.autoFlip != AutoFlipMode::None &&
             elementRect.monitorIndex >= 0)
         {
-            const IntRect workArea = osWindowManager.GetMonitor(elementRect.monitorIndex).workArea;
+            const IntRect workArea = Overhung(osWindowManager.GetMonitor(elementRect.monitorIndex).workArea, positionConstraints.x.far, 0);
             const int32_t overflowLeft  = workArea.x - elementRect.rect.x;
             const int32_t overflowRight = elementRect.rect.Max(0) - workArea.Max(0);
 
@@ -334,7 +345,7 @@ namespace tachyon
             positionConstraints.y.autoFlip != AutoFlipMode::None &&
             elementRect.monitorIndex >= 0)
         {
-            const IntRect workArea = osWindowManager.GetMonitor(elementRect.monitorIndex).workArea;
+            const IntRect workArea = Overhung(osWindowManager.GetMonitor(elementRect.monitorIndex).workArea, positionConstraints.y.far, 1);
             const int32_t overflowTop    = workArea.y - elementRect.rect.y;
             const int32_t overflowBottom = elementRect.rect.Max(1) - workArea.Max(1);
 

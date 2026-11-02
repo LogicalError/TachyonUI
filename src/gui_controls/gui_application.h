@@ -788,6 +788,11 @@ namespace tachyon
         void SetTooltip(ID targetID, IconID icon, std::string_view text, std::string_view shortcut);
         /// As above, for the last control.
         inline void SetTooltip(std::string_view text, std::string_view shortcut) { SetTooltip(elementStorage.GetLastItemID(), text, shortcut); }
+        /// A property's help on targetID, in a larger tooltip: its title, description and footer.
+        /// A label given help (Label, DragLabel) is underlined, dotted.
+        void SetTooltip(ID targetID, const PropertyHelp& help);
+        /// As above, for the last control.
+        inline void SetTooltip(const PropertyHelp& help) { SetTooltip(elementStorage.GetLastItemID(), help); }
 
         /// A tooltip with any content on targetID: build it while this returns true.
         /// EndTooltip is called either way.
@@ -2552,7 +2557,8 @@ namespace tachyon
         /// The bodies of the conditional Begin / End pairs (the public ones keep the open stacks).
         bool OpenMenu(ID menuID, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints);
         void CloseMenu();
-        bool OpenTooltip(ID targetID);
+        /// `rich`: property help's box, on the popup surface, instead of the simple one.
+        bool OpenTooltip(ID targetID, bool rich = false);
         /// Closes what OpenTooltip opened: the box and the window.
         void CloseTooltip();
         bool OpenContextMenuWindow(ID targetID);

@@ -115,6 +115,13 @@ namespace tachyon
         void SetUndoHistory(UndoHistory* /*history*/) override {}
         VisualColorStyleIndex caretColor = VisualColorStyleIndex::Invalid;
         std::unordered_map<TextID, VisualColorStyleIndex> textColors;
+        // The style a text was registered with.
+        StyleRef StyleOf(TextID textId) const
+        {
+            if (textId == TextID::Invalid || ((uint32_t)textId) > m_registry.size())
+                return StyleRef{};
+            return m_registry[((uint32_t)textId) - 1].styleIndex;
+        }
 
 
         std::string_view GetText(TextID textId) const override

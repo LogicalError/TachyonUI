@@ -86,7 +86,7 @@
 .text-style::highlight(selected) { color: var(--text-1); border-color: var(--accent); background-color: var(--accent-soft); }
 
 /* ---- labelStyle ----------------------------------------------------------- */
-.label {
+.label, .label-help {
     border-width: 0px;
     border-radius: 0px;
     padding: 0px 8px;
@@ -103,10 +103,18 @@
     border-color: transparent;
     break-after: avoid;
 }
-.label:hover  { color: var(--text-1); }
-.label:active { color: var(--text-1); }
-.label:focus  { color: var(--text-1); }
-.label::highlight(selected) { color: var(--text-1); }
+.label:hover, .label-help:hover  { color: var(--text-1); }
+.label:active, .label-help:active { color: var(--text-1); }
+.label:focus, .label-help:focus  { color: var(--text-1); }
+.label::highlight(selected), .label-help::highlight(selected) { color: var(--text-1); }
+
+/* A label with property help (SetTooltip with a PropertyHelp): a dotted underline. */
+.label-help, .group-label-help, .drag-label-help, .group-drag-label-help {
+    text-underline-thickness: 1px;
+    text-underline-style: dotted;
+    text-underline-color: var(--text-3);
+    text-underline-offset: 3px;
+}
 
 /* ---- iconLabelStyle ------------------------------------------------------- */
 /* Inline icon + text, icon on the left with a gap, both vertically centered.
@@ -153,7 +161,7 @@
 .icon-label-no-icon::highlight(selected) { color: var(--text-1); }
 
 /* ---- dragLabelStyle ------------------------------------------------------- */
-.drag-label {
+.drag-label, .drag-label-help {
     border-width: 0px;
     border-radius: 0px;
     padding: 0px 8px;
@@ -169,10 +177,10 @@
     break-after: avoid;
     cursor: col-resize;
 }
-.drag-label:hover  { color: var(--text-1); }
-.drag-label:active { color: var(--text-1); }
-.drag-label:focus  { color: var(--text-1); }
-.drag-label::highlight(selected) { color: var(--text-1); }
+.drag-label:hover, .drag-label-help:hover  { color: var(--text-1); }
+.drag-label:active, .drag-label-help:active { color: var(--text-1); }
+.drag-label:focus, .drag-label-help:focus  { color: var(--text-1); }
+.drag-label::highlight(selected), .drag-label-help::highlight(selected) { color: var(--text-1); }
 
 /* ---- vector fields: an axis label attached to each component's field ------ */
 .axis-label-x {
@@ -271,7 +279,7 @@
 /* ---- grouped label variants (overflow visible for edge dragger rendering) - */
 /* No margin, like .group-drag-label: the group sizes both to one width, so a
    margin would shift a row's sizer and field off the others. */
-.group-label {
+.group-label, .group-label-help {
     border-width: 0px;
     border-radius: 0px;
     padding: 4px 8px;
@@ -289,12 +297,12 @@
     break-after: avoid;
     align-self: stretch;
 }
-.group-label:hover  { color: var(--text-1); }
-.group-label:active { color: var(--text-1); }
-.group-label:focus  { color: var(--text-1); }
-.group-label::highlight(selected) { color: var(--text-1); }
+.group-label:hover, .group-label-help:hover  { color: var(--text-1); }
+.group-label:active, .group-label-help:active { color: var(--text-1); }
+.group-label:focus, .group-label-help:focus  { color: var(--text-1); }
+.group-label::highlight(selected), .group-label-help::highlight(selected) { color: var(--text-1); }
 
-.group-drag-label {
+.group-drag-label, .group-drag-label-help {
     border-width: 0px;
     border-radius: 0px;
     padding: 0px 8px;
@@ -313,10 +321,10 @@
     align-self: stretch;
     cursor: col-resize;
 }
-.group-drag-label:hover  { color: var(--text-1); }
-.group-drag-label:active { color: var(--text-1); }
-.group-drag-label:focus  { color: var(--text-1); }
-.group-drag-label::highlight(selected) { color: var(--text-1); }
+.group-drag-label:hover, .group-drag-label-help:hover  { color: var(--text-1); }
+.group-drag-label:active, .group-drag-label-help:active { color: var(--text-1); }
+.group-drag-label:focus, .group-drag-label-help:focus  { color: var(--text-1); }
+.group-drag-label::highlight(selected), .group-drag-label-help::highlight(selected) { color: var(--text-1); }
 
 /* ---- textboxStyle --------------------------------------------------------- */
 .textbox, .number-field {
@@ -2268,8 +2276,9 @@
 }
 
 /* ---- tooltipStyle --------------------------------------------------------- */
-/* The window: see-through. The box's margin leaves room above and below it for its arrow
-   (a window clips what it draws to inside its padding). */
+/* The window: see-through. The box's margin leaves room around it for its arrow and its
+   shadow (a window clips what it draws to inside its padding); the tooltip is placed so the
+   box itself is where it should be. */
 .tooltip-frame {
     display: flex;
     flex-direction: column;
@@ -2287,12 +2296,57 @@
     align-items: center;
     gap: 8px;
     padding: 5px 8px;
-    margin: 7px 0px;
+    margin: 22px;        /* its shadow's reach: 6 px down, 16 px of blur */
     overflow: visible;   /* its arrow is drawn outside it */
     border-width: 1px;
     border-radius: 6px;
     background-color: var(--tooltip-bg);
     border-color: var(--tooltip-border);
+    box-shadow: var(--shadow-tooltip);
+}
+/* Property help: on the popup surface, a title, a description and a footer. */
+.tooltip-rich {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    width: 268px;
+    padding: 10px 12px;
+    margin: 56px;        /* its shadow's reach: 16 px down, 40 px of blur */
+    overflow: visible;
+    border-width: 1px;
+    border-radius: 8px;
+    background-color: var(--bg-popup);
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-popup);
+}
+.tooltip-title {
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    text-wrap: wrap;
+    color: var(--text-1);
+    font-size: var(--font-size-tooltip);
+    font-weight: 600;
+}
+.tooltip-description {
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    text-wrap: wrap;
+    color: var(--text-2);
+    font-size: var(--font-size-tooltip);
+}
+/* "MeshRenderer.castShadows  bool": where it lives in the API, and its type. */
+.tooltip-footer {
+    padding: 6px 0px 0px 0px;
+    margin: 0px;
+    border-width: 1px 0px 0px 0px;
+    border-color: var(--line-subtle);
+    text-wrap: wrap;
+    color: var(--text-3);
+    font-family: monospace;
+    font-size: 10.5px;
 }
 
 /* ---- tooltipTextStyle ----------------------------------------------------- */

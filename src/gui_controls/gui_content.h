@@ -35,5 +35,15 @@ namespace tachyon
         constexpr GUIContent(IconID icon, std::string_view text = {}, std::string_view tooltip = {})
             : icon(icon), text(text), tooltip(tooltip) {}
     };
+
+    /// A property's help, shown in a larger tooltip (SetTooltip): its name, what it does, and
+    /// where it lives in the API with its type, such as "MeshRenderer.castShadows (bool)".
+    /// Empty parts are left out.
+    struct PropertyHelp
+    {
+        std::string_view title;
+        std::string_view description;
+        std::string_view footer;
+    };
     /// @}
 }

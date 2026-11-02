@@ -359,6 +359,14 @@ namespace tachyon
         StyleRef tooltipStyleRef {};          ///< the tooltip's box
         StyleRef tooltipTextStyleRef {};      ///< its text
         StyleRef tooltipShortcutStyleRef {};  ///< a shortcut chip after the text
+        StyleRef tooltipRichStyleRef {};      ///< property help's box, on the popup surface
+        StyleRef tooltipTitleStyleRef {};     ///< its title
+        StyleRef tooltipDescriptionStyleRef {}; ///< its description
+        StyleRef tooltipFooterStyleRef {};    ///< its footer, under a line
+        StyleRef labelHelpStyleRef {};        ///< a Label() with property help: underlined, dotted
+        StyleRef groupLabelHelpStyleRef {};   ///< the same inside a label group
+        StyleRef dragLabelHelpStyleRef {};    ///< a DragLabel() with property help
+        StyleRef groupDragLabelHelpStyleRef {}; ///< the same inside a label group
         StyleRef groupLabelStyleRef {};       ///< Label() inside a label group
         StyleRef groupDragLabelStyleRef {};   ///< DragLabel() inside a label group
         StyleRef collectionStyleRef {};       ///< BeginArea / BeginCached default
@@ -537,6 +545,8 @@ namespace tachyon
         tachyon::VisualColorStyleIndex marqueeFillColorStyle; ///< selection-marquee fill (fixed translucent blue)
         tachyon::VisualColorStyleIndex tooltipArrowFill;      ///< --tooltip-bg: a tooltip's arrow
         tachyon::VisualColorStyleIndex tooltipArrowLine;      ///< --tooltip-border: its edges
+        tachyon::VisualColorStyleIndex popupArrowFill;        ///< --bg-popup: property help's arrow
+        tachyon::VisualColorStyleIndex popupArrowLine;        ///< --line-strong: its edges
 
         /// Table row height in pixels, measured from real font metrics in ComputeRowMetrics.
         /// Must match the rendered rows exactly, or the max scroll oscillates.

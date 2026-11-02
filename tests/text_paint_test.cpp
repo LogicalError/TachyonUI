@@ -213,6 +213,33 @@ namespace tachyon
             EXPECT_GT(CountColor(draws, ColorIndex(kWhite)), 0u);
         }
 
+        // With a language set for all text, which goes first among a text's attributes, its
+        // decoration (the last of them) is still drawn: plain, and in a field being edited.
+        TEST_F(TextPaintTest, ADecorationIsDrawnWithALanguageSet)
+        {
+            textSystem->SetLanguage("en");
+            Style s = BaseStyle();
+            for (StyleState& state : s.states)
+            {
+                state.textStyle.underLine.thickness = 2;
+                state.decorationColors[size_t(DecorationLine::Under)] = ColorStyle::Create(kGreen);
+            }
+            const StyleRef style = styleManager.Register(s);
+            EXPECT_GT(CountColor(Render(Register(style, ElementState::None)), ColorIndex(kGreen)), 0u) << "plain";
+
+            const ID field{ .value{ .integer = 84 } };
+            std::string bound = "abc";
+            bool modified = false;
+            auto& focus = stateManager.TextEditorFocus();
+            focus.Set(field);
+            textSystem->SwitchTextEditor(focus.GetPrevFocusedID(), field);
+            focus.Commit();
+            std::vector<GlyphDraw> draws;
+            for (int frame = 0; frame < 2; ++frame)
+                draws = Render(textSystem->RegisterEditableText(field, bound, TextEditBehavior::None, style, ElementState::Focused, modified));
+            EXPECT_GT(CountColor(draws, ColorIndex(kGreen)), 0u) << "edited";
+        }
+
         // A link run is drawn in its link color, the rest in the text color.
         TEST_F(TextPaintTest, ALinkIsDrawnInItsColor)
         {
