@@ -55,15 +55,23 @@ void main()
     float w1 = cross2(p2 - p1, p - p1) / area;
     float w2 = cross2(p0 - p2, p - p2) / area;
 
-    bool inside = (w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0) ||
-                  (w0 <= 0.0 && w1 <= 0.0 && w2 <= 0.0);
-
-    float edgeDistance = min(distanceToSegment(p, p0, p1),
-                         min(distanceToSegment(p, p1, p2),
-                             distanceToSegment(p, p2, p0)));
+    // A hard edge (shared with a neighbour) cuts straight; only the others are soft.
+    // (A pixel's middle right on it is kept on both sides, despite rounding.)
+    int hard = int(triangle.hardEdges);
+    const float onEdge = -1e-4;
+    if (((hard & 1) != 0 && w0 < onEdge) || ((hard & 2) != 0 && w1 < onEdge) || ((hard & 4) != 0 && w2 < onEdge))
+        discard;
+    // The weights are over the signed area, so inside is all three at or above zero; a hard
+    // edge passed above counts as inside.
+    bool inside = ((hard & 1) != 0 || w0 >= 0.0) && ((hard & 2) != 0 || w1 >= 0.0) && ((hard & 4) != 0 || w2 >= 0.0);
+    float edgeDistance = 1e6;
+    if ((hard & 1) == 0) edgeDistance = min(edgeDistance, distanceToSegment(p, p0, p1));
+    if ((hard & 2) == 0) edgeDistance = min(edgeDistance, distanceToSegment(p, p1, p2));
+    if ((hard & 4) == 0) edgeDistance = min(edgeDistance, distanceToSegment(p, p2, p0));
 
     float signedDistance = inside ? -edgeDistance : edgeDistance;
-    float opacity = saturate(1.0 - signedDistance);
+    // Half a pixel either side of the edge, as lines and circles: the shape keeps its size.
+    float opacity = saturate(0.5 - signedDistance);
     if (opacity <= (1.0 / 512.0))
         discard;
 

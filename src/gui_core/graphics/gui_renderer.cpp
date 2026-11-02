@@ -35,12 +35,22 @@ namespace tachyon
         RenderBox(rect, clipRect, styleIndexValue, styleIndexValue, 1.0f, colorStyleIndex, textureIndex, snappedPx);
     }
 
+    static TriangleEdges FanInnerEdges(size_t i, size_t count)
+    {
+        // Triangle i of a fan from point 0: its edges back to point 0 are shared, but for
+        // the first one's and the last one's, which are the polygon's own.
+        TriangleEdges inner = TriangleEdges::None;
+        if (i > 1)         inner |= TriangleEdges::Edge01;
+        if (i + 2 < count) inner |= TriangleEdges::Edge20;
+        return inner;
+    }
+
     void GUIRenderer::RenderFilledPolygon(std::span<const tachyon::float2> points, tachyon::IntRect clipRect,
                                           VisualColorStyleIndex colorIndex, tachyon::ImageIndex textureIndex)
     {
         if (points.size() < 3) return;
         for (size_t i = 1; i + 1 < points.size(); i++)
-            RenderTriangle(points[0], points[i], points[i + 1], clipRect, colorIndex, textureIndex);
+            RenderTriangle(points[0], points[i], points[i + 1], clipRect, colorIndex, textureIndex, FanInnerEdges(i, points.size()));
     }
 
     void GUIRenderer::RenderPolyline(std::span<const tachyon::int2> points, bool closed,

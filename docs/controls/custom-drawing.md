@@ -32,7 +32,7 @@ space: (0, 0) is the top-left of its padding box, and pan / zoom of its ancestor
 | `RenderLine(p0, p1, lineStyle)` | A line (also a four-point form) |
 | `RenderPolyline(points, closed, lineStyle, cornerRadius)` | A polyline |
 | `RenderCircle`, `RenderDisc`, `RenderDot` | Circle outline (exactly round; a gradient and dashes run clockwise from the right), filled disc, dot |
-| `RenderTriangle`, `RenderFilledPolygon` | Filled triangle, convex polygon |
+| `RenderTriangle`, `RenderFilledPolygon` | Filled triangle, convex polygon; a triangle's `hardEdges` (edges it shares with another) have no soft edge, so no seam shows |
 | `RenderText(textId, rect)` | Text registered with `textSystem->RegisterText` |
 
 Colors are style indices (for example `theme.lineWhiteStyle`, or one registered with

@@ -782,6 +782,12 @@ namespace tachyon
         inline void SetTooltip(std::string_view text) { SetTooltip(elementStorage.GetLastItemID(), text); }
         /// As above, with an icon, on the control just drawn.
         inline void SetTooltip(IconID icon, std::string_view text) { SetTooltip(elementStorage.GetLastItemID(), icon, text); }
+        /// As above, with the keyboard shortcut that does the same in a chip after the text.
+        void SetTooltip(ID targetID, std::string_view text, std::string_view shortcut);
+        /// As above, with an icon.
+        void SetTooltip(ID targetID, IconID icon, std::string_view text, std::string_view shortcut);
+        /// As above, for the last control.
+        inline void SetTooltip(std::string_view text, std::string_view shortcut) { SetTooltip(elementStorage.GetLastItemID(), text, shortcut); }
 
         /// A tooltip with any content on targetID: build it while this returns true.
         /// EndTooltip is called either way.
@@ -2547,6 +2553,8 @@ namespace tachyon
         bool OpenMenu(ID menuID, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints);
         void CloseMenu();
         bool OpenTooltip(ID targetID);
+        /// Closes what OpenTooltip opened: the box and the window.
+        void CloseTooltip();
         bool OpenContextMenuWindow(ID targetID);
         bool OpenCached(ID id, StyleRef style, uint64_t signature, LayoutOverride&& constraints);
         static void ReportInvalidControlID(ID id);

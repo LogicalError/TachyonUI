@@ -4,41 +4,46 @@
 
 namespace tachyon
 {
+    void TooltipManager::Dismiss(ID currentFocusedID, bool hasMouseMove)
+    {
+        m_activeTargetID = ID::Invalid();
+        m_isReady = false;
+        m_isVisible = false;
+        m_triggeredByFocus = false;
+        m_lingerID = ID::Invalid();
+        m_lastVisibleTime = -1.0e9f;
+        // After a dismissal, no hover tooltips until the mouse moves.
+        m_suppressHover = !hasMouseMove;
+        m_prevFocusedID = currentFocusedID;
+    }
+
     void TooltipManager::BeginFrame(ID currentHoveredID, ID currentFocusedID, float elapsedTimeSecs,
-                                    bool hasMouseMove, bool hasMousePress, bool hasKeyboard, bool hasScroll, bool menuIsOpen)
+                                    bool hasMouseMove, bool hasMousePress, bool hasKeyboard, bool hasScroll, bool menuIsOpen,
+                                    bool buttonHeld)
     {
         m_currentTime = elapsedTimeSecs;
         m_declaredThisFrame = false;
+        m_activeAskedLast = m_activeAsked;
+        m_activeAsked = false;
         // A press moves focus during that frame's dispatch (after this runs), so
         // the focus change shows up one frame later; it is still mouse-driven.
         const bool pressedLastFrame = m_pressedLastFrame;
         m_pressedLastFrame = hasMousePress;
 
-        // Menu open always kills tooltip
-        if (menuIsOpen)
+        // An open menu, and a held button (a drag), have none.
+        if (menuIsOpen || buttonHeld)
         {
-            m_activeTargetID = ID::Invalid();
-            m_isReady = false;
-            m_isVisible = false;
-            m_triggeredByFocus = false;
+            Dismiss(currentFocusedID, true);
             m_suppressHover = false;
-            m_prevFocusedID = currentFocusedID;
             return;
         }
 
         bool anyDismiss = hasMousePress || hasKeyboard || hasScroll;
         if (m_triggeredByFocus)
             anyDismiss = anyDismiss || hasMouseMove; // mouse move also dismisses focus tooltips
-
         if (anyDismiss)
         {
-            m_activeTargetID = ID::Invalid();
-            m_isReady = false;
-            m_isVisible = false;
-            m_triggeredByFocus = false;
-            // After any dismissal, suppress hover tooltips until mouse moves
-            m_suppressHover = !hasMouseMove;
-            m_prevFocusedID = currentFocusedID;
+            Dismiss(currentFocusedID, hasMouseMove);
             return;
         }
 
@@ -61,6 +66,7 @@ namespace tachyon
             m_isVisible = false;
             m_triggeredByFocus = true;
             m_suppressHover = false;
+            m_lingerID = ID::Invalid();
             return;
         }
 
@@ -70,10 +76,19 @@ namespace tachyon
 
         if (currentHoveredID != m_activeTargetID)
         {
+            // The one left stays a moment; the next shows at once if one was just showing.
+            if (m_isVisible && m_activeTargetID != ID::Invalid())
+            {
+                m_lingerID = m_activeTargetID;
+                m_lingerUntil = elapsedTimeSecs + hideSeconds;
+            }
+            const bool warm = elapsedTimeSecs - m_lastVisibleTime < warmSeconds;
             m_activeTargetID = currentHoveredID;
             m_targetStartTime = elapsedTimeSecs;
-            m_isReady = false;
+            m_isReady = warm && currentHoveredID != ID::Invalid();
             m_isVisible = false;
+            // Asks by the target left don't count against its linger.
+            m_activeAskedLast = false;
         }
         else if (m_activeTargetID != ID::Invalid() && !m_isReady)
         {
@@ -85,14 +100,27 @@ namespace tachyon
     bool TooltipManager::ShouldShow(ID targetID)
     {
         if (targetID == ID::Invalid()) return false;
-        if (!m_isReady || m_declaredThisFrame) return false;
-        if (targetID != m_activeTargetID &&
-            std::find(m_targetAncestors.begin(), m_targetAncestors.end(), targetID) == m_targetAncestors.end())
-            return false;
-
-        m_declaredThisFrame = true;
-        m_isVisible = true;
-        return true;
+        const bool isActive = targetID == m_activeTargetID ||
+            std::find(m_targetAncestors.begin(), m_targetAncestors.end(), targetID) != m_targetAncestors.end();        // Asked for, even when the one left was declared first this frame: it goes next frame.
+        if (isActive && m_isReady)
+            m_activeAsked = true;
+        if (m_declaredThisFrame) return false;
+        if (isActive && m_isReady)
+        {
+            m_declaredThisFrame = true;
+            m_isVisible = true;
+            m_lingerID = ID::Invalid();
+            m_lastVisibleTime = m_currentTime;
+            return true;
+        }
+        // The target just left, a moment more, unless the new one has a tooltip of its own.
+        if (targetID == m_lingerID && m_currentTime < m_lingerUntil && !m_activeAskedLast)
+        {
+            m_declaredThisFrame = true;
+            m_lastVisibleTime = m_currentTime;
+            return true;
+        }
+        return false;
     }
 
     void TooltipManager::EndFrame()

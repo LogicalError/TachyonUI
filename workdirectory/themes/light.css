@@ -60,6 +60,9 @@
     --info-soft: #2F6FEB1F;
     --error-circle: #D645451F;
     --ok-soft: #1E9E621F;
+    /* Tooltips: inverted, dark on the light theme, no border */
+    --tooltip-bg: #1A1D23;   --tooltip-border: #1A1D23;   --tooltip-text: #FFFFFF;
+    --tooltip-chip: #FFFFFF1F;   --tooltip-chip-text: #C3C9D2;   /* white at 12% */
     /* Banners: the severity at 10% under the message, at 30% along its bottom */
     --info-banner: #2F6FEB1A;    --info-banner-line: #2F6FEB4D;
     --ok-banner: #1E9E621A;      --ok-banner-line: #1E9E624D;

@@ -1483,7 +1483,7 @@ namespace tachyon
                 }
                 tooltipManager.BeginFrame(guiStateManager.Interaction().GetHoveredID(), guiStateManager.Interaction().GetFocusedID(),
                     elapsedTimeSecs, hasMouseMove, hasMousePress, hasKeyboard, hasScroll,
-                    menuManager.IsOpen());
+                    menuManager.IsOpen(), windowManager->GetMouseButtons() != MouseButtons::None);
                 NoteTargetAncestors();
 
                 // Any mouse activity ends keyboard-nav hover suppression.

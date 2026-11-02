@@ -172,7 +172,7 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
                                guiStateManager.Interaction().GetFocusedID(),
                                static_cast<float>(m_timeMs) / 1000.0f,
                                hasMouseMove, hasMousePress, hasKeyboard, hasScroll,
-                               menuManager.IsOpen());
+                               menuManager.IsOpen(), m_buttonsHeld != tachyon::MouseButtons::None);
     NoteTargetAncestors();
     textSystem->BeginFrame(m_mousePos, m_buttonsHeld, m_timeMs);
 

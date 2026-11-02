@@ -2268,18 +2268,31 @@
 }
 
 /* ---- tooltipStyle --------------------------------------------------------- */
+/* The window: see-through. The box's margin leaves room above and below it for its arrow
+   (a window clips what it draws to inside its padding). */
+.tooltip-frame {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
 .tooltip {
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
     align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    margin: 0px;
-    border-width: var(--border-thin);
-    border-radius: var(--radius-sm);
-    background-color: var(--bg-raised);
-    border-color: var(--line-subtle);
+    gap: 8px;
+    padding: 5px 8px;
+    margin: 7px 0px;
+    overflow: visible;   /* its arrow is drawn outside it */
+    border-width: 1px;
+    border-radius: 6px;
+    background-color: var(--tooltip-bg);
+    border-color: var(--tooltip-border);
 }
 
 /* ---- tooltipTextStyle ----------------------------------------------------- */
@@ -2288,8 +2301,20 @@
     margin: 0px;
     border-width: 0px;
     text-wrap: nowrap;
-    color: var(--text-1);
+    color: var(--tooltip-text);
     font-size: var(--font-size-tooltip);
+}
+/* The keyboard shortcut that does the same: "Ctrl S". */
+.tooltip-shortcut {
+    padding: 1px 5px;
+    margin: 0px;
+    border-width: 0px;
+    border-radius: 3px;
+    background-color: var(--tooltip-chip);
+    color: var(--tooltip-chip-text);
+    font-family: monospace;
+    font-size: 10.5px;
+    text-wrap: nowrap;
 }
 
 /* ---- collectionStyle ------------------------------------------------------ */

@@ -231,6 +231,7 @@ namespace tachyon
         }
 
         positionConstraints.ApplyHorizontal(elementRect.rect, targetRect);
+        elementRect.anchorTargetX = targetRect.x;
 
         // Anchored elements overflowing the work area try the flipped placement, then clamp.
         if (positionConstraints.x.type == PositionType::Anchored &&
@@ -247,6 +248,9 @@ namespace tachyon
                 flippedRect.x = 0;
                 LayoutOverride flipped = positionConstraints;
                 flipped.x.anchorPlacement = FlipAxis(flipped.x.anchorPlacement);
+                // The offset mirrors with it: a gap from the target stays a gap.
+                if (flipped.x.anchorPlacement != positionConstraints.x.anchorPlacement)
+                    flipped.x.near = int16_t(-flipped.x.near);
                 flipped.ApplyHorizontal(flippedRect, targetRect);
 
                 const int32_t flippedOverflowLeft  = std::max(0, workArea.x - flippedRect.x);
@@ -255,6 +259,7 @@ namespace tachyon
                 {
                     elementRect.rect.x = flippedRect.x;
                     positionConstraints.x.anchorPlacement = flipped.x.anchorPlacement;
+                    positionConstraints.x.near = flipped.x.near;
                 }
             }
 
@@ -339,6 +344,8 @@ namespace tachyon
                 flippedRect.y = 0;
                 LayoutOverride flipped = positionConstraints;
                 flipped.y.anchorPlacement = FlipAxis(flipped.y.anchorPlacement);
+                if (flipped.y.anchorPlacement != positionConstraints.y.anchorPlacement)
+                    flipped.y.near = int16_t(-flipped.y.near);
                 flipped.ApplyVertical(flippedRect, targetRect);
 
                 const int32_t flippedOverflowTop    = std::max(0, workArea.y - flippedRect.y);
@@ -347,6 +354,7 @@ namespace tachyon
                 {
                     elementRect.rect.y = flippedRect.y;
                     positionConstraints.y.anchorPlacement = flipped.y.anchorPlacement;
+                    positionConstraints.y.near = flipped.y.near;
                 }
             }
 

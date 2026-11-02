@@ -355,8 +355,10 @@ namespace tachyon
         StyleRef menuItemLabelStyleRef {};    ///< grow:1 label inside a menu item row
         StyleRef menuItemShortcutStyleRef {}; ///< dim trailing keyboard-shortcut text
         StyleRef menuItemArrowStyleRef {};    ///< dim trailing submenu arrow
-        StyleRef tooltipStyleRef {};          ///< a tooltip's window
+        StyleRef tooltipFrameStyleRef {};     ///< a tooltip's window: see-through, with room for the arrow
+        StyleRef tooltipStyleRef {};          ///< the tooltip's box
         StyleRef tooltipTextStyleRef {};      ///< its text
+        StyleRef tooltipShortcutStyleRef {};  ///< a shortcut chip after the text
         StyleRef groupLabelStyleRef {};       ///< Label() inside a label group
         StyleRef groupDragLabelStyleRef {};   ///< DragLabel() inside a label group
         StyleRef collectionStyleRef {};       ///< BeginArea / BeginCached default
@@ -533,6 +535,8 @@ namespace tachyon
         tachyon::VisualColorStyleIndex treeDropIndicatorStyle; ///< drop indicator lines + closed-branch outline
 
         tachyon::VisualColorStyleIndex marqueeFillColorStyle; ///< selection-marquee fill (fixed translucent blue)
+        tachyon::VisualColorStyleIndex tooltipArrowFill;      ///< --tooltip-bg: a tooltip's arrow
+        tachyon::VisualColorStyleIndex tooltipArrowLine;      ///< --tooltip-border: its edges
 
         /// Table row height in pixels, measured from real font metrics in ComputeRowMetrics.
         /// Must match the rendered rows exactly, or the max scroll oscillates.

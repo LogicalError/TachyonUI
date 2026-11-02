@@ -109,8 +109,8 @@ namespace tachyon
                     const auto outer = ctx.ElementRect();
                     if (outer.w <= 0 || outer.h <= 0) return;
                     auto diamond = [&ctx](float2 c, float r, VisualColorStyleIndex color) {
-                        ctx.RenderTriangle({ c.x - r, c.y }, { c.x, c.y - r }, { c.x + r, c.y }, color);
-                        ctx.RenderTriangle({ c.x - r, c.y }, { c.x + r, c.y }, { c.x, c.y + r }, color);
+                        const float2 corners[] = { { c.x - r, c.y }, { c.x, c.y - r }, { c.x + r, c.y }, { c.x, c.y + r } };
+                        ctx.RenderFilledPolygon(corners, color);
                     };
                     for (int i = 0; i < stopCount; i++)
                     {
