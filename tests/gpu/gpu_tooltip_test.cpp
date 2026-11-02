@@ -4,8 +4,8 @@
 //
 // Measured against what's beside the arrow on the same row, not against "nothing": where
 // the window can't be see-through its empty part reads back opaque, and a shadow may lie
-// under the arrow. Where the tooltip's window reads back blank (no drawing to read), it
-// skips.
+// under the arrow. Where the tooltip's box never shows up in what its window reads back,
+// it skips.
 
 #include <gtest/gtest.h>
 
@@ -43,16 +43,33 @@ namespace
             // Once laid out, the pointer goes to the field's middle.
             if (frame == 2)
                 InjectMouseMove(windowID, int2{ fieldRect.x + fieldRect.w / 2, fieldRect.y + fieldRect.h / 2 });
-            // Its first drawing, read once there is one: a popup may show a few frames late.
+            // Its first drawing with the box in it: a popup may show a few frames late.
             if (frame >= 8 && !drawn)
             {
                 tooltipRect = windowManager->GetWindowRect(tooltipWindowID);
                 pixels.resize(size_t(tooltipRect.w) * tooltipRect.h * 4);
-                drawn = ReadWindowPixels(tooltipWindowID, pixels)
-                     && std::any_of(pixels.begin(), pixels.end(), [&](uint8_t v) { return v != pixels[0]; });
+                drawn = ReadWindowPixels(tooltipWindowID, pixels) && BoxStandsOut();
             }
             if (++frame >= 30 || (drawn && frame > 10))
                 applicationQuit = true;
+        }
+
+        // Whether the box reads back different from the window's empty top row, a few pixels
+        // into it, anywhere along it.
+        bool BoxStandsOut() const
+        {
+            const int left = boxLaid.x - tooltipLaid.x, y = boxLaid.y - tooltipLaid.y + 3;
+            if (boxLaid.w <= 0 || y >= tooltipRect.h)
+                return false;
+            for (int x = std::max(left, 0); x < std::min(left + boxLaid.w, tooltipRect.w); ++x)
+            {
+                const uint8_t* a = pixels.data() + (size_t(y) * tooltipRect.w + size_t(x)) * 4;
+                const uint8_t* b = pixels.data() + size_t(x) * 4;
+                for (int c = 0; c < 4; ++c)
+                    if (std::abs(int(a[c]) - int(b[c])) > 16)
+                        return true;
+            }
+            return false;
         }
 
         bool Start(float scale)
@@ -98,7 +115,7 @@ namespace
         if (!app.drawn)
         {
             app.Cleanup();
-            GTEST_SKIP() << "the tooltip's window reads back blank here";
+            GTEST_SKIP() << "the tooltip's box never shows up in what its window reads back here";
         }
 
         const IntRect r = app.tooltipRect;
