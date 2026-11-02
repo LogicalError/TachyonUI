@@ -150,7 +150,19 @@ namespace tachyon
         for (auto &cursor : storage.BottomUpDepthScanRange())
         {
             if (cursor.HasChildren())
+            {
                 SizeVertically(cursor.CurrentElementRect(storage), cursor.GetChildRects(storage));
+                continue;
+            }
+            // Text that wraps, in an element as tall as its content: as many lines as it takes
+            // at the width it was given.
+            ElementRect& rect = cursor.CurrentElementRect(storage);
+            const Element& element = cursor.CurrentElement(storage);
+            if (element.textID != TextID::Invalid && rect.layoutStyle != nullptr
+                && rect.layoutStyle->textLayoutStyle.textWrapping != TextWrap::NoWrap
+                && !rect.constraints.HasFixedHeight()
+                && (element.flags & ElementFlags::DoNotMeasureText) == ElementFlags::None)
+                LayoutHelpers::ApplyVerticalStyleSize(rect, LayoutHelpers::RecalculateContentHeight(m_textSystem, element, rect));
         }
     }
 

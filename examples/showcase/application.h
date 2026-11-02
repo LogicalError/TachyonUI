@@ -415,6 +415,10 @@ namespace tachyon
             DocumentSet*  closingSet      = nullptr; // the set it's in
             std::vector<std::unique_ptr<DocumentWindow>> documentWindows;   // documents dragged out
             bool          mainWindowOpen = true;
+            ToastID       uploadToast = 0;          // the demo upload, its progress moving
+            float         uploadStart = 0.0f;       // when it started, frame time in seconds
+            bool          inspectorUnsaved = true;  // the Inspector's banners
+            bool          inspectorReadOnly = true;
             ID            closeDocumentDialogID { ID::Invalid() };
             int           untitledCount = 0;
             std::string   dockNotes;
@@ -523,6 +527,10 @@ namespace tachyon
 
         /// A panel the showcase knows by its title ("Viewport", "Inspector", ...), added to `layout`.
         ID   CreateShowcasePanel(DockingLayout& layout, std::string_view title);
+        /// Help > Show Notifications: a toast of each kind.
+        void ShowDemoToasts();
+        /// Moves the demo upload's progress bar along.
+        void UpdateDemoToasts();
         /// A document of `kind` with its panels (the samples by name), added to `set`.
         Document& CreateShowcaseDocument(DocumentSet& set, std::string name, std::string extension, std::string kind);
         /// The first document's panels: every one, in the full docking demo layout.

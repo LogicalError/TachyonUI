@@ -59,6 +59,12 @@
     --warn-soft: #D99A2B29;
     --info-soft: #2F6FEB1F;
     --error-circle: #D645451F;
+    --ok-soft: #1E9E621F;
+    /* Banners: the severity at 10% under the message, at 30% along its bottom */
+    --info-banner: #2F6FEB1A;    --info-banner-line: #2F6FEB4D;
+    --ok-banner: #1E9E621A;      --ok-banner-line: #1E9E624D;
+    --warn-banner: #D99A2B1A;    --warn-banner-line: #D99A2B4D;
+    --error-banner: #D645451A;   --error-banner-line: #D645454D;
     --bg-well: #F6F7F9;
     --dialog-bg: #FFFFFF;
     --dialog-header: #F6F7F9;

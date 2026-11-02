@@ -109,7 +109,7 @@ have the form `inset 0 0 0 <width> <color>`:
 | `text-align` | `start`, `end`, `center`, `left`, `right`, `top`, `bottom` | |
 | `-tachyon-vertical-text-align` | `start`/`top`, `center`/`middle`, `end`/`bottom`: where the text (and icon) block sits vertically in the box | |
 | `vertical-align`, `dominant-baseline`, `-tachyon-text-baseline` | `auto`/`baseline`/`alphabetic`, `ideographic`, `central`, `hanging`, `mathematical`, `middle`, `text-top`, `text-bottom`: the glyph baseline, not the block position | |
-| `text-wrap` | `nowrap`, `wrap`, `word-char` (wrap at words, break a too-long word between characters) | |
+| `text-wrap` | `nowrap`, `wrap`, `word-char` (wrap at words, break a too-long word between characters) | An element whose height isn't fixed is as tall as its lines at the width it's given. |
 | `text-overflow` | `clip`, `ellipsis` | |
 | `direction` | `auto`, `initial` (same as auto), `ltr`, `rtl` | |
 

@@ -36,6 +36,8 @@ knob, a table's header) have their own classes, listed with the control above.
 | `BeginContextMenu` | `menu` |
 | `SetTooltip`, `BeginTooltip` | `tooltip` (text: `tooltip-text`) |
 | `MessageDialog` | `message-box` |
+| `Toasts` | `toast-stack`, `toast`, `toast-circle-<severity>` |
+| `Banner` | `banner-<severity>`, `banner-message-<severity>` |
 | `BeginListView`, `ListItem` | `list-view`, `list-item` |
 | `BeginReorderableGroup` | `horzReorderableGroup`, `vertReorderableGroup` (`...Wrap` when wrapped) |
 | `BeginReorderableItem` | `reorderableItem` |

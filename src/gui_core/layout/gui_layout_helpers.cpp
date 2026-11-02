@@ -162,8 +162,9 @@ namespace tachyon
     {
         //TACHYON_PROFILE_SCOPE("LayoutHelpers::RecalculateContentHeight");
 
-        int32_t availableWidth =
-            elementRect.rect.w - elementRect.layoutStyle->GetMinWidth();
+        // rect.w is the border box here: the margin is already off it.
+        int32_t availableWidth = elementRect.rect.w - elementRect.layoutStyle->padding.Horizontal()
+                               - elementRect.layoutStyle->borderWidths.Horizontal();
 
         bool horizontalIcon = elementRect.layoutStyle->iconSide == IconSide::Left ||
                               elementRect.layoutStyle->iconSide == IconSide::Right;

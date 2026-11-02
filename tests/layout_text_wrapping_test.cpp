@@ -395,7 +395,8 @@ namespace tachyon
         EXPECT_EQ(Width(label), 20);
     }
 
-    // Text items in a flex column are all one line tall regardless of text length.
+    // Text items in a flex column keep their natural widths there (it doesn't stretch them):
+    // one line each, however long.
     TEST_F(TextWrappingLayoutTest, FlexColumn_TextChildren_Height_IsOneLineRegardlessOfTextLength)
     {
         Style containerStyle;
@@ -442,6 +443,115 @@ namespace tachyon
             const ElementRect& item = storage.GetElementRectUnsafe(ref);
             EXPECT_EQ(item.rect.h, kLineHeight);
         }
+    }
+
+    // Wrapping text stretched across a narrow column, its height its content's: as many lines
+    // as the text takes at that width, and the column grows to hold them.
+    TEST_F(TextWrappingLayoutTest, WrappingText_StretchedNarrow_IsAsTallAsItsLines)
+    {
+        Style containerStyle;
+        containerStyle.display = Display::Flex;
+        containerStyle.layoutData.flex.direction = FlexDirection::Column;
+        containerStyle.layoutData.flex.alignItems = AlignItems::Stretch;
+        containerStyle.padding = BoxEdges(0);
+        containerStyle.borderWidths = BoxEdges(0);
+
+        Style wrapStyle;
+        wrapStyle.padding = BoxEdges(2);
+        wrapStyle.borderWidths = BoxEdges(0);
+        wrapStyle.textLayoutStyle.textWrapping = TextWrap::Wrap;
+        Style lineStyle = wrapStyle;
+        lineStyle.textLayoutStyle.textWrapping = TextWrap::NoWrap;
+
+        const StyleRef containerRef = styleManager.Register(containerStyle);
+        const StyleRef wrapRef = styleManager.Register(wrapStyle);
+        const StyleRef lineRef = styleManager.Register(lineStyle);
+
+        ASSERT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        auto parent = storage.Add([&] { Element e; e.id = ID{ .value{.integer = 30} }; e.styleRef = containerRef; return e; }(),
+                                  LayoutOverride::FixedWidth(84));
+        ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        // 36 characters, 10 to a line in the 80 px inside the padding: 4 lines.
+        auto wrapped = storage.Add(MakeTextElement(wrapRef, ID{ .value{.integer = 31} }, "A Much Longer Label That Should Wrap"));
+        auto fixed   = storage.Add(MakeTextElement(wrapRef, ID{ .value{.integer = 32} }, "A Much Longer Label That Should Wrap"),
+                                   LayoutOverride{}.Height(20));
+        auto oneLine = storage.Add(MakeTextElement(lineRef, ID{ .value{.integer = 33} }, "A Much Longer Label That Should Wrap"));
+        ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        ASSERT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        layoutEngine.Layout(*osWindowManager, storage);
+
+        const IntRect w = storage.GetElementRectUnsafe(wrapped.ref).rect;
+        EXPECT_EQ(w.w, 84);
+        EXPECT_EQ(w.h, 4 * kLineHeight + 4) << "four lines and its padding";
+        EXPECT_EQ(storage.GetElementRectUnsafe(fixed.ref).rect.h, 20) << "a fixed height stays";
+        EXPECT_EQ(storage.GetElementRectUnsafe(oneLine.ref).rect.h, kLineHeight + 4) << "text that doesn't wrap: one line";
+        EXPECT_EQ(storage.GetElementRectUnsafe(fixed.ref).rect.y, w.y + w.h) << "the next item below all of it";
+        EXPECT_EQ(storage.GetElementRectUnsafe(parent.ref).rect.h, (4 * kLineHeight + 4) + 20 + (kLineHeight + 4)) << "the column holds them";
+    }
+
+    // A wrapping element's margin is outside it: its text wraps at the width inside its
+    // border and padding.
+    TEST_F(TextWrappingLayoutTest, WrappingText_WithAMargin_WrapsInsideItsBorderBox)
+    {
+        Style containerStyle;
+        containerStyle.display = Display::Flex;
+        containerStyle.layoutData.flex.direction = FlexDirection::Column;
+        containerStyle.layoutData.flex.alignItems = AlignItems::Stretch;
+        containerStyle.padding = BoxEdges(0);
+        containerStyle.borderWidths = BoxEdges(0);
+
+        Style wrapStyle;
+        wrapStyle.margin = BoxEdges(4);
+        wrapStyle.padding = BoxEdges(2);
+        wrapStyle.borderWidths = BoxEdges(0);
+        wrapStyle.textLayoutStyle.textWrapping = TextWrap::Wrap;
+
+        const StyleRef containerRef = styleManager.Register(containerStyle);
+        const StyleRef wrapRef = styleManager.Register(wrapStyle);
+
+        ASSERT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        (void)storage.Add([&] { Element e; e.id = ID{ .value{.integer = 40} }; e.styleRef = containerRef; return e; }(),
+                    LayoutOverride::FixedWidth(84));
+        ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        auto wrapped = storage.Add(MakeTextElement(wrapRef, ID{ .value{.integer = 41} }, "A Much Longer Label That Should Wrap"));
+        ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        ASSERT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        layoutEngine.Layout(*osWindowManager, storage);
+
+        // 84 - 8 margin - 4 padding = 72 px: 9 characters to a line, 4 lines.
+        const IntRect w = storage.GetElementRectUnsafe(wrapped.ref).rect;
+        EXPECT_EQ(w.w, 76);
+        EXPECT_EQ(w.h, 4 * kLineHeight + 4);
+    }
+
+    // word-char wraps as well: its element grows the same way.
+    TEST_F(TextWrappingLayoutTest, WordCharText_IsAsTallAsItsLines)
+    {
+        Style containerStyle;
+        containerStyle.display = Display::Flex;
+        containerStyle.layoutData.flex.direction = FlexDirection::Column;
+        containerStyle.layoutData.flex.alignItems = AlignItems::Stretch;
+        containerStyle.padding = BoxEdges(0);
+        containerStyle.borderWidths = BoxEdges(0);
+        Style wrapStyle;
+        wrapStyle.padding = BoxEdges(0);
+        wrapStyle.borderWidths = BoxEdges(0);
+        wrapStyle.textLayoutStyle.textWrapping = TextWrap::WordChar;
+        const StyleRef containerRef = styleManager.Register(containerStyle);
+        const StyleRef wrapRef = styleManager.Register(wrapStyle);
+
+        ASSERT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        (void)storage.Add([&] { Element e; e.id = ID{ .value{.integer = 50} }; e.styleRef = containerRef; return e; }(),
+                    LayoutOverride::FixedWidth(80));
+        ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        auto wrapped = storage.Add(MakeTextElement(wrapRef, ID{ .value{.integer = 51} }, "A Much Longer Label That Should Wrap"));
+        ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        ASSERT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        layoutEngine.Layout(*osWindowManager, storage);
+        EXPECT_EQ(storage.GetElementRectUnsafe(wrapped.ref).rect.h, 4 * kLineHeight);
     }
 
     // An explicitly fixed-height text element has the requested height even though

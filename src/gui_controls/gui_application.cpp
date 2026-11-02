@@ -260,6 +260,30 @@ namespace tachyon
             m_gridItemRenameByID.clear();
         });
         // Scrims go over windows once everything in them is declared.
+        // The toasts over everything their window built, wherever in it Toasts was called; a
+        // modal's scrim, after them, still dims them.
+        m_frame.OnPostConstruct([this](FrameContext&)
+        {
+            if (!std::exchange(m_toastsBuilt, false))
+                return;
+            ElementRef stack = elementStorage.FindElementRefByID(m_toastStackID);
+            if (!elementStorage.IsValidRef(stack))
+                return;
+            // Its window's last child, so the pointer finds it first; then drawn last.
+            const IndexRange siblings = elementStorage.GetChildRange(elementStorage.GetParentRef(stack));
+            if (!siblings.Empty() && stack.index + 1 < siblings.end)
+            {
+                ElementMove move;
+                if (elementStorage.MoveChild(stack.depth, siblings.begin, stack.index - siblings.begin,
+                                             siblings.end - 1 - siblings.begin, &move) == ElementStorageResult::Success)
+                {
+                    windowRegistry.ApplyElementMove(move);
+                    stack = elementStorage.FindElementRefByID(m_toastStackID);
+                }
+            }
+            if (elementStorage.IsValidRef(stack))
+                windowRegistry.MoveSubtreeToEnd(stack);
+        });
         m_frame.OnPostConstruct([this](FrameContext& ctx) { DrawScrims(ctx.elapsedTimeSecs); });
     }
 

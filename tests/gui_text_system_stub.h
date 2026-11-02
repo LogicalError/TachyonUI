@@ -431,7 +431,7 @@ namespace tachyon
             return TextMeasurement{
                 .minWidth = std::min<int32_t>(widestLine, static_cast<int32_t>(longestWord) * charWidth),
                 .maxWidth = widestLine,
-                .minHeight = m_defaultLineHeight,
+                .minHeight = height,   // laid out at maxWidth, as TextMeasurement says
                 .maxHeight = height
             };
         }
