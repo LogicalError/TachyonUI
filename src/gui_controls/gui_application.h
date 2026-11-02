@@ -325,6 +325,10 @@ namespace tachyon
 
         /// Call from OnGUI after the main docking container. Empty windows are closed.
         void EmitFloatingDockWindows();
+        /// With documents in several main windows: in each, after its Documents, the windows of
+        /// the panels torn from its documents. They belong to it, and to the window a document
+        /// is moved to.
+        void EmitFloatingDockWindows(const DocumentSet& documents);
         /// Moves a docked panel into its own window at a screen position, as tearing its tab
         /// off does; the window's Dock button returns it. False if the layout hasn't the panel.
         bool FloatPanel(DockingLayout& layout, ID panelID, int2 screenPos);
@@ -2462,10 +2466,23 @@ namespace tachyon
 
         std::vector<std::unique_ptr<FloatingDockWindow>> m_floatingDockWindows;
 
-        /// Document sets built this frame (cleared at frame start), for ActivateDocumentOf.
+        /// The floating windows of `documents` (all of them when null).
+        void EmitFloatingDockWindowsOf(const DocumentSet* documents);
+
+        /// Document sets built this frame (cleared at frame start): ActivateDocumentOf, and the
+        /// bars a dragged document drops on.
         std::vector<DocumentSet*> m_documentSetsThisFrame{};
         /// Shows the document of a set built this frame that owns `layout`; false when none does.
         bool ActivateDocumentOf(const DockingLayout* layout);
+        DocumentDrag m_documentDrag;   ///< the document tab being dragged, if any
+        std::vector<IntRect> m_documentBarRects;   ///< last frame's document bars, screen pixels
+        std::optional<DocumentMove> m_documentMove;   ///< a drop, done at the next frame's start
+        /// Moves or tears off the dropped document (m_documentMove); at frame start.
+        void ApplyDocumentMove();
+        /// After layout: each set's bar and tab rects, for next frame's drops.
+        void SyncDocumentRects();
+        /// The set whose bar is at `screenPos` (last frame's rects); null when none is.
+        DocumentSet* FindDocumentBarAt(tachyon::int2 screenPos);
 
         /// Debug asserts for Begin*/End* stacks left unbalanced at frame end. Also used by the headless tests.
         void RegisterFrameHooks();   // per-frame stage hooks; Initialize (and test harnesses) call it

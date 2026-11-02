@@ -118,11 +118,18 @@ namespace tachyon
         for (size_t i = 0; i < m_tabBarState.shown.size(); ++i)
             if (m_tabBarState.shown[i])
                 order.push_back(int(i));
+        auto tabIndex = [order](int i) { return i >= 0 && i < int(order.size()) ? order[size_t(i)] : i; };
+        // The group counts what follows the tabs too ("+N", or a caller's button): dropped past
+        // the last tab, a tab goes to the last slot.
+        if (onReorder)
+            onReorder = [this, id, inner = std::move(onReorder), order, tabIndex](int from, int to)
+            {
+                const int slots = order.empty() ? guiStateManager.GetElementDataStore().GetOrCreate<TabBarMemory>(id).tabCount
+                                                : int(order.size());
+                inner(tabIndex(from), tabIndex(std::min(to, slots - 1)));
+            };
         if (!order.empty())
         {
-            auto tabIndex = [order](int i) { return i >= 0 && i < int(order.size()) ? order[size_t(i)] : i; };
-            if (onReorder)
-                onReorder = [inner = std::move(onReorder), tabIndex](int from, int to) { inner(tabIndex(from), tabIndex(to)); };
             if (onDragOut)
                 onDragOut = [inner = std::move(onDragOut), tabIndex](int i, int2 at) { inner(tabIndex(i), at); };
             if (dragVisualizer)
@@ -132,6 +139,7 @@ namespace tachyon
         const bool open = BeginReorderableGroup(id, ReorderDirection::Horizontal, /*isWrapped*/ rows,
                                                 std::move(onReorder), style, std::move(constraints),
                                                 std::move(onDragOut), std::move(dragVisualizer));
+        m_reorderable->Construction().dropAreaID = options.dropArea;
         if (const ElementRef barRef = elementStorage.FindElementRefByID(id); barRef.IsValid())
             [[maybe_unused]] auto added = elementStorage.AddPostLayout(barRef, [this, id](PostLayoutContext& ctx)
                 { guiStateManager.GetElementDataStore().GetOrCreate<TabBarMemory>(id).barWidth = ctx.ElementInnerRect().w; });

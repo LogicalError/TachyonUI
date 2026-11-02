@@ -27,7 +27,7 @@ namespace tachyon
         tachyon::ID  groupID       = tachyon::ID::Invalid();
         int      draggedIndex   = -1;   ///< slot the item was dragged from
         int      insertionIndex = -1;   ///< slot it would drop into
-        int      itemCount      = 0;
+        int      itemCount      = 0;    ///< the group's items, the slots (other children aren't)
         std::vector<tachyon::IntRect> originalRects; ///< item rects at drag start, layout space
         /// Child IDs at drag start, in slot order, so MouseUp can resolve slots by ID
         /// (storage is already visually reordered by then).
@@ -58,6 +58,9 @@ namespace tachyon
         std::function<void(int, tachyon::int2)>       dragVisualizer;
         int                          nextItemIndex = 0;
         tachyon::ElementRef              groupRef      = tachyon::ElementRef::Invalid();
+        /// Counts as the group while an item is dragged (a tab bar's TabBarOptions::dropArea);
+        /// Invalid: the group.
+        tachyon::ID                      dropAreaID    = tachyon::ID::Invalid();
         std::vector<tachyon::ElementRef> itemRefs;
         /// Alt + an arrow along the group with the focus in item `keyboardFrom`: moved by
         /// `keyboardStep` in EndReorderableGroup, after the caller's items are built.

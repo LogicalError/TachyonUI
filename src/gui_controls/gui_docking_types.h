@@ -31,6 +31,9 @@ namespace tachyon
         /// way; what it adds after the tabs is left room for (TabBarMemory::trailingWidth).
         bool listHidden = true;
         bool layoutMenu = true;  ///< the context menus offer Collapse Rows / Multiple Rows
+        /// An element around the bar (its row, say) that counts as the bar while a tab is
+        /// dragged: in it the tab reorders, and only off it is it dragged out. Invalid: the bar.
+        tachyon::ID dropArea = tachyon::ID::Invalid();
     };
 
     /// Construction state of the current tab bar; internal.
@@ -204,10 +207,42 @@ namespace tachyon
         /// Asked before a document is closed from its tab: false keeps it open (to ask about
         /// unsaved changes first, then CloseDocument). Unset: it closes.
         std::function<bool(Document&)> onClose;
+        /// A tab dropped outside every document bar: the document, taken out of the set, for a
+        /// new main window (its own DocumentSet) at the screen position the tab was dropped
+        /// at. Unset: the tab goes back.
+        std::function<void(std::unique_ptr<Document>, tachyon::int2)> onTearOff;
 
         /// The shown document; null when there are none.
         Document*       Active()       { return active >= 0 && active < int(documents.size()) ? documents[size_t(active)].get() : nullptr; }
         const Document* Active() const { return active >= 0 && active < int(documents.size()) ? documents[size_t(active)].get() : nullptr; }
+
+        /// Kept by the documents; not part of the API.
+        struct Internal
+        {
+            tachyon::ID barID    = tachyon::ID::Invalid();  ///< the bar, a drop target for documents
+            tachyon::ID tabBarID = tachyon::ID::Invalid();
+            tachyon::ID hostWindowID = tachyon::ID::Invalid();  ///< the OS window it's in
+            tachyon::IntRect barRect {};          ///< last frame's, in screen pixels
+            std::vector<tachyon::IntRect> tabRects;   ///< by document; empty for one left out
+        } internal;  ///< not part of the API
+    };
+
+    /// A document tab being dragged, for the document bars it passes over; internal.
+    struct DocumentDrag {
+        Document*    document = nullptr;
+        DocumentSet* source   = nullptr;
+        int32_t      tabWidth = 0;   ///< pixels
+        int32_t      grabOffset = 0; ///< from the tab's left edge to where it was pressed, pixels
+    };
+
+    /// A document dropped on another bar or torn off, done at the start of the next frame;
+    /// internal.
+    struct DocumentMove {
+        Document*     document = nullptr;
+        DocumentSet*  source   = nullptr;
+        DocumentSet*  target   = nullptr;   ///< null: torn off
+        int           index    = 0;         ///< where in the target
+        tachyon::int2 screenPos {};
     };
 
     /// @}

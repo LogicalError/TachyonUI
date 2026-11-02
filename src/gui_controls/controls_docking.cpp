@@ -642,16 +642,21 @@ namespace tachyon
     bool GUIApplication::BeginDockingFrame()
     {
         m_dockingLayoutsThisFrame.clear();
-        m_documentSetsThisFrame.clear();
         m_toolbarDocksThisFrame.clear();
         if (!m_reorderable->Drag().IsPressed())
+        {
             m_dockTabDragSub->Info() = {};
+            m_documentDrag = {};
+        }
+        ApplyDocumentMove();   // last frame's sets are still alive: nothing has been built yet
+        m_documentSetsThisFrame.clear();
         return true;
     }
 
     void GUIApplication::EndDockingFrame()
     {
         SyncDockingScrollOffsets();
+        SyncDocumentRects();
         SyncToolbarDockRects();
     }
 
@@ -1010,9 +1015,34 @@ namespace tachyon
 
     void GUIApplication::EmitFloatingDockWindows()
     {
+        EmitFloatingDockWindowsOf(nullptr);
+    }
+
+    void GUIApplication::EmitFloatingDockWindows(const DocumentSet& documents)
+    {
+        EmitFloatingDockWindowsOf(&documents);
+    }
+
+    void GUIApplication::EmitFloatingDockWindowsOf(const DocumentSet* documents)
+    {
+        // A set's: those torn from its documents, wherever they were torn from since.
+        auto ofSet = [documents](const FloatingDockWindow& fw)
+        {
+            if (!documents)
+                return true;
+            for (const auto& document : documents->documents)
+                if (fw.home == &document->layout)
+                    return true;
+            return false;
+        };
         for (size_t i = 0; i < m_floatingDockWindows.size(); )
         {
             auto& fw = *m_floatingDockWindows[i];
+            if (!ofSet(fw))
+            {
+                ++i;
+                continue;
+            }
             if (fw.dockRequested)
                 DockFloatingWindow(fw);
 

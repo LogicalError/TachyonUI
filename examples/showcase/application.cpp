@@ -124,19 +124,7 @@ namespace tachyon
         CreateDocument(showcase.documents, "Hud", ".layout", "layout", showcase.documentLayoutIcon);
         CreateDocument(showcase.documents, "Rock", ".prefab", "prefab", showcase.documentPrefabIcon);
         CreateDocument(showcase.documents, "Walk", ".anim", "animation", showcase.documentAnimationIcon);
-        showcase.documents.onNew = [this] {
-            Document& created = CreateDocument(showcase.documents, std::format("Untitled {}", ++showcase.untitledCount),
-                                               ".level", "level", showcase.documentLevelIcon);
-            FillDocument(created, "Viewport", "Inspector");
-            showcase.documents.active = int(showcase.documents.documents.size()) - 1;
-        };
-        // An unsaved document asks first; the dialog closes it (AskBeforeClosingDocument).
-        showcase.documents.onClose = [this](Document& document) {
-            if (!document.dirty)
-                return true;
-            showcase.closingDocument = &document;
-            return false;
-        };
+        SetUpDocuments(showcase.documents);
 
         showcase.smallMenuID = idManager.CreateStaticID();
         showcase.bigMenuID = idManager.CreateStaticID();
@@ -1041,7 +1029,7 @@ namespace tachyon
 
     // Title bar with the main menu and the command search. Most items only log;
     // Theme and Zoom reload the theme and Exit ends the run loop.
-    void Application::RenderMainMenu()
+    void Application::RenderMainMenu(bool withSearch)
     {
         BeginTitleBar(idManager.AllocateDynamicID("mainMenuBar"));
 
@@ -1145,12 +1133,15 @@ namespace tachyon
         }
         EndMenu();
 
-        // The command search, centred in the space after the menus.
+        // The command search, centred in the space after the menus (one window has it).
         BeginHorizontal(LayoutOverride::Auto().FlexGrow(1));
         EndHorizontal();
-        CommandSearch(showcase.commandSearch);
-        BeginHorizontal(LayoutOverride::Auto().FlexGrow(1));
-        EndHorizontal();
+        if (withSearch)
+        {
+            CommandSearch(showcase.commandSearch);
+            BeginHorizontal(LayoutOverride::Auto().FlexGrow(1));
+            EndHorizontal();
+        }
         StatusText("Test");
 
         EndTitleBar();
@@ -1228,12 +1219,93 @@ namespace tachyon
         document.layout.root = MakeSplit(DockSplitMode::RightPinned, 420, MakeLeaf({ mainID }), MakeLeaf({ sideID }));
     }
 
-    void Application::AskBeforeClosingDocument()
+    void Application::SetUpDocuments(DocumentSet& documents)
+    {
+        DocumentSet* const set = &documents;
+        documents.onNew = [this, set] {
+            Document& created = CreateDocument(*set, std::format("Untitled {}", ++showcase.untitledCount),
+                                               ".level", "level", showcase.documentLevelIcon);
+            FillDocument(created, "Viewport", "Inspector");
+            set->active = int(set->documents.size()) - 1;
+        };
+        // An unsaved document asks first; the dialog closes it (AskBeforeClosingDocument).
+        documents.onClose = [this, set](Document& document) {
+            if (!document.dirty)
+                return true;
+            showcase.closingDocument = &document;
+            showcase.closingSet      = set;
+            return false;
+        };
+        // Dropped off every bar: a main window of its own, its top left a little up and left
+        // of where the tab was dropped, so the tab lands near the cursor.
+        documents.onTearOff = [this](std::unique_ptr<Document> document, int2 at) {
+            auto window = std::make_unique<DocumentWindow>();
+            window->windowID      = idManager.CreateStaticID();
+            window->documentsID   = idManager.CreateStaticID();
+            window->spawnPosition = at - int2{ styleManager.Px(80), styleManager.Px(52) };
+            SetUpDocuments(window->documents);
+            window->documents.documents.push_back(std::move(document));
+            showcase.documentWindows.push_back(std::move(window));
+        };
+    }
+
+    void Application::RenderDocumentWindows()
+    {
+        for (size_t i = 0; i < showcase.documentWindows.size(); )
+        {
+            DocumentWindow& window = *showcase.documentWindows[i];
+            // Left with no documents, it closes; closed, its documents go back to the main window.
+            bool open = !window.documents.documents.empty();
+            if (open)
+            {
+                const Document* document = window.documents.Active();
+                const std::string title = document ? document->name + document->extension + " - Test" : std::string("Test");
+                auto constraints = LayoutOverride::FixedSize(1200, 760);
+                if (!window.positioned)
+                {
+                    constraints.x = PositionConstraintAxis::Fixed(static_cast<int16_t>(window.spawnPosition.x));
+                    constraints.y = PositionConstraintAxis::Fixed(static_cast<int16_t>(window.spawnPosition.y));
+                    window.positioned = true;
+                }
+                open = BeginWindow(window.windowID, title, theme.mainWindowStyleRef, std::move(constraints),
+                                   ElementFlags::WindowUserControlled | ElementFlags::WindowCustomTitleBar);
+                if (open)
+                {
+                    RenderMainMenu(/*withSearch*/ false);
+                    AskBeforeClosingDocument(window.documents);
+                    Documents(window.documentsID, window.documents);
+                    RenderStatusBar(window.documents);
+                    EmitFloatingDockWindows(window.documents);
+                }
+                EndWindow();
+            }
+            if (open)
+            {
+                ++i;
+                continue;
+            }
+            while (!window.documents.documents.empty())
+            {
+                if (showcase.mainWindowOpen)
+                {
+                    showcase.documents.documents.push_back(std::move(window.documents.documents.front()));
+                    window.documents.documents.erase(window.documents.documents.begin());
+                }
+                else
+                    CloseDocument(window.documents, 0);
+            }
+            idManager.ReleaseStaticID(window.windowID);
+            idManager.ReleaseStaticID(window.documentsID);
+            showcase.documentWindows.erase(showcase.documentWindows.begin() + ptrdiff_t(i));
+        }
+    }
+
+    void Application::AskBeforeClosingDocument(DocumentSet& set)
     {
         Document* const document = showcase.closingDocument;
-        if (!document)
+        if (!document || showcase.closingSet != &set)
             return;
-        auto& documents = showcase.documents.documents;
+        auto& documents = set.documents;
         const auto it = std::find_if(documents.begin(), documents.end(), [document](const auto& d) { return d.get() == document; });
         if (it == documents.end())
         {
@@ -1249,13 +1321,13 @@ namespace tachyon
             .icon = MessageIcon::Warning, .title = title, .message = "It has unsaved changes. Closing it discards them.",
             .buttons = kButtons, .defaultButton = 0, .cancelButton = 0 });
         if (choice == 1)
-            CloseDocument(showcase.documents, int(it - documents.begin()));
+            CloseDocument(set, int(it - documents.begin()));
         if (choice >= 0)
             showcase.closingDocument = nullptr;
     }
 
     // Status bar: state on the left, frame time on the right.
-    void Application::RenderStatusBar()
+    void Application::RenderStatusBar(const DocumentSet& documents)
     {
         std::array<FrameTimingSample, kFrameHistoryCount> history{};
         GetFrameTimingHistory(history);
@@ -1267,7 +1339,7 @@ namespace tachyon
 
         BeginStatusBar(idManager.AllocateDynamicID("statusBar"));
         StatusText("Ready");
-        const Document* document = showcase.documents.Active();
+        const Document* document = documents.Active();
         StatusText(document ? document->name + document->extension : std::string(), LayoutOverride::Auto().FlexGrow(1));
         StatusText(std::format("{:.2f} ms \u00B7 {:.0f} fps", frameMs, frameMs > 0.0f ? 1000.0f / frameMs : 0.0f));
         EndStatusBar();
@@ -1278,9 +1350,13 @@ namespace tachyon
         auto&& sizeConstraints = LayoutOverride::FixedSize(1700, 900);
         
         {
-            static bool mainWindowClosed = false;
-            // Closed by the user; reset mainWindowClosed to reopen.
-            if (!mainWindowClosed)
+            // Closed by the user, or left without documents while another window has some.
+            if (showcase.mainWindowOpen && showcase.documents.documents.empty() && !showcase.documentWindows.empty())
+            {
+                showcase.mainWindowOpen = false;
+                windowManager->RequestCloseAllowReopen(showcase.windowLayoutID2);
+            }
+            if (showcase.mainWindowOpen)
             {
                 // The window's title names the active document.
                 const Document* document = showcase.documents.Active();
@@ -1399,24 +1475,25 @@ namespace tachyon
                                     }
                         }
 
-                        AskBeforeClosingDocument();
+                        AskBeforeClosingDocument(showcase.documents);
                         Documents(showcase.documentsID, showcase.documents);
                     }
 
-                    RenderStatusBar();
+                    RenderStatusBar(showcase.documents);
 
                     // Must be emitted inside the main window's scope so main becomes
                     // their OS owner; otherwise SDL's hidden helper owns them and they
-                    // die when it is torn down.
-                    EmitFloatingDockWindows();
+                    // die when it is torn down. The other windows emit their documents' own.
+                    EmitFloatingDockWindows(showcase.documents);
                     EmitFloatingToolbarWindows(toolbars.floatingItems, &toolbarOpts);
                 } else
                 {
                     // BeginWindow returned false - window is closing
-                    mainWindowClosed = true;
+                    showcase.mainWindowOpen = false;
                 }
                 EndWindow();
             }
         }
+        RenderDocumentWindows();
     }
 }

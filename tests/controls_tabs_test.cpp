@@ -523,6 +523,30 @@ namespace tachyon
             EXPECT_NE(Overflow(), ID::Invalid());
         }
 
+        // Dropped past "+N", a tab goes to the last slot of the bar, not back.
+        TEST_F(TabOverflowTest, ATabDroppedPastTheListGoesLast)
+        {
+            std::pair<int, int> moved{ -1, -1 };
+            onReorder = [&](int from, int to) { moved = { from, to }; };
+            Settle();
+            const std::vector<int> shown = Shown();
+            const ID overflow = Overflow();
+            ASSERT_NE(overflow, ID::Invalid());
+            const IntRect list = app.GetElementRect(overflow);
+            const int2 from = app.CenterOf(tabIDs[0]);
+            const int2 to{ list.x + list.w + 2, list.y + list.h / 2 };
+            app.InjectMouseMove(from);
+            app.InjectMouseDown(from);
+            Frame();
+            app.InjectMouseMove({ from.x + 10, from.y }, MouseButtons::Left);
+            Frame();
+            app.InjectMouseMove(to, MouseButtons::Left);
+            Frame();
+            app.InjectMouseUp(to);
+            Frame();
+            EXPECT_EQ(moved, (std::pair<int, int>{ 0, shown.back() }));
+        }
+
         TEST_F(TabOverflowTest, PickingFromTheListSelectsAndShowsTheTab)
         {
             Settle();

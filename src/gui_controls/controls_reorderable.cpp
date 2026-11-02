@@ -83,6 +83,7 @@ namespace tachyon
         // Capture by value: construction state is reset in EndReorderableGroup, before input dispatch.
         tachyon::ID groupID = m_reorderable->Construction().groupID;
         tachyon::ElementRef groupRef = m_reorderable->Construction().groupRef;
+        const ID dropAreaID = m_reorderable->Construction().dropAreaID;
         auto onReorder = m_reorderable->Construction().onReorder;
         auto onDragOut = m_reorderable->Construction().onDragOut;
         ReorderDirection direction = m_reorderable->Construction().direction;
@@ -94,7 +95,7 @@ namespace tachyon
             .styleRef = style,
         };
         item.state = guiStateManager.GetCurrentState(id);
-        item.eventHandler = [this, groupID, id, itemIndex, direction, isWrapped, groupRef, onReorder, onDragOut]
+        item.eventHandler = [this, groupID, id, itemIndex, direction, isWrapped, groupRef, dropAreaID, onReorder, onDragOut]
             (tachyon::ElementEvent&& event) -> bool
         {
             int mainAxis = (direction == ReorderDirection::Horizontal) ? 0 : 1;
@@ -122,9 +123,13 @@ namespace tachyon
                     drag.itemCount = static_cast<int>(childRange.Size());
                     drag.direction = direction;
 
-                    // Snapshot group rect for drag-out detection
+                    // Snapshot group rect for drag-out detection; a drop area around the group
+                    // counts as the group.
                     auto* groupRectPtr = elementStorage.GetElementRectPtr(groupRef);
                     if (groupRectPtr) drag.groupRect = groupRectPtr->rect;
+                    if (dropAreaID != ID::Invalid())
+                        if (const auto* areaPtr = elementStorage.GetElementRectPtr(elementStorage.FindElementRefByID(dropAreaID)))
+                            drag.groupRect = areaPtr->rect;
 
                     drag.originalRects.clear();
                     drag.originalRects.reserve(childRange.Size());
@@ -253,7 +258,8 @@ namespace tachyon
                         }
                     }
 
-                    newInsertionIndex = std::clamp(newInsertionIndex, 0, count - 1);
+                    // Only items are slots: past the last one (over a "+" after them, say), the last.
+                    newInsertionIndex = std::clamp(newInsertionIndex, 0, std::min(count, drag.itemCount) - 1);
                     drag.insertionIndex = newInsertionIndex;
                     return true;
                 }
@@ -430,6 +436,8 @@ namespace tachyon
         auto& drag = m_reorderable->Drag();
         // The item list can change under a drag (data edited mid-drag): only touch slots that still exist.
         const size_t itemCount = m_reorderable->Construction().itemRefs.size();
+        if (drag.IsPressed() && drag.groupID == m_reorderable->Construction().groupID)
+            drag.itemCount = int(itemCount);
         if (drag.IsDragging() && drag.groupID == m_reorderable->Construction().groupID
             && !drag.originalRects.empty() && itemCount > 0
             && size_t(drag.draggedIndex) < itemCount && size_t(drag.insertionIndex) < itemCount
