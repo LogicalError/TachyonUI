@@ -10,6 +10,10 @@
 #include <gui_core/state/gui_state_manager.h>
 #include <gui_controls/gui_tooltip_manager.h>
 
+#include <functional>
+#include <optional>
+#include <string>
+
 namespace tachyon
 {
     using GUITest::HeadlessGUIApp;
@@ -674,6 +678,412 @@ namespace tachyon
             app.Frame(draw);
             app.Frame(draw);
             EXPECT_FALSE(app.menuManager.IsOpen());
+        }
+
+        // ---------------------------------------------------------------------
+        // Text cut short: shown whole, right over itself
+        // ---------------------------------------------------------------------
+
+        // The cut text, and the tooltip's box and text when it shows (empty when not).
+        struct Expansion
+        {
+            IntRect cut{}, box{}, text{};
+            std::string shown;
+            StyleRef style{};
+            IconID icon = IconID::Invalid;
+        };
+
+        // Builds the frame with `build` (which says what to point at, and the text that may be
+        // cut), points `at` that far into what to point at (its middle when unset), and waits
+        // past the delay.
+        // `inRootWindow` false: `build` makes windows of its own, after the root window.
+        Expansion PointAtCutText(HeadlessGUIApp& app, const std::function<void(ID& pointAt, ID& cut)>& build,
+                                 std::optional<int2> at = std::nullopt, bool inRootWindow = true)
+        {
+            ID pointAt = ID::Invalid(), cut = ID::Invalid();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    if (inRootWindow)
+                        build(pointAt, cut);
+                    app.EndRootWindow();
+                    if (!inRootWindow)
+                        build(pointAt, cut);
+                });
+            };
+            frame();
+            app.InjectMouseMove(at ? app.GetElementRect(pointAt).position + *at : app.CenterOf(pointAt));
+            for (int i = 0; i < 8; ++i) { app.AdvanceTime(100); frame(); }
+
+            Expansion e;
+            e.cut = app.GetElementRect(cut);
+            const ElementRef window = app.elementStorage.FindElementRefByID(app.tooltipWindowID);
+            if (!window.IsValid() || app.elementStorage.GetChildrenSpan(window).empty())
+                return e;
+            const ElementRef box = app.elementStorage.FindElementRefByID(app.elementStorage.GetChildrenSpan(window)[0].id);
+            if (app.elementStorage.GetChildrenSpan(box).empty())
+                return e;
+            const Element& text = app.elementStorage.GetChildrenSpan(box)[0];
+            e.box   = app.elementStorage.GetElementRectPtr(box)->rect;
+            e.text  = app.GetElementRect(text.id);
+            e.shown = std::string(app.TextOf(text.id));
+            e.style = text.styleRef;
+            e.icon  = text.iconID;
+            return e;
+        }
+
+        // A label of `style` (the theme's when unset), `width` wide (and `height` high, when
+        // set), `indent` from the left.
+        void CutLabel(HeadlessGUIApp& app, std::string_view text, int width, ID& id, StyleRef style = {}, int indent = 0,
+                      int height = 0)
+        {
+            app.BeginHorizontal(app.idManager.AllocateDynamicID("line"), app.theme.emptyHorzStyleRef);
+            app.BeginHorizontal(app.idManager.AllocateDynamicID("indent"), app.theme.emptyHorzStyleRef, LayoutOverride{}.Width(Pixels{ indent }));
+            app.EndHorizontal();
+            id = app.idManager.AllocateDynamicID("cut");
+            app.Label(id, text, style == StyleRef{} ? app.theme.labelStyleRef : style,
+                      height > 0 ? LayoutOverride{}.Size(width, height) : LayoutOverride{}.Width(width));
+            app.EndHorizontal();
+        }
+
+        // A one-line style padded 8 px each side, its text cut short at its box, aligned as `align`.
+        StyleRef AlignedStyle(HeadlessGUIApp& app, TextAlign align)
+        {
+            Style s{};
+            s.padding.left = 8;
+            s.padding.right = 8;
+            s.SetOverflow(Overflow::Hidden);
+            s.textLayoutStyle.textWrapping = TextWrap::NoWrap;
+            s.textLayoutStyle.textOverflow = TextOverflow::Ellipsis;
+            s.textLayoutStyle.horizontalAlignment = align;
+            return app.styleManager.Register(s);
+        }
+
+        constexpr std::string_view kLongName = "UpdateLayoutWhenDirty";   // 21 characters, 168 px
+
+        // An ellipsis: the whole text, its first letter where the cut one's is, as high and on
+        // its row, in its font and the tooltip's colors, in a box 1 px border and 6 px padding
+        // around it.
+        TEST_F(ControlsTooltipTest, TextCutShortShowsWholeRightOverItself)
+        {
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                CutLabel(app, kLongName, 80, cut, {}, 0, 24);   // taller than its text
+                at = cut;
+            });
+            ASSERT_EQ(e.shown, kLongName);
+            ASSERT_EQ(e.cut.h, 24);
+            EXPECT_EQ(e.text.x, e.cut.x + 8) << "where the label's padding puts its text";
+            EXPECT_EQ(e.text.y, e.cut.y);
+            EXPECT_EQ(e.text.h, e.cut.h) << "its row's height, so the text sits as high";
+            EXPECT_EQ(e.text.w, int(kLongName.size()) * 8) << "all of it";
+            EXPECT_EQ(e.box.x, e.text.x - 7);
+            EXPECT_EQ(e.box.y, e.text.y - 1);
+            EXPECT_EQ(e.box.h, e.text.h + 2);
+
+            const VisualTextStyle* shown = app.styleManager.GetVisualTextStyle(e.style.visualTextStyleIndex, ElementState::None);
+            const VisualTextStyle* label = app.styleManager.GetVisualTextStyle(app.theme.labelStyleRef.visualTextStyleIndex, ElementState::Hover);
+            const VisualTextStyle* tip   = app.styleManager.GetVisualTextStyle(app.theme.tooltipExpandTextStyleRef.visualTextStyleIndex, ElementState::None);
+            ASSERT_TRUE(shown && label && tip);
+            EXPECT_EQ(shown->textStyle, label->textStyle) << "the label's font, as it is hovered";
+            EXPECT_EQ(shown->textColorIndex, tip->textColorIndex) << "the tooltip's text color";
+            const LayoutStyle* layout = app.styleManager.GetLayoutStyle(e.style.layoutStyleIndex);
+            ASSERT_NE(layout, nullptr);
+            EXPECT_EQ(layout->textLayoutStyle.textOverflow, TextOverflow::Clip) << "not cut short again";
+        }
+
+        // Text that fits shows nothing.
+        TEST_F(ControlsTooltipTest, TextThatFitsShowsNothing)
+        {
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                CutLabel(app, kLongName, 200, cut);
+                at = cut;
+            });
+            EXPECT_TRUE(e.shown.empty());
+            EXPECT_EQ(app.CountByText(kLongName), 1);
+        }
+
+        // A tooltip of its own shows instead.
+        TEST_F(ControlsTooltipTest, ATooltipOfItsOwnShowsInstead)
+        {
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                CutLabel(app, kLongName, 80, cut);
+                app.SetTooltip(cut, "Lays out what changed");
+                at = cut;
+            });
+            EXPECT_NE(app.FindByText("Lays out what changed"), ID::Invalid());
+            EXPECT_EQ(app.CountByText(kLongName), 1);
+        }
+
+        // Cut by a box around it, not its own: a row in a narrow panel.
+        TEST_F(ControlsTooltipTest, TextCutByABoxAroundItShowsToo)
+        {
+            Style clip{};
+            clip.SetOverflow(Overflow::Hidden);
+            const StyleRef panel = app.styleManager.Register(clip);
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                app.BeginHorizontal(app.idManager.AllocateDynamicID("panel"), panel, LayoutOverride{}.Width(90));
+                CutLabel(app, kLongName, 200, cut);
+                app.EndHorizontal();
+                at = cut;
+            }, int2{ 30, 8 });
+            ASSERT_EQ(e.shown, kLongName);
+            EXPECT_EQ(e.text.x, e.cut.x + 8);
+        }
+
+        // A part of what is pointed at, the one under the pointer: a row's name, not its type.
+        TEST_F(ControlsTooltipTest, ThePartUnderThePointerShows)
+        {
+            ID name = ID::Invalid(), type = ID::Invalid();
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                at = app.idManager.AllocateDynamicID("row");
+                app.BeginHorizontal(at, app.theme.emptyHorzStyleRef);
+                name = app.idManager.AllocateDynamicID("name");
+                type = app.idManager.AllocateDynamicID("type");
+                app.RegisterElement(Element{ .id = name, .styleRef = app.theme.labelStyleRef, .flags = ElementFlags::NoInput },
+                                    kLongName, LayoutOverride{}.Width(80));
+                app.RegisterElement(Element{ .id = type, .styleRef = app.theme.labelStyleRef, .flags = ElementFlags::NoInput },
+                                    "MeshRendererComponent", LayoutOverride{}.Width(80));
+                app.EndHorizontal();
+                cut = type;
+            }, int2{ 120, 8 });   // into the second
+            EXPECT_EQ(e.shown, "MeshRendererComponent");
+            EXPECT_EQ(e.text.x, e.cut.x + 8);
+        }
+
+        // Aligned to its end, the ends line up; centered, the middles. (Away from the screen's
+        // left edge, which the whole text would reach past.)
+        TEST_F(ControlsTooltipTest, CutTextLinesUpOnTheSideItsAlignedTo)
+        {
+            const StyleRef end = AlignedStyle(app, TextAlign::End);
+            Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) { CutLabel(app, kLongName, 80, cut, end, 300); at = cut; });
+            ASSERT_EQ(e.shown, kLongName);
+            EXPECT_EQ(e.text.Max(0), e.cut.Max(0) - 8);
+
+            HeadlessGUIApp centered;
+            ASSERT_TRUE(centered.Initialize());
+            const StyleRef middle = AlignedStyle(centered, TextAlign::Center);
+            e = PointAtCutText(centered, [&](ID& at, ID& cut) { CutLabel(centered, kLongName, 80, cut, middle, 300); at = cut; });
+            ASSERT_EQ(e.shown, kLongName);
+            EXPECT_EQ(e.text.x + e.text.w / 2, e.cut.x + e.cut.w / 2);
+            centered.Cleanup();
+        }
+
+        // Near the screen's right edge the box stays on it, the text moved in as far as it must.
+        TEST_F(ControlsTooltipTest, CutTextNearTheScreensEdgeStaysOnIt)
+        {
+            const IntRect screen = app.windowManager->GetMonitorArea(0);
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                CutLabel(app, "UpdateLayoutWhenDirtyAndRedrawTheWindow", 80, cut, {}, 1600);   // 312 px, past 1920
+                at = cut;
+            });
+            ASSERT_EQ(e.shown, "UpdateLayoutWhenDirtyAndRedrawTheWindow");
+            ASSERT_GT(e.cut.x + 8 + 312, screen.Max(0)) << "it would reach past the edge";
+            EXPECT_EQ(e.box.Max(0), screen.Max(0));
+            EXPECT_EQ(e.text.y, e.cut.y) << "still on its row";
+        }
+
+        // ... and at the left and bottom edges.
+        TEST_F(ControlsTooltipTest, CutTextNearTheLeftAndBottomEdgesStaysOnTheScreen)
+        {
+            const IntRect screen = app.windowManager->GetMonitorArea(0);
+            const StyleRef end = AlignedStyle(app, TextAlign::End);
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                app.BeginVertical(app.idManager.AllocateDynamicID("column"), app.theme.emptyVertStyleRef);
+                app.BeginVertical(app.idManager.AllocateDynamicID("spacer"), app.theme.emptyVertStyleRef,
+                                  LayoutOverride{}.Height(Pixels{ screen.h - 26 }));   // its foot under the window's edge
+                app.EndVertical();
+                CutLabel(app, kLongName, 80, cut, end);
+                app.EndVertical();
+                at = cut;
+            }, int2{ 40, 3 });
+            ASSERT_EQ(e.shown, kLongName);
+            ASSERT_LT(e.cut.Max(0) - 8 - 168, screen.x) << "it would reach past the left";
+            ASSERT_GT(e.cut.Max(1) + 1, screen.Max(1)) << "... and the bottom";
+            EXPECT_EQ(e.box.x, screen.x);
+            EXPECT_EQ(e.box.Max(1), screen.Max(1));
+        }
+
+        // An icon before the text counts: the text alone would fit. The icon shows with it.
+        // Above the text, it doesn't make it wider.
+        TEST_F(ControlsTooltipTest, AnIconBesideTheTextCountsAndShowsWithIt)
+        {
+            const IconID icon = app.textSystem->RegisterIconFromSVG("mesh", "", 0);
+            const LayoutStyle* label = app.styleManager.GetLayoutStyle(app.theme.labelStyleRef.layoutStyleIndex);
+            ASSERT_NE(label, nullptr);
+            const int beside = 16 + 8 + label->iconTextGap + 32 + 4;   // 4 px short of the icon, the gap and "Mesh"
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                at = cut = app.idManager.AllocateDynamicID("cut");
+                app.RegisterElement(Element{ .id = cut, .iconID = icon, .styleRef = app.theme.labelStyleRef }, "Mesh",
+                                    LayoutOverride{}.Width(beside));
+            });
+            ASSERT_EQ(e.shown, "Mesh");
+            EXPECT_EQ(e.icon, icon);
+            EXPECT_EQ(e.text.w, 16 + label->iconTextGap + 32);
+
+            HeadlessGUIApp tiles;
+            ASSERT_TRUE(tiles.Initialize());
+            Style s{};
+            s.padding.left = 8;
+            s.padding.right = 8;
+            s.SetOverflow(Overflow::Hidden);
+            s.iconSide = IconSide::Top;
+            s.textLayoutStyle.textOverflow = TextOverflow::Ellipsis;
+            const StyleRef tile = tiles.styleManager.Register(s);
+            const IconID tileIcon = tiles.textSystem->RegisterIconFromSVG("mesh", "", 0);
+            const Expansion t = PointAtCutText(tiles, [&](ID& at, ID& cut) {
+                at = cut = tiles.idManager.AllocateDynamicID("tile");
+                tiles.RegisterElement(Element{ .id = cut, .iconID = tileIcon, .styleRef = tile }, "Mesh",
+                                      LayoutOverride{}.Width(16 + 32));
+            });
+            EXPECT_TRUE(t.shown.empty()) << "the icon above: as wide as the text";
+            tiles.Cleanup();
+        }
+
+        // Focused with the keyboard, a control's cut text shows at once, the pointer elsewhere:
+        // a button's, in its middle, inside its border and at its padding.
+        TEST_F(ControlsTooltipTest, FocusedByTheKeyboardItShowsAtOnce)
+        {
+            ID button = ID::Invalid();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.BeginHorizontal(app.idManager.AllocateDynamicID("holder"), app.theme.emptyHorzStyleRef, LayoutOverride{}.Width(80));
+                    button = app.idManager.AllocateDynamicID("button");
+                    app.Button(button, std::string(kLongName), [] {});   // grows to fill the holder
+                    app.EndHorizontal();
+                    app.EndRootWindow();
+                });
+            };
+            app.InjectMouseMove({ 1500, 900 });
+            frame();
+            app.InjectKey(KeyCode::Tab);
+            frame();
+            frame();
+            ASSERT_EQ(app.guiStateManager.Interaction().GetFocusedID(), button);
+            ASSERT_EQ(app.CountByText(kLongName), 2) << "the button's, and shown whole";
+
+            const ElementRef window = app.elementStorage.FindElementRefByID(app.tooltipWindowID);
+            ASSERT_TRUE(window.IsValid());
+            const ElementRef box = app.elementStorage.FindElementRefByID(app.elementStorage.GetChildrenSpan(window)[0].id);
+            const Element& text = app.elementStorage.GetChildrenSpan(box)[0];
+            const IntRect shown = app.GetElementRect(text.id), cut = app.GetElementRect(button);
+            const LayoutStyle* buttonLayout = app.styleManager.GetLayoutStyle(app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(button)).styleRef.layoutStyleIndex);
+            const LayoutStyle* shownLayout  = app.styleManager.GetLayoutStyle(text.styleRef.layoutStyleIndex);
+            ASSERT_TRUE(buttonLayout && shownLayout);
+            const int border = buttonLayout->borderWidths.top;
+            ASSERT_GT(border, 0);
+            EXPECT_EQ(shown.x + shown.w / 2, cut.x + cut.w / 2);
+            EXPECT_EQ(shown.y, cut.y + border);
+            EXPECT_EQ(shown.h, cut.h - buttonLayout->borderWidths.Vertical());
+            EXPECT_EQ(shownLayout->padding.top, buttonLayout->padding.top) << "its text as high in it";
+            EXPECT_EQ(shownLayout->padding.bottom, buttonLayout->padding.bottom);
+        }
+
+        // Focused but out of sight (scrolled away), nothing shows.
+        TEST_F(ControlsTooltipTest, FocusedOutOfSightNothingShows)
+        {
+            Style clip{};
+            clip.SetOverflow(Overflow::Hidden);
+            const StyleRef panel = app.styleManager.Register(clip);
+            ID button = ID::Invalid();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.BeginHorizontal(app.idManager.AllocateDynamicID("panel"), panel, LayoutOverride{}.Width(60));
+                    app.BeginHorizontal(app.idManager.AllocateDynamicID("pad"), app.theme.emptyHorzStyleRef,
+                                        LayoutOverride{}.Width(100).FlexShrink(0));
+                    app.EndHorizontal();
+                    app.BeginHorizontal(app.idManager.AllocateDynamicID("holder"), app.theme.emptyHorzStyleRef,
+                                        LayoutOverride{}.Width(80).FlexShrink(0));
+                    button = app.idManager.AllocateDynamicID("button");
+                    app.Button(button, std::string(kLongName), [] {});
+                    app.EndHorizontal();
+                    app.EndHorizontal();
+                    app.EndRootWindow();
+                });
+            };
+            app.InjectMouseMove({ 1500, 900 });
+            frame();
+            app.InjectKey(KeyCode::Tab);
+            frame();
+            frame();
+            ASSERT_EQ(app.guiStateManager.Interaction().GetFocusedID(), button);
+            EXPECT_EQ(app.CountByText(kLongName), 1);
+        }
+
+        // Under a canvas's pan or zoom the text is drawn other than as laid out: nothing shows.
+        TEST_F(ControlsTooltipTest, UnderAPanOrZoomNothingShows)
+        {
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                const ElementRef canvas = app.RegisterElement(Element{ .id = app.idManager.AllocateDynamicID("canvas"),
+                                                                       .styleRef = app.theme.emptyVertStyleRef },
+                                                              LayoutOverride{}.Size(400, 100));
+                app.elementStorage.SetContentTransform(canvas, float3x2::Translate(3, 0));
+                ASSERT_EQ(app.elementStorage.BeginChildren(), ElementStorageResult::Success);
+                CutLabel(app, kLongName, 80, cut);
+                ASSERT_EQ(app.elementStorage.EndChildren(), ElementStorageResult::Success);
+                at = cut;
+            });
+            ASSERT_NE(e.cut.w, 0);
+            EXPECT_TRUE(e.shown.empty());
+        }
+
+        // In a style whose hovered state has another font, it's that font.
+        TEST_F(ControlsTooltipTest, CutTextShowsInItsFontAsItIsNow)
+        {
+            Style s{};
+            s.padding.left = 8;
+            s.padding.right = 8;
+            s.SetOverflow(Overflow::Hidden);
+            s.textLayoutStyle.textOverflow = TextOverflow::Ellipsis;
+            for (StyleState& state : s.states)
+                state.textStyle.fontSize = 13.0f;
+            s.states[ElementState::Hover].textStyle.fontSize = 17.0f;
+            const StyleRef style = app.styleManager.Register(s);
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) { CutLabel(app, kLongName, 80, cut, style); at = cut; });
+            ASSERT_EQ(e.shown, kLongName);
+            const VisualTextStyle* shown = app.styleManager.GetVisualTextStyle(e.style.visualTextStyleIndex, ElementState::None);
+            ASSERT_NE(shown, nullptr);
+            EXPECT_EQ(shown->textStyle.fontSize,
+                      app.styleManager.GetVisualTextStyle(style.visualTextStyleIndex, ElementState::Hover)->textStyle.fontSize);
+        }
+
+        // In a window of its own, away from the screen's corner.
+        TEST_F(ControlsTooltipTest, CutTextInAnotherWindowShowsOverItself)
+        {
+            const ID window = app.idManager.CreateStaticID();
+            app.mouseWindow = window;   // the pointer over it
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                if (app.BeginWindow(window, "Panel", app.theme.windowStyleRef, LayoutOverride{}.Position(400, 300).Size(300, 100)))
+                    CutLabel(app, kLongName, 80, cut);
+                app.EndWindow();
+                at = cut;
+            }, std::nullopt, false);
+            ASSERT_GT(e.cut.x, 300);
+            ASSERT_GT(e.cut.y, 250);
+            ASSERT_EQ(e.shown, kLongName);
+            EXPECT_EQ(e.text.x, e.cut.x + 8);
+            EXPECT_EQ(e.text.y, e.cut.y);
+        }
+
+        // A field's text scrolls in it, and text that wraps isn't cut: neither shows.
+        TEST_F(ControlsTooltipTest, FieldsAndWrappingTextShowNothing)
+        {
+            std::string value{ kLongName };
+            Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                app.BeginHorizontal(app.idManager.AllocateDynamicID("holder"), app.theme.emptyHorzStyleRef, LayoutOverride{}.Width(80));
+                app.Field(value);
+                cut = at = app.elementStorage.GetLastItemID();
+                app.EndHorizontal();
+            });
+            ASSERT_GT(int(kLongName.size()) * 8, e.cut.w) << "its text cut";
+            EXPECT_TRUE(e.shown.empty()) << "a field";
+
+            e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                CutLabel(app, "Lays out what changed since the last frame", 80, cut, app.theme.tooltipDescriptionStyleRef);
+                at = cut;
+            });
+            EXPECT_TRUE(e.shown.empty()) << "wrapping text";
         }
 
     } // namespace

@@ -173,7 +173,7 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
                                static_cast<float>(m_timeMs) / 1000.0f,
                                hasMouseMove, hasMousePress, hasKeyboard, hasScroll,
                                menuManager.IsOpen(), m_buttonsHeld != tachyon::MouseButtons::None);
-    NoteTargetAncestors();
+    NoteTargetAncestors(m_mousePos);
     textSystem->BeginFrame(m_mousePos, m_buttonsHeld, m_timeMs);
 
     VERIFY(elementStorage.BeginConstruction());
@@ -186,6 +186,7 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
     if (onGuiFn) onGuiFn();
 
     m_frame.RunStage(tachyon::FrameStage::PostConstruct, ctx);
+    ShowCutShortText();   // as OnFrame: after OnGUI, while the tree is open
 
     // As OnFrame: a drag's visual (a ghost window following the cursor) is declared now.
     if (guiStateManager.Drag().IsDragging())

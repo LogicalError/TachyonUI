@@ -363,6 +363,8 @@ namespace tachyon
         StyleRef tooltipTitleStyleRef {};     ///< its title
         StyleRef tooltipDescriptionStyleRef {}; ///< its description
         StyleRef tooltipFooterStyleRef {};    ///< its footer, under a line
+        StyleRef tooltipExpandStyleRef {};    ///< text cut short, shown whole over itself: the box
+        StyleRef tooltipExpandTextStyleRef {}; ///< its text's colors (the font is the cut text's)
         StyleRef labelHelpStyleRef {};        ///< a Label() with property help: underlined, dotted
         StyleRef groupLabelHelpStyleRef {};   ///< the same inside a label group
         StyleRef dragLabelHelpStyleRef {};    ///< a DragLabel() with property help

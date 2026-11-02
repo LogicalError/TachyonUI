@@ -79,6 +79,22 @@ SetTooltip(PropertyHelp{ "Cast shadows",
 Checkbox(castShadows);
 ```
 
+### Text cut short
+
+Text that doesn't fit, cut short by its own box (an ellipsis) or by one around it (a tree
+or list row in a narrow panel), shows whole on hover, in a tooltip lying right over it: its
+text exactly where the cut text is, in the same font and at the same height, so it reads as
+the text growing. It comes by itself; nothing to declare. It lines up on the side the text
+is aligned to (its start, its end or its middle), an icon beside the text shows with it,
+and it stays on the screen. It is for the target's own text, or for the part of it under
+the pointer (a row's name, not its type); after Tab, for the focused control's.
+
+A tooltip of the target's own shows instead. Nothing shows for text in a field (it
+scrolls), text that wraps, text out of sight, or text under a canvas's pan or zoom. It
+takes the tooltip's timing. Classes: `tooltip-expand` (the box: the tooltip's colors,
+radius 4 px, 6 px each side, no arrow), `tooltip-expand-text` (its text's color; the font,
+alignment and height are the cut text's).
+
 
 ## Message dialogs
 

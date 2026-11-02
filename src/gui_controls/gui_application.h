@@ -2561,6 +2561,25 @@ namespace tachyon
         bool OpenTooltip(ID targetID, bool rich = false);
         /// Closes what OpenTooltip opened: the box and the window.
         void CloseTooltip();
+        /// Text cut short, as last frame laid it out.
+        struct CutShortText
+        {
+            ID      id = ID::Invalid();
+            ID      windowID = ID::Invalid();  ///< the top-level window it's in
+            int2    windowPos{};               ///< ... where that window was
+            int2    at{};                      ///< where its text starts, at its padding box's top
+            int32_t width = 0;                 ///< its text (and icon) whole, on one line
+            int32_t height = 0;                ///< its padding box's height
+            int16_t monitorIndex = -1;         ///< its window's monitor (the primary when unknown)
+        };
+        /// Before construction, from last frame's layout: the text in the tooltip's target (its
+        /// own, or a part's under `mousePos`) that is cut short, by its own box or one around
+        /// it. No id if none.
+        CutShortText FindCutShortText(int2 mousePos) const;
+        /// After OnGUI, when no other tooltip showed: the text found cut short, whole, right
+        /// over itself.
+        void ShowCutShortText();
+        CutShortText m_cutShort{};
         bool OpenContextMenuWindow(ID targetID);
         bool OpenCached(ID id, StyleRef style, uint64_t signature, LayoutOverride&& constraints);
         static void ReportInvalidControlID(ID id);
@@ -2693,8 +2712,9 @@ namespace tachyon
         /// The PropagatesDescendantState ancestors of `leafID`'s element, innermost first.
         static std::vector<ID> CollectPropagatedAncestors(const ElementStorage& storage, ID leafID);
         /// Before construction: a tooltip or context menu on an element that takes its parts'
-        /// states (PropagatesDescendantState) is for those parts too.
-        void NoteTargetAncestors();
+        /// states (PropagatesDescendantState) is for those parts too. Also notes the target's
+        /// text cut short (FindCutShortText), with the pointer at `mousePos`.
+        void NoteTargetAncestors(int2 mousePos);
         /// Rebuilds, next frame, the cached scopes `id` is in.
         void        InvalidateCachedScopesAbove(ID id);
         /// As InvalidateCachedScopesAbove, from layout: this frame's capture would clear it, so

@@ -762,6 +762,8 @@ namespace tachyon
         tooltipTitleStyleRef              = registerCSS("tooltip-title");
         tooltipDescriptionStyleRef        = registerCSS("tooltip-description");
         tooltipFooterStyleRef             = registerCSS("tooltip-footer");
+        tooltipExpandStyleRef             = registerCSS("tooltip-expand");
+        tooltipExpandTextStyleRef         = registerCSS("tooltip-expand-text");
         settingsPageSelectionRef          = registerCSS("settings-page-selection");
         settingsPageStyleRef              = registerCSS("settings-page");
 
