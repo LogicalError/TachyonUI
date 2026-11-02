@@ -42,10 +42,17 @@ namespace tachyon
         SetDrawCacheEnabled(true);
 
         // The saved UI state (the showcase stores it next to its themes): the main window, the
-        // toolbars and the dock, which is applied again once the dock exists.
+        // toolbars, and the documents of each window, made again on the first frame.
         PersistWindow("main", showcase.windowLayoutID2);
         PersistToolbars("toolbars", toolbars.sides);
-        PersistDocking("dock", showcase.forest->layout);
+        PersistDocuments("documents", [this] {
+            std::vector<DocumentWindowRef> windows;
+            if (showcase.mainWindowOpen)
+                windows.push_back({ showcase.windowLayoutID2, &showcase.documents });
+            for (const auto& window : showcase.documentWindows)
+                windows.push_back({ window->windowID, &window->documents });
+            return windows;
+        });
         if (std::ifstream file(ResourceFile(kUIStateFile), std::ios::binary); file)
         {
             showcase.savedUIState.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
@@ -115,15 +122,9 @@ namespace tachyon
         showcase.exitDialogID    = idManager.CreateStaticID();
         showcase.dragGhostWindowID = idManager.CreateStaticID();
 
-        // Documents: their panels are made with the dock, on the first frame.
+        // Documents: made with their panels on the first frame (MakeShowcaseDocuments).
         showcase.documentsID           = idManager.CreateStaticID();
         showcase.closeDocumentDialogID = idManager.CreateStaticID();
-        showcase.forest = &CreateDocument(showcase.documents, "Forest", ".level", "level", showcase.documentLevelIcon);
-        CreateDocument(showcase.documents, "Desert", ".level", "level", showcase.documentLevelIcon).dirty = true;
-        CreateDocument(showcase.documents, "Terrain", ".mat", "material", showcase.documentMaterialIcon);
-        CreateDocument(showcase.documents, "Hud", ".layout", "layout", showcase.documentLayoutIcon);
-        CreateDocument(showcase.documents, "Rock", ".prefab", "prefab", showcase.documentPrefabIcon);
-        CreateDocument(showcase.documents, "Walk", ".anim", "animation", showcase.documentAnimationIcon);
         SetUpDocuments(showcase.documents);
 
         showcase.smallMenuID = idManager.CreateStaticID();
@@ -1219,6 +1220,170 @@ namespace tachyon
         document.layout.root = MakeSplit(DockSplitMode::RightPinned, 420, MakeLeaf({ mainID }), MakeLeaf({ sideID }));
     }
 
+    // The first document: every panel, in the full DockingContainer demo layout.
+    void Application::FillForest(Document& document)
+    {
+        DockingLayout& dock = document.layout;
+        auto hierarchyPanelID   = CreatePanel(dock.panels, "Hierarchy",   showcase.panelHierarchyIcon, [this]() { RenderHierarchyPanel(); }, {}, [this]() { EnableHierarchyPanel(); }, [this]() { DisableHierarchyPanel(); });
+        auto inspectorPanelID   = CreatePanel(dock.panels, "Inspector",   showcase.panelInspectorIcon, [this]() { RenderInspectorPanel(); }, {}, [this]() { EnableInspectorPanel(); }, [this]() { DisableInspectorPanel(); });
+        auto consolePanelID     = CreatePanel(dock.panels, "Log",         showcase.panelLogIcon,       [this]() { RenderLogPanel(); },       {}, [this]() { EnableLogPanel(); },       [this]() { DisableLogPanel(); });
+        auto filesPanelID       = CreatePanel(dock.panels, "Files",       showcase.panelFilesIcon,     [this]() { RenderFilesPanel(); }, {}, [this]() { EnableFilesPanel(); }, [this]() { DisableFilesPanel(); });
+        auto nodeViewPanelID    = CreatePanel(dock.panels, "NodeView",    showcase.panelNodeViewIcon,  [this]() { RenderNodeViewPanel(); });
+        auto viewportPanelID    = CreatePanel(dock.panels, "Viewport",    showcase.panelViewportIcon,  [this]() { RenderViewportPanel(); });
+        auto profilerPanelID    = CreatePanel(dock.panels, "Profiler",    showcase.panelProfilerIcon,  [this]() { RenderProfilerTreePanel(); }, {}, [this]() { EnableProfilerTreePanel(); });
+        // Panels are cached by default; the profiler opts out while profiling is on.
+        dock.panels[profilerPanelID].cacheSignature =
+            []() -> std::optional<uint64_t> { return Diagnostics::IsProfilingEnabled() ? std::nullopt : std::optional<uint64_t>(0); };
+
+        auto treeTablePanelID   = CreatePanel(dock.panels, "TreeTable",   showcase.panelMiscIcon, [this]() { RenderTreeTablePanel(); });
+        auto tablePanelID       = CreatePanel(dock.panels, "Table",       showcase.panelMiscIcon, [this]() { RenderTablePanel(); });
+        auto splitScrollPanelID = CreatePanel(dock.panels, "FrozenTable", showcase.panelMiscIcon, [this]() { RenderSplitScrollPanel(); });
+        auto reorderablePanelID = CreatePanel(dock.panels, "Reorderable", showcase.panelMiscIcon, [this]() { RenderReorderablePanel(); });
+        auto boxTestPanelID     = CreatePanel(dock.panels, "BoxTest",     showcase.panelMiscIcon, [this]() { RenderBoxTestPanel(); });
+        auto miscPanelID        = CreatePanel(dock.panels, "Misc",        showcase.panelMiscIcon, [this]() { RenderMiscPanel(); });
+        // Misc animates during construction (rotating triangle, cycling hue), so it
+        // must rebuild every frame - opt out of caching.
+        dock.panels[miscPanelID].cacheSignature =
+            []() -> std::optional<uint64_t> { return std::nullopt; };
+
+        // Pages are registered once in InitSettingsPages.
+        auto settingsPanelID    = CreatePanel(dock.panels, "Settings", showcase.panelSettingsIcon, [this]() { RenderSettingsPanel(showcase.settings); });
+    
+        // bottom
+        auto&& filesLeaf         = MakeLeaf({ filesPanelID });
+        auto&& consolePanelLeaf  = MakeLeaf({ consolePanelID });
+    						// left / center / right
+        auto&& leftPanelGroup    = MakeLeaf({ hierarchyPanelID });
+        auto&& centerPanelGroup  = MakeLeaf({ nodeViewPanelID, viewportPanelID, settingsPanelID });
+        auto&& rightPanelGroup   = MakeLeaf({ profilerPanelID, inspectorPanelID,
+                    reorderablePanelID, miscPanelID, boxTestPanelID, treeTablePanelID,
+                    tablePanelID, splitScrollPanelID });
+
+        // Build tree:  Vsplit( Hsplit( left, Hsplit(center, right) ), Hsplit(files, console) )
+        // Resize semantics:
+        //  - outer Vsplit:  bottom row pinned -> top group absorbs vertical resize
+        //  - top Hsplit:    left pinned       -> (center+right) absorbs horizontal resize
+        //  - inner Hsplit:  right pinned      -> center absorbs horizontal resize
+        //  - bottom Hsplit: left (files) pinned
+        dock.root =
+            MakeSplit(DockSplitMode::BottomPinned, 280,
+                MakeSplit(DockSplitMode::LeftPinned, 320,
+                    // left panel group
+                    std::move(leftPanelGroup),
+                    MakeSplit(DockSplitMode::RightPinned, 540,
+                        // center panel group
+                        std::move(centerPanelGroup),
+                        // right panel group
+                        std::move(rightPanelGroup)
+                    )
+                ),
+                // bottom panel group
+                MakeSplit(DockSplitMode::LeftPinned, 500,
+                    std::move(filesLeaf),
+                    std::move(consolePanelLeaf)
+                ),
+                120, // minFirst
+                160  // minSecond
+            );
+    }
+
+    Document& Application::CreateShowcaseDocument(DocumentSet& set, std::string name, std::string extension, std::string kind)
+    {
+        const IconID icon = kind == "material"  ? showcase.documentMaterialIcon
+                          : kind == "layout"    ? showcase.documentLayoutIcon
+                          : kind == "prefab"    ? showcase.documentPrefabIcon
+                          : kind == "animation" ? showcase.documentAnimationIcon
+                                                : showcase.documentLevelIcon;
+        Document& document = CreateDocument(set, name, std::move(extension), std::move(kind), icon);
+        // Each sample document has its own panels; one made with "+" a viewport and an inspector.
+        if (name == "Forest")        FillForest(document);
+        else if (name == "Terrain")  FillDocument(document, "NodeView", "Inspector");
+        else if (name == "Hud")      FillDocument(document, "BoxTest", "Misc");
+        else if (name == "Rock")     FillDocument(document, "Viewport", "Hierarchy");
+        else if (name == "Walk")     FillDocument(document, "Viewport", "Profiler");
+        else                         FillDocument(document, "Viewport", "Inspector");
+        document.dirty = name == "Desert";   // to show the unsaved dot, and the question on closing
+        return document;
+    }
+
+    void Application::MakeShowcaseDocuments()
+    {
+        // As they were when the showcase was last closed: each window with its documents, the
+        // first in the main window. Else the samples.
+        std::vector<SavedDocumentWindow> saved = TakeSavedDocuments("documents");
+        for (size_t w = 0; w < saved.size(); ++w)
+        {
+            DocumentSet* set = &showcase.documents;
+            if (w > 0)
+            {
+                auto window = std::make_unique<DocumentWindow>();
+                window->windowID    = idManager.CreateStaticID();
+                window->documentsID = idManager.CreateStaticID();
+                // Its saved place, else a little in from the main window's corner.
+                window->positioned    = saved[w].rect.w > 0 && saved[w].rect.h > 0;
+                window->spawnPosition = int2{ styleManager.Px(120), styleManager.Px(120) };
+                RestoreWindowPlace(window->windowID, saved[w]);
+                SetUpDocuments(window->documents);
+                set = &window->documents;
+                showcase.documentWindows.push_back(std::move(window));
+            }
+            for (const SavedDocument& document : saved[w].documents)
+            {
+                (void)RestoreDocumentLayout(CreateShowcaseDocument(*set, document.name, document.extension, document.kind), document);
+                if (document.name.starts_with("Untitled "))
+                    showcase.untitledCount = std::max(showcase.untitledCount, std::atoi(document.name.c_str() + 9));
+            }
+            set->active = saved[w].active;
+        }
+        if (showcase.documents.documents.empty() && showcase.documentWindows.empty())
+        {
+            CreateShowcaseDocument(showcase.documents, "Forest", ".level", "level");
+            CreateShowcaseDocument(showcase.documents, "Desert", ".level", "level");
+            CreateShowcaseDocument(showcase.documents, "Terrain", ".mat", "material");
+            CreateShowcaseDocument(showcase.documents, "Hud", ".layout", "layout");
+            CreateShowcaseDocument(showcase.documents, "Rock", ".prefab", "prefab");
+            CreateShowcaseDocument(showcase.documents, "Walk", ".anim", "animation");
+        }
+
+        // --panel and --float: in the Forest document, where it is.
+        Document* forest = nullptr;
+        for (const auto& document : showcase.documents.documents)
+            if (document->name == "Forest") forest = document.get();
+        for (const auto& window : showcase.documentWindows)
+            for (const auto& document : window->documents.documents)
+                if (document->name == "Forest") forest = document.get();
+        if (!forest)
+            return;
+        DockingLayout& dock = forest->layout;
+
+        // --panel: bring that panel to the front of its tab group.
+        auto selectStartPanel = [this, &dock](auto& self, DockNode* node) -> void {
+            if (!node) return;
+            for (size_t t = 0; t < node->panelIds.size(); ++t)
+            {
+                const auto it = dock.panels.find(node->panelIds[t]);
+                if (it != dock.panels.end()
+                    && std::find(m_startPanels.begin(), m_startPanels.end(), it->second.title) != m_startPanels.end())
+                    node->selectedTab = int(t);
+            }
+            self(self, node->first.get());
+            self(self, node->second.get());
+        };
+        if (!m_startPanels.empty())
+            selectStartPanel(selectStartPanel, dock.root.get());
+
+        // --float: those panels start in their own windows.
+        int2 floatAt{ styleManager.Px(200), styleManager.Px(200) };
+        for (const std::string& title : m_floatPanels)
+            for (const auto& [id, panel] : dock.panels)
+                if (panel.title == title)
+                {
+                    (void)FloatPanel(dock, id, floatAt);
+                    floatAt += int2{ styleManager.Px(40), styleManager.Px(40) };
+                    break;
+                }
+    }
+
     void Application::SetUpDocuments(DocumentSet& documents)
     {
         DocumentSet* const set = &documents;
@@ -1375,104 +1540,8 @@ namespace tachyon
                     {
                         if (!showcase.dockInitialized)
                         {
-                            DockingLayout& dock = showcase.forest->layout;
-                            auto hierarchyPanelID   = CreatePanel(dock.panels, "Hierarchy",   showcase.panelHierarchyIcon, [this]() { RenderHierarchyPanel(); }, {}, [this]() { EnableHierarchyPanel(); }, [this]() { DisableHierarchyPanel(); });
-                            auto inspectorPanelID   = CreatePanel(dock.panels, "Inspector",   showcase.panelInspectorIcon, [this]() { RenderInspectorPanel(); }, {}, [this]() { EnableInspectorPanel(); }, [this]() { DisableInspectorPanel(); });
-                            auto consolePanelID     = CreatePanel(dock.panels, "Log",         showcase.panelLogIcon,       [this]() { RenderLogPanel(); },       {}, [this]() { EnableLogPanel(); },       [this]() { DisableLogPanel(); });
-                            auto filesPanelID       = CreatePanel(dock.panels, "Files",       showcase.panelFilesIcon,     [this]() { RenderFilesPanel(); }, {}, [this]() { EnableFilesPanel(); }, [this]() { DisableFilesPanel(); });
-                            auto nodeViewPanelID    = CreatePanel(dock.panels, "NodeView",    showcase.panelNodeViewIcon,  [this]() { RenderNodeViewPanel(); });
-                            auto viewportPanelID    = CreatePanel(dock.panels, "Viewport",    showcase.panelViewportIcon,  [this]() { RenderViewportPanel(); });
-                            auto profilerPanelID    = CreatePanel(dock.panels, "Profiler",    showcase.panelProfilerIcon,  [this]() { RenderProfilerTreePanel(); }, {}, [this]() { EnableProfilerTreePanel(); });
-                            // Panels are cached by default; the profiler opts out while profiling is on.
-                            dock.panels[profilerPanelID].cacheSignature =
-                                []() -> std::optional<uint64_t> { return Diagnostics::IsProfilingEnabled() ? std::nullopt : std::optional<uint64_t>(0); };
-
-                            auto treeTablePanelID   = CreatePanel(dock.panels, "TreeTable",   showcase.panelMiscIcon, [this]() { RenderTreeTablePanel(); });
-                            auto tablePanelID       = CreatePanel(dock.panels, "Table",       showcase.panelMiscIcon, [this]() { RenderTablePanel(); });
-                            auto splitScrollPanelID = CreatePanel(dock.panels, "FrozenTable", showcase.panelMiscIcon, [this]() { RenderSplitScrollPanel(); });
-                            auto reorderablePanelID = CreatePanel(dock.panels, "Reorderable", showcase.panelMiscIcon, [this]() { RenderReorderablePanel(); });
-                            auto boxTestPanelID     = CreatePanel(dock.panels, "BoxTest",     showcase.panelMiscIcon, [this]() { RenderBoxTestPanel(); });
-                            auto miscPanelID        = CreatePanel(dock.panels, "Misc",        showcase.panelMiscIcon, [this]() { RenderMiscPanel(); });
-                            // Misc animates during construction (rotating triangle, cycling hue), so it
-                            // must rebuild every frame - opt out of caching.
-                            dock.panels[miscPanelID].cacheSignature =
-                                []() -> std::optional<uint64_t> { return std::nullopt; };
-
-                            // Pages are registered once in InitSettingsPages.
-                            auto settingsPanelID    = CreatePanel(dock.panels, "Settings", showcase.panelSettingsIcon, [this]() { RenderSettingsPanel(showcase.settings); });
-                        
-                            // bottom
-                            auto&& filesLeaf         = MakeLeaf({ filesPanelID });
-                            auto&& consolePanelLeaf  = MakeLeaf({ consolePanelID });
-    						// left / center / right
-                            auto&& leftPanelGroup    = MakeLeaf({ hierarchyPanelID });
-                            auto&& centerPanelGroup  = MakeLeaf({ nodeViewPanelID, viewportPanelID, settingsPanelID });
-                            auto&& rightPanelGroup   = MakeLeaf({ profilerPanelID, inspectorPanelID,
-                                        reorderablePanelID, miscPanelID, boxTestPanelID, treeTablePanelID,
-                                        tablePanelID, splitScrollPanelID });
-
-                            // Build tree:  Vsplit( Hsplit( left, Hsplit(center, right) ), Hsplit(files, console) )
-                            // Resize semantics:
-                            //  - outer Vsplit:  bottom row pinned -> top group absorbs vertical resize
-                            //  - top Hsplit:    left pinned       -> (center+right) absorbs horizontal resize
-                            //  - inner Hsplit:  right pinned      -> center absorbs horizontal resize
-                            //  - bottom Hsplit: left (files) pinned
-                            dock.root =
-                                MakeSplit(DockSplitMode::BottomPinned, 280,
-                                    MakeSplit(DockSplitMode::LeftPinned, 320,
-                                        // left panel group
-                                        std::move(leftPanelGroup),
-                                        MakeSplit(DockSplitMode::RightPinned, 540,
-                                            // center panel group
-                                            std::move(centerPanelGroup),
-                                            // right panel group
-                                            std::move(rightPanelGroup)
-                                        )
-                                    ),
-                                    // bottom panel group
-                                    MakeSplit(DockSplitMode::LeftPinned, 500,
-                                        std::move(filesLeaf),
-                                        std::move(consolePanelLeaf)
-                                    ),
-                                    120, // minFirst
-                                    160  // minSecond
-                                );
-                            FillDocument(*showcase.documents.documents[1], "Viewport", "Inspector");
-                            FillDocument(*showcase.documents.documents[2], "NodeView", "Inspector");
-                            FillDocument(*showcase.documents.documents[3], "BoxTest", "Misc");
-                            FillDocument(*showcase.documents.documents[4], "Viewport", "Hierarchy");
-                            FillDocument(*showcase.documents.documents[5], "Viewport", "Profiler");
+                            MakeShowcaseDocuments();
                             showcase.dockInitialized = true;
-                            showcase.forest = nullptr;   // the first frame's: the document may be closed
-                            if (!showcase.savedUIState.empty())
-                                (void)RestoreUIState(showcase.savedUIState);   // now with the dock's panels
-
-                            // --panel: bring that panel to the front of its tab group.
-                            auto selectStartPanel = [this, &dock](auto& self, DockNode* node) -> void {
-                                if (!node) return;
-                                for (size_t t = 0; t < node->panelIds.size(); ++t)
-                                {
-                                    const auto it = dock.panels.find(node->panelIds[t]);
-                                    if (it != dock.panels.end()
-                                        && std::find(m_startPanels.begin(), m_startPanels.end(), it->second.title) != m_startPanels.end())
-                                        node->selectedTab = int(t);
-                                }
-                                self(self, node->first.get());
-                                self(self, node->second.get());
-                            };
-                            if (!m_startPanels.empty())
-                                selectStartPanel(selectStartPanel, dock.root.get());
-
-                            // --float: those panels start in their own windows.
-                            int2 floatAt{ styleManager.Px(200), styleManager.Px(200) };
-                            for (const std::string& title : m_floatPanels)
-                                for (const auto& [id, panel] : dock.panels)
-                                    if (panel.title == title)
-                                    {
-                                        (void)FloatPanel(dock, id, floatAt);
-                                        floatAt += int2{ styleManager.Px(40), styleManager.Px(40) };
-                                        break;
-                                    }
                         }
 
                         AskBeforeClosingDocument(showcase.documents);

@@ -319,6 +319,154 @@ namespace
         EXPECT_EQ(monitor->Find("h")->AsNumber(), 1440);
     }
 
+    // ---- Documents ----
+
+    // A document with panels titled `titles`, all in one leaf.
+    Document& AddDocument(HeadlessGUIApp& app, DocumentSet& set, std::string name, std::string extension, std::string kind,
+                          std::initializer_list<const char*> titles)
+    {
+        Document& document = app.CreateDocument(set, std::move(name), std::move(extension), std::move(kind), IconID::Invalid);
+        std::vector<ID> ids;
+        for (const char* title : titles)
+            ids.push_back(app.CreatePanel(document.layout.panels, title, IconID::Invalid, [] {}));
+        document.layout.root = MakeLeaf({});
+        document.layout.root->panelIds = std::move(ids);
+        return document;
+    }
+
+    std::vector<std::string> TitlesOf(const Document& document, const DockNode* leaf)
+    {
+        std::vector<std::string> titles;
+        for (const ID id : leaf->panelIds)
+            titles.push_back(document.layout.panels.at(id).title);
+        return titles;
+    }
+
+    // Each main window's documents come back: which, in what order, the active one, each
+    // one's panel layout; the app makes them again.
+    TEST_F(UIStateTest, DocumentsComeBackPerWindow)
+    {
+        DocumentSet first, second;
+        Document& forest = AddDocument(app, first, "Forest", ".level", "level", { "Scene", "Details", "Log" });
+        forest.layout.root = MakeSplit(DockSplitMode::LeftPinned, 250, MakeLeaf({ forest.layout.root->panelIds[0] }),
+                                       MakeLeaf({ forest.layout.root->panelIds[1], forest.layout.root->panelIds[2] }));
+        AddDocument(app, first, "Terrain", ".mat", "material", { "Graph" });
+        AddDocument(app, second, "Hud", ".layout", "layout", { "Canvas" });
+        first.active = 1;
+        const ID firstWindow = app.idManager.CreateStaticID(), secondWindow = app.idManager.CreateStaticID();
+        app.PersistDocuments("documents", [&] {
+            return std::vector<DocumentWindowRef>{ { firstWindow, &first }, { secondWindow, &second } };
+        });
+        const std::string saved = app.SaveUIState();
+
+        ASSERT_TRUE(app.RestoreUIState(saved));
+        std::vector<SavedDocumentWindow> windows = app.TakeSavedDocuments("documents");
+        EXPECT_TRUE(app.TakeSavedDocuments("documents").empty()) << "taken once";
+        ASSERT_EQ(windows.size(), 2u);
+        ASSERT_EQ(windows[0].documents.size(), 2u);
+        EXPECT_EQ(windows[0].documents[0].name, "Forest");
+        EXPECT_EQ(windows[0].documents[0].extension, ".level");
+        EXPECT_EQ(windows[0].documents[0].kind, "level");
+        EXPECT_EQ(windows[0].documents[1].name, "Terrain");
+        EXPECT_EQ(windows[0].active, 1);
+        ASSERT_EQ(windows[1].documents.size(), 1u);
+        EXPECT_EQ(windows[1].documents[0].name, "Hud");
+        EXPECT_EQ(windows[1].rect, IntRect{}) << "not open: no place kept";
+
+        // A new run: the document made again, its panels in one leaf, a new one among them.
+        DocumentSet fresh;
+        Document& again = AddDocument(app, fresh, "Forest", ".level", "level", { "Log", "Details", "Scene", "Help" });
+        ASSERT_TRUE(app.RestoreDocumentLayout(again, windows[0].documents[0]));
+        ASSERT_FALSE(again.layout.root->isLeaf);
+        EXPECT_EQ(again.layout.root->splitSize, CssPx(250));
+        EXPECT_EQ(TitlesOf(again, again.layout.root->first.get()), (std::vector<std::string>{ "Scene", "Help" })) << "Scene, then the new Help";
+        EXPECT_EQ(TitlesOf(again, again.layout.root->second.get()), (std::vector<std::string>{ "Details", "Log" }));
+    }
+
+    TEST_F(UIStateTest, WhatCantBeReadOfSavedDocumentsIsSkipped)
+    {
+        const ID windowID = app.idManager.CreateStaticID();
+        DocumentSet set;
+        app.PersistDocuments("documents", [&] { return std::vector<DocumentWindowRef>{ { windowID, &set } }; });
+        ASSERT_TRUE(app.RestoreUIState(R"({"documents":{"documents":[
+            {"active":9,"documents":[{"name":"Forest","kind":"level","layout":"not a tree"},{"kind":"level"},{"name":"Desert"}]},
+            {"active":0,"documents":[]},
+            "not a window"
+        ]}})"));
+        std::vector<SavedDocumentWindow> windows = app.TakeSavedDocuments("documents");
+        ASSERT_EQ(windows.size(), 1u) << "a window without documents is left out";
+        ASSERT_EQ(windows[0].documents.size(), 2u) << "a document without a name is left out";
+        EXPECT_EQ(windows[0].documents[1].name, "Desert");
+        EXPECT_EQ(windows[0].documents[1].extension, "");
+        EXPECT_EQ(windows[0].active, 1) << "the last one, as there's no tenth";
+
+        Document& forest = AddDocument(app, set, "Forest", ".level", "level", { "Scene" });
+        const DockNode* before = forest.layout.root.get();
+        EXPECT_FALSE(app.RestoreDocumentLayout(forest, windows[0].documents[0]));
+        EXPECT_EQ(forest.layout.root.get(), before) << "its own layout stays";
+        EXPECT_FALSE(app.RestoreDocumentLayout(forest, windows[0].documents[1])) << "none saved";
+        EXPECT_TRUE(app.TakeSavedDocuments("other").empty());
+    }
+
+    // A document window's place is kept, and comes back like a persisted window's.
+    TEST_F(WindowMonitorTest, ADocumentWindowsPlaceComesBack)
+    {
+        using ::testing::_;
+        SetMonitors({ Monitor({ 0, 0, 1920, 1080 }, true), Monitor({ 1920, 0, 2560, 1440 }, false) });
+        ON_CALL(app.mockBackend, CreateWindow(_, ::testing::A<IntRect>(), _, _))
+            .WillByDefault([](std::string_view, IntRect, WindowFlags, OSWindowHandle) { return reinterpret_cast<OSWindowHandle>(uintptr_t(0x100)); });
+        ON_CALL(app.mockBackend, IsWindow(_)).WillByDefault(::testing::Return(true));
+        ON_CALL(app.mockBackend, GetWindowRect(_)).WillByDefault(::testing::Return(IntRect{ 2100, 150, 800, 600 }));
+        const ID documentWindow = app.idManager.CreateStaticID();
+        app.Frame([&] { (void)app.windowManager->GetOrCreateWindow(documentWindow, "Docs", IntRect{ 2100, 150, 800, 600 }, nullptr); });
+        DocumentSet set;
+        AddDocument(app, set, "Forest", ".level", "level", { "Scene" });
+        app.PersistDocuments("documents", [&] { return std::vector<DocumentWindowRef>{ { documentWindow, &set } }; });
+        const std::string saved = app.SaveUIState();
+
+        ASSERT_TRUE(app.RestoreUIState(saved));
+        std::vector<SavedDocumentWindow> windows = app.TakeSavedDocuments("documents");
+        ASSERT_EQ(windows.size(), 1u);
+        EXPECT_EQ(windows[0].rect, (IntRect{ 2100, 150, 800, 600 }));
+        EXPECT_EQ(windows[0].monitor, (IntRect{ 1920, 0, 2560, 1440 }));
+
+        // Made again in a new run, at a new ID: where it was.
+        const ID again = app.idManager.CreateStaticID();
+        app.RestoreWindowPlace(again, windows[0]);
+        app.Frame([&] {
+            if (app.BeginWindow(again, "Docs", LayoutOverride{}.Size(300, 200).Position(10, 20)))
+                app.Label("inside");
+            app.EndWindow();
+        });
+        const IntRect r = app.GetElementRect(again);
+        EXPECT_EQ(r.x, 2100);
+        EXPECT_EQ(r.y, 150);
+        EXPECT_EQ(r.w, 800);
+
+        // Saved with the big monitor on the left, now on the right: the same place on it.
+        SavedDocumentWindow moved = windows[0];
+        moved.rect    = IntRect{ -2460, 150, 800, 600 };
+        moved.monitor = IntRect{ -2560, 0, 2560, 1440 };
+        const ID rearranged = app.idManager.CreateStaticID();
+        app.RestoreWindowPlace(rearranged, moved);
+        app.Frame([&] {
+            if (app.BeginWindow(rearranged, "Docs", LayoutOverride{}.Size(300, 200).Position(10, 20)))
+                app.Label("inside");
+            app.EndWindow();
+        });
+        EXPECT_EQ(app.GetElementRect(rearranged).x, 1920 + 100);
+
+        // No place saved: the app's own.
+        const ID unplaced = app.idManager.CreateStaticID();
+        app.RestoreWindowPlace(unplaced, SavedDocumentWindow{});
+        app.Frame([&] {
+            if (app.BeginWindow(unplaced, "Docs", LayoutOverride{}.Size(300, 200).Position(10, 20)))
+                app.Label("inside");
+            app.EndWindow();
+        });
+        EXPECT_EQ(app.GetElementRect(unplaced).x, 10);
+    }
+
     TEST_F(UIStateTest, MalformedOrNewerStateIsAnError)
     {
         EXPECT_FALSE(app.RestoreUIState("{ not json"));

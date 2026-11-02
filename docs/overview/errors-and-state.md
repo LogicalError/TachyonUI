@@ -32,7 +32,9 @@ PersistTable("assets", tableState, columns); // column widths and order
 PersistValue("zoom", zoom);                  // an app setting (bool, int, float, string)
 ```
 
-`PersistToolbars` keeps the toolbars. Then:
+`PersistToolbars` keeps the toolbars. `PersistDocuments` keeps the documents of each main
+window (see Documents in [Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md)).
+Then:
 
 ```cpp
 std::string json = app.SaveUIState();                        // e.g. after Run()

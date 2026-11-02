@@ -2342,6 +2342,7 @@ namespace tachyon
         ///     PersistTable("assets", tableState, columns); // column widths and order, by header
         ///     PersistToolbars("toolbars", toolbarSides);   // items by debugName
         ///     PersistValue("zoom", zoom);                  // an app setting, if it wants
+        ///     PersistDocuments("documents", windows);      // each main window's documents
         ///
         /// RestoreUIState applies saved text: windows when they are next declared, the rest
         /// at once. What it doesn't know (keys, panels, columns) is skipped.
@@ -2363,6 +2364,20 @@ namespace tachyon
         void PersistValue(std::string key, float& value);
         /// As above, for a string.
         void PersistValue(std::string key, std::string& value);
+        /// Keeps the documents of each main window that `windows` lists when the state is
+        /// saved: their names, kinds and order, the active one, each one's dock tree, and the
+        /// window's position, size and mode. The app makes them again (TakeSavedDocuments).
+        void PersistDocuments(std::string key, std::function<std::vector<DocumentWindowRef>()> windows);
+        /// The main windows of documents RestoreUIState read for `key`, in the order they were
+        /// listed; empty when none were saved. Taking them clears them. Make each document with
+        /// its panels, then RestoreDocumentLayout, and place each window with RestoreWindowPlace.
+        std::vector<SavedDocumentWindow> TakeSavedDocuments(std::string_view key);
+        /// Lays a document's panels out as saved: panels by type, else title; ones the saved
+        /// tree doesn't have go to its first leaf. False (the layout stays) when it can't be read.
+        bool RestoreDocumentLayout(Document& document, const SavedDocument& saved);
+        /// Puts a window where `saved` was when it's next declared, as PersistWindow does
+        /// (on its monitor, or the same place on another). Nothing when no place was saved.
+        void RestoreWindowPlace(ID windowID, const SavedDocumentWindow& saved);
         /// The named state as JSON text.
         std::string  SaveUIState() const;
         /// Applies JSON text from SaveUIState. An error when it doesn't parse, isn't an object
@@ -2563,6 +2578,7 @@ namespace tachyon
         struct PersistedTable    { struct Target { TableState* state; std::span<VirtualTableColumn> columns; }; std::string key; Target target; };
         struct PersistedToolbars { std::string key; std::span<std::vector<ToolbarItem>, kToolbarSideCount> target; };
         struct PersistedValue    { using Target = std::variant<bool*, int*, float*, std::string*>; std::string key; Target target; };
+        struct PersistedDocuments { std::string key; std::function<std::vector<DocumentWindowRef>()> target; };
         struct RestoredWindow
         {
             IntRect    rect {};
@@ -2577,6 +2593,9 @@ namespace tachyon
         std::vector<PersistedTable>    m_persistTables;
         std::vector<PersistedToolbars> m_persistToolbars;
         std::vector<PersistedValue>    m_persistValues;
+        std::vector<PersistedDocuments> m_persistDocuments;
+        /// Read by RestoreUIState, until the app takes them (TakeSavedDocuments).
+        std::unordered_map<std::string, std::vector<SavedDocumentWindow>> m_savedDocuments;
         std::unordered_map<ID, RestoredWindow> m_restoredWindows;
         void ApplyRestoredWindow(ID windowID, LayoutOverride& constraints, ElementFlags& flags);
         /// Moves a restored rect onto the monitor it was saved on, or the same place on another.
