@@ -78,6 +78,9 @@ namespace tachyon
         /// Leaf with visibly overflowing text: the margin box width flex shrink stops at
         /// (CSS min-content).
         int16_t  minContentWidth = 0;
+        /// Anchored X: the target's x when X was placed (flipped or clamped to the screen).
+        /// A target that scrolls after that moves it by as much.
+        int32_t  anchorTargetX = 0;
     };
 
     /// Render-time callback. Coordinates are inner-rect-local LAYOUT space; the renderer's

@@ -114,7 +114,7 @@ struct Triangle
     int        textureIndex;
 
     int16_t    colorIndex;
-    int16_t    _pad1;
+    int16_t    hardEdges;   // bit 0: p0-p1, 1: p1-p2, 2: p2-p0, drawn without a soft edge
 };
 
 layout(buffer_reference, std430)

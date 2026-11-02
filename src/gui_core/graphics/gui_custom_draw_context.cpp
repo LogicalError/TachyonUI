@@ -136,9 +136,9 @@ namespace tachyon
 
     void CustomDrawContext::RenderTriangle(float2 p0, float2 p1, float2 p2,
                                            VisualColorStyleIndex colorStyleIndex,
-                                           ImageIndex textureIndex) const
+                                           ImageIndex textureIndex, TriangleEdges hardEdges) const
     {
-        m_renderer->RenderTriangle(p0, p1, p2, m_clipRect, colorStyleIndex, textureIndex);
+        m_renderer->RenderTriangle(p0, p1, p2, m_clipRect, colorStyleIndex, textureIndex, hardEdges);
     }
 
     void CustomDrawContext::RenderCircle(float2 center, float radius, const LineStyle& style) const
@@ -162,10 +162,7 @@ namespace tachyon
                                                 VisualColorStyleIndex colorStyleIndex,
                                                 ImageIndex textureIndex) const
     {
-        if (points.size() < 3) return;
-        for (size_t i = 1; i + 1 < points.size(); i++)
-            m_renderer->RenderTriangle(points[0], points[i], points[i + 1],
-                                       m_clipRect, colorStyleIndex, textureIndex);
+        m_renderer->RenderFilledPolygon(points, m_clipRect, colorStyleIndex, textureIndex);
     }
 
     void CustomDrawContext::RenderPolyline(std::span<const int2> points, bool closed,

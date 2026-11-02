@@ -6,6 +6,7 @@
 #include <gui_core/gui_base_types.h>
 #include <gui_core/elements/gui_element.h>            // ElementRef (member by value)
 #include <gui_core/graphics/gui_image.h>              // ImageIndex (default args)
+#include <gui_core/graphics/gui_renderer.h>           // TriangleEdges (default args)
 
 #include <span>
 
@@ -147,10 +148,11 @@ namespace tachyon
         /// A filled, anti-aliased dot centered on `pos`; `size` is its diameter.
         void RenderDot(float2 pos, float size, color4f color) const;
 
-        /// A filled triangle.
+        /// A filled triangle; see GUIRenderer::RenderTriangle for `hardEdges`.
         void RenderTriangle(float2 p0, float2 p1, float2 p2,
                             VisualColorStyleIndex colorStyleIndex,
-                            ImageIndex textureIndex = ImageIndex::Invalid) const;
+                            ImageIndex textureIndex = ImageIndex::Invalid,
+                            TriangleEdges hardEdges = TriangleEdges::None) const;
 
         /// A circle outline, stroked with `style`; see GUIRenderer::RenderCircle.
         void RenderCircle(float2 center, float radius, const LineStyle& style) const;

@@ -3,6 +3,7 @@
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_base_types.h>      // IntRect, int2, float2, color4b, color4f, float3x2
 #include <gui_core/graphics/gui_image.h>  // ImageIndex (default args)
+#include <gui_core/gui_enum_operators.h>
 
 #include <stdint.h>
 #include <span>
@@ -15,6 +16,17 @@ namespace tachyon
     enum class VisualBoxStyleIndex : uint16_t;
     enum class VisualColorStyleIndex : uint16_t;
     enum class ElementState : uint8_t;
+
+    /// A triangle's edges, for the ones drawn without a soft edge: where it meets another
+    /// triangle of the same shape (a polygon's fan), so no seam shows between them.
+    enum class TriangleEdges : uint8_t
+    {
+        None   = 0,
+        Edge01 = 1 << 0,   ///< p0 to p1
+        Edge12 = 1 << 1,   ///< p1 to p2
+        Edge20 = 1 << 2,   ///< p2 to p0
+    };
+    TACHYON_ENUM_OPERATORS(TriangleEdges)
 
     struct LineStyle
     {
@@ -70,7 +82,9 @@ namespace tachyon
         virtual void RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const LineStyle& lineStyle) = 0;
 
         virtual void RenderDot(tachyon::float2 pos, tachyon::IntRect clipRect, float size, tachyon::color4f color) = 0;
-        virtual void RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid) = 0;
+        /// A filled triangle. `hardEdges` end without a soft edge, for edges it shares with
+        /// another triangle of the same shape.
+        virtual void RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, TriangleEdges hardEdges = TriangleEdges::None) = 0;
 
         /// Draws a filled, optionally rounded and textured rect: a box without borders, style
         /// blending or element state.

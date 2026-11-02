@@ -201,7 +201,7 @@ void PrimitiveRenderTarget::RenderBox(tachyon::IntRect rect, tachyon::IntRect cl
                     });
 }
 
-void PrimitiveRenderTarget::RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex)
+void PrimitiveRenderTarget::RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex, tachyon::TriangleEdges hardEdges)
 {
     Append(PrimitiveKind::Triangle, Triangle
                     {
@@ -215,7 +215,8 @@ void PrimitiveRenderTarget::RenderTriangle(tachyon::float2 p0, tachyon::float2 p
                         .p2 = { p2.x, p2.y },
 
                         .textureIndex = textureIndex,
-                        .colorIndex = int16_t(colorStyleIndex)
+                        .colorIndex = int16_t(colorStyleIndex),
+                        .hardEdges = int16_t(hardEdges)
                     });
 }
 
@@ -612,10 +613,10 @@ void PrimitiveRenderer::RenderDot(tachyon::float2 pos, tachyon::IntRect clipRect
     currentTarget->RenderDot(pos, clipRect, size, color);
 }
 
-void PrimitiveRenderer::RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex)
+void PrimitiveRenderer::RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex, tachyon::TriangleEdges hardEdges)
 {
     assert(currentTarget != nullptr);
-    currentTarget->RenderTriangle(p0, p1, p2, clipRect, colorStyleIndex, textureIndex);
+    currentTarget->RenderTriangle(p0, p1, p2, clipRect, colorStyleIndex, textureIndex, hardEdges);
 }
 
 void PrimitiveRenderer::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex)

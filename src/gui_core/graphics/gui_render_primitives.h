@@ -136,7 +136,7 @@ namespace tachyon
 
         int16_t         colorIndex = 0;
 
-        int16_t         _pad1 = 0;
+        int16_t         hardEdges = 0;   ///< TriangleEdges without a soft edge
     };
 
     struct alignas(16) Quad

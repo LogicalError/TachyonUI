@@ -49,25 +49,207 @@ namespace tachyon
             EXPECT_TRUE(tm.ShouldShow(target));
         }
 
-        TEST_F(ControlsTooltipTest, MovingHoverToDifferentTargetRestartsDelay)
+        // Moving on from a shown tooltip to another target shows the next one at once.
+        TEST_F(ControlsTooltipTest, MovingOnFromAShownTooltipShowsTheNextAtOnce)
         {
             TooltipManager tm;
-            tm.delaySeconds = 0.5f;
-
             ID first{}; first.value.dynamicParts.hashValue = 1;
             ID second{}; second.value.dynamicParts.hashValue = 2;
 
             tm.BeginFrame(first, ID::Invalid(), 0.0f, true, false, false, false, false);
             tm.BeginFrame(first, ID::Invalid(), 0.6f, false, false, false, false, false);
             ASSERT_TRUE(tm.ShouldShow(first));
+            tm.EndFrame();
 
-            // Move hover to second - visibility resets, no immediate show.
             tm.BeginFrame(second, ID::Invalid(), 0.7f, true, false, false, false, false);
-            EXPECT_FALSE(tm.ShouldShow(second));
+            EXPECT_TRUE(tm.ShouldShow(second)) << "no new delay";
+        }
 
-            // After the delay elapses for second, it shows.
-            tm.BeginFrame(second, ID::Invalid(), 1.3f, false, false, false, false, false);
+        // Some time after the last tooltip, the next waits the delay again.
+        TEST_F(ControlsTooltipTest, AfterAPauseTheDelayStartsAgain)
+        {
+            TooltipManager tm;
+            ID first{}; first.value.dynamicParts.hashValue = 1;
+            ID second{}; second.value.dynamicParts.hashValue = 2;
+
+            tm.BeginFrame(first, ID::Invalid(), 0.0f, true, false, false, false, false);
+            tm.BeginFrame(first, ID::Invalid(), 0.6f, false, false, false, false, false);
+            ASSERT_TRUE(tm.ShouldShow(first));
+            tm.EndFrame();
+            tm.BeginFrame(ID::Invalid(), ID::Invalid(), 0.7f, true, false, false, false, false);
+            tm.EndFrame();
+
+            tm.BeginFrame(second, ID::Invalid(), 1.5f, true, false, false, false, false);
+            EXPECT_FALSE(tm.ShouldShow(second)) << "0.8 s since the last: the delay again";
+            tm.BeginFrame(second, ID::Invalid(), 2.1f, false, false, false, false, false);
             EXPECT_TRUE(tm.ShouldShow(second));
+        }
+
+        // A tooltip stays 100 ms after its target is left, then goes.
+        TEST_F(ControlsTooltipTest, ATooltipStaysAMomentAfterItsTargetIsLeft)
+        {
+            TooltipManager tm;
+            ID first{}; first.value.dynamicParts.hashValue = 1;
+            tm.BeginFrame(first, ID::Invalid(), 0.0f, true, false, false, false, false);
+            tm.BeginFrame(first, ID::Invalid(), 0.6f, false, false, false, false, false);
+            ASSERT_TRUE(tm.ShouldShow(first));
+            tm.EndFrame();
+
+            tm.BeginFrame(ID::Invalid(), ID::Invalid(), 0.65f, true, false, false, false, false);
+            EXPECT_TRUE(tm.ShouldShow(first)) << "50 ms after";
+            tm.EndFrame();
+            tm.BeginFrame(ID::Invalid(), ID::Invalid(), 0.8f, false, false, false, false, false);
+            EXPECT_FALSE(tm.ShouldShow(first)) << "past 100 ms";
+        }
+
+        // The one left gives way to the next target's own tooltip, whatever order they're
+        // declared in.
+        TEST_F(ControlsTooltipTest, TheOneLeftGivesWayToTheNext)
+        {
+            TooltipManager tm;
+            ID first{}; first.value.dynamicParts.hashValue = 1;
+            ID second{}; second.value.dynamicParts.hashValue = 2;
+            tm.BeginFrame(first, ID::Invalid(), 0.0f, true, false, false, false, false);
+            tm.BeginFrame(first, ID::Invalid(), 0.6f, false, false, false, false, false);
+            ASSERT_TRUE(tm.ShouldShow(first));
+            tm.EndFrame();
+
+            // The first's declared before the second's: it keeps this frame, the next is the second's.
+            tm.BeginFrame(second, ID::Invalid(), 0.62f, true, false, false, false, false);
+            EXPECT_TRUE(tm.ShouldShow(first));
+            EXPECT_FALSE(tm.ShouldShow(second));
+            tm.EndFrame();
+            tm.BeginFrame(second, ID::Invalid(), 0.64f, false, false, false, false, false);
+            EXPECT_FALSE(tm.ShouldShow(first));
+            EXPECT_TRUE(tm.ShouldShow(second));
+        }
+
+        // The same over the gap between two buttons: the next one's shows, not the first's.
+        TEST_F(ControlsTooltipTest, TheOneLeftGivesWayAcrossAGap)
+        {
+            TooltipManager tm;
+            ID first{}; first.value.dynamicParts.hashValue = 1;
+            ID gap{}; gap.value.dynamicParts.hashValue = 3;
+            ID second{}; second.value.dynamicParts.hashValue = 2;
+            tm.BeginFrame(first, ID::Invalid(), 0.0f, true, false, false, false, false);
+            tm.BeginFrame(first, ID::Invalid(), 0.6f, false, false, false, false, false);
+            ASSERT_TRUE(tm.ShouldShow(first));
+            tm.EndFrame();
+
+            tm.BeginFrame(gap, ID::Invalid(), 0.63f, true, false, false, false, false);
+            EXPECT_TRUE(tm.ShouldShow(first)) << "a moment more";
+            tm.EndFrame();
+            float t = 0.66f;
+            tm.BeginFrame(second, ID::Invalid(), t, true, false, false, false, false);
+            (void)tm.ShouldShow(first);
+            (void)tm.ShouldShow(second);
+            tm.EndFrame();
+            for (int i = 0; i < 10; ++i)
+            {
+                t += 0.03f;
+                tm.BeginFrame(second, ID::Invalid(), t, false, false, false, false, false);
+                EXPECT_FALSE(tm.ShouldShow(first)) << t;
+                EXPECT_TRUE(tm.ShouldShow(second)) << t;
+                tm.EndFrame();
+            }
+        }
+
+        // None while a mouse button is held: a drag over targets shows nothing.
+        TEST_F(ControlsTooltipTest, NoneWhileAButtonIsHeld)
+        {
+            TooltipManager tm;
+            ID target{}; target.value.dynamicParts.hashValue = 5;
+            tm.BeginFrame(target, ID::Invalid(), 0.0f, true, false, false, false, false, true);
+            tm.BeginFrame(target, ID::Invalid(), 0.6f, true, false, false, false, false, true);
+            EXPECT_FALSE(tm.ShouldShow(target));
+            tm.BeginFrame(target, ID::Invalid(), 1.2f, true, false, false, false, false, true);
+            EXPECT_FALSE(tm.ShouldShow(target));
+
+            // Released: the delay from then.
+            tm.BeginFrame(target, ID::Invalid(), 1.3f, true, false, false, false, false, false);
+            EXPECT_FALSE(tm.ShouldShow(target));
+            tm.BeginFrame(target, ID::Invalid(), 1.9f, false, false, false, false, false, false);
+            EXPECT_TRUE(tm.ShouldShow(target));
+        }
+
+        // A command's tooltip: its description, and its shortcut in a chip.
+        TEST_F(ControlsTooltipTest, ACommandsShortcutIsInAChip)
+        {
+            int ran = 0;
+            const CommandID save = app.commandManager.RegisterCommand(KeyCode::KeyS, KeyModifier::Control, [&] { ++ran; }, "Save scene");
+            ID button = ID::Invalid();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.CommandButton(save);
+                    button = app.elementStorage.GetLastItemID();
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            app.InjectMouseMove(app.CenterOf(button));
+            for (int i = 0; i < 8; ++i) { app.AdvanceTime(100); frame(); }
+            EXPECT_NE(app.FindByText("Save scene"), ID::Invalid());
+            const ID chip = app.FindByText(app.commandManager.GetCommand(save)->displayString);
+            ASSERT_NE(chip, ID::Invalid()) << "the shortcut, on its own";
+            EXPECT_GT(app.GetElementRect(chip).x, app.GetElementRect(app.FindByText("Save scene")).x) << "after the text";
+        }
+
+        // A button `top` px down the screen (and `left` px across), hovered until its tooltip
+        // shows: the two rects.
+        std::pair<IntRect, IntRect> TooltipAndTarget(HeadlessGUIApp& app, int top, int left = 0,
+                                                     std::string_view text = "Save scene")
+        {
+            ID button = ID::Invalid();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.BeginVertical(app.idManager.AllocateDynamicID("column"), app.theme.emptyVertStyleRef);
+                    app.BeginVertical(app.idManager.AllocateDynamicID("spacer"), app.theme.emptyVertStyleRef,
+                                      LayoutOverride{}.Height(top));
+                    app.EndVertical();
+                    app.BeginHorizontal(app.idManager.AllocateDynamicID("row"), app.theme.emptyHorzStyleRef);
+                    app.BeginHorizontal(app.idManager.AllocateDynamicID("indent"), app.theme.emptyHorzStyleRef,
+                                        LayoutOverride{}.Width(left));
+                    app.EndHorizontal();
+                    app.Button("Save", [] {});
+                    button = app.elementStorage.GetLastItemID();
+                    app.SetTooltip(text);
+                    app.EndHorizontal();
+                    app.EndVertical();
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            app.InjectMouseMove(app.CenterOf(button));
+            for (int i = 0; i < 8; ++i) { app.AdvanceTime(100); frame(); }
+            if (!app.HasElement(app.tooltipWindowID))
+                return {};
+            return { app.GetElementRect(app.tooltipWindowID), app.GetElementRect(button) };
+        }
+
+        TEST_F(ControlsTooltipTest, BelowATargetWithAGap)
+        {
+            const auto [tip, target] = TooltipAndTarget(app, 0);
+            ASSERT_GT(tip.h, 0);
+            EXPECT_EQ(tip.y - target.Max(1), 2);
+        }
+
+        // At the bottom of the screen it goes above, the same gap away.
+        TEST_F(ControlsTooltipTest, AboveATargetItKeepsTheSameGap)
+        {
+            const auto [tip, target] = TooltipAndTarget(app, 1040);
+            ASSERT_GT(tip.h, 0);
+            EXPECT_EQ(target.y - tip.Max(1), 2);
+        }
+
+        // At the right edge of the screen it lines up with its target's right edge instead.
+        TEST_F(ControlsTooltipTest, AtTheRightEdgeItStaysOnScreen)
+        {
+            const auto [tip, target] = TooltipAndTarget(app, 0, 1840, "A tooltip far too long to fit beside the right edge");
+            ASSERT_GT(tip.w, 0);
+            EXPECT_LE(tip.Max(0), 1920);
+            EXPECT_EQ(tip.Max(0), target.Max(0));
         }
 
         TEST_F(ControlsTooltipTest, MousePressDuringHoverDismissesTooltip)

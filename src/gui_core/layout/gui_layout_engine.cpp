@@ -228,17 +228,17 @@ namespace tachyon
             parentRect.rect.x += scrollImmuneX ? 0 : parentRect.scrollOffset.x;
             parentRect.rect.y += scrollImmuneY ? 0 : parentRect.scrollOffset.y;
 
-            // Anchored X was resolved against the target's pre-scroll rect; re-resolve so it
-            // tracks a target inside a scrolling container. The target is already final here.
+            // Anchored X was placed against the target's pre-scroll rect; move it as far as the
+            // target has moved since, so it tracks a target inside a scrolling container. (Not
+            // placed again: that would undo a flip or a clamp to the screen.) The target is
+            // already final here.
             if (ptX == PositionType::Anchored)
             {
                 const ElementRef anchorRef = storage.FindElementRefByID(parentRect.constraints.x.anchorTarget);
                 if (anchorRef.IsValid())
                 {
-                    const int32_t prevX = parentRect.rect.x;
-                    parentRect.constraints.x.Apply(parentRect.rect, /*axis*/0,
-                                                   storage.GetElementRectUnsafe(anchorRef).rect);
-                    parentRect.innerRect.x += parentRect.rect.x - prevX;
+                    const int32_t moved = storage.GetElementRectUnsafe(anchorRef).rect.x - parentRect.anchorTargetX;                    parentRect.rect.x += moved;
+                    parentRect.innerRect.x += moved;
                 }
             }
 

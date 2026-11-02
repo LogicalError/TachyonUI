@@ -679,10 +679,7 @@ namespace tachyon
         const std::string_view text = (c.icon != IconID::Invalid)
             ? std::string_view{} : std::string_view(c.description);
         bool clicked = Button({ c.icon, text }, c.callback, style, std::move(constraints));
-        if (c.HasShortcut())
-            SetTooltip(c.description + " (" + c.displayString + ")");
-        else
-            SetTooltip(std::string_view(c.description));
+        SetTooltip(std::string_view(c.description), c.HasShortcut() ? std::string_view(c.displayString) : std::string_view{});
         return clicked;
     }
 

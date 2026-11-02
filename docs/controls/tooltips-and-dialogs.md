@@ -2,21 +2,46 @@
 
 ## Tooltips
 
-A tooltip fades in over 100 ms and out over 80 ms (not with reduced motion).
+A tooltip is a small box below its target, or above it when there's no room below, lined
+up with the target's left side (its right side at the right edge of the screen), with an
+arrow toward the target near that end. It fades in over 100 ms and out over 80 ms (not
+with reduced motion).
 
 ```cpp
 void SetTooltip(ID targetID, std::string_view text);
 void SetTooltip(ID targetID, IconID icon, std::string_view text);
+void SetTooltip(ID targetID, std::string_view text, std::string_view shortcut);
+void SetTooltip(ID targetID, IconID icon, std::string_view text, std::string_view shortcut);
 void SetTooltip(std::string_view text);           // the control just drawn
+void SetTooltip(std::string_view text, std::string_view shortcut);
 bool BeginTooltip(ID targetID);
 bool BeginTooltip();                              // the control just drawn
 void EndTooltip();
 ```
 
 `SetTooltip` shows a text (and icon) on hover, or right away when Tab moves the focus to
-the target. `BeginTooltip` builds any content; it returns `true` while the tooltip shows,
-and `EndTooltip` is called either way. A `GUIContent` with a tooltip sets it too. Classes:
-`tooltip`, `tooltip-text`.
+the target. A `shortcut` (the keys that do the same) goes in a chip after the text;
+`CommandButton` gives its command's. `BeginTooltip` builds any content; it returns `true`
+while the tooltip shows, and `EndTooltip` is called either way. A `GUIContent` with a
+tooltip sets it too. Classes: `tooltip-frame` (the see-through window), `tooltip` (the box),
+`tooltip-text`, `tooltip-shortcut`; colors `--tooltip-bg`, `--tooltip-border`,
+`--tooltip-text`, `--tooltip-chip`, `--tooltip-chip-text`.
+
+Timing, on `TooltipManager` (`tooltipManager`):
+
+- `delaySeconds` (0.5): how long the pointer rests on a target before its tooltip shows.
+- `warmSeconds` (0.5): moving to another target within this long of a tooltip showing
+  shows the next one at once.
+- `hideSeconds` (0.1): a tooltip stays this long after its target is left, unless the next
+  target has one of its own.
+
+None shows while a mouse button is held (a drag over targets), and a press, a key, a
+scroll or an open menu takes it away.
+
+```cpp
+Button(saveIcon, [this] { Save(); });
+SetTooltip("Save scene", "Ctrl+S");
+```
 
 Without a target, the tooltip goes on the control just drawn: its outer element, whatever
 parts it drew after it (a checkbox's label, a slider's value), and not a popup it opened. A

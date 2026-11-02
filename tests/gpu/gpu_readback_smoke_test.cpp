@@ -239,6 +239,97 @@ namespace
             << "a line must change the pixels along its path";
     }
 
+    // A triangle's soft edge is centered on its edge, and drawn even past its corners: a
+    // pixel whose middle is 0.2 px inside an edge between pixels is about 70% covered.
+    TEST_F(GpuReadbackTest, ATrianglesEdgeIsSoftHalfAPixelEitherSide)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        RegisterColorStyles();
+
+        // Its left edge upright at x = 40.3, the triangle's leftmost point.
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderTriangle(tachyon::float2{ 40.3f, 20.0f }, tachyon::float2{ 40.3f, 100.0f },
+                              tachyon::float2{ 120.0f, 100.0f }, kFullClip, solidColor);
+        });
+
+        auto green = [&](int x, int y) { return int((PixelAt(ctx, x, y) >> 8) & 0xFF); };
+        const int outside = green(20, 90), inside = green(60, 90);
+        ASSERT_GT(inside - outside, 100);
+        const float edge = float(green(40, 90) - outside) / float(inside - outside);   // its middle at 40.5
+        EXPECT_GT(edge, 0.55f);
+        EXPECT_LT(edge, 0.85f);
+        EXPECT_NEAR(green(39, 90), outside, 2) << "nothing a pixel out";
+    }
+
+    // A hard edge cuts straight: the pixel 0.2 px inside it is full, the one outside empty.
+    TEST_F(GpuReadbackTest, ATrianglesHardEdgeIsNotSoft)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        RegisterColorStyles();
+
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderTriangle(tachyon::float2{ 40.3f, 20.0f }, tachyon::float2{ 40.3f, 100.0f },
+                              tachyon::float2{ 120.0f, 100.0f }, kFullClip, solidColor,
+                              tachyon::ImageIndex::Invalid, tachyon::TriangleEdges::Edge01);
+        });
+
+        auto green = [&](int x, int y) { return int((PixelAt(ctx, x, y) >> 8) & 0xFF); };
+        const int outside = green(20, 90), inside = green(60, 90);
+        ASSERT_GT(inside - outside, 100);
+        EXPECT_NEAR(green(40, 90), inside, 2);
+        EXPECT_NEAR(green(39, 90), outside, 2);
+        // Its other edges stay soft: the long one, y = x - 20.3, is 0.2 px from (70.5, 50.5).
+        const int hypotenuse = green(70, 50);
+        EXPECT_GT(hypotenuse, outside + 2);
+        EXPECT_LT(hypotenuse, inside - 2);
+    }
+
+    // A polygon is a fan of triangles: no seam where they meet.
+    TEST_F(GpuReadbackTest, APolygonHasNoSeamBetweenItsTriangles)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        RegisterColorStyles();
+
+        // A square from (60, 40) to (160, 140), split along its diagonal y = x - 20.
+        const tachyon::float2 square[] = { { 60, 40 }, { 160, 40 }, { 160, 140 }, { 60, 140 } };
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) { r->RenderFilledPolygon(square, kFullClip, solidColor); });
+
+        auto green = [&](int x, int y) { return int((PixelAt(ctx, x, y) >> 8) & 0xFF); };
+        const int inside = green(130, 60);
+        ASSERT_GT(inside - green(20, 20), 100);
+        for (int x = 70; x < 150; x += 10)
+            EXPECT_NEAR(green(x, x - 20), inside, 2) << "on the diagonal at x = " << x;
+    }
+
+    // See-through, the triangles don't overlap either: the same everywhere inside, along
+    // the diagonal too. (Moved 0.3 px down, so no pixel's middle is right on it.)
+    TEST_F(GpuReadbackTest, ASeeThroughPolygonIsEvenAcrossItsTriangles)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        const auto halfWhite = styleManager.RegisterColorStyle(
+            tachyon::ColorStyle::Create(tachyon::color4b{ 255, 255, 255, 128 }));
+
+        const tachyon::float2 square[] = { { 60.0f, 40.3f }, { 160.0f, 40.3f }, { 160.0f, 140.3f }, { 60.0f, 140.3f } };
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) { r->RenderFilledPolygon(square, kFullClip, halfWhite); });
+
+        auto green = [&](int x, int y) { return int((PixelAt(ctx, x, y) >> 8) & 0xFF); };
+        const int upper = green(140, 60), lower = green(80, 120), outside = green(20, 20);
+        ASSERT_GT(upper - outside, 50);
+        EXPECT_NEAR(upper, outside + (255 - outside) * 128 / 255, 3) << "drawn once";
+        EXPECT_NEAR(lower, upper, 2) << "both halves the same";
+        for (int x = 70; x < 150; x += 10)
+            for (int dy = -1; dy <= 1; ++dy)
+                EXPECT_NEAR(green(x, x - 20 + dy), upper, 2) << "by the diagonal at x = " << x << ", " << dy;
+    }
+
     // ---- Glyph atlas pages ----
 
     class GpuTextAtlasTest : public GpuReadbackTest

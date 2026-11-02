@@ -17,7 +17,7 @@ Button("Click me", [this] { ++clicks; });
 ## CommandButton
 
 An icon button for a command in `commandManager`. Its icon and callback come from the
-command; the tooltip shows the command's description and shortcut, e.g. "Undo (Ctrl+Z)".
+command; the tooltip shows the command's description, and its shortcut in a chip after it.
 
 ```cpp
 bool CommandButton(CommandID command, StyleRef style, LayoutOverride&& constraints = {});

@@ -43,20 +43,24 @@ void main()
 	vec2 triSize = max(triMax - triMin, vec2(1, 1));
 
 
+	// The quad drawn: a pixel past the triangle all round, for the soft edge outside it.
+	vec2 quadMin  = triMin - 1.0;
+	vec2 quadSize = (triMax + 1.0) - quadMin;
+
 	vec2 clipMin = triangle.clipMin;
 	vec2 clipMax = triangle.clipMax;
 
-	clipMin.x = max(clipMin.x, triMin.x);
-	clipMin.y = max(clipMin.y, triMin.y);
-	clipMax.x = min(clipMax.x, triMax.x);
-	clipMax.y = min(clipMax.y, triMax.y);
+	clipMin.x = max(clipMin.x, quadMin.x);
+	clipMin.y = max(clipMin.y, quadMin.y);
+	clipMax.x = min(clipMax.x, quadMin.x + quadSize.x);
+	clipMax.y = min(clipMax.y, quadMin.y + quadSize.y);
 
 
-	vec2 clipped_min = vec2(clipMin) - triMin;
-	vec2 clipped_max = vec2(clipMax) - triMin;
-	vec2 clipped_uv = clamp(uv * triSize, clipped_min, clipped_max);
+	vec2 clipped_min = vec2(clipMin) - quadMin;
+	vec2 clipped_max = vec2(clipMax) - quadMin;
+	vec2 clipped_uv = clamp(uv * quadSize, clipped_min, clipped_max);
 
-	vec2 position = triMin + clipped_uv + 0.5;
+	vec2 position = quadMin + clipped_uv + 0.5;
 
 	outSurface.triMin = triMin;
 	outSurface.triSize = triSize;
