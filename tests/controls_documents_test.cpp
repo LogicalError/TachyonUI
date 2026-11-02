@@ -25,6 +25,10 @@ namespace tachyon
             DocumentSet    set;
             ID             documentsID{};
             int2           windowSize{ 1200, 700 };
+            // A second bar under the first, as another main window's would be.
+            DocumentSet    other;
+            ID             otherID{};
+            bool           twoBars = false;
 
             struct PanelLog { int draws = 0, enables = 0, disables = 0; };
             std::vector<std::unique_ptr<PanelLog>> logs;
@@ -34,14 +38,16 @@ namespace tachyon
                 ASSERT_TRUE(app.Initialize());
                 app.runPostLayoutCallbacks = true;   // the tab bar measures what fits
                 documentsID = app.idManager.CreateStaticID();
+                otherID     = app.idManager.CreateStaticID();
             }
 
             void TearDown() override { app.Cleanup(); }
 
             // A document with one panel, whose draws and visibility are logged.
-            Document& Add(std::string name, std::string extension, std::string kind)
+            Document& Add(std::string name, std::string extension, std::string kind) { return AddTo(set, std::move(name), std::move(extension), std::move(kind)); }
+            Document& AddTo(DocumentSet& to, std::string name, std::string extension, std::string kind)
             {
-                Document& document = app.CreateDocument(set, name, std::move(extension), std::move(kind), IconID::Invalid);
+                Document& document = app.CreateDocument(to, name, std::move(extension), std::move(kind), IconID::Invalid);
                 PanelLog* log = logs.emplace_back(std::make_unique<PanelLog>()).get();
                 const ID panel = app.CreatePanel(document.layout.panels, name + " panel", IconID::Invalid,
                                                  [log] { log->draws++; }, {},
@@ -54,9 +60,18 @@ namespace tachyon
             {
                 app.Frame([&] {
                     app.BeginRootWindow(windowSize, ElementFlags::None, app.theme.mainWindowStyleRef);
-                    app.Documents(documentsID, set);
+                    if (!twoBars)
+                    {
+                        app.Documents(documentsID, set);
+                        app.EndRootWindow();
+                        app.EmitFloatingDockWindows();
+                        return;
+                    }
+                    app.Documents(documentsID, set, LayoutOverride{}.Height(windowSize.y / 2));
+                    app.Documents(otherID, other, LayoutOverride{}.Height(windowSize.y / 2));
                     app.EndRootWindow();
-                    app.EmitFloatingDockWindows();
+                    app.EmitFloatingDockWindows(set);
+                    app.EmitFloatingDockWindows(other);
                 });
             }
 
@@ -83,6 +98,32 @@ namespace tachyon
 
             // The tab of `document`, by its name.
             int2 TabCenter(const Document& document) const { return app.CenterOf(app.FindByText(document.name)); }
+
+            // Presses a tab, drags it to `to` (stopping there for `during`) and drops it.
+            void DragTab(int2 from, int2 to, const std::function<void()>& during = {})
+            {
+                app.InjectMouseMove(from);
+                app.InjectMouseDown(from);
+                Frame();
+                app.InjectMouseMove({ from.x + 12, from.y + 2 }, MouseButtons::Left);
+                Frame();
+                app.InjectMouseMove(to, MouseButtons::Left);
+                Frame();
+                Frame();
+                if (during)
+                    during();
+                app.InjectMouseUp(to);
+                Frame();
+                Frame();
+            }
+            IntRect BarOf(const DocumentSet& documents) const { return app.GetElementRect(documents.internal.barID); }
+            static std::vector<std::string> Names(const DocumentSet& documents)
+            {
+                std::vector<std::string> names;
+                for (const auto& document : documents.documents)
+                    names.push_back(document->name);
+                return names;
+            }
         };
 
         TEST_F(DocumentsTest, OnlyTheActiveDocumentsPanelsAreBuilt)
@@ -472,6 +513,294 @@ namespace tachyon
             app.InjectMouseUp(strip, MouseButtons::Right);
             Frame();
             EXPECT_EQ(app.FindByText("Multiple Rows"), ID::Invalid());
+        }
+
+        // ---- Moving documents between bars and tearing them off ----
+
+        TEST_F(DocumentsTest, ATabDroppedOnAnotherBarMovesItsDocumentThere)
+        {
+            twoBars = true;
+            Document& forest = Add("Forest", ".level", "level");
+            Add("Desert", ".level", "level");
+            Add("Dunes", ".level", "level");
+            AddTo(other, "Terrain", ".mat", "material");
+            AddTo(other, "Hud", ".layout", "layout");
+            set.onTearOff = [](std::unique_ptr<Document>, int2) {};   // a drop off the bars would make a window
+            Settle();
+
+            const IntRect terrain = app.GetElementRect(other.documents[0]->id);
+            const int2 between{ terrain.x + terrain.w * 3 / 4, terrain.y + terrain.h / 2 };
+            int shownDuring = 0;
+            DragTab(TabCenter(forest), between, [&] {
+                shownDuring = app.CountByText("Forest");
+                EXPECT_GT(app.GetElementRect(other.documents[1]->id).x, terrain.x + terrain.w + app.styleManager.Px(100))
+                    << "Hud moves apart for it";
+                set.active = 2;   // Dunes shown meanwhile: it stays shown
+            });
+            EXPECT_EQ(shownDuring, 2) << "its tab, and a phantom in the bar it would go to; no window preview";
+            EXPECT_EQ(Names(set), (std::vector<std::string>{ "Desert", "Dunes" }));
+            EXPECT_EQ(Names(other), (std::vector<std::string>{ "Terrain", "Forest", "Hud" })) << "after the tab it passed the middle of";
+            EXPECT_EQ(other.Active(), &forest) << "the moved document is shown";
+            EXPECT_EQ(set.Active()->name, "Dunes");
+            EXPECT_EQ(logs[0]->enables - logs[0]->disables, 1) << "its panels move with it, shown there";
+            EXPECT_EQ(app.CountByText("Forest"), 1);
+        }
+
+        // Over another bar the phantom follows the cursor, held where the tab was grabbed, as a
+        // tab dragged within its own bar does.
+        TEST_F(DocumentsTest, ThePhantomFollowsTheCursor)
+        {
+            twoBars = true;
+            Document& forest = Add("Forest", ".level", "level");
+            AddTo(other, "Terrain", ".mat", "material");
+            AddTo(other, "Hud", ".layout", "layout");
+            Settle();
+
+            const IntRect tab = app.GetElementRect(forest.id);
+            const int2 from{ tab.x + 40, tab.y + tab.h / 2 };   // grabbed 40 px into the tab
+            const IntRect bar = BarOf(other);
+            const IntRect hud = app.GetElementRect(other.documents[1]->id);
+            auto phantomX = [&]
+            {
+                for (const ID id : FindAllByStyle(Class("document-tab-level")))
+                {
+                    const IntRect r = app.GetElementRect(id);
+                    if (r.y >= bar.y && r.y < bar.y + bar.h)
+                        return r.x;
+                }
+                return INT32_MIN;
+            };
+
+            app.InjectMouseMove(from);
+            app.InjectMouseDown(from);
+            Frame();
+            app.InjectMouseMove({ from.x + 12, from.y + 2 }, MouseButtons::Left);
+            Frame();
+            const int32_t y = bar.y + bar.h / 2;
+            // Two places past Hud's middle: the phantom goes after Hud both times.
+            const int32_t first = hud.x + hud.w * 3 / 4, second = first + 30;
+            app.InjectMouseMove({ first, y }, MouseButtons::Left);
+            Frame();
+            Frame();
+            EXPECT_EQ(phantomX(), first - 40);
+            app.InjectMouseMove({ second, y }, MouseButtons::Left);
+            Frame();
+            Frame();
+            EXPECT_EQ(phantomX(), second - 40) << "it moves with the cursor, not by slots";
+            app.InjectMouseUp({ second, y });
+            Frame();
+            Frame();
+            EXPECT_EQ(Names(other), (std::vector<std::string>{ "Terrain", "Hud", "Forest" }));
+        }
+
+        // Dropped right of every tab, a tab goes last: in its own bar and in another.
+        TEST_F(DocumentsTest, ATabDroppedPastTheLastOneGoesLast)
+        {
+            twoBars = true;
+            Add("A", ".level", "level");
+            Add("B", ".level", "level");
+            Add("C", ".level", "level");
+            AddTo(other, "Terrain", ".mat", "material");
+            AddTo(other, "Hud", ".layout", "layout");
+            set.onNew = [] {};
+            Settle();
+
+            // Just past the last tab, past "+", into the empty bar, up to "N open", on it and
+            // past it; at the tabs' height, in the gap above them and on the line under them.
+            const IntRect bar = BarOf(set);
+            for (const int y : { bar.y + bar.h / 2, bar.y + 1, bar.y + bar.h - 1 })
+                for (const int x : { 0, 1, 2, 3, 4, 5 })
+                {
+                    const IntRect last = app.GetElementRect(set.documents.back()->id);
+                    const IntRect plus = app.GetElementRect(FindByStyle(app.theme.documentNewStyleRef));
+                    const IntRect list = app.GetElementRect(app.FindByText(std::to_string(set.documents.size()) + " open"));
+                    const int32_t xs[] = { last.x + last.w + 2, plus.x + plus.w + 4, (plus.x + plus.w + list.x) / 2, list.x - 4,
+                                           list.x + list.w / 2, bar.x + bar.w - 2 };
+                    const ID dragged = set.documents[0]->id;
+                    const std::string first = set.documents[0]->name;
+                    int32_t draggedX = 0;
+                    DragTab(app.CenterOf(dragged), { xs[x], y }, [&] { draggedX = app.GetElementRect(dragged).x; });
+                    EXPECT_GT(draggedX, last.x) << "it follows the cursor, at spot " << x << " y " << y;
+                    EXPECT_EQ(set.documents.back()->name, first) << "own bar, spot " << x << " y " << y;
+                }
+
+            // The padding before the first tab: first.
+            const std::string lastName = set.documents.back()->name;
+            DragTab(app.CenterOf(set.documents.back()->id), { bar.x + 2, bar.y + 1 });
+            EXPECT_EQ(set.documents.front()->name, lastName);
+
+            const IntRect hud = app.GetElementRect(other.documents[1]->id);
+            const IntRect otherBar = BarOf(other);
+            DragTab(app.CenterOf(set.documents[0]->id), { (hud.x + hud.w + otherBar.x + otherBar.w) / 2, hud.y + hud.h / 2 });
+            ASSERT_EQ(other.documents.size(), 3u);
+            EXPECT_NE(other.documents.back()->name, "Hud") << "other bar: last";
+        }
+
+        // Tabs left out of the bar don't count when the one dragged is found.
+        TEST_F(DocumentsTest, ATabAfterOnesLeftOutMovesItsOwnDocument)
+        {
+            twoBars = true;
+            windowSize = { 700, 700 };
+            for (int i = 0; i < 8; ++i)
+                Add("Doc" + std::to_string(i), ".level", "level");
+            AddTo(other, "Terrain", ".mat", "material");
+            set.active = 7;
+            Settle();
+            Frame();
+            ASSERT_FALSE(app.HasElement(set.documents[6]->id)) << "test setup: tabs before it are left out";
+            ASSERT_TRUE(app.HasElement(set.documents[7]->id));
+
+            const IntRect bar = BarOf(other);
+            int phantoms = 0;
+            DragTab(app.CenterOf(set.documents[7]->id), { bar.x + bar.w / 2, bar.y + bar.h / 2 },
+                    [&] { phantoms = app.CountByText("Doc7"); });
+            EXPECT_EQ(phantoms, 2) << "the phantom is the dragged document's";
+            ASSERT_EQ(other.documents.size(), 2u);
+            EXPECT_EQ(other.documents[1]->name, "Doc7");
+            EXPECT_EQ(set.documents.size(), 7u);
+        }
+
+        TEST_F(DocumentsTest, ATabDroppedOffEveryBarIsTornOff)
+        {
+            twoBars = true;
+            Document& forest = Add("Forest", ".level", "level");
+            Add("Desert", ".level", "level");
+            AddTo(other, "Terrain", ".mat", "material");
+            std::vector<std::pair<std::string, int2>> tornOff;
+            set.onTearOff = [&](std::unique_ptr<Document> document, int2 at) { tornOff.push_back({ document->name, at }); };
+            Settle();
+
+            // Over the other bar's panels: documents don't drop on panels.
+            const IntRect panels = app.GetElementRect(other.documents[0]->internal.dockID);
+            const int2 onPanels{ panels.x + panels.w / 2, panels.y + panels.h / 2 };
+            bool ghostDuring = false;
+            DragTab(TabCenter(forest), onPanels, [&] { ghostDuring = app.CountByText("Forest") == 2; });
+            EXPECT_TRUE(ghostDuring) << "the window a drop would make follows the cursor";
+            ASSERT_EQ(tornOff.size(), 1u);
+            EXPECT_EQ(tornOff[0].first, "Forest");
+            EXPECT_EQ(tornOff[0].second, onPanels);
+            EXPECT_EQ(Names(set), (std::vector<std::string>{ "Desert" }));
+            EXPECT_EQ(Names(other), (std::vector<std::string>{ "Terrain" }));
+            EXPECT_EQ(other.documents[0]->layout.panels.size(), 1u) << "nor did it dock";
+        }
+
+        TEST_F(DocumentsTest, WithoutOnTearOffATabDroppedOffTheBarsGoesBack)
+        {
+            Document& forest = Add("Forest", ".level", "level");
+            Add("Desert", ".level", "level");
+            Settle();
+            bool ghostDuring = true;
+            DragTab(TabCenter(forest), { 600, 500 }, [&] { ghostDuring = app.CountByText("Forest") == 2; });
+            EXPECT_FALSE(ghostDuring) << "no window to preview";
+            EXPECT_EQ(Names(set), (std::vector<std::string>{ "Forest", "Desert" }));
+        }
+
+        TEST_F(DocumentsTest, OffTheTabsButOnItsOwnBarATabMovesAlongIt)
+        {
+            Add("Forest", ".level", "level");
+            Add("Desert", ".level", "level");
+            Add("Dunes", ".level", "level");
+            int tornOff = 0;
+            set.onTearOff = [&](std::unique_ptr<Document>, int2) { ++tornOff; };
+            Settle();
+            // The bar past "N open", outside the tabs but still the bar: last.
+            const IntRect bar = BarOf(set);
+            DragTab(TabCenter(*set.documents[0]), { bar.x + bar.w - 3, bar.y + bar.h / 2 });
+            EXPECT_EQ(Names(set), (std::vector<std::string>{ "Desert", "Dunes", "Forest" }));
+            EXPECT_EQ(set.Active()->name, "Forest");
+            EXPECT_EQ(tornOff, 0);
+        }
+
+        TEST_F(DocumentsTest, APanelTabDroppedOnADocumentBarIsNotADocument)
+        {
+            twoBars = true;
+            Add("Forest", ".level", "level");
+            Add("Desert", ".level", "level");
+            AddTo(other, "Terrain", ".mat", "material");
+            Settle();
+            const IntRect bar = BarOf(other);
+            // A document dragged before: what's left of that drag shows nothing now.
+            DragTab(TabCenter(*set.documents[1]), { bar.x + bar.w / 3, bar.y + bar.h / 2 });
+            ASSERT_EQ(Names(other), (std::vector<std::string>{ "Terrain", "Desert" }));
+            app.CloseDocument(other, 1);
+            Frame();
+
+            const ID panel = set.documents[0]->layout.root->panelIds[0];
+            int forestDuring = 0;
+            DragTab(app.CenterOf(panel), { bar.x + bar.w / 3, bar.y + bar.h / 2 },
+                    [&] { forestDuring = app.CountByText("Forest"); });
+            EXPECT_EQ(forestDuring, 1) << "no document phantom for a panel";
+            EXPECT_EQ(Names(other), (std::vector<std::string>{ "Terrain" }));
+            EXPECT_EQ(other.documents[0]->layout.panels.size(), 1u);
+            ASSERT_EQ(app.m_floatingDockWindows.size(), 1u) << "it floats, as off every dock";
+            EXPECT_EQ(app.m_floatingDockWindows[0]->home, &set.documents[0]->layout);
+        }
+
+        TEST_F(DocumentsTest, TornOffPanelsBelongToTheirDocumentsWindow)
+        {
+            twoBars = true;
+            Document& forest = Add("Forest", ".level", "level");
+            AddTo(other, "Terrain", ".mat", "material");
+            const ID floated = app.CreatePanel(forest.layout.panels, "Floated", IconID::Invalid, [] {}, {});
+            forest.layout.root = MakeSplit(DockSplitMode::LeftPinned, 200, std::move(forest.layout.root), MakeLeaf({ floated }));
+            Settle();
+            ASSERT_TRUE(app.FloatPanel(forest.layout, floated, { 100, 100 }));
+            Frame();
+            ASSERT_EQ(app.m_floatingDockWindows.size(), 1u);
+            const ID window = app.m_floatingDockWindows[0]->windowID;
+
+            // Only the set holding its document builds it.
+            int built = 0;
+            auto emitOnly = [&](DocumentSet& documents)
+            {
+                app.Frame([&] {
+                    app.BeginRootWindow(windowSize, ElementFlags::None, app.theme.mainWindowStyleRef);
+                    app.Documents(documentsID, set, LayoutOverride{}.Height(windowSize.y / 2));
+                    app.Documents(otherID, other, LayoutOverride{}.Height(windowSize.y / 2));
+                    app.EndRootWindow();
+                    app.EmitFloatingDockWindows(documents);
+                });
+                built = app.HasElement(window) ? 1 : 0;
+            };
+            emitOnly(other);
+            EXPECT_EQ(built, 0);
+            emitOnly(set);
+            EXPECT_EQ(built, 1);
+
+            // Its document moved to the other bar, the other set builds it.
+            const IntRect bar = BarOf(other);
+            DragTab(TabCenter(forest), { bar.x + bar.w / 2, bar.y + bar.h / 2 });
+            ASSERT_EQ(other.documents.size(), 2u);
+            emitOnly(set);
+            EXPECT_EQ(built, 0);
+            emitOnly(other);
+            EXPECT_EQ(built, 1);
+            EXPECT_EQ(app.m_floatingDockWindows.size(), 1u);
+        }
+
+        TEST_F(DocumentsTest, ADocumentClosedBeforeItsDropIsDoneStaysClosed)
+        {
+            twoBars = true;
+            Document& forest = Add("Forest", ".level", "level");
+            Add("Desert", ".level", "level");
+            AddTo(other, "Terrain", ".mat", "material");
+            Settle();
+            const IntRect bar = BarOf(other);
+            const int2 from = TabCenter(forest);
+            const int2 to{ bar.x + bar.w / 2, bar.y + bar.h / 2 };
+            app.InjectMouseMove(from);
+            app.InjectMouseDown(from);
+            Frame();
+            app.InjectMouseMove({ from.x + 12, from.y + 2 }, MouseButtons::Left);
+            Frame();
+            app.InjectMouseMove(to, MouseButtons::Left);
+            Frame();
+            app.InjectMouseUp(to);
+            Frame();   // dropped: the move waits for the next frame
+            app.CloseDocument(set, 0);
+            Frame();
+            EXPECT_EQ(Names(set), (std::vector<std::string>{ "Desert" }));
+            EXPECT_EQ(Names(other), (std::vector<std::string>{ "Terrain" }));
         }
 
         TEST_F(DocumentsTest, ClosingADocumentClosesItsTornOffPanels)

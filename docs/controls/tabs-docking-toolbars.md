@@ -30,7 +30,9 @@ app.
 
 `TabBarOptions` changes the rest: `closeLabel` names the context menu's close item ("Close
 Panel"), `listHidden = false` leaves out the "+N" button (the caller lists the hidden tabs
-another way), and `layoutMenu = false` leaves out "Collapse Rows" / "Multiple Rows".
+another way), `layoutMenu = false` leaves out "Collapse Rows" / "Multiple Rows", and
+`dropArea` names an element around the bar that counts as the bar while a tab is dragged (in
+it the tab reorders, past the last tab it goes last; only off it is it dragged out).
 
 ```cpp
 bool BeginTabBar(ID id, int* selectedIndex, std::function<void(int, int)> onReorder,
@@ -137,14 +139,29 @@ close the document on the next frame; `onClose` returning false keeps it (to ask
 unsaved changes, then call `CloseDocument`). Closing a document destroys its panels and
 closes its torn-off panel windows.
 
+A tab dragged off the bar moves its document: dropped on another document bar (another main
+window's, or another set's in the same window) it goes there, where a phantom tab showed it
+would; dropped anywhere else, `onTearOff` gets the document, out of the set, and the screen
+position, for a new main window of its own (a preview of it follows the cursor). Without
+`onTearOff` the tab goes back. Document tabs only drop on document bars and panel tabs only
+on panel docks: a document dropped on panels is torn off, a panel dropped on a document bar
+floats. Drops are done at the start of the next frame.
+
+The app builds each main window: its title bar and menus, `Documents` for its own
+`DocumentSet`, its status bar, then `EmitFloatingDockWindows(set)`, which builds the windows
+of the panels torn from that set's documents; they belong to that window, and to the one a
+document moves to. A window left with no documents should close. A set must stay alive until
+the end of the frame it was built in.
+
 ```cpp
 Document& CreateDocument(DocumentSet& set, std::string name, std::string extension,
                          std::string kind, IconID icon);
 void      CloseDocument(DocumentSet& set, int index);
 void      Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
+void      EmitFloatingDockWindows(const DocumentSet& documents);
 ```
 
-`DocumentSet` holds the documents in tab order, `active`, `onNew` and `onClose`;
+`DocumentSet` holds the documents in tab order, `active`, `onNew`, `onClose` and `onTearOff`;
 `Active()` is the shown document. Name the active document in the window's title or status
 bar. Other classes: `documents`, `document-bar`, `document-row`, `document-tab-bar`,
 `document-extension`, `document-mark`, `document-close`, `document-dirty`, `document-new`,
@@ -159,7 +176,16 @@ terrain.layout.root = MakeLeaf({ CreatePanel(terrain.layout.panels, "Graph", Ico
 
 // Each frame, under the title bar:
 Documents(documentsID, documents);
-EmitFloatingDockWindows();
+EmitFloatingDockWindows(documents);
+
+// A tab dropped off the bars: a window of its own, built like the first one.
+documents.onTearOff = [this](std::unique_ptr<Document> document, int2 at) {
+    auto& window = windows.emplace_back(std::make_unique<MyDocumentWindow>());
+    window->windowID = idManager.CreateStaticID();
+    window->position = at;
+    window->documents.onTearOff = documents.onTearOff;
+    window->documents.documents.push_back(std::move(document));
+};
 ```
 
 

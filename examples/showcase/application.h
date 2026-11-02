@@ -51,6 +51,16 @@ namespace tachyon
     // The showcase's saved UI state, under the resource root (workdirectory/ in the source tree).
     inline constexpr const char* kUIStateFile = "ui_state.json";
 
+    // A main window that documents were dragged out to, with the first window's chrome.
+    struct DocumentWindow
+    {
+        ID          windowID    = ID::Invalid();
+        ID          documentsID = ID::Invalid();
+        DocumentSet documents;
+        int2        spawnPosition {};      // screen pixels, used on the first frame only
+        bool        positioned = false;    // once true, the OS manages the position
+    };
+
     class Application : public GUIApplication
     {
     public:
@@ -403,6 +413,9 @@ namespace tachyon
             DocumentSet   documents;
             Document*     forest = nullptr;          // the first document, whose layout is saved
             Document*     closingDocument = nullptr; // asked about its unsaved changes
+            DocumentSet*  closingSet      = nullptr; // the set it's in
+            std::vector<std::unique_ptr<DocumentWindow>> documentWindows;   // documents dragged out
+            bool          mainWindowOpen = true;
             ID            closeDocumentDialogID { ID::Invalid() };
             int           untitledCount = 0;
             std::string   dockNotes;
@@ -502,8 +515,10 @@ namespace tachyon
         void RenderProfilerTreePanel();
 
         // Main menu bar across the top of the main window (File / Edit / View / Help).
-        void RenderMainMenu();
-        void RenderStatusBar();
+        /// The title bar's menus; `withSearch` adds the command search (one window has it).
+        void RenderMainMenu(bool withSearch = true);
+        /// State on the left, the active document in `documents`, frame time on the right.
+        void RenderStatusBar(const DocumentSet& documents);
         void RequestExit();
         void AskBeforeExit();
 
@@ -511,8 +526,12 @@ namespace tachyon
         ID   CreateShowcasePanel(DockingLayout& layout, std::string_view title);
         /// A document's panels: `main`, and `side` docked to its right.
         void FillDocument(Document& document, std::string_view main, std::string_view side);
-        /// While an unsaved document waits to close: asks whether to discard its changes.
-        void AskBeforeClosingDocument();
+        /// While an unsaved document of `set` waits to close: asks whether to discard its changes.
+        void AskBeforeClosingDocument(DocumentSet& set);
+        /// A set's "+", its unsaved-changes question and its tear-off into a window of its own.
+        void SetUpDocuments(DocumentSet& documents);
+        /// The windows documents were dragged out to, each with the main window's chrome.
+        void RenderDocumentWindows();
         // Into `fullscreen` (Fullscreen or ExclusiveFullscreen), or out of fullscreen when in it.
         void ToggleFullscreen(WindowMode fullscreen);
 
