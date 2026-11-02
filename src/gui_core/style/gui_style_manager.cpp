@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 namespace tachyon
 {
@@ -464,6 +465,47 @@ namespace tachyon
         return StyleRef{ RegisterLayoutStyle(variant, false), base.visualBoxStyleIndex, base.visualTextStyleIndex };
     }
 
+    StyleRef StyleManager::WithTextOf(StyleRef base, StyleRef from, tachyon::ElementState state) noexcept
+    {
+        const LayoutStyle*           baseLayout = GetLayoutStyle(base.layoutStyleIndex);
+        const LayoutStyle*           fromLayout = GetLayoutStyle(from.layoutStyleIndex);
+        const VisualTextStyleStates* baseText   = GetVisualTextStyles(base.visualTextStyleIndex);
+        const VisualTextStyle*       fromText   = GetVisualTextStyle(from.visualTextStyleIndex, state);
+        if (!baseLayout || !fromLayout || !baseText || !fromText)
+            return base;
+
+        const uint64_t key = Hash::Combine(Hash::Calculate(base), Hash::Calculate(from), Hash::Calculate(state));
+        if (auto it = m_textOfVariants.find(key); it != m_textOfVariants.end())
+            return it->second;
+
+        LayoutStyle layout     = *baseLayout;
+        layout.textLayoutStyle = fromLayout->textLayoutStyle;
+        layout.textLayoutStyle.textWrapping = TextWrap::NoWrap;
+        layout.textLayoutStyle.textOverflow = TextOverflow::Clip;
+        layout.iconSide    = fromLayout->iconSide;
+        layout.iconTextGap = fromLayout->iconTextGap;
+        layout.iconSize    = fromLayout->iconSize;
+        layout.iconOffsetY = fromLayout->iconOffsetY;
+        layout.padding.top    = fromLayout->padding.top;
+        layout.padding.bottom = fromLayout->padding.bottom;
+
+        VisualTextStyle states[Style::kStateCount];
+        uint64_t hash = 0;
+        for (int i = 0; i < Style::kStateCount; i++)
+        {
+            states[i] = *fromText;
+            states[i].textColorIndex = (*baseText)[i].textColorIndex;
+            states[i].iconColorIndex = (*baseText)[i].iconColorIndex;
+            for (size_t d = 0; d < std::size(states[i].decorationColorIndex); ++d)
+                states[i].decorationColorIndex[d] = (*baseText)[i].decorationColorIndex[d];
+            std::copy(std::begin((*baseText)[i].textShadows), std::end((*baseText)[i].textShadows), states[i].textShadows);
+            hash = Hash::Combine(hash, states[i].GetHashCode());
+        }
+        const StyleRef variant{ RegisterLayoutStyle(layout, false), base.visualBoxStyleIndex, RegisterVisualTextStyles(states, hash) };
+        m_textOfVariants[key] = variant;
+        return variant;
+    }
+
     StyleRef StyleManager::WithTextOverride(StyleRef base, const TextOverride& textOverride) noexcept
     {
         if (textOverride.font == FontID::Invalid && textOverride.language.empty())
@@ -638,6 +680,7 @@ namespace tachyon
         m_visualTextStyles.clear();
         m_visualTextHashMap.clear();
         m_textOverrides.clear();
+        m_textOfVariants.clear();
 
         visualColorStylesModified = true;
         visualBoxStylesModified = true;

@@ -88,6 +88,13 @@ namespace tachyon
         /// already wraps that way. Cheap to call every frame; ClearAll drops the variants.
         StyleRef WithFlexWrap(StyleRef base, FlexWrap wrap) noexcept;
 
+        /// A variant of `base` whose text is set as `from`'s is in `state`: its font, text layout
+        /// (alignment, trim), icon size and gap, and vertical padding, so at `from`'s height the
+        /// text sits as high; on one line and never cut short. The colors and text shadows stay
+        /// `base`'s, and so does the rest of its layout and its box. For text shown again
+        /// elsewhere, looking the same. ClearAll drops the variants.
+        StyleRef WithTextOf(StyleRef base, StyleRef from, tachyon::ElementState state) noexcept;
+
         /// @name Lookups
         /// Each returns nullptr for an out-of-range index. The per-state getters ignore
         /// non-visual state bits; Disabled overrides every other state.
@@ -218,6 +225,7 @@ namespace tachyon
         GradientManager&             m_gradientManager;
         uint32_t                     m_generation = 0;
         std::unordered_map<uint64_t, VisualTextStyleIndex> m_textOverrides; ///< (base text style, override) -> variant
+        std::unordered_map<uint64_t, StyleRef> m_textOfVariants;            ///< (base, from, state) -> WithTextOf
 
         /// deque: element rects hold LayoutStyle pointers across mid-frame registrations.
         std::deque<LayoutStyle>       m_layoutStyles;

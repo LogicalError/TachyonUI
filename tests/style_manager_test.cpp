@@ -205,6 +205,85 @@ namespace tachyon
         EXPECT_EQ(sm.GetVisualTextStyle(again.visualTextStyleIndex, ElementState::None)->textStyle.fontId, serif);
     }
 
+    // Text shown again elsewhere: the font, text layout, icon and vertical padding of the
+    // text it shows in the state it's in, on one line and whole; the colors and the rest stay.
+    TEST(StyleManagerTest, WithTextOfTakesTheTextAndKeepsTheColors)
+    {
+        GradientManager gm(16);
+        StyleManager sm(gm);
+
+        Style base{};
+        base.padding.left = 6;
+        base.padding.right = 6;
+        base.margin.top = 2;
+        for (StyleState& state : base.states)
+        {
+            state.textColor = ColorStyle::Create(color4b{ 230, 230, 230, 255 });
+            state.decorationColors[size_t(DecorationLine::Under)] = ColorStyle::Create(color4b{ 255, 0, 0, 255 });
+        }
+        const StyleRef box = sm.Register(base);
+
+        Style from{};
+        from.padding.top = 3;
+        from.padding.bottom = 4;
+        from.padding.left = 9;
+        from.iconSide = IconSide::Top;
+        from.iconTextGap = 5;
+        from.iconSize = 12;
+        from.iconOffsetY = 2;
+        from.textLayoutStyle.horizontalAlignment = TextAlign::Center;
+        from.textLayoutStyle.verticalAlignment = TextAlign::Center;
+        from.textLayoutStyle.textWrapping = TextWrap::Wrap;
+        from.textLayoutStyle.textOverflow = TextOverflow::Ellipsis;
+        for (StyleState& state : from.states)
+        {
+            state.textStyle.fontSize = 14.0f;
+            state.textStyle.fontId = FontIDFromName("Inter");
+            state.textColor = ColorStyle::Create(color4b{ 0, 0, 255, 255 });
+            state.textShadow[0] = BoxShadow{ .y = 1, .blur = 2, .color = color4b{ 0, 0, 0, 128 } };
+        }
+        from.states[ElementState::Hover].textStyle.fontSize = 18.0f;
+        const StyleRef text = sm.Register(from);
+
+        const StyleRef shown = sm.WithTextOf(box, text, ElementState::Hover);
+        EXPECT_EQ(shown.visualBoxStyleIndex, box.visualBoxStyleIndex);
+        for (ElementState state : { ElementState::None, ElementState::Hover, ElementState::Focused })
+        {
+            const VisualTextStyle* got  = sm.GetVisualTextStyle(shown.visualTextStyleIndex, state);
+            const VisualTextStyle* keep = sm.GetVisualTextStyle(box.visualTextStyleIndex, state);
+            ASSERT_TRUE(got && keep);
+            EXPECT_EQ(got->textStyle.fontSize, 18.0f) << "the hovered font, in every state";
+            EXPECT_EQ(got->textStyle.fontId, FontIDFromName("Inter"));
+            EXPECT_EQ(got->textColorIndex, keep->textColorIndex);
+            EXPECT_EQ(got->iconColorIndex, keep->iconColorIndex);
+            EXPECT_EQ(got->decorationColorIndex[size_t(DecorationLine::Under)], keep->decorationColorIndex[size_t(DecorationLine::Under)]);
+            EXPECT_TRUE(got->textShadows[0] == keep->textShadows[0]) << "no shadow from the text it shows";
+        }
+        const LayoutStyle* layout = sm.GetLayoutStyle(shown.layoutStyleIndex);
+        ASSERT_NE(layout, nullptr);
+        EXPECT_EQ(layout->textLayoutStyle.horizontalAlignment, TextAlign::Center);
+        EXPECT_EQ(layout->textLayoutStyle.verticalAlignment, TextAlign::Center);
+        EXPECT_EQ(layout->textLayoutStyle.textWrapping, TextWrap::NoWrap);
+        EXPECT_EQ(layout->textLayoutStyle.textOverflow, TextOverflow::Clip);
+        EXPECT_EQ(layout->iconSide, IconSide::Top);
+        EXPECT_EQ(layout->iconTextGap, 5);
+        EXPECT_EQ(layout->iconSize, 12);
+        EXPECT_EQ(layout->iconOffsetY, 2);
+        EXPECT_EQ(layout->padding.top, 3);
+        EXPECT_EQ(layout->padding.bottom, 4);
+        EXPECT_EQ(layout->padding.left, 6) << "its own sides";
+        EXPECT_EQ(layout->margin.top, 2);
+
+        EXPECT_EQ(sm.WithTextOf(box, text, ElementState::Hover), shown) << "repeat calls reuse the variant";
+        EXPECT_NE(sm.WithTextOf(box, text, ElementState::None).visualTextStyleIndex, shown.visualTextStyleIndex);
+
+        sm.ClearAll();
+        const StyleRef box2 = sm.Register(base), text2 = sm.Register(from);
+        const StyleRef again = sm.WithTextOf(box2, text2, ElementState::None);
+        ASSERT_NE(sm.GetVisualTextStyle(again.visualTextStyleIndex, ElementState::None), nullptr);
+        EXPECT_EQ(sm.GetVisualTextStyle(again.visualTextStyleIndex, ElementState::None)->textStyle.fontSize, 14.0f);
+    }
+
     // Caches of style indices (e.g. node-view wire colours) detect a theme
     // reload through the generation, which only ClearAll changes.
     TEST(StyleManagerTest, GenerationChangesOnlyOnClearAll)

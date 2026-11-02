@@ -172,6 +172,140 @@ namespace tachyon
         EndWindow();
     }
 
+    namespace
+    {
+        // Where a text's start lines up in its box: 0 its left, 1 its right, 2 its middle.
+        int AlignSide(TextAlign align)
+        {
+            switch (align)
+            {
+                case TextAlign::End: case TextAlign::Right: case TextAlign::Bottom: return 1;
+                case TextAlign::Center: return 2;
+                default: return 0;
+            }
+        }
+
+        // How wide an element's text and icon are on one line.
+        int32_t NaturalWidth(const ITextSystem& textSystem, const Element& element, const LayoutStyle& layout)
+        {
+            const int32_t text = textSystem.GetTextMeasurement(element.textID).maxWidth;
+            if (element.iconID == IconID::Invalid)
+                return text;
+            const int32_t icon = textSystem.GetIconMeasurement(element.iconID).width;
+            switch (layout.iconSide)
+            {
+                case IconSide::Left: case IconSide::Right: return icon + layout.iconTextGap + text;
+                case IconSide::Top: case IconSide::Bottom: return std::max(icon, text);
+                default: return text;
+            }
+        }
+    }
+
+    GUIApplication::CutShortText GUIApplication::FindCutShortText(int2 mousePos) const
+    {
+        const ID target = tooltipManager.GetActiveTargetID();
+        const ElementRef targetRef = elementStorage.FindElementRefByID(target);
+        if (!targetRef.IsValid() || !textSystem)
+            return {};
+        // Under a zoom the text is drawn at another size than its own.
+        for (ElementRef up = elementStorage.GetParentRef(targetRef); up.IsValid(); up = elementStorage.GetParentRef(up))
+            if (!elementStorage.GetElementRectUnsafe(up).contentTransform.IsIdentity())
+                return {};
+        // Shown for the focus after a Tab: the target's own text or its first part's.
+        const bool byMouse = target == guiStateManager.Interaction().GetHoveredID();
+
+        std::vector<ElementRef> todo{ targetRef };
+        for (size_t visited = 0; !todo.empty() && visited < 256; ++visited)
+        {
+            const ElementRef ref = todo.back();
+            todo.pop_back();
+            const Element&     element = elementStorage.GetElementUnsafe(ref);
+            const ElementRect& rect    = elementStorage.GetElementRectUnsafe(ref);
+            const LayoutStyle* layout  = rect.layoutStyle;
+            if (element.textID != TextID::Invalid && layout && layout->textLayoutStyle.textWrapping == TextWrap::NoWrap &&
+                !textSystem->IsTextEditor(element.id))
+            {
+                // Its text drawn whole, where in its box it would start, against what shows of it.
+                const IntRect content = layout->GetPaddingBoxContentRect(rect.rect);
+                const int32_t natural = NaturalWidth(*textSystem, element, *layout);
+                const int     side    = AlignSide(layout->textLayoutStyle.horizontalAlignment);
+                const int32_t start   = side == 0 ? content.x : side == 1 ? content.x + content.w - natural
+                                                                         : content.x + (content.w - natural) / 2;
+                const IntRect shown   = content.Intersection(rect.clipRect);
+                const bool cut = start < shown.x || start + natural > shown.x + shown.w;
+                if (cut && shown.w > 0 && (!byMouse || shown.Contains(mousePos)))
+                {
+                    ElementRef window = ref;
+                    while (window.depth > 0)
+                        window = elementStorage.GetParentRef(window);
+                    const ElementRect& windowRect = elementStorage.GetElementRectUnsafe(window);
+                    return CutShortText{ .id = element.id, .windowID = elementStorage.GetElementUnsafe(window).id,
+                                         .windowPos = windowRect.rect.position,
+                                         .at = { start, rect.rect.y + layout->borderWidths.top }, .width = natural,
+                                         .height = rect.rect.h - layout->borderWidths.Vertical(),
+                                         .monitorIndex = windowRect.monitorIndex };
+                }
+            }
+            const IndexRange children = elementStorage.GetChildRange(ref);
+            for (uint32_t i = children.end; i-- > children.begin;)
+                todo.push_back(ElementRef{ ref.depth + 1, i });
+        }
+        return {};
+    }
+
+    void GUIApplication::ShowCutShortText()
+    {
+        const ElementRef ref = elementStorage.FindElementRefByID(m_cutShort.id);
+        if (!ref.IsValid())
+            return;
+        // Its parts, as registering elements may move it.
+        const Element&     found    = elementStorage.GetElementUnsafe(ref);
+        const TextID       textID   = found.textID;
+        const IconID       iconID   = found.iconID;
+        const StyleRef     cutStyle = found.styleRef;
+        const ElementState cutState = found.state;
+        const LayoutStyle* box = styleManager.GetLayoutStyle(theme.tooltipExpandStyleRef.layoutStyleIndex);
+        if (textID == TextID::Invalid || !box || !tooltipManager.ShouldShow(tooltipManager.GetActiveTargetID()))
+            return;
+
+        // Its text where the cut text's is (as laid out last frame: this frame's isn't yet), the
+        // box's margin, border and padding around it; kept on the screen, but for the margin
+        // (room for the shadow).
+        const int boxLeft   = box->margin.left + box->borderWidths.left + box->padding.left;
+        const int boxTop    = box->margin.top + box->borderWidths.top + box->padding.top;
+        const int boxRight  = box->margin.right + box->borderWidths.right + box->padding.right;
+        const int boxBottom = box->margin.bottom + box->borderWidths.bottom + box->padding.bottom;
+        int x = m_cutShort.at.x - boxLeft, y = m_cutShort.at.y - boxTop;
+        if (const IntRect area = windowManager->GetMonitorArea(m_cutShort.monitorIndex); area.w > 0 && area.h > 0)
+        {
+            const int w = m_cutShort.width + boxLeft + boxRight, h = m_cutShort.height + boxTop + boxBottom;
+            x = std::max(std::min(x, area.Max(0) + box->margin.right - w), area.x - box->margin.left);
+            y = std::max(std::min(y, area.Max(1) + box->margin.bottom - h), area.y - box->margin.top);
+        }
+        // Against its window, which is laid out before this one: the cut text, in it, isn't.
+        auto pos = LayoutOverride{}.Anchored(m_cutShort.windowID, AnchorPlacementAxis::InsideMin, x - m_cutShort.windowPos.x,
+                                             AnchorPlacementAxis::InsideMin, y - m_cutShort.windowPos.y);
+
+        const ElementFlags flags = ElementFlags::WindowNoCaption | ElementFlags::WindowIsPopup | ElementFlags::WindowIsTransparent
+                                 | ElementFlags::WindowNotFocusable;
+        if (!BeginWindow(tooltipWindowID, theme.tooltipFrameStyleRef, std::move(pos), flags))
+        {
+            EndWindow();   // the window's skipped scope
+            return;
+        }
+        if (const ElementRef winRef = elementStorage.FindElementRefByID(tooltipWindowID); winRef.IsValid())
+            elementStorage.GetElementUnsafe(winRef).flags |= ElementFlags::NoInput;
+        RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("tooltip_box"), .styleRef = theme.tooltipExpandStyleRef,
+                                          .flags = ElementFlags::NoInput }, LayoutOverride{});
+        VERIFY(elementStorage.BeginChildren());
+        const std::string text{ textSystem->GetText(textID) };
+        RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID(), .iconID = iconID,
+                                          .styleRef = styleManager.WithTextOf(theme.tooltipExpandTextStyleRef, cutStyle, cutState),
+                                          .flags = ElementFlags::NoInput },
+                        text, LayoutOverride{}.Height(Pixels{ m_cutShort.height }));
+        CloseTooltip();
+    }
+
     // Called for every BeginTooltip, shown or not.
     void GUIApplication::EndTooltip()
     {
