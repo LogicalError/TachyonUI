@@ -58,6 +58,45 @@ namespace tachyon
                 if (entry.key == key) { entry.target = target; return; }
             entries.push_back(Entry{ std::move(key), target });
         }
+
+        // A layout's dock tree as JSON, panels by key; null when it has none.
+        std::optional<JsonValue> DockTreeJson(const DockingLayout& layout)
+        {
+            if (!layout.root)
+                return std::nullopt;
+            const std::string tree = SerializeDockTree(*layout.root, [&layout](ID id) {
+                const auto it = layout.panels.find(id);
+                return it != layout.panels.end() ? PanelKey(it->second) : std::string();
+            });
+            Result<JsonValue> parsed = JsonValue::Parse(tree);
+            return parsed ? std::optional<JsonValue>(std::move(*parsed)) : std::nullopt;
+        }
+
+        // A saved dock tree applied to a layout: panels by key, the ones it hasn't to its
+        // first leaf. False when it can't be read; the layout stays.
+        bool ApplyDockTree(DockingLayout& layout, std::string_view tree)
+        {
+            std::unique_ptr<DockNode> root = ParseDockTree(tree, [&layout](std::string_view panelKey) -> std::optional<ID> {
+                for (const auto& [id, panel] : layout.panels)
+                    if (PanelKey(panel) == panelKey) return id;
+                return std::nullopt;
+            });
+            if (!root)
+                return false;
+            std::vector<ID> all;
+            for (const auto& [id, panel] : layout.panels) all.push_back(id);
+            if (DockNode* leaf = FirstLeaf(root.get()))
+                for (const ID id : UnplacedPanels(*root, all))
+                    leaf->panelIds.push_back(id);
+            layout.root = std::move(root);
+            return true;
+        }
+
+        std::string StringOf(const JsonValue& object, const char* name)
+        {
+            const JsonValue* v = object.Find(name);
+            return v && v->IsString() ? v->AsString() : std::string();
+        }
     }
 
     void GUIApplication::PersistWindow(std::string key, ID windowID)                     { Upsert(m_persistWindows, std::move(key), windowID); }
@@ -72,17 +111,48 @@ namespace tachyon
     {
         Upsert(m_persistTables, std::move(key), PersistedTable::Target{ &state, columns });
     }
+    void GUIApplication::PersistDocuments(std::string key, std::function<std::vector<DocumentWindowRef>()> windows)
+    {
+        Upsert(m_persistDocuments, std::move(key), std::move(windows));
+    }
+
+    std::vector<SavedDocumentWindow> GUIApplication::TakeSavedDocuments(std::string_view key)
+    {
+        const auto it = m_savedDocuments.find(std::string(key));
+        if (it == m_savedDocuments.end())
+            return {};
+        std::vector<SavedDocumentWindow> windows = std::move(it->second);
+        m_savedDocuments.erase(it);
+        return windows;
+    }
+
+    bool GUIApplication::RestoreDocumentLayout(Document& document, const SavedDocument& saved)
+    {
+        return !saved.layout.empty() && ApplyDockTree(document.layout, saved.layout);
+    }
+
+    void GUIApplication::RestoreWindowPlace(ID windowID, const SavedDocumentWindow& saved)
+    {
+        if (saved.rect.w <= 0 || saved.rect.h <= 0)
+            return;
+        RestoredWindow restored;
+        restored.rect       = saved.rect;
+        restored.mode       = saved.mode;
+        restored.monitor    = saved.monitor;
+        restored.hasMonitor = saved.monitor.w > 0 && saved.monitor.h > 0;
+        m_restoredWindows[windowID] = restored;
+    }
 
     std::string GUIApplication::SaveUIState() const
     {
         JsonValue doc = JsonValue::MakeObject();
         doc.Set("version", kStateVersion);
 
-        JsonValue windows = JsonValue::MakeObject();
-        for (const auto& [key, windowID] : m_persistWindows)
+        // A window's place; null when it isn't open (its last place isn't known here).
+        auto windowJson = [this](ID windowID) -> std::optional<JsonValue>
         {
             if (!windowManager || windowManager->GetWindowHandle(windowID) == nullptr)
-                continue;   // not open: its last saved state isn't known here
+                return std::nullopt;
             const IntRect rect = windowManager->GetWindowRect(windowID);
             JsonValue w = JsonValue::MakeObject();
             w.Set("x", rect.x); w.Set("y", rect.y); w.Set("w", rect.w); w.Set("h", rect.h);
@@ -101,23 +171,52 @@ namespace tachyon
                     break;
                 }
             }
-            windows.Set(key, std::move(w));
-        }
+            return w;
+        };
+
+        JsonValue windows = JsonValue::MakeObject();
+        for (const auto& [key, windowID] : m_persistWindows)
+            if (std::optional<JsonValue> w = windowJson(windowID))
+                windows.Set(key, std::move(*w));
         doc.Set("windows", std::move(windows));
 
         JsonValue docking = JsonValue::MakeObject();
         for (const auto& [key, layout] : m_persistDocks)
-        {
-            if (!layout->root)
-                continue;
-            const std::string tree = SerializeDockTree(*layout->root, [layout](ID id) {
-                const auto it = layout->panels.find(id);
-                return it != layout->panels.end() ? PanelKey(it->second) : std::string();
-            });
-            if (Result<JsonValue> parsed = JsonValue::Parse(tree))
-                docking.Set(key, std::move(*parsed));
-        }
+            if (std::optional<JsonValue> tree = DockTreeJson(*layout))
+                docking.Set(key, std::move(*tree));
         doc.Set("docking", std::move(docking));
+
+        // Each main window's documents: which, in what order, the active one and their dock
+        // trees, with the window's place.
+        JsonValue documents = JsonValue::MakeObject();
+        for (const auto& [key, listWindows] : m_persistDocuments)
+        {
+            JsonValue list = JsonValue::MakeArray();
+            for (const DocumentWindowRef& window : listWindows ? listWindows() : std::vector<DocumentWindowRef>{})
+            {
+                if (!window.documents)
+                    continue;
+                JsonValue w = JsonValue::MakeObject();
+                if (std::optional<JsonValue> place = windowJson(window.windowID))
+                    w.Set("window", std::move(*place));
+                w.Set("active", window.documents->active);
+                JsonValue items = JsonValue::MakeArray();
+                for (const auto& document : window.documents->documents)
+                {
+                    JsonValue d = JsonValue::MakeObject();
+                    d.Set("name", document->name);
+                    d.Set("extension", document->extension);
+                    d.Set("kind", document->kind);
+                    if (std::optional<JsonValue> tree = DockTreeJson(document->layout))
+                        d.Set("layout", std::move(*tree));
+                    items.Push(std::move(d));
+                }
+                w.Set("documents", std::move(items));
+                list.Push(std::move(w));
+            }
+            documents.Set(key, std::move(list));
+        }
+        doc.Set("documents", std::move(documents));
 
         JsonValue tables = JsonValue::MakeObject();
         for (const auto& [key, table] : m_persistTables)
@@ -175,17 +274,16 @@ namespace tachyon
             return s ? s->Find(key) : nullptr;
         };
 
-        // Windows: applied when each is next declared (OpenWindow).
-        for (const auto& [key, windowID] : m_persistWindows)
+        // A saved window place; null when it has no size.
+        auto readWindow = [](const JsonValue* w) -> std::optional<RestoredWindow>
         {
-            const JsonValue* w = section("windows", key);
             if (!w || !w->IsObject())
-                continue;
+                return std::nullopt;
             RestoredWindow restored;
             restored.rect = IntRect{ int32_t(w->Find("x") ? w->Find("x")->AsNumber() : 0), int32_t(w->Find("y") ? w->Find("y")->AsNumber() : 0),
                                      int32_t(w->Find("w") ? w->Find("w")->AsNumber() : 0), int32_t(w->Find("h") ? w->Find("h")->AsNumber() : 0) };
             if (restored.rect.w <= 0 || restored.rect.h <= 0)
-                continue;
+                return std::nullopt;
             restored.mode = ModeFromName(w->Find("mode") ? w->Find("mode")->AsString() : std::string_view{});
             if (const JsonValue* m = w->Find("monitor"); m && m->IsObject())
             {
@@ -193,28 +291,54 @@ namespace tachyon
                 restored.monitor    = IntRect{ number("x"), number("y"), number("w"), number("h") };
                 restored.hasMonitor = restored.monitor.w > 0 && restored.monitor.h > 0;
             }
-            m_restoredWindows[windowID] = restored;
-        }
+            return restored;
+        };
+
+        // Windows: applied when each is next declared (OpenWindow).
+        for (const auto& [key, windowID] : m_persistWindows)
+            if (std::optional<RestoredWindow> restored = readWindow(section("windows", key)))
+                m_restoredWindows[windowID] = *restored;
 
         // Dock trees: panels by key; panels the saved tree doesn't have go to its first leaf.
+        // Nothing usable: the app's own layout stays.
         for (const auto& [key, layout] : m_persistDocks)
+            if (const JsonValue* tree = section("docking", key))
+                (void)ApplyDockTree(*layout, tree->Write());
+
+        // Documents: kept for the app, which makes them again (TakeSavedDocuments).
+        for (const auto& [key, listWindows] : m_persistDocuments)
         {
-            const JsonValue* tree = section("docking", key);
-            if (!tree)
+            const JsonValue* saved = section("documents", key);
+            if (!saved || !saved->IsArray())
                 continue;
-            std::unique_ptr<DockNode> root = ParseDockTree(tree->Write(), [layout](std::string_view panelKey) -> std::optional<ID> {
-                for (const auto& [id, panel] : layout->panels)
-                    if (PanelKey(panel) == panelKey) return id;
-                return std::nullopt;
-            });
-            if (!root)
-                continue;   // nothing usable: the app's own layout stays
-            std::vector<ID> all;
-            for (const auto& [id, panel] : layout->panels) all.push_back(id);
-            if (DockNode* leaf = FirstLeaf(root.get()))
-                for (const ID id : UnplacedPanels(*root, all))
-                    leaf->panelIds.push_back(id);
-            layout->root = std::move(root);
+            std::vector<SavedDocumentWindow> windows;
+            for (const JsonValue& w : saved->Items())
+            {
+                if (!w.IsObject())
+                    continue;
+                SavedDocumentWindow window;
+                if (const JsonValue* items = w.Find("documents"); items && items->IsArray())
+                    for (const JsonValue& d : items->Items())
+                    {
+                        if (!d.IsObject() || StringOf(d, "name").empty())
+                            continue;
+                        const JsonValue* tree = d.Find("layout");
+                        window.documents.push_back(SavedDocument{ StringOf(d, "name"), StringOf(d, "extension"), StringOf(d, "kind"),
+                                                                  tree ? tree->Write() : std::string() });
+                    }
+                if (window.documents.empty())
+                    continue;
+                const JsonValue* active = w.Find("active");
+                window.active = std::clamp(active && active->IsNumber() ? int(active->AsNumber()) : 0, 0, int(window.documents.size()) - 1);
+                if (std::optional<RestoredWindow> place = readWindow(w.Find("window")))
+                {
+                    window.rect    = place->rect;
+                    window.mode    = place->mode;
+                    window.monitor = place->hasMonitor ? place->monitor : IntRect{};
+                }
+                windows.push_back(std::move(window));
+            }
+            m_savedDocuments[key] = std::move(windows);
         }
 
         // Tables: columns in their saved order (new ones after), with their saved widths.

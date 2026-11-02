@@ -411,7 +411,6 @@ namespace tachyon
             // Documents, each with its own panels; the first holds the full DockingContainer demo
             ID            documentsID { ID::Invalid() };
             DocumentSet   documents;
-            Document*     forest = nullptr;          // the first document, whose layout is saved
             Document*     closingDocument = nullptr; // asked about its unsaved changes
             DocumentSet*  closingSet      = nullptr; // the set it's in
             std::vector<std::unique_ptr<DocumentWindow>> documentWindows;   // documents dragged out
@@ -421,7 +420,7 @@ namespace tachyon
             std::string   dockNotes;
             bool          dockToggle = false;
             bool          dockInitialized = false;
-            std::string   savedUIState;   // kUIStateFile's text, applied once more when the dock exists
+            std::string   savedUIState;   // kUIStateFile's text, restored at start
 
             // Settings panel chrome (page list, selection, tree width); page content
             // state lives in the fields below.
@@ -524,6 +523,12 @@ namespace tachyon
 
         /// A panel the showcase knows by its title ("Viewport", "Inspector", ...), added to `layout`.
         ID   CreateShowcasePanel(DockingLayout& layout, std::string_view title);
+        /// A document of `kind` with its panels (the samples by name), added to `set`.
+        Document& CreateShowcaseDocument(DocumentSet& set, std::string name, std::string extension, std::string kind);
+        /// The first document's panels: every one, in the full docking demo layout.
+        void FillForest(Document& document);
+        /// On the first frame: the documents as they were saved, else the samples.
+        void MakeShowcaseDocuments();
         /// A document's panels: `main`, and `side` docked to its right.
         void FillDocument(Document& document, std::string_view main, std::string_view side);
         /// While an unsaved document of `set` waits to close: asks whether to discard its changes.

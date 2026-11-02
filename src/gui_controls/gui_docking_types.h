@@ -5,6 +5,7 @@
 #include <gui_core/style/gui_style_text.h>      // IconID
 
 #include <gui_controls/gui_dock_node.h>          // DockNode, DockDropTarget
+#include <gui_core/windows/gui_window_backend.h> // WindowMode
 
 #include <functional>
 #include <memory>
@@ -225,6 +226,29 @@ namespace tachyon
             tachyon::IntRect barRect {};          ///< last frame's, in screen pixels
             std::vector<tachyon::IntRect> tabRects;   ///< by document; empty for one left out
         } internal;  ///< not part of the API
+    };
+
+    /// A main window of documents, for PersistDocuments: its OS window and its documents.
+    struct DocumentWindowRef {
+        tachyon::ID        windowID  = tachyon::ID::Invalid();
+        const DocumentSet* documents = nullptr;
+    };
+
+    /// A document as SaveUIState kept it: which one it was, and how its panels were laid out.
+    struct SavedDocument {
+        std::string name;
+        std::string extension;
+        std::string kind;
+        std::string layout;   ///< its dock tree (SerializeDockTree), panels by type, else title
+    };
+
+    /// A main window of documents as SaveUIState kept it (TakeSavedDocuments).
+    struct SavedDocumentWindow {
+        std::vector<SavedDocument> documents;   ///< in tab order
+        int              active = 0;            ///< the one shown
+        tachyon::IntRect rect {};               ///< where it was, screen pixels; empty when not known
+        WindowMode       mode = WindowMode::Normal;
+        tachyon::IntRect monitor {};            ///< the monitor it was on; empty when not known
     };
 
     /// A document tab being dragged, for the document bars it passes over; internal.

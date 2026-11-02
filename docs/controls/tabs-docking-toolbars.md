@@ -153,6 +153,28 @@ of the panels torn from that set's documents; they belong to that window, and to
 document moves to. A window left with no documents should close. A set must stay alive until
 the end of the frame it was built in.
 
+The open documents can be kept between runs. `PersistDocuments(key, windows)` names a
+function listing the main windows and their sets (`DocumentWindowRef`); `SaveUIState` keeps
+each window's place and, per document, its name, extension and kind, the order, the active
+one and the dock tree. The library can't make documents (their panels are the app's), so
+after `RestoreUIState` the app takes them with `TakeSavedDocuments(key)`: for each window,
+make its documents with their panels, lay each out with `RestoreDocumentLayout`, set
+`active`, and put an extra window where it was with `RestoreWindowPlace` before declaring it.
+
+```cpp
+// Initialize:
+PersistDocuments("documents", [this] { return std::vector<DocumentWindowRef>{ { mainWindowID, &documents } }; });
+(void)RestoreUIState(savedText);
+
+// The first frame:
+for (const SavedDocumentWindow& window : TakeSavedDocuments("documents"))
+{
+    for (const SavedDocument& saved : window.documents)
+        (void)RestoreDocumentLayout(MakeMyDocument(documents, saved.name, saved.extension, saved.kind), saved);
+    documents.active = window.active;
+}
+```
+
 ```cpp
 Document& CreateDocument(DocumentSet& set, std::string name, std::string extension,
                          std::string kind, IconID icon);
