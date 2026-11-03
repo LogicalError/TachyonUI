@@ -4,8 +4,9 @@
 
 ### VirtualTreeView
 
-A single-column, virtualized tree over flat rows that the app owns: a `VirtualTable`
-with one `TreeCell` column. A non-empty `header` shows a header row.
+A single-column tree that only builds the visible rows. Your app owns the rows as a flat
+list. Under the hood it's a `VirtualTable` with one `TreeCell` column. If you pass a
+non-empty `header`, it shows a header row.
 
 ```cpp
 void VirtualTreeView(ID id, std::vector<TreeViewRow>& rows, std::vector<int>& visibleIdx, TableState& state,
@@ -15,29 +16,31 @@ static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows, std::ve
 ID TreeDropTargetRow() const;
 ```
 
-`TreeViewRow` fields: `id`, `name`, `depth`, `isOpen`, `icon`, `renameBuffer`; the rest
-is derived by `RebuildTreeViewIndex`, which you call after adding, removing or moving
-rows. Rows are in depth-first order. `visibleIdx` is filled each frame with the flat
-indices of the visible rows. Selection, scrolling and drag and drop live on the
-`TableState`: the selected row's flat index is
-`visibleIdx[state.selectedRowID.value.subRangeParts.index]`. Default class: `tree-view`;
-rows use `list-row`.
+You fill in these `TreeViewRow` fields: `id`, `name`, `depth`, `isOpen`, `icon` and
+`renameBuffer`. `RebuildTreeViewIndex` works out the rest, so call it whenever you add,
+remove or move rows. Keep the rows in depth-first order.
+
+Each frame, `visibleIdx` is filled with the flat indices of the rows that are visible.
+Selection, scrolling and drag and drop are handled through the `TableState`. To get the
+selected row's flat index, use `visibleIdx[state.selectedRowID.value.subRangeParts.index]`.
+The default class is `tree-view`, and rows use `list-row`.
 
 ```cpp
 RebuildTreeViewIndex(rows);   // after structural changes
 VirtualTreeView(treeID, rows, visibleIdx, treeState, {}, LayoutOverride{}.FlexGrow(1));
 ```
 
-For a tree with more columns, use `VirtualTable` with `TreeCell` in the first column.
+If you need a tree with more than one column, use a `VirtualTable` with `TreeCell` in the
+first column.
 
 
 ## Grid views
 
 ### BeginGridView / GridViewItem
 
-A 2D grid of items, like a file explorer. `selectedIndex` takes a single selection;
-`MultiSelectState` takes several (Ctrl and Shift clicks); `ItemDragDropConfig` makes
-items draggable.
+A 2D grid of items, like a file explorer. Pass `selectedIndex` for single selection, or a
+`MultiSelectState` to let the user select several items with Ctrl and Shift clicks. An
+`ItemDragDropConfig` makes the items draggable.
 
 ```cpp
 bool BeginGridView(ID id, int* selectedIndex, StyleRef style, MultiSelectState* multiSelect = nullptr,
@@ -50,16 +53,17 @@ bool GridViewItem(ID id, const GUIContent& content, ElementState extraState = El
 bool IsRenaming() const;
 ```
 
-`renameBuffer` enables in-place rename (F2, Ctrl+Shift+Click or a slow second click;
-Enter commits, Escape or focus loss cancels). `IsRenaming` says whether a rename editor
-is open. `GridViewItem` returns `true` in the frame after a click. Classes:
-`grid-view`, `grid-view-item`, `grid-view-list-item`, `grid-view-rename-*`.
+Pass a `renameBuffer` to allow renaming in place. The user starts a rename with F2,
+Ctrl+Shift+Click or a slow second click. Enter commits it, and Escape or losing focus
+cancels it. `IsRenaming` tells you whether a rename editor is open. `GridViewItem` returns
+`true` in the frame after the item was clicked. Classes: `grid-view`, `grid-view-item`,
+`grid-view-list-item`, `grid-view-rename-*`.
 
 ### VirtualGridView
 
-A grid that builds only the visible rows. `generateItem(index, itemID)` must emit
-exactly one cell, usually `GridViewItem(itemID, ...)`; `itemID` is a stable ranged
-sub-ID used for selection and drag payloads. Cells are `cellSize` pixels.
+A grid that only builds the visible rows. Your `generateItem(index, itemID)` must emit
+exactly one cell, usually with `GridViewItem(itemID, ...)`. The `itemID` is a stable ranged
+sub-ID that's used for selection and drag payloads. Each cell is `cellSize` pixels.
 
 ```cpp
 void VirtualGridView(ID id, GridViewVirtualState& vstate, int itemCount, int2 cellSize,
@@ -69,9 +73,9 @@ void VirtualGridView(ID id, GridViewVirtualState& vstate, int itemCount, int2 ce
                      LayoutOverride&& constraints = {});
 ```
 
-The column count comes from last frame's viewport. `vstate.cellStretchedW` is the cell
-width that makes the columns exactly fill it. Classes: `grid-view-scroll`,
-`grid-view-row`.
+The number of columns is based on the previous frame's viewport.
+`vstate.cellStretchedW` gives you the cell width at which the columns fill the viewport
+exactly. Classes: `grid-view-scroll`, `grid-view-row`.
 
 ```cpp
 VirtualGridView(gridID, gridState, int(files.size()), int2{ styleManager.Px(96), styleManager.Px(96) },
@@ -81,19 +85,26 @@ VirtualGridView(gridID, gridState, int(files.size()), int2{ styleManager.Px(96),
 
 ## File views
 
-A tree and a grid of files read from an `IFileSystem` (`gui_controls/gui_file_system.h`):
-`List(path)` gives a folder's entries, `Move` and `Rename` change them, `Import` copies a
-file or folder in from the disk (one dropped from another application), and `Generation()`
-changes whenever a list may have, so a view knows when to read again. Paths are relative
-to the file system's root, with `/` between names; `""` is the root. A refused move or
-rename returns false with the reason in `error`, ready to show.
+The file views show a tree and a grid of files read from an `IFileSystem`
+(`gui_controls/gui_file_system.h`). The interface is small:
 
-`MemoryFileSystem` keeps it all in memory: filled with `AddFolder` / `AddFile`, or a copy
-of a folder on the disk, each folder read the first time it's needed. Its moves, renames
-and imports change only the copy (an imported folder is read as it's browsed), so a demo can
-browse the real disk without writing to it.
-Implement `IFileSystem` over the disk itself, an archive or an asset database to change
-those instead.
+- `List(path)` returns a folder's entries.
+- `Move` and `Rename` change them.
+- `Import` copies a file or folder in from disk, such as one dropped from another
+  application.
+- `Generation()` changes whenever a listing may have changed, so a view knows when to read
+  it again.
+
+Paths are relative to the file system's root and use `/` between names. `""` is the root.
+When a move or rename is refused, the call returns false and puts the reason in `error`,
+ready to show to the user.
+
+`MemoryFileSystem` keeps everything in memory. You can fill it with `AddFolder` /
+`AddFile`, or make it a copy of a folder on disk, where each folder is read the first time
+it's needed. Moves, renames and imports only change the copy, and an imported folder is
+read as the user browses it. That makes it handy for a demo that browses the real disk
+without writing to it. If you want changes to reach the disk itself, an archive or an
+asset database, implement `IFileSystem` over that instead.
 
 ```cpp
 MemoryFileSystem files(std::filesystem::path("C:/Projects"));
@@ -105,41 +116,47 @@ if (!files.Move("TachyonUI/notes.txt", "Archive", error))
     ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Can't move it", .body = error });
 ```
 
-`FileIcons` (`gui_controls/gui_file_icons.h`) gives the OS's icon for a file or folder:
-the Windows shell's, one per extension, read once, at the size asked for or the next one
-up. It's `IconID::Invalid` elsewhere, and a view shows its own icons then.
+`FileIcons` (`gui_controls/gui_file_icons.h`) gets the operating system's icon for a file
+or folder. On Windows these are the shell's icons, one per extension, read once, at the
+size you ask for or the next size up. On other systems it returns `IconID::Invalid`, and
+the view shows its own icons instead.
 
 ```cpp
 FileIcons icons(*textSystem, 48);
 const IconID icon = icons.Get("photo.jpg", false);
 ```
 
-The icons are pictures: `ITextSystem::RegisterIconFromPixels(name, size, rgba)` makes an
-icon of RGBA pixels, drawn in its own colors (not tinted by the style's icon color, and
-without text shadows), fit to its box keeping its shape, on its own and in text.
-`ITextSystem::UnregisterIcon` lets go of one again, freeing its image slot.
+These icons are pictures rather than glyphs. `ITextSystem::RegisterIconFromPixels(name,
+size, rgba)` makes an icon from RGBA pixels. It's drawn in its own colors, so the style's
+icon color doesn't tint it and it gets no text shadow. It's scaled to fit its box while
+keeping its shape, both on its own and inside text. `ITextSystem::UnregisterIcon` removes
+one again and frees its image slot.
 
-`FileThumbnails` (`gui_controls/gui_file_thumbnails.h`) gives a file's thumbnail, what
-Explorer shows for it: a picture's contents, a frame of a video. They're read from the
-Windows shell on a thread of their own, so `Get` is `IconID::Invalid` until one is ready,
-and for a file without one: show the type's icon meanwhile. A `FileEntry` from a disk
-folder, or imported from the disk, says where its file is (`disk`) and when it was last
-written (`modified`); one that's only in memory has no `disk`, and no thumbnail.
+`FileThumbnails` (`gui_controls/gui_file_thumbnails.h`) gets a file's thumbnail, the
+picture Explorer shows for it: a photo's contents, or a frame of a video. On Windows it
+reads them from the shell on a background thread, so `Get` returns `IconID::Invalid`
+until the thumbnail is ready, and also for a file that has none. Show the file's type
+icon in the meantime. On other systems there are no thumbnails, unless you pass your own
+`FileThumbnails::Reader`.
+
+A `FileEntry` read from a disk folder, or imported from the disk, knows where its file is
+(`disk`) and when it was last written (`modified`). A file that only exists in memory has
+no `disk`, so it gets no thumbnail.
 
 ```cpp
-FileThumbnails thumbnails(*textSystem);   // the 512 asked for last are kept
+FileThumbnails thumbnails(*textSystem);   // keeps the last 512 asked for
 IconID icon = thumbnails.Get(entry.disk, entry.modified, uint32_t(styleManager.Px(34)));
 if (icon == IconID::Invalid)
     icon = icons.Get(entry.name, entry.isFolder);
 ```
 
-They're kept by path, modification time and size, so a file that changed is read again.
-Past the cap, the one asked for longest ago goes, and its icon is unregistered; one let go
-before it was read isn't read. One asked for in the last half second (on screen still)
-isn't let go: with more files on screen than the cap, the rest keep their type icons.
-Destroy it before the text system. Elsewhere than Windows
-there are none; pass a `FileThumbnails::Reader` of your own to read them another way.
+Thumbnails are cached by path, modification time and size, so a file that changed is read
+again. When the cache is full, the thumbnail asked for longest ago is dropped and its icon
+unregistered, and a file dropped before it was read isn't read at all. A thumbnail asked
+for in the last half second is still on screen, so it's never dropped: if more files are
+on screen than the cache holds, the extra ones keep their type icons. Destroy the
+`FileThumbnails` before the text system.
 
 ---
 
-[← Tables](tables.md) · [Controls](../controls.md) · [Tabs, docking and toolbars →](tabs-docking-toolbars.md)
+[Previous: Tables](tables.md) | [Controls](../controls.md) | [Next: Tabs, docking and toolbars](tabs-docking-toolbars.md)

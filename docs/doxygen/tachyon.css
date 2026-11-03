@@ -148,3 +148,8 @@ td.memSeparator {
 .navpath ul, address.footer {
     font-size: .85em;
 }
+
+/* Subpage links that only order the sidebar; the guide tables already link these pages. */
+.page-tree {
+    display: none;
+}

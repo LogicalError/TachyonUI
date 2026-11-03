@@ -1,7 +1,7 @@
 # Custom drawing
 
-Any element can draw with its own callback at render time. Register an element with
-`RegisterElement`, then attach the callback with `elementStorage.AddCustomDraw`:
+Any element can draw its own content with a callback at render time. Register the element
+with `RegisterElement`, then attach the callback with `elementStorage.AddCustomDraw`:
 
 ```cpp
 ElementRef RegisterElement(Element&& element, LayoutOverride&& constraints);
@@ -13,14 +13,14 @@ ElementStorageResult AddCustomDrawAfter(const ElementRef& ref, CustomDrawCallbac
 ElementStorageResult AddPostLayout(const ElementRef& ref, PostLayoutCallback callback);
 ```
 
-`AddCustomDraw` runs before the element's children are drawn; `AddCustomDrawAfter`
-runs after its whole subtree (call it after the element's children are closed).
-`AddPostLayout` runs after layout and before rendering, with the final geometry and no
-drawing, for state that depends on it.
+`AddCustomDraw` runs before the element's children are drawn. `AddCustomDrawAfter` runs
+after the whole subtree, so call it once the element's children are closed.
+`AddPostLayout` runs after layout and before rendering. It can't draw, but it sees the
+final geometry, so use it for state that depends on where things ended up.
 
-The callback gets a `CustomDrawContext`. By default it draws in the element's local
-space: (0, 0) is the top-left of its padding box, and pan / zoom of its ancestors applies.
-`SetSpace(DrawSpace::Screen)` switches to absolute layout pixels, and
+The callback gets a `CustomDrawContext`. By default you draw in the element's local
+space, where (0, 0) is the top-left corner of its padding box and any pan or zoom on its
+ancestors applies. `SetSpace(DrawSpace::Screen)` switches to absolute layout pixels, and
 `ScreenToCurrent(screenPos)` converts a cursor position into the current space.
 
 | Method | Draws or returns |
@@ -29,14 +29,14 @@ space: (0, 0) is the top-left of its padding box, and pan / zoom of its ancestor
 | `GetElementRect(ref)`, `GetInnerRect(ref)` | Another element's rects |
 | `RenderBox(rect, boxStyle, state, ...)` | A styled box |
 | `RenderQuad(rect, colorStyle, cornerRadius, ...)` | A filled rectangle |
-| `RenderLine(p0, p1, lineStyle)` | A line (also a four-point form) |
+| `RenderLine(p0, p1, lineStyle)` | A line (there's also a four-point form) |
 | `RenderPolyline(points, closed, lineStyle, cornerRadius)` | A polyline |
-| `RenderCircle`, `RenderDisc`, `RenderDot` | Circle outline (exactly round; a gradient and dashes run clockwise from the right), filled disc, dot |
-| `RenderTriangle`, `RenderFilledPolygon` | Filled triangle, convex polygon; a triangle's `hardEdges` (edges it shares with another) have no soft edge, so no seam shows |
+| `RenderCircle`, `RenderDisc`, `RenderDot` | A circle outline, a filled disc and a dot. The circle is exactly round, and gradients and dashes run clockwise from the right. |
+| `RenderTriangle`, `RenderFilledPolygon` | A filled triangle and a convex polygon. A triangle's `hardEdges` (edges it shares with another triangle) get no soft edge, so no seam shows. |
 | `RenderText(textId, rect)` | Text registered with `textSystem->RegisterText` |
 
-Colors are style indices (for example `theme.lineWhiteStyle`, or one registered with
-`styleManager.RegisterColorStyle`); `LineStyle` has `colorStyleIndex`, `lineWidth` and
+Colors are style indices, such as `theme.lineWhiteStyle` or one you registered with
+`styleManager.RegisterColorStyle`. A `LineStyle` has `colorStyleIndex`, `lineWidth` and
 dash settings.
 
 ```cpp
@@ -50,9 +50,9 @@ VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)
 }));
 ```
 
-The callback runs at render time, after `OnGUI` returns, so its captures must outlive the
-frame.
+The callback runs at render time, after `OnGUI` has returned, so anything it captures
+has to outlive the frame.
 
 ---
 
-[← Other controls](other-controls.md) · [Controls](../controls.md) · [Default CSS classes →](css-classes.md)
+[Previous: Other controls](other-controls.md) | [Controls](../controls.md) | [Next: Default CSS classes](css-classes.md)

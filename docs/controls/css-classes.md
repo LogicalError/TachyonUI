@@ -1,7 +1,8 @@
 # Default CSS classes
 
-The class each control uses when no style is passed. Parts of a control (a switch's
-knob, a table's header) have their own classes, listed with the control above.
+This is the class each control uses when you don't pass a style. Parts of a control,
+such as a switch's knob or a table's header, have classes of their own, which are listed
+on that control's page.
 
 | Control | Class |
 | --- | --- |
@@ -34,7 +35,7 @@ knob, a table's header) have their own classes, listed with the control above.
 | `MenuSeparator`, `MenuHeader` | `menu-separator`, `menu-header` |
 | `BeginMenuBar`, `BeginTitleBar` | `menu-bar`, `title-bar` |
 | `BeginContextMenu` | `menu` |
-| `SetTooltip`, `BeginTooltip` | window `tooltip-frame`, box `tooltip` (text: `tooltip-text`, shortcut: `tooltip-shortcut`); property help `tooltip-rich` (`tooltip-title`, `tooltip-description`, `tooltip-footer`), its label `label-help` (or `group-label-help`, `drag-label-help`, `group-drag-label-help`); text cut short, shown whole over itself: `tooltip-expand` (text: `tooltip-expand-text`); a value that isn't accepted: `tooltip-error` (`tooltip-error-text`); a few lines (a disabled control's reason, a node pin's): `tooltip-lines`, the muted line `tooltip-note`, a pin's first line `tooltip-pin-row` (`tooltip-pin-type`, `tooltip-pin-value`) |
+| `SetTooltip`, `BeginTooltip` | Window `tooltip-frame`, box `tooltip`, text `tooltip-text`, shortcut `tooltip-shortcut`. Property help uses `tooltip-rich` (with `tooltip-title`, `tooltip-description` and `tooltip-footer`), and its label uses `label-help` (or `group-label-help`, `drag-label-help`, `group-drag-label-help`). Text that was cut short and is shown whole over itself uses `tooltip-expand` (text `tooltip-expand-text`). A value that isn't accepted uses `tooltip-error` (`tooltip-error-text`). A few lines, such as a disabled control's reason or a node pin's tooltip, use `tooltip-lines`, with `tooltip-note` for the muted line and `tooltip-pin-row` (`tooltip-pin-type`, `tooltip-pin-value`) for a pin's first line. |
 | `MessageDialog` | `message-box` |
 | `Toasts` | `toast-stack`, `toast`, `toast-circle-<severity>` |
 | `Banner` | `banner-<severity>`, `banner-message-<severity>` |
@@ -56,10 +57,10 @@ knob, a table's header) have their own classes, listed with the control above.
 | `RenderNodeView` | `node-view` |
 | Links in rich text (`theme.linkStyle`) | `link` (`color`, `:hover` `color`, `cursor`) |
 
-The classes are defined in `workdirectory/themes/styles.css`, with colors from the
-palette in `dark.css` or `light.css`. See [CSS and theming](../css.md) for how to change them or add
-your own.
+The classes are defined in `workdirectory/themes/styles.css`, and their colors come from
+the palette in `dark.css` or `light.css`. [CSS and theming](../css.md) shows how to change
+them or add your own.
 
 ---
 
-[← Custom drawing](custom-drawing.md) · [Controls](../controls.md)
+[Previous: Custom drawing](custom-drawing.md) | [Controls](../controls.md)

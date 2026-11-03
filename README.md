@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="docs/banner.png" alt="TachyonUI — tool UI that keeps up with your engine" width="100%">
+  <img src="docs/banner.png" alt="TachyonUI: high-performance UI for building tools" width="100%">
 </p>
 
 <p align="center">
-  An immediate-mode <b>C++20</b> GUI library for editors and tools —<br>
-  docking, real controls, CSS themes, on <b>Vulkan</b>.
+  An immediate-mode <b>C++20</b> GUI library for editors and tools,<br>
+  with docking, the controls tools need and CSS themes, running on your <b>GPU</b>.
 </p>
 
 <p align="center">
@@ -17,32 +17,60 @@
 </p>
 
 <p align="center">
-  <a href="docs/README.md"><b>Guides</b></a> ·
-  <a href="https://logicalerror.github.io/TachyonUI/"><b>API reference</b></a> ·
-  <a href="examples/"><b>Examples</b></a> ·
+  <a href="docs/README.md"><b>Guides</b></a> |
+  <a href="https://logicalerror.github.io/TachyonUI/"><b>API reference</b></a> |
+  <a href="https://github.com/LogicalError/TachyonUI/wiki"><b>Wiki</b></a> |
+  <a href="examples/"><b>Examples</b></a> |
   <a href="CHANGELOG.md"><b>Changelog</b></a>
 </p>
 
 ![The showcase application: docking, a node graph, the profiler, a file browser and a log](docs/screenshot.png)
 
-<p align="center">
-  Every frame of this UI is built and rendered in <b>under a millisecond</b>: 0.91 ms (1,097 fps) with the
-  profiler recording, as it shows above.<br>
-  <sub>Release build of <code>examples/showcase</code> on a Ryzen 9 7950X3D with a GeForce RTX 4070 Ti SUPER.</sub>
-</p>
+TachyonUI is for building tools: game and level editors, audio editors, image and 3D tools.
+It opens its own windows out of the box, and can also be embedded in an application that
+already has a Vulkan renderer.
 
-## At a glance
+## Features
 
-| **Docking & windows** | **Tool-grade controls** | **CSS themes** |
+| **Docking and windows** | **Controls** | **CSS themes** |
 | --- | --- | --- |
-| Dock, tab and tear off panels into OS windows. Menus, tooltips, drag and drop. | Fields, sliders, color & gradient editors, tables, trees, list/grid views, node graphs. | Dark and light palettes, UI and font scaling, your own stylesheets, runtime reload. |
-| **Layout** | **Text** | **Engine-ready** |
-| Flexbox and grid, in CSS px scaled by the UI scale. | Shaping, bidi and font fallback for most scripts. | Share your Vulkan device, show your images, render the UI into a texture. |
+| Dock, tab and tear off panels into OS windows. Menus, tooltips, drag and drop. | Fields, sliders, color and gradient editors, tables, trees, list and grid views, node graphs. | Dark and light palettes, UI and font scaling, your own stylesheets, reloaded while the app runs. |
+| **Layout** | **Text** | **Standalone or embedded** |
+| Flexbox and grid, in CSS pixels scaled by the UI scale. | Shaping, bidi and font fallback for most scripts. | Its own windows by default, or inside your Vulkan renderer. |
+
+## Requirements
+
+### Windows
+
+- Windows x64
+- Visual Studio 2026 with CMake 4.2 or newer, or Visual Studio 2022 with CMake 3.22 or newer
+- The [Vulkan SDK](https://vulkan.lunarg.com/)
+- Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
+
+### Linux
+
+- Linux x64
+- GCC 13 or newer, or Clang 17 or newer
+- CMake 3.22 or newer and Ninja
+- The X11 and Wayland development packages SDL3 needs ([list for Ubuntu](.github/linux-packages.txt))
+- The [Vulkan SDK](https://vulkan.lunarg.com/), or your distribution's Vulkan and glslang packages
+- Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
+
+### macOS
+
+Not tested on a Mac yet (help would be appreciated!). CI builds it and runs the tests that need no GPU.
+
+- Apple Clang
+- CMake 3.22 or newer and Ninja
+- The [Vulkan SDK](https://vulkan.lunarg.com/), or Homebrew's `vulkan-headers`, `vulkan-loader`, `molten-vk` and `glslang`
+- Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
+
+### To run
+
+- A GPU driver with Vulkan 1.3 and the features listed by
+  `VulkanDeviceContext::GetDeviceRequirements()`
 
 ## Quick start
-
-You need the [Vulkan SDK](https://vulkan.lunarg.com/), [Git LFS](https://git-lfs.com/) (the fonts live there),
-CMake 3.22+ and MSVC 2022+, GCC 13 or Clang 17. [Full requirements ↓](#reference)
 
 ```sh
 git clone --recursive https://github.com/LogicalError/TachyonUI.git
@@ -54,15 +82,17 @@ cd TachyonUI
 | Windows | `build.bat` | `bin\Debug\showcase.exe` |
 | Linux and macOS | `./build.sh` | `bin/Debug/showcase` |
 
-`build.bat Release` (or `./build.sh Release`) builds the Release configuration into `bin/Release`. Every program in `bin/`
-runs on its own: the examples, the showcase and the tests.
+`build.bat Release` (or `./build.sh Release`) builds the Release configuration into `bin/Release`.
+The scripts use the presets in `CMakePresets.json`, which Visual Studio, VS Code and CLion
+also pick up.
 
-The scripts use the CMake presets in `CMakePresets.json`, which Visual Studio, VS Code
-and CLion also pick up.
+The CMake options and how to run the tests are on the wiki:
+[Building](https://github.com/LogicalError/TachyonUI/wiki/Building) and
+[Running the showcase and tests](https://github.com/LogicalError/TachyonUI/wiki/Running-the-showcase-and-tests).
 
 ## Hello world
 
-Describe the whole UI every frame; the library keeps the state.
+You describe the whole UI every frame, and the library keeps the state.
 
 ```cpp
 void OnGUI() override
@@ -77,27 +107,28 @@ void OnGUI() override
 }
 ```
 
-The full program is [examples/hello_world/hello_world.cpp](examples/hello_world/hello_world.cpp). Frame model, IDs and the
-Begin/End rules: [docs/overview.md](docs/overview.md).
+The full program is [examples/hello_world/hello_world.cpp](examples/hello_world/hello_world.cpp).
+The frame model, IDs and the Begin/End rules are in [docs/overview.md](docs/overview.md).
 
 ## Examples
 
-Each one is a folder in [`examples/`](examples); [docs/examples.md](docs/examples.md) walks through them.
+Each example is a folder in [`examples/`](examples), and [docs/examples.md](docs/examples.md)
+walks through them.
 
 | Example | Shows |
 | --- | --- |
 | `hello_world` | A window with a text field and buttons |
 | `controls` | The common controls, as label/value rows |
 | `docking` | Panels in a dock layout |
-| `custom_theme` | Your own CSS, dark/light palettes, font scaling |
+| `custom_theme` | Your own CSS, dark and light palettes, font scaling |
 | `host_device` | Running on your Vulkan device and showing an image it renders |
 | `showcase` | An editor-style app with most of the library in its panels (the screenshot above) |
 | `tutorial` | The [tutorial](docs/tutorial.md)'s app: two docked panels, with buttons and fields |
 
 ## Use it in your project
 
-New to TachyonUI? The [tutorial](docs/tutorial.md) goes step by step from an empty folder
-to an app with docked panels, buttons and fields.
+If you're new to TachyonUI, the [tutorial](docs/tutorial.md) goes from an empty folder to an
+app with docked panels, buttons and fields.
 
 ```cmake
 find_package(TachyonUI 0.1 CONFIG REQUIRED)       # after cmake --install
@@ -105,87 +136,30 @@ find_package(TachyonUI 0.1 CONFIG REQUIRED)       # after cmake --install
 target_link_libraries(my_app PRIVATE TachyonUI::gui_controls)
 ```
 
-That's all: the shaders, the default themes and the fonts are built into the library, and
-SDL is linked in, so there are no files or DLLs to ship. Packaging, subprojects, your own
-themes and system libraries: [docs/integration.md](docs/integration.md).
+The shaders, default themes and fonts are built into the library and SDL is linked
+statically, so there are no extra files or DLLs to ship. Packaging, subprojects, your own
+themes and system libraries are covered in [docs/integration.md](docs/integration.md).
 
-## Inside an engine
+## Embedding in your own renderer
 
-- **Share the host's Vulkan device** — one instance, device and queue; the GUI destroys only what it created.
-- **Show a host-rendered image** — a 3D viewport as a control.
-- **Render the UI into an image** — no OS window; you inject input.
+This part is optional: by default the library creates its own device and windows. If your
+application already renders with Vulkan, TachyonUI can work with it:
 
-Synchronization contracts and code: [Using your own Vulkan device](docs/integration/vulkan-device.md).
+- **Share your Vulkan device.** One instance, device and queue; the GUI only destroys what it created.
+- **Show an image you render**, such as a 3D viewport, as a control.
+- **Render the UI into an image** instead of an OS window, and pass it the input yourself.
 
-## Reference
-
-<details>
-<summary><b>Full requirements</b> — compilers, Vulkan features, LFS</summary>
-
-- Windows x64 with Visual Studio 2026 (MSVC) and CMake 4.2 or newer; Visual Studio 2022 with CMake 3.22 or newer also works
-- Linux x64 with GCC 13 or Clang 17 or newer, Ninja and CMake 3.22 or newer, and the X11 and Wayland development
-  packages for SDL3 (see the Linux job in `.github/workflows/ci.yml` for the Ubuntu package list)
-- macOS (untested: CI builds it with Apple Clang against MoltenVK from Homebrew and runs the headless tests,
-  but it has never run on a Mac)
-- The [Vulkan SDK](https://vulkan.lunarg.com/): headers, loader and `glslangValidator` for the shaders;
-  the GPU tests also use its validation layers
-- Git with [Git LFS](https://git-lfs.com/): a clone without it only has pointer files, so the fonts fail to load
-- At runtime, a GPU driver with Vulkan 1.3, `VK_KHR_swapchain` and the features listed by
-  `tachyon::vulkan::VulkanDeviceContext::GetDeviceRequirements()`
-
-In an existing clone without the submodules, run `git submodule update --init --recursive`.
-The first configure builds the third-party libraries once into `build/third_party/install`.
-</details>
-
-<details>
-<summary><b>CMake options</b> — <code>TACHYON_*</code></summary>
-
-| Option | Default | |
-| --- | --- | --- |
-| `TACHYON_BUILD_SHOWCASE` | on when top-level | The showcase application (`examples/showcase`) |
-| `TACHYON_BUILD_EXAMPLES` | on when top-level | The small examples in `examples/` |
-| `TACHYON_BUILD_TESTS` | on when top-level | The unit and GPU tests |
-| `TACHYON_INSTALL` | on when top-level | The install rules and the CMake package |
-| `TACHYON_INSTALL_THIRD_PARTY` | on | Bundle the third-party libraries into the install |
-| `TACHYON_SDL` | on | The SDL window backend; off builds without SDL |
-| `TACHYON_SYSTEM_SDL`, `_HARFBUZZ`, `_VMA` | off | Use the host's copy of that library |
-| `TACHYON_FALLBACK_FONTS` | off | Copy and install the Noto fallback fonts |
-| `TACHYON_EMBED_RESOURCES` | on | Build the default themes and fonts into the library; off needs `SetResourceRoot` in every program |
-</details>
-
-<details>
-<summary><b>Optional runtime files</b> — your own themes, fonts, fallbacks</summary>
-
-Nothing is required: the shaders, `dark.css`, `light.css`, `styles.css` and the Inter and
-JetBrains Mono fonts are built in. With `SetResourceRoot(folder)`, files there replace the
-built-in ones of the same name and add your own:
-
-| Folder | Contents |
-| --- | --- |
-| `themes/` | Your own palettes and style files, or changed copies of the built-in ones |
-| `fonts/` | Fonts your style files name in `@font-face` |
-| `fonts/Noto-otf/` | Optional fallback fonts for other scripts, emoji and symbols, loaded with `InitializeOptions::fallbackFonts` |
-</details>
-
-<details>
-<summary><b>Running the tests</b> — unit, GPU, ctest</summary>
-
-```text
-bin\Debug\gui_core_tests.exe        rem unit tests, no GPU needed
-bin\Debug\gui_gpu_tests.exe         rem real-device tests, skipped without a GPU
-ctest --test-dir build -C Debug     rem both, one process per test
-```
-</details>
+The synchronization rules and code are in [Using your own Vulkan device](docs/integration/vulkan-device.md).
 
 ## Status
 
-**0.1 preview** — under active development; APIs will change. Windows x64 and Linux x64 are built and tested in CI.
-macOS builds in CI against MoltenVK and runs the headless tests, but has not run on a Mac.
+**0.1 preview.** The API will still change. Windows x64 and Linux x64 are built and tested in
+CI; macOS is built in CI but hasn't run on a Mac.
 
 ---
 
-[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) ·
-[Sponsor on GitHub](https://github.com/sponsors/LogicalError) · [Patreon](https://www.patreon.com/c/logicalerror)
+[Contributing](CONTRIBUTING.md) | [Security](SECURITY.md) |
+[Sponsor on GitHub](https://github.com/sponsors/LogicalError) | [Patreon](https://www.patreon.com/c/logicalerror)
 
 MIT licensed. Bundled third-party code, fonts and icons keep their own licenses, listed in
 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).

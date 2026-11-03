@@ -8,19 +8,19 @@
 * { font-family: "Inter"; }              /* the base of every style */
 ```
 
-- A selector is a class name. The leading `.` is optional (`button { }` is the class
-  `button`). Class names are case-sensitive; property names and keywords are not.
-- `*` sets the base: it applies to every class defined so far and is the starting point
-  of every class defined after it. Class rules override it. Put it before the rules it
-  should be the base of. A library style whose class no file defines gets the base.
-- A class can appear in any number of rules; later declarations overwrite earlier ones.
-  File order is the only priority (there is no specificity), except for the
+- A selector is a class name. The leading `.` is optional, so `button { }` is the class
+  `button`. Class names are case-sensitive, but property names and keywords aren't.
+- `*` sets the base. It applies to every class defined so far, and every class defined
+  after it starts from it. Class rules override it, so put it before the rules it should be
+  the base of. A library style whose class isn't defined in any file gets the base.
+- A class can appear in as many rules as you like, and later declarations overwrite earlier
+  ones. There's no specificity: file order is the only priority. The one exception is the
   [child position](#child-position) rules, which always win over the class's other rules.
-- There are no combinators: `.a .b`, `.a > .b` and the like are reported as errors.
+- There are no combinators. `.a .b`, `.a > .b` and the like are reported as errors.
 
 ## Pseudo-classes and states
 
-Each style has a slot per element state. A rule writes to every slot whose state bits
+Each style has a slot for every element state. A rule writes to every slot whose state bits
 include the selector's bits:
 
 | Selector | State |
@@ -29,16 +29,16 @@ include the selector's bits:
 | `:hover` | Under the pointer |
 | `:active` | Being pressed |
 | `:focus` | Has keyboard focus |
-| `:selected` or `::highlight(selected)` | Selected or checked (a selected row, a toggle that is on) |
-| `::selection` | Selected text in the element (its `background-color` is the highlight) |
-| `:disabled` | Disabled. Exclusive: it can't combine with other states. A disabled control is also drawn faded (see `opacity`) |
-| `:not(:hover)`, `:not(:active)`, `:not(:focus)`, `:not(:selected)` | Slots without that bit |
-| `:focus-visible` | The focus ring, shown while focus came from the keyboard. Only `box-shadow`, see below |
+| `:selected` or `::highlight(selected)` | Selected or checked (a selected row, a toggle that's on) |
+| `::selection` | Selected text in the element. Its `background-color` is the highlight. |
+| `:disabled` | Disabled. This one is exclusive and can't be combined with other states. A disabled control is also drawn faded (see `opacity`). |
+| `:not(:hover)`, `:not(:active)`, `:not(:focus)`, `:not(:selected)` | The slots without that bit |
+| `:focus-visible` | The focus ring, shown when focus came from the keyboard. It takes only `box-shadow` (see below). |
 | `:normal` | Same as no pseudo-class |
 
-States combine: `.a:hover` also applies while hovered and pressed, and
-`.a:focus::selection` applies to selected text in a focused element. Because a rule covers
-every slot that has its bits, write the general rule first and the specific ones after:
+States combine. `.a:hover` also applies while the element is hovered and pressed, and
+`.a:focus::selection` applies to selected text in a focused element. Since a rule covers
+every slot that has its bits, write the general rule first and the specific ones after it:
 
 ```css
 .text-style        { background-color: var(--bg-control); border-color: var(--line-strong); }
@@ -51,18 +51,18 @@ every slot that has its bits, write the general rule first and the specific ones
 .textbox:not(:focus)::selection { background-color: var(--selection-inactive); }
 ```
 
-A `:disabled` rule changes only what it declares; the rest comes from the class's base rule.
-`::selection` must have two colons (`:selection` is an error).
+A `:disabled` rule only changes what it declares. Everything else comes from the class's
+base rule. Note that `::selection` needs two colons; `:selection` is an error.
 
-Only per-state properties (marked "state" in the tables below) differ between slots. A
-layout property such as `padding` or `border-style` written in a `:hover` rule changes the
-whole style, for every state.
+Only per-state properties (marked "state" in the property tables) can differ between slots.
+If you write a layout property such as `padding` or `border-style` in a `:hover` rule, it
+changes the whole style, for every state.
 
 ### Changing state
 
 When an element's state changes, its box (background and border) blends from the old
-state's slot to the new one; text, icons and shadows change at once. Each change has its
-own timing. Ease-out is `cubic-bezier(0.2, 0, 0, 1)`, ease-in-out is `cubic-bezier(0.4, 0, 0.2, 1)`:
+state's slot to the new one. Text, icons and shadows switch straight away. Each kind of
+change has its own timing. Ease-out is `cubic-bezier(0.2, 0, 0, 1)`, ease-in-out is `cubic-bezier(0.4, 0, 0.2, 1)`:
 
 | Change | Time | Easing |
 | --- | --- | --- |
@@ -76,30 +76,32 @@ own timing. Ease-out is `cubic-bezier(0.2, 0, 0, 1)`, ease-in-out is `cubic-bezi
 | Disabled | at once | |
 | Invalid (`BeginInvalid`) | the border at once, the halo 150 ms | ease-out |
 
-Colors of different hues (both with some color, more than 20 degrees of hue apart: blue
-to red, ok to warning to error) blend in Oklab, so the middle keeps the ends' lightness and
-saturation; in sRGB it goes dark and grey. Greys and shades of one hue blend in sRGB. A
-transparent end adds no color, only its alpha.
+Colors of different hues blend in Oklab. That's when both ends have some color and their
+hues are more than 20 degrees apart, such as blue to red, or ok to warning to error. Oklab
+keeps the lightness and saturation of the ends in the middle, where sRGB would turn dark and
+grey. Greys and shades of a single hue blend in sRGB. A transparent end adds no color, only
+its alpha.
 
-A change that comes back before the blend has finished (out again during a hover in) carries
-on from what is shown, in the new change's timing. A control part blends its on / off flip
-only when it has `ElementFlags::AnimatesSelected`; other selection changes are instant.
+If a change reverses before the blend has finished (moving out again during a hover in), it
+carries on from what's currently shown, with the new change's timing. A control part only
+blends its on/off flip when it has `ElementFlags::AnimatesSelected`. Other selection changes
+are instant.
 
-Popups and theme switches move too:
+Popups and theme switches are animated too:
 
 | Change | Time | Easing |
 | --- | --- | --- |
 | A menu or popup opening | 120 ms, fading in and sliding 4px away from what it opens from | ease-out |
 | A tooltip appearing | 100 ms, fading in | ease-out |
 | Either closing | 80 ms, fading out | ease-out |
-| Another palette (`RequestReloadTheme`) | 200 ms: the old look fades out over the new | ease-in-out |
+| Another palette (`RequestReloadTheme`) | 200 ms, with the old look fading out over the new one | ease-in-out |
 
-With reduced motion every change is instant. It follows the OS setting (on Windows, the
-"Animation effects" switch); `GUIApplication::SetReducedMotion` sets it for the app.
+With reduced motion, every change is instant. It follows the OS setting (on Windows, the
+"Animation effects" switch), and `GUIApplication::SetReducedMotion` sets it for your app.
 
 ## Child position
 
-`:first-child`, `:last-child` and `:only-child` style an element by where it is among its
+`:first-child`, `:last-child` and `:only-child` style an element by where it sits among its
 parent's children:
 
 ```css
@@ -109,22 +111,22 @@ parent's children:
 .segment:only-child  { border-radius: 4px; }
 ```
 
-- An only child is both the first and the last, so it takes the `:first-child` and
-  `:last-child` rules, then the `:only-child` ones. `:first-child:last-child` is the same
+- An only child is both the first and the last child. It takes the `:first-child` and
+  `:last-child` rules, then the `:only-child` ones. `:first-child:last-child` means the same
   as `:only-child`.
-- These rules apply on top of all of the class's other rules, wherever those are in the
-  files, and on top of `*`.
-- They take the box properties only: backgrounds, borders (`border-*` and
+- These rules apply on top of all the class's other rules, wherever those are in the files,
+  and on top of `*`.
+- They only accept box properties: backgrounds, borders (`border-*` and
   `-tachyon-border-dash-*`), `box-shadow`, `margin`, `padding`, `gap`, `row-gap`,
-  `column-gap` and `cursor`. Any other property is an error. The element's size and text are
-  worked out before its parent's last child is known.
-- They combine with states (`.a:first-child:hover`), but not with `:focus-visible`, and need
-  a class (`*:first-child` is an error).
-- Every child counts, hidden ones too.
+  `column-gap` and `cursor`. Any other property is an error, because the element's size and
+  text are worked out before its parent's last child is known.
+- You can combine them with states (`.a:first-child:hover`), but not with `:focus-visible`.
+  They need a class, so `*:first-child` is an error.
+- Every child counts, including hidden ones.
 
 ## Comments
 
-`/* block */` and `// to the end of the line` are both comments.
+Both `/* block */` and `// to the end of the line` work as comments.
 
 ## \@font-face
 
@@ -133,16 +135,19 @@ parent's children:
 @font-face { font-family: "Inter"; src: url("../fonts/Inter/Inter-Bold.ttf"); }
 ```
 
-- Descriptors: `font-family` (quoted, or unquoted words) and `src` (`url("path")` or
-  `"path"`, optionally followed by `format(...)`, which is ignored). One source per rule.
-- Faces with the same family name form one family; weight and style come from the font files.
-- Relative paths are relative to the palette file's folder (`themes/`), for every style file.
-- Use the family with `font-family: "Inter";`.
+- There are two descriptors. `font-family` is quoted or plain words. `src` is
+  `url("path")` or `"path"`, optionally followed by `format(...)`, which is ignored. Each
+  rule takes one source.
+- Faces with the same family name make up one family. Weight and style come from the font
+  files.
+- Relative paths are relative to the palette file's folder (`themes/`), whichever style file
+  they're in.
+- To use the family, write `font-family: "Inter";`.
 
 ## Custom properties
 
-Custom properties are defined in `:root` blocks (any number, in any file) and used with
-`var(--name)`:
+You define custom properties in `:root` blocks (as many as you like, in any file) and use
+them with `var(--name)`:
 
 ```css
 :root {
@@ -157,14 +162,14 @@ Custom properties are defined in `:root` blocks (any number, in any file) and us
 
 | Value | Can be used in |
 | --- | --- |
-| A color or gradient (any color form below, or `var()` of an earlier color variable) | Color properties, gradient stops, `box-shadow` colors |
-| One number (`px` or `em` suffix ignored) | Any property that takes `var()` and one number |
+| A color or gradient (any color form on the Values page, or `var()` of an earlier color variable) | Color properties, gradient stops, `box-shadow` colors |
+| One number (a `px` or `em` suffix is ignored) | Any property that takes `var()` and one number |
 | 2 to 4 numbers | `margin`, `padding`, `border-width`, `border-radius` (each value fills one slot) |
 | A box-shadow list, or `none` | `box-shadow` |
 
-Numeric variables are stored as whole numbers from 0 to 65535: a fraction is cut off and
-a negative value becomes 0. Using an undefined variable, or one of the wrong kind, is an error.
+Numeric variables are stored as whole numbers from 0 to 65535. A fraction is cut off and a
+negative value becomes 0. Using an undefined variable, or one of the wrong kind, is an error.
 
 ---
 
-[← How a theme loads](loading.md) · [CSS and theming](../css.md) · [Values →](values.md)
+[Previous: How a theme loads](loading.md) | [CSS and theming](../css.md) | [Next: Values](values.md)
