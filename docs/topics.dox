@@ -8,26 +8,170 @@ is one of its member functions. The class page groups them by family. The
 @ref md_docs_2controls "Controls" covers each control.
 
 @defgroup controls Controls
-@brief Types the controls take and return: bindings, widget state, list and group helpers.
+@brief Every control by family, and the types they take and return.
 
-The controls themselves are member functions of tachyon::GUIApplication; this topic
-holds the types they use. See the @ref md_docs_2controls "Controls" guide.
+Controls are member functions of tachyon::GUIApplication. Guide:
+@ref md_docs_2controls "Controls".
+
+@defgroup controls_windows Windows and layout
+@ingroup controls
+@brief Windows, horizontal and vertical groups, areas, scroll bars, caching, label and
+button groups.
+
+Calls (members of tachyon::GUIApplication):
+@ref tachyon::GUIApplication::BeginWindow "BeginWindow",
+@ref tachyon::GUIApplication::EndWindow "EndWindow",
+@ref tachyon::GUIApplication::OpenWindow "OpenWindow",
+@ref tachyon::GUIApplication::CloseWindow "CloseWindow",
+@ref tachyon::GUIApplication::BeginGhostWindow "BeginGhostWindow",
+@ref tachyon::GUIApplication::BeginHorizontal "BeginHorizontal",
+@ref tachyon::GUIApplication::BeginVertical "BeginVertical",
+@ref tachyon::GUIApplication::BeginHorizontalWrap "BeginHorizontalWrap",
+@ref tachyon::GUIApplication::BeginVerticalWrap "BeginVerticalWrap",
+@ref tachyon::GUIApplication::BeginArea "BeginArea",
+@ref tachyon::GUIApplication::VerticalScrollbar "VerticalScrollbar",
+@ref tachyon::GUIApplication::HorizontalScrollbar "HorizontalScrollbar",
+@ref tachyon::GUIApplication::BeginCached "BeginCached",
+@ref tachyon::GUIApplication::Invalidate "Invalidate",
+@ref tachyon::GUIApplication::BeginLabelGroup "BeginLabelGroup",
+@ref tachyon::GUIApplication::BeginButtonGroup "BeginButtonGroup",
+@ref tachyon::GUIApplication::BeginToggleGroup "BeginToggleGroup".
+Guide: @ref md_docs_2controls_2windows-and-layout "Windows and layout".
+
+@defgroup controls_text Text and images
+@ingroup controls
+@brief Text, labels, drag labels, selectable text and images.
+
+Calls (members of tachyon::GUIApplication): @ref tachyon::GUIApplication::Text "Text",
+@ref tachyon::GUIApplication::Label "Label",
+@ref tachyon::GUIApplication::DragLabel "DragLabel",
+@ref tachyon::GUIApplication::SelectableText "SelectableText",
+@ref tachyon::GUIApplication::Image "Image".
+Guide: @ref md_docs_2controls_2text-and-images "Text and images".
+
+@defgroup controls_buttons Buttons and toggles
+@ingroup controls
+@brief Buttons, command buttons, toggles, switches and checkboxes.
+
+Calls (members of tachyon::GUIApplication): @ref tachyon::GUIApplication::Button "Button",
+@ref tachyon::GUIApplication::CommandButton "CommandButton",
+@ref tachyon::GUIApplication::Toggle "Toggle",
+@ref tachyon::GUIApplication::Switch "Switch",
+@ref tachyon::GUIApplication::Checkbox "Checkbox".
+Guide: @ref md_docs_2controls_2buttons-and-toggles "Buttons and toggles".
+
+@defgroup controls_fields Fields
+@ingroup controls
+@brief Text, search, autocomplete, numeric, vector and typed fields, dropdowns, lists and
+dictionaries.
+
+Calls (members of tachyon::GUIApplication): @ref tachyon::GUIApplication::Field "Field",
+@ref tachyon::GUIApplication::SearchField "SearchField",
+@ref tachyon::GUIApplication::AutocompleteField "AutocompleteField",
+@ref tachyon::GUIApplication::TypedField "TypedField",
+@ref tachyon::GUIApplication::Dropdown "Dropdown",
+@ref tachyon::GUIApplication::BeginFieldBox "BeginFieldBox".
+Numeric limits and formatting per type: tachyon::NumericFieldConfig.
+Guide: @ref md_docs_2controls_2fields "Fields".
+
+@defgroup controls_sliders Sliders
+@ingroup controls
+@brief Sliders with and without a value field.
+
+Calls (members of tachyon::GUIApplication):
+@ref tachyon::GUIApplication::SliderField "SliderField",
+@ref tachyon::GUIApplication::Slider "Slider".
+Guide: @ref md_docs_2controls_2sliders "Sliders".
+
+@defgroup controls_color Color and gradient fields
+@ingroup controls
+@brief Color and gradient fields with their picker popups.
+
+Calls (members of tachyon::GUIApplication):
+@ref tachyon::GUIApplication::ColorField "ColorField",
+@ref tachyon::GUIApplication::GradientField "GradientField".
+Guide: @ref md_docs_2controls_2color-and-gradient "Color and gradient fields".
+
+@defgroup controls_lists Lists and reorderable groups
+@ingroup controls
+@brief List views and drag-to-reorder groups.
+
+Calls (members of tachyon::GUIApplication):
+@ref tachyon::GUIApplication::BeginListView "BeginListView",
+@ref tachyon::GUIApplication::ListItem "ListItem",
+@ref tachyon::GUIApplication::BeginReorderableGroup "BeginReorderableGroup",
+@ref tachyon::GUIApplication::BeginReorderableItem "BeginReorderableItem".
+Guide: @ref md_docs_2controls_2lists "Lists and reorderable groups".
 
 @defgroup controls_data Tables, trees and grids
 @ingroup controls
 @brief Columns, sorting, selection and data sources for tables, tree views and grid views.
 
-@defgroup controls_docking Docking and toolbars
-@ingroup controls
-@brief Dock nodes, dock layouts and the toolbar dock.
+Calls (members of tachyon::GUIApplication):
+@ref tachyon::GUIApplication::BeginTable "BeginTable",
+@ref tachyon::GUIApplication::BeginRow "BeginRow",
+@ref tachyon::GUIApplication::Cell "Cell",
+@ref tachyon::GUIApplication::TreeCell "TreeCell",
+@ref tachyon::GUIApplication::VirtualTable "VirtualTable",
+@ref tachyon::GUIApplication::VirtualTreeView "VirtualTreeView",
+@ref tachyon::GUIApplication::BeginGridView "BeginGridView",
+@ref tachyon::GUIApplication::GridViewItem "GridViewItem",
+@ref tachyon::GUIApplication::VirtualGridView "VirtualGridView".
+Tree and grid views: @ref md_docs_2controls_2trees-and-grids "Tree and grid views".
+Guide: @ref md_docs_2controls_2tables "Tables".
 
-@defgroup controls_menus Menus and tooltips
+@defgroup controls_docking Tabs, docking and toolbars
 @ingroup controls
-@brief The menu and tooltip managers.
+@brief Tab bars, dock nodes, dock layouts, documents, toolbars and the toolbar dock.
+
+Calls (members of tachyon::GUIApplication):
+@ref tachyon::GUIApplication::BeginTabBar "BeginTabBar",
+@ref tachyon::GUIApplication::Tab "Tab",
+@ref tachyon::GUIApplication::BeginDockingContainer "BeginDockingContainer",
+@ref tachyon::GUIApplication::Documents "Documents",
+@ref tachyon::GUIApplication::BeginToolbar "BeginToolbar".
+The toolbar dock: tachyon::RenderToolbarDock.
+Guide: @ref md_docs_2controls_2tabs-docking-toolbars "Tabs, docking and toolbars".
+
+@defgroup controls_menus Menus, tooltips and dialogs
+@ingroup controls
+@brief Menus, context menus, the menu and title bar, tooltips, message dialogs and toasts.
+
+Calls (members of tachyon::GUIApplication):
+@ref tachyon::GUIApplication::BeginMenu "BeginMenu",
+@ref tachyon::GUIApplication::MenuItem "MenuItem",
+@ref tachyon::GUIApplication::BeginMenuBar "BeginMenuBar",
+@ref tachyon::GUIApplication::BeginTitleBar "BeginTitleBar",
+@ref tachyon::GUIApplication::BeginContextMenu "BeginContextMenu",
+@ref tachyon::GUIApplication::SetTooltip "SetTooltip",
+@ref tachyon::GUIApplication::BeginTooltip "BeginTooltip",
+@ref tachyon::GUIApplication::MessageDialog "MessageDialog",
+@ref tachyon::GUIApplication::ShowToast "ShowToast",
+@ref tachyon::GUIApplication::Banner "Banner".
+Tooltips and dialogs:
+@ref md_docs_2controls_2tooltips-and-dialogs "Tooltips and message dialogs".
+Guide: @ref md_docs_2controls_2menus "Menus".
 
 @defgroup controls_nodes Node view
 @ingroup controls
 @brief Nodes, pins and links for the node graph editor.
+
+Calls (members of tachyon::GUIApplication):
+@ref tachyon::GUIApplication::RenderNodeView "RenderNodeView",
+@ref tachyon::GUIApplication::NodeText "NodeText".
+Guide: @ref md_docs_2controls_2node-view "Node view".
+
+@defgroup controls_other Other controls
+@ingroup controls
+@brief Breadcrumb, status bar, command search and the settings panel.
+
+Calls (members of tachyon::GUIApplication):
+@ref tachyon::GUIApplication::Breadcrumb "Breadcrumb",
+@ref tachyon::GUIApplication::BeginStatusBar "BeginStatusBar",
+@ref tachyon::GUIApplication::StatusText "StatusText",
+@ref tachyon::GUIApplication::CommandSearch "CommandSearch",
+@ref tachyon::GUIApplication::RenderSettingsPanel "RenderSettingsPanel".
+Guide: @ref md_docs_2controls_2other-controls "Other controls".
 
 @defgroup layout Layout
 @brief Flexbox and grid layout, constraints and units.

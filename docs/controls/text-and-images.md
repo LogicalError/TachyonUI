@@ -8,6 +8,11 @@ Non-interactive text. Default class: `static-text`.
 void Text(ID id, std::string_view text, StyleRef style, LayoutOverride&& constraints = {});
 ```
 
+```cpp
+Text("Hello from TachyonUI!");
+Text("Selected object " + std::to_string(selected));
+```
+
 ## Label
 
 A label for the next control. In a label group it takes the group's width.
@@ -15,6 +20,11 @@ A label for the next control. In a label group it takes the group's width.
 ```cpp
 void Label(ID id, std::string_view text, StyleRef style, LayoutOverride&& constraints = {});
 void Label(ID id, std::string_view text, std::string_view caption, LayoutOverride&& constraints = {});
+```
+
+```cpp
+Label("Name");
+Field(name);
 ```
 
 The caption form, for tall controls like lists, puts the label at the top of the row with a
@@ -60,6 +70,11 @@ ContentRun runs[] =
 };
 ```
 
+```cpp
+SelectableText(docsTextID, runs, [this](intptr_t contentId) { if (contentId == 1) showDocs = true; },
+               theme.staticTextStyleRef);   // member: ID docsTextID = idManager.CreateStaticID()
+```
+
 Pass `theme.linkStyle` again every frame so links follow a theme reload.
 
 ## Image
@@ -70,6 +85,11 @@ Draws an image registered with `graphicsContext->RegisterImage`, stretched to fi
 ```cpp
 void Image(ID id, ImageIndex image, StyleRef style, LayoutOverride&& constraints = {});
 void Image(ID id, ImageIndex image, uint2 sourceSize, StyleRef style, LayoutOverride&& constraints = {});
+```
+
+```cpp
+Image(preview, LayoutOverride::FixedSize(96, 96));   // member: ImageIndex preview, from RegisterImage
+Image(preview, uint2{ 64, 64 });   // a 64x64 source, aspect ratio kept
 ```
 
 Default style: `theme.imageStyleRef` (built in code; CSS can't express the texture fill).

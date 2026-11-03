@@ -120,6 +120,17 @@ void TreeCell(std::string_view text, int depth, bool* isOpen, IconID icon = Icon
               std::string* renameBuffer = nullptr, bool reserveExpander = true);
 ```
 
+```cpp
+WalkTreeViewVisibility(rows, visibleIdx);   // members: std::vector<TreeViewRow> rows; std::vector<int> visibleIdx
+std::vector<VirtualTableColumn> columns = {
+    { .column = { .header = "Name", .initialWidth = 240 }, .generateCell = [this](int i) {
+          TreeViewRow& r = rows[visibleIdx[i]];
+          TreeCell(r.name, r.depth, r.HasChildren() ? &r.isOpen : nullptr, r.icon, r.ancestorLineMask, r.isLastSibling);
+      } },
+};
+VirtualTable(tableID, tableState, columns, int(visibleIdx.size()), 0, {}, LayoutOverride{}.FlexGrow(1));
+```
+
 - `isOpen`: null on leaf rows.
 - `renameBuffer`: enables rename in place (F2, Ctrl+Shift+Click or slow second click).
 - `ancestorLineMask`, `isLastSibling`: guide lines; `RebuildTreeViewIndex` computes them.

@@ -3,7 +3,7 @@
 # does the Docs workflow that publishes it.
 PROJECT_NAME           = TachyonUI
 PROJECT_NUMBER         = $(TACHYON_VERSION)
-PROJECT_BRIEF          = "Tool UI that keeps up with your engine."
+PROJECT_BRIEF          = "High-performance UI for building tools."
 PROJECT_LOGO           = docs/doxygen/logo.svg
 OUTPUT_DIRECTORY       = $(DOXYGEN_OUTPUT)
 INPUT                  = src/gui_core src/gui_controls docs
@@ -11,6 +11,8 @@ RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.md *.dox
 EXCLUDE                = docs/design docs/doxygen
 EXCLUDE_PATTERNS       = *_internal.h */internal/*
+# Helpers the public headers need but callers never use
+EXCLUDE_SYMBOLS        = tachyon::detail tachyon::detail::*
 # The example programs, shown in full by docs/examples.dox and linked from the members they use
 EXAMPLE_PATH           = examples
 EXAMPLE_PATTERNS       = *.cpp *.css

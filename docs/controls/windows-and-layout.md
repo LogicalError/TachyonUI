@@ -52,6 +52,16 @@ void AddGhostIcon(IconID icon);
 void EndGhostWindow();
 ```
 
+```cpp
+// A reorderable group's dragVisualizer: the dragged item's icon follows the cursor.
+auto ghost = [this](int index, int2 screenPos)
+{
+    if (BeginCursorGhostWindow(ghostWindowID, screenPos))   // member: ID ghostWindowID = idManager.CreateStaticID()
+        AddGhostIcon(itemIcons[index]);
+    EndGhostWindow();
+};
+```
+
 Overloads can omit the size (fits content) or the style. Classes: `ghost-window`;
 `AddGhostIcon` uses `ghost-icon`.
 
@@ -87,6 +97,13 @@ bool BeginArea(ID id, StyleRef style, LayoutOverride&& constraints = {});
 void EndArea();
 ```
 
+```cpp
+BeginArea(LayoutOverride{}.Size(300, 120));
+for (const std::string& tag : tags)
+    Text(tag);
+EndArea();
+```
+
 ## Scroll bars
 
 A container scrolls when its style has `overflow: auto` and its size is bounded. A flex
@@ -104,6 +121,15 @@ void HorizontalScrollbar(ID containerID);
 void ScrollbarOverlay(ID containerID, int2 lastInnerSize = int2{0, 0},
                       ID vertScrollBarID = ID::Invalid(), ID horzScrollBarID = ID::Invalid(),
                       bool emitVert = true, bool emitHorz = true);
+```
+
+```cpp
+const ID logID = idManager.AllocateDynamicID("log");
+BeginArea(logID, LayoutOverride{}.Size(300, 200));
+for (const std::string& line : logLines)
+    Text(line);
+VerticalScrollbar(logID);
+EndArea();
 ```
 
 `ScrollbarOverlay` draws both bars and the corner. Classes: `scrollbar-vertical`,

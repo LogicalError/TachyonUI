@@ -27,6 +27,11 @@ Groove and knob, no value text. Drag only; whole numbers.
 bool Slider(ID id, int& value, int minVal, int maxVal, StyleRef style, LayoutOverride&& constraints = {});
 ```
 
+```cpp
+Label("Quality");
+Slider(quality, 0, 4);   // member: int quality
+```
+
 Classes: `slider`, `slider-groove`, `slider-fill`, `slider-knob`.
 
 ---

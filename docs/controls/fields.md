@@ -35,6 +35,11 @@ bool SearchField(ID id, std::string& value, IconID icon, TextEditBehavior textEd
                  StyleRef style, LayoutOverride&& constraints = {});
 ```
 
+```cpp
+if (SearchField(filter, searchIcon))   // member: IconID searchIcon
+    filterDirty = true;
+```
+
 Classes: `search-textbox`, `search-textbox-icon`, `search-textbox-field`.
 
 ## AutocompleteField
@@ -134,6 +139,11 @@ Number field with its type after the value, e.g. "0.5  f32".
 template<typename T> bool TypedField(ID id, T& value, LayoutOverride&& constraints = {});
 ```
 
+```cpp
+DragLabel("Speed");
+TypedField(speed);   // float, shown as f32
+```
+
 Classes: `typed-field`, `typed-field-input`, `typed-field-type`.
 
 ## Lists
@@ -172,6 +182,11 @@ template<typename V>
 void Field(ID id, std::vector<std::pair<std::string, V>>& items, StyleRef style, LayoutOverride&& constraints = {});
 template<typename V>
 void Field(ID id, std::unordered_map<std::string, V>& items, StyleRef style, LayoutOverride&& constraints = {});
+```
+
+```cpp
+Label("Stats", std::to_string(stats.size()) + " entries");
+Field(stats, LayoutOverride{}.FlexGrow(1));   // member: std::vector<std::pair<std::string, float>> stats
 ```
 
 Both also come without the style. Classes: `collection-area`, `collection-header`,
