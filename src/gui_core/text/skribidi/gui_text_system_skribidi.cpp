@@ -261,6 +261,49 @@ namespace tachyon
 		return RegisterIconFromSVG(path, buffer.data(), buffer.size());
 	}
 
+	// A picture icon in its own colors, fit in `rect` keeping its aspect. Text shadows leave
+	// it out: a shadow of a picture's box would be a block.
+	static void DrawPixelIcon(SkribidiContext& ctx, const SkribidiContext::PixelIcon& icon, IntRect rect, IntRect clipRect)
+	{
+		if (!ctx.shadow.IsNone() || !ctx.guiRenderer || !ctx.styleManager)
+			return;
+		const float scale = std::min(float(rect.w) / float(icon.size.x), float(rect.h) / float(icon.size.y));
+		const int32_t w = int32_t(std::round(float(icon.size.x) * scale)), h = int32_t(std::round(float(icon.size.y) * scale));
+		const IntRect fit{ rect.x + (rect.w - w) / 2, rect.y + (rect.h - h) / 2, w, h };
+		// Only texture types sample the image a quad passes.
+		const VisualColorStyleIndex white = ctx.styleManager->RegisterColorStyle(
+			ColorStyle::Create(color4b{ 255, 255, 255, 255 }, color4b{ 255, 255, 255, 255 }, ColorType::StretchedTexture));
+		ctx.guiRenderer->RenderQuad(fit, clipRect, white, 0.0f, icon.index);
+	}
+
+	IconID SkribidiTextSystem::RegisterIconFromPixels(const char* name, uint2 size, std::span<const uint8_t> rgba)
+	{
+		if (!m_skribidiContext || !m_skribidiContext->graphicsContext || !name || size.x == 0 || size.y == 0 ||
+		    rgba.size() < size_t(size.x) * size.y * 4)
+			return IconID::Invalid;
+		auto& icons = m_skribidiContext->pixelIcons;
+		for (size_t i = 0; i < icons.size(); i++)
+			if (icons[i].name == name)
+				return IconID{ SkribidiContext::kPixelIconBit | uint32_t(i + 1) };
+
+		std::vector<uint8_t> pixels(rgba.begin(), rgba.begin() + std::ptrdiff_t(size_t(size.x) * size.y * 4));
+		GraphicsContext* gc = m_skribidiContext->graphicsContext;
+		Image* image = gc->CreateImage(pixels.data(), size, ImageFormat::R8G8B8A8, Sampler::LinearClampToEdge, true);
+		if (!image)
+			return IconID::Invalid;
+		const ImageIndex index = gc->RegisterImage(image);
+		if (index == ImageIndex::Invalid)
+		{
+			gc->DestroyImageAtEnd(image, DeviceScope::Application);
+			return IconID::Invalid;
+		}
+		const std::string placeholder = std::string("pixels:") + name;
+		const skb_icon_handle_t handle = skb_icon_collection_add_icon(m_skribidiContext->icon_collection, placeholder.c_str(),
+		                                                              float(size.x), float(size.y));
+		icons.push_back(SkribidiContext::PixelIcon{ .name = name, .image = image, .index = index, .size = size, .handle = handle });
+		return IconID{ SkribidiContext::kPixelIconBit | uint32_t(icons.size()) };
+	}
+
 	// -------------------- Icon Measurement --------------------
 
 	IconMeasurement SkribidiTextSystem::GetIconMeasurement(IconID iconId) const
@@ -276,6 +319,8 @@ namespace tachyon
 		if (iconId == IconID::Invalid)
 			return IconMeasurement {};
 		
+		if (const auto* pixels = m_skribidiContext->GetPixelIcon(iconId))
+			return IconMeasurement{ .width = int32_t(pixels->size.x), .height = int32_t(pixels->size.y) };
 		const skb_icon_handle_t handle = m_skribidiContext->GetIconHandle(iconId);
 		if (handle == 0)
 			return IconMeasurement {};
@@ -811,6 +856,11 @@ namespace tachyon
 		if (iconId == IconID::Invalid)
 			return;
 		
+		if (const auto* pixels = m_skribidiContext->GetPixelIcon(iconId))
+		{
+			DrawPixelIcon(*m_skribidiContext, *pixels, rect, clipRect);
+			return;
+		}
 		const skb_icon_handle_t handle = m_skribidiContext->GetIconHandle(iconId);
 		if (handle == 0)
 			return;
@@ -1004,6 +1054,14 @@ namespace tachyon
 			
 				if (run->type == SKB_CONTENT_RUN_ICON)
 				{
+					if (const auto* pixels = ctx->GetPixelIcon(run->icon_handle))
+					{
+						const skb_rect2_t r = view_transform_rect(&ctx->view, run->bounds);
+						const int32_t x0 = int32_t(std::round(r.x)), y0 = int32_t(std::round(r.y));
+						DrawPixelIcon(*ctx, *pixels, IntRect{ x0, y0, int32_t(std::round(r.x + r.width)) - x0, int32_t(std::round(r.y + r.height)) - y0 },
+						              clipRect);
+						continue;
+					}
 					skb_quad_t quad = ctx->GetIconQuad(run->bounds.x, run->bounds.y,
 					 pixelScale,  // pixel_scale
 						ctx->icon_collection,

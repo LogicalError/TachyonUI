@@ -164,8 +164,10 @@ namespace tachyon
             return MeasureIcon(iconId);
         }
 
-        IconMeasurement MeasureIcon(IconID /*iconId*/) const override
+        IconMeasurement MeasureIcon(IconID iconId) const override
         {
+            if (const auto it = m_pixelIconSizes.find(uint32_t(iconId)); it != m_pixelIconSizes.end())
+                return IconMeasurement{ .width = int32_t(it->second.x), .height = int32_t(it->second.y) };
             return IconMeasurement{ .width = m_defaultIconSize, .height = m_defaultIconSize };
         }
 
@@ -217,6 +219,22 @@ namespace tachyon
         {
             static uint32_t nextIconId = 0x10000000;
             return IconID{ nextIconId++ };
+        }
+
+        int pixelIconCalls = 0;   ///< RegisterIconFromPixels calls, repeats too
+
+        // An ID per name, measured at its pixel size.
+        IconID RegisterIconFromPixels(const char* name, uint2 size, std::span<const uint8_t> rgba) override
+        {
+            ++pixelIconCalls;
+            if (!name || size.x == 0 || size.y == 0 || rgba.size() < size_t(size.x) * size.y * 4)
+                return IconID::Invalid;
+            if (const auto it = m_pixelIconNames.find(name); it != m_pixelIconNames.end())
+                return IconID{ it->second };
+            const uint32_t id = 0x20000000 + uint32_t(m_pixelIconNames.size());
+            m_pixelIconNames[name] = id;
+            m_pixelIconSizes[id]   = size;
+            return IconID{ id };
         }
 
         // -------------------- Icon Rendering --------------------
@@ -468,6 +486,8 @@ namespace tachyon
         std::unordered_map<uint64_t, TextID> m_elementTextIdMap;
         std::unordered_map<uint64_t, std::string> m_floatTextMap;
         std::unordered_map<uint64_t, std::string> m_intTextMap;
+        std::unordered_map<std::string, uint32_t> m_pixelIconNames;
+        std::unordered_map<uint32_t, uint2>       m_pixelIconSizes;
 
         struct PendingEdit
         {

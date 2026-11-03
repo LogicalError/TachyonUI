@@ -24,6 +24,8 @@ int main(int argc, char* argv[])
     // --panel <title>: bring that panel to the front of its tab group, e.g. Inspector
     //                  (repeatable).
     // --float <title>: start with that panel in its own window (repeatable).
+    // --files <folder>: the folder the Files panel shows (a copy: it's never written to);
+    //                   the home folder without it.
     for (int i = 1; i + 1 < argc; ++i)
     {
         if (std::string_view(argv[i]) == "--ui-scale")
@@ -34,6 +36,8 @@ int main(int argc, char* argv[])
             application->AddStartPanel(argv[i + 1]);
         else if (std::string_view(argv[i]) == "--float")
             application->AddFloatPanel(argv[i + 1]);
+        else if (std::string_view(argv[i]) == "--files")
+            application->SetFilesRoot(argv[i + 1]);
     }
 
     int returnCode = EXIT_FAILURE;

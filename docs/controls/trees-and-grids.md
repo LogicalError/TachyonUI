@@ -79,6 +79,43 @@ VirtualGridView(gridID, gridState, int(files.size()), int2{ styleManager.Px(96),
                 &selectedFile);
 ```
 
+## File views
+
+A tree and a grid of files read from an `IFileSystem` (`gui_controls/gui_file_system.h`):
+`List(path)` gives a folder's entries, `Move` and `Rename` change them, and `Generation()`
+changes whenever a list may have, so a view knows when to read again. Paths are relative
+to the file system's root, with `/` between names; `""` is the root. A refused move or
+rename returns false with the reason in `error`, ready to show.
+
+`MemoryFileSystem` keeps it all in memory: filled with `AddFolder` / `AddFile`, or a copy
+of a folder on the disk, each folder read the first time it's needed. Its moves and
+renames change only the copy, so a demo can browse the real disk without writing to it.
+Implement `IFileSystem` over the disk itself, an archive or an asset database to change
+those instead.
+
+```cpp
+MemoryFileSystem files(std::filesystem::path("C:/Projects"));
+std::vector<std::string> names;
+for (const FileEntry& entry : files.List("TachyonUI"))
+    names.push_back(entry.isFolder ? entry.name + "/" : entry.name);
+std::string error;
+if (!files.Move("TachyonUI/notes.txt", "Archive", error))
+    ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Can't move it", .body = error });
+```
+
+`FileIcons` (`gui_controls/gui_file_icons.h`) gives the OS's icon for a file or folder:
+the Windows shell's, one per extension, read once, at the size asked for or the next one
+up. It's `IconID::Invalid` elsewhere, and a view shows its own icons then.
+
+```cpp
+FileIcons icons(*textSystem, 48);
+const IconID icon = icons.Get("photo.jpg", false);
+```
+
+The icons are pictures: `ITextSystem::RegisterIconFromPixels(name, size, rgba)` makes an
+icon of RGBA pixels, drawn in its own colors (not tinted by the style's icon color, and
+without text shadows), fit to its box keeping its shape, on its own and in text.
+
 ---
 
 [← Tables](tables.md) · [Controls](../controls.md) · [Tabs, docking and toolbars →](tabs-docking-toolbars.md)

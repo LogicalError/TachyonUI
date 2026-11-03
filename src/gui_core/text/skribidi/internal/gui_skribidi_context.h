@@ -263,9 +263,40 @@ namespace tachyon
 		std::vector<skb_icon_handle_t> iconHandles;  // skb handle per IconID, at index IconID - 1
 		std::vector<size_t>            iconSources;  // hash of each icon's SVG, to tell a repeat from a clash
 
+		// Icons from pixels (RegisterIconFromPixels): an image each. Their IconIDs have
+		// kPixelIconBit set, the index + 1 under it. In text they're an empty icon of their
+		// size in the icon collection, which is laid out like any other and drawn as the image.
+		static constexpr uint32_t kPixelIconBit = 1u << 30;
+		struct PixelIcon
+		{
+			std::string       name;
+			Image*            image  = nullptr;
+			ImageIndex        index  = ImageIndex::Invalid;
+			uint2             size {};
+			skb_icon_handle_t handle = 0;   // the empty icon standing in for it in text
+		};
+		std::vector<PixelIcon> pixelIcons;
+		const PixelIcon* GetPixelIcon(IconID iconId) const
+		{
+			const uint32_t value = (uint32_t)iconId;
+			if ((value & kPixelIconBit) == 0)
+				return nullptr;
+			const uint32_t index = value & ~kPixelIconBit;
+			return (index == 0 || index > pixelIcons.size()) ? nullptr : &pixelIcons[index - 1];
+		}
+		const PixelIcon* GetPixelIcon(skb_icon_handle_t handle) const
+		{
+			for (const PixelIcon& icon : pixelIcons)
+				if (handle != 0 && icon.handle == handle)
+					return &icon;
+			return nullptr;
+		}
+
 		// Returns 0 for an invalid or unknown icon
 		skb_icon_handle_t GetIconHandle(IconID iconId) const
 		{
+			if (const PixelIcon* pixels = GetPixelIcon(iconId))
+				return pixels->handle;
 			const uint32_t index = (uint32_t)iconId;
 			return (index == 0 || index > iconHandles.size()) ? 0 : iconHandles[index - 1];
 		}
@@ -291,6 +322,7 @@ namespace tachyon
 		// Registers the caret's color; again after the style manager drops its colors (a theme reload).
 		void RegisterCaretColor();
 
+		GraphicsContext*		graphicsContext  = nullptr;   // makes the images of icons from pixels
 		GUIRenderer*			guiRenderer      = nullptr;
 		StyleManager*			styleManager     = nullptr;
 		// A size in CSS pixels at the UI scale (StyleManager::Px).
