@@ -2,8 +2,8 @@
 
 ## BeginWindow / EndWindow
 
-Creates an OS window. A window lays out its children in rows that wrap, so put a
-`BeginVertical` inside if you want them stacked.
+Creates an OS window. Children are laid out in wrapping rows; put a `BeginVertical` inside
+to stack them.
 
 ```cpp
 bool BeginWindow(ID windowLayoutID, std::string_view title, StyleRef styleRef, LayoutOverride&& constraints,
@@ -12,19 +12,20 @@ bool BeginWindow(ID windowLayoutID, std::string_view title, StyleRef styleRef, L
 void EndWindow();
 ```
 
-Shorter overloads let you leave out the title, the style or the constraints. The ID has
-to be stable, so create it with `idManager.CreateStaticID()`. `BeginWindow` returns
-`false` once the user has closed the window, and you call `EndWindow` either way. The
-default class is `window`, and `theme.mainWindowStyleRef` uses `main-window`.
+- Overloads can omit title, style or constraints.
+- The ID must be stable: `idManager.CreateStaticID()`.
+- Returns `false` once the user closed the window; call `EndWindow` either way.
+- Classes: `window`; `theme.mainWindowStyleRef` uses `main-window`.
 
-These flags are the ones you'll reach for most:
-
-- `WindowUserControlled` lets the user move and resize the window.
-- `WindowIsCentered` centers it.
-- `WindowNoCaption` hides the caption.
-- `WindowCustomTitleBar` lets you draw your own title bar with `BeginTitleBar`.
-- `WindowConfirmClose` asks your app before closing (see `CloseRequested`).
-- `WindowIsModal` and `WindowRenderToImage`.
+| Flag | Effect |
+| --- | --- |
+| `WindowUserControlled` | User can move and resize |
+| `WindowIsCentered` | Centered |
+| `WindowNoCaption` | No caption |
+| `WindowCustomTitleBar` | Draw your own title bar with `BeginTitleBar` |
+| `WindowConfirmClose` | Ask your app before closing (see `CloseRequested`) |
+| `WindowIsModal` | Blocks input to the app's other windows |
+| `WindowRenderToImage` | No OS window: renders into an image, the host passes input ([Rendering into a host image](../integration/render-to-image.md)) |
 
 ```cpp
 if (BeginWindow(windowID, "Hello", LayoutOverride{}.Size(360, 160)))
@@ -36,14 +37,13 @@ if (BeginWindow(windowID, "Hello", LayoutOverride{}.Size(360, 160)))
 EndWindow();
 ```
 
-For a window with `WindowConfirmClose`, `bool CloseRequested(ID windowID)` tells you
-whether the user has asked to close it since you last checked. The window stays open until
-your app stops declaring it.
+With `WindowConfirmClose`, `bool CloseRequested(ID windowID)` returns whether the user
+asked to close since the last check. The window stays open until you stop declaring it.
 
 ## Ghost windows
 
-Borderless, transparent windows for drag previews. `BeginCursorGhostWindow` places the
-window at the cursor, offset a little so it doesn't sit under the OS cursor.
+Borderless transparent windows for drag previews. `BeginCursorGhostWindow` places it at
+the cursor, offset clear of the OS cursor.
 
 ```cpp
 bool BeginGhostWindow(ID windowLayoutID, int2 position, int2 size, StyleRef styleRef);
@@ -52,13 +52,12 @@ void AddGhostIcon(IconID icon);
 void EndGhostWindow();
 ```
 
-Other overloads leave out the size, in which case the window fits its content, or the
-style. The default class is `ghost-window`, and `AddGhostIcon` uses `ghost-icon`.
+Overloads can omit the size (fits content) or the style. Classes: `ghost-window`;
+`AddGhostIcon` uses `ghost-icon`.
 
 ## BeginHorizontal / BeginVertical and the Wrap variants
 
-Plain flex containers with no decoration. You get a row, a column, and wrapping versions
-of each.
+Undecorated flex containers: row, column, and wrapping versions.
 
 ```cpp
 bool BeginHorizontal(ID id, StyleRef style, LayoutOverride&& constraints = {});
@@ -68,9 +67,8 @@ bool BeginVerticalWrap(ID id, StyleRef style, LayoutOverride&& constraints = {})
 void EndHorizontal();   // EndVertical, EndHorizontalWrap, EndVerticalWrap
 ```
 
-Their default styles aren't CSS classes. They're plain flex boxes built in code:
-`theme.emptyHorzStyleRef`, `emptyVertStyleRef`, `emptyHorzWrapStyleRef` and
-`emptyVertWrapStyleRef`.
+Default styles are built in code, not CSS classes: `theme.emptyHorzStyleRef`,
+`emptyVertStyleRef`, `emptyHorzWrapStyleRef`, `emptyVertWrapStyleRef`.
 
 ```cpp
 BeginHorizontal();
@@ -81,8 +79,8 @@ EndHorizontal();
 
 ## BeginArea / EndArea
 
-A container you can put anything in. Its default class, `collection`, is a bordered flex
-box that wraps and has `overflow: auto`.
+A general container. Default class `collection`: bordered, wrapping flex box with
+`overflow: auto`.
 
 ```cpp
 bool BeginArea(ID id, StyleRef style, LayoutOverride&& constraints = {});
@@ -91,16 +89,14 @@ void EndArea();
 
 ## Scroll bars
 
-A container scrolls when its style has `overflow: auto` and its size is bounded.
+A container scrolls when its style has `overflow: auto` and its size is bounded. A flex
+child is bounded if it has a fixed size, or if it and every container up to a bounded
+ancestor have `flex-basis: 0` with `flex-grow` (`flex-fill-row` / `flex-fill-col`,
+`theme.flexFillRowStyleRef` / `flexFillColStyleRef`). Otherwise it grows to fit its content
+and nothing scrolls.
 
-A flex child is bounded in one of two ways. Either it has a fixed size, or it has
-`flex-basis: 0` with `flex-grow`, and so does every container between it and a bounded
-ancestor. The `flex-fill-row` and `flex-fill-col` classes do this, as do
-`theme.flexFillRowStyleRef` and `flexFillColStyleRef`. If neither applies, the child grows
-to fit its content and there's nothing to scroll.
-
-Call these functions from inside the container. The bar is drawn on top of the content,
-and it draws nothing when there's no overflow.
+Call these inside the container. Bars draw over the content, and draw nothing without
+overflow.
 
 ```cpp
 void VerticalScrollbar(ID containerID);
@@ -110,16 +106,14 @@ void ScrollbarOverlay(ID containerID, int2 lastInnerSize = int2{0, 0},
                       bool emitVert = true, bool emitHorz = true);
 ```
 
-`ScrollbarOverlay` draws both bars plus the corner where they meet. Classes:
-`scrollbar-vertical`, `scrollbar-vertical-thumb`, `scrollbar-horizontal`,
-`scrollbar-horizontal-thumb`.
+`ScrollbarOverlay` draws both bars and the corner. Classes: `scrollbar-vertical`,
+`scrollbar-vertical-thumb`, `scrollbar-horizontal`, `scrollbar-horizontal-thumb`.
 
 ## BeginCached / EndCached
 
-A container like `BeginArea` that keeps its rendered output. If nothing inside it has
-changed, `BeginCached` returns `false`, you skip the body, and the kept output is drawn
-instead. It's rebuilt when its size changes, when the cursor or keyboard focus is inside
-it, when `signature` changes, or after you call `Invalidate(id)`.
+Like `BeginArea`, but keeps its rendered output. If nothing changed, `BeginCached` returns
+`false`: skip the body and the kept output is drawn. Rebuilt when its size changes, the
+cursor or keyboard focus is inside, `signature` changes, or after `Invalidate(id)`.
 
 ```cpp
 bool BeginCached(ID id, StyleRef style, uint64_t signature = 0, LayoutOverride&& constraints = {});
@@ -129,13 +123,10 @@ void InvalidatePanel(ID panelId);
 void SetDrawCacheEnabled(bool enabled);
 ```
 
-The ID must be stable, either static or salted. The default class is `collection`. Docked
-panels are already cached (see
-[Docking](tabs-docking-toolbars.md#docking)).
-
-The kept output lives on the GPU. Once it's there, drawing it again uploads nothing, even
-if it has moved. Output that hasn't been drawn for 240 frames is dropped, and it's built
-again the next time it's shown.
+- The ID must be stable (static or salted). Default class: `collection`.
+- Docked panels are already cached (see [Docking](tabs-docking-toolbars.md#docking)).
+- The output stays on the GPU; redrawing uploads nothing, even if moved. Output not drawn
+  for 240 frames is dropped and rebuilt when next shown.
 
 ```cpp
 if (BeginCached(listID, dataVersion))
@@ -148,9 +139,8 @@ EndCached();
 
 ## Label groups
 
-Inside a label group, every `Label` and `DragLabel` shares one width, so each label and its
-control line up in rows. Dragging the right edge of any label resizes all of them. Widths
-are in CSS pixels.
+Every `Label` and `DragLabel` inside shares one width, so labels and controls line up.
+Dragging any label's right edge resizes all. Widths in CSS pixels.
 
 ```cpp
 bool BeginLabelGroup(ID id, CssPx defaultWidth = 120, CssPx minWidth = 40, CssPx maxWidth = 500,
@@ -167,14 +157,12 @@ Field(scale);
 EndLabelGroup();
 ```
 
-In a resizable group, labels use the `group-label` class and drag labels use
-`group-drag-label`.
+In a resizable group: `group-label` and `group-drag-label`.
 
 ## Button and toggle groups
 
-Put `Button`s in a button group, or `Toggle`s and `Field(bool)`s in a toggle group, and
-they're packed together with shared borders. A group with only one item keeps that item's
-normal style.
+Packs `Button`s (button group) or `Toggle`s and `Field(bool)`s (toggle group) together with
+shared borders. A lone item keeps its normal style.
 
 ```cpp
 bool BeginButtonGroup(LayoutOverride&& constraints = {});
@@ -183,10 +171,9 @@ bool BeginToggleGroup(LayoutOverride&& constraints = {});
 void EndToggleGroup();
 ```
 
-A button group uses `button-group` and its buttons use `group-button`. A toggle group uses
-`toggle-group` with `group-toggle`. A lone item uses `button` or `toggle`. You can style
-the ends of a group with `.group-button:first-child` and `:last-child` (see
-[Syntax](../css/syntax.md#child-position)).
+Classes: `button-group` with `group-button`; `toggle-group` with `group-toggle`; a lone
+item `button` or `toggle`. Style the ends with `.group-button:first-child` and
+`:last-child` (see [Syntax](../css/syntax.md#child-position)).
 
 ```cpp
 BeginToggleGroup(LayoutOverride{}.NoGrow());

@@ -1,17 +1,15 @@
 # CSS and theming
 
-You style TachyonUI with CSS files. The parser reads a subset of CSS, plus a few
-`-tachyon-*` properties of its own, and turns each class into a `tachyon::Style`. The pages
-below spell out exactly what it accepts. For layout and the controls themselves, see the
-[Overview](overview.md) and [Controls](controls.md).
+Themes are CSS files: a subset of CSS plus `-tachyon-*` properties. Each class becomes a
+`tachyon::Style`.
 
-| Page | What it covers |
+| Page | Covers |
 | --- | --- |
-| [How a theme loads](css/loading.md) | Which files load and in what order, and how palettes and reloads work. |
-| [Syntax](css/syntax.md) | Rules, selectors, pseudo-classes and states, comments, `@font-face` and custom properties. |
-| [Values](css/values.md) | Numbers and units, colors and gradients. |
-| [Properties](css/properties.md) | Every supported property (box model, borders, colors, text, flex, grid, sizing, icons) and what isn't supported. |
-| [Using styles from C++](css/from-cpp.md) | Theme classes, styles built in code, and the UI scale. |
+| [How a theme loads](css/loading.md) | Theme files, load order, palettes, reloads |
+| [Syntax](css/syntax.md) | Rules, selectors, states, comments, `@font-face`, custom properties |
+| [Values](css/values.md) | Numbers, units, colors, gradients |
+| [Properties](css/properties.md) | Every supported property, and what isn't supported |
+| [Using styles from C++](css/from-cpp.md) | Theme classes, styles built in code, UI scale |
 
 <!--!
 \htmlonly <div class="page-tree"> \endhtmlonly

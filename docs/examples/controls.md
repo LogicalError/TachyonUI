@@ -1,12 +1,12 @@
 # Controls
 
-This example puts the common controls in one window, laid out as label/value rows.
+The common controls in one window, as label/value rows.
 Full source: [examples/controls/controls.cpp](https://github.com/LogicalError/TachyonUI/blob/main/examples/controls/controls.cpp).
 
 ## A window as a scope
 
-Instead of calling `BeginWindow` and `EndWindow`, this example uses the scope form. The
-scope ends the window when it goes out of scope, so returning early is safe:
+`Window(...)` returns a scope that ends the window when it goes out of scope, so early
+returns are safe:
 
 ```cpp
 // The scope ends the window when it leaves, open or not.
@@ -16,15 +16,13 @@ if (!window)
 BeginVertical(tachyon::LayoutOverride{}.FlexGrow(1));
 ```
 
-Other container pairs have scopes like this too, such as `Menu`, `Horizontal`, `Table`
-and `Tooltip`. Each one takes the same arguments as its `Begin*` call (see
-[Begin and End](../overview/begin-end.md)).
+`Menu`, `Horizontal`, `Table`, `Tooltip` and other pairs have scopes too, taking the same
+arguments as their `Begin*` (see [Begin and End](../overview/begin-end.md)).
 
 ## Label/value rows
 
-Inside a label group, each `Label` lines up with the control that follows it. The labels
-sit in a column the user can resize. `DragLabel` works the same way, and the user can
-also drag it to change the value of the field it labels.
+In a label group each `Label` lines up with the next control; the label column is
+user-resizable. `DragLabel` also changes its field's value when dragged.
 
 ```cpp
 BeginLabelGroup(140);
@@ -52,8 +50,8 @@ EndHorizontal();
 
 ## Text and numbers
 
-`Field` chooses its editor based on the type of the value. You can pass behavior flags
-to a text field and an optional range to a number field:
+`Field` picks the editor from the value's type. Text fields take behavior flags; number
+fields take an optional range:
 
 ```cpp
 Label("Text");
@@ -84,8 +82,8 @@ ColorField(color);
 
 ## A menu
 
-`BeginMenu` returns true while the menu is open, and that's when you add its items.
-Call `EndMenu` either way. An item's callback runs when the user picks it.
+`BeginMenu` returns true while open; add items then. Always call `EndMenu`. An item's
+callback runs when it is picked.
 
 ```cpp
 Label("Menu");
@@ -99,8 +97,7 @@ EndMenu();
 
 ## Tabs
 
-A tab bar only keeps track of which tab is selected. What you show for each tab is up
-to you:
+A tab bar only tracks the selected tab; you draw each tab's content:
 
 ```cpp
 BeginTabBar(idManager.AllocateDynamicID("tabs"), &selectedTab, nullptr);
@@ -110,8 +107,7 @@ EndTabBar();
 Text(selectedTab == 0 ? "Content of the first tab" : "Content of the second tab");
 ```
 
-Each of these controls has its own page in the [Controls](../controls.md) guide, which
-lists all its overloads and its default CSS class.
+Overloads and default CSS classes: [Controls](../controls.md).
 
 ---
 

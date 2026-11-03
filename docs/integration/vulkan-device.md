@@ -1,14 +1,12 @@
 # Using your own Vulkan device
 
-By default the GUI creates its own `VkInstance` and `VkDevice` and owns them. If your
-program already has a device, you can hand its handles to the GUI so that both render on
-the same device. `examples/host_device/host_device.cpp` is a complete program that does
-this.
+By default the GUI creates and owns its `VkInstance` and `VkDevice`. You can hand it your
+own instead. Complete program: `examples/host_device/host_device.cpp`.
 
 ## Device requirements
 
 `tachyon::vulkan::VulkanDeviceContext::GetDeviceRequirements()` returns what the device
-has to enable:
+must enable:
 
 ```cpp
 struct DeviceRequirements
@@ -22,8 +20,7 @@ struct DeviceRequirements
 };
 ```
 
-The feature structs don't have a `pNext` chain, so you chain them yourself. Here's how
-it looks with vk-bootstrap, as in the example:
+The feature structs have no `pNext` chain; chain them yourself. With vk-bootstrap:
 
 ```cpp
 auto requirements = tachyon::vulkan::VulkanDeviceContext::GetDeviceRequirements();
@@ -38,23 +35,21 @@ auto selected = vkb::PhysicalDeviceSelector{ instance }
     .select();
 ```
 
-`VulkanDeviceContext::CheckPhysicalDeviceSupport(physicalDevice, &problems)` tells you
-what a physical device is missing, with one line per missing capability. The GUI runs
-this check when it adopts the device, and `Initialize` fails with a message if the
-device can't run the GUI. The check can't see what you actually enabled when you created
-the device, though.
+`VulkanDeviceContext::CheckPhysicalDeviceSupport(physicalDevice, &problems)` lists what a
+physical device lacks, one line each. The GUI runs it when adopting the device, and
+`Initialize` fails with a message if unsupported. It cannot see what you actually enabled
+at device creation.
 
-There are two more requirements besides the device:
+Also required:
 
-- The instance has to enable the extensions the window backend needs to create
-  surfaces. For SDL, you get those from `SDL_Vulkan_GetInstanceExtensions`. SDL has to
-  be running before you create the instance for that to work, which is why the example
-  calls `SDL_Init(SDL_INIT_VIDEO)` first.
-- The queue has to support graphics, and presenting to the GUI's windows.
+- The instance enables the window backend's surface extensions. For SDL, get them from
+  `SDL_Vulkan_GetInstanceExtensions`, which needs SDL running first (hence
+  `SDL_Init(SDL_INIT_VIDEO)` before creating the instance).
+- The queue supports graphics and presenting to the GUI's windows.
 
 ## Handing over the device
 
-Set the device on a `VulkanGraphicsContext` and give that to the app. Do both before
+Set the device on a `VulkanGraphicsContext` and give it to the app, both before
 `Initialize`:
 
 ```cpp
@@ -77,29 +72,27 @@ if (tachyon::Result<void> result = app.Initialize(); !result)
     std::fprintf(stderr, "%s\n", result.GetError().message.c_str());   // e.g. a missing device feature
 ```
 
-You don't have to pass an `allocator`. Without one, the GUI creates its own
-`VmaAllocator` and owns it. If you do pass one, it must have been created with
-`VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT`, or `Initialize` fails.
+`allocator` is optional; without it the GUI creates and owns its own `VmaAllocator`. A
+passed allocator must be created with `VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT`,
+or `Initialize` fails.
 
-**Ownership.** The GUI only destroys what it created. Your instance, device and
-allocator are still alive after `Cleanup`, and you destroy them after that.
+**Ownership.** The GUI destroys only what it created. Destroy your instance, device and
+allocator after `Cleanup`.
 
-**Threading.** A Vulkan queue needs external synchronization. The GUI locks
-`queueMutex` around every `vkQueueSubmit2` and `vkQueuePresentKHR` call it makes, and
-around `vkDeviceWaitIdle`. If you submit to the same queue from other threads, pass in
-the mutex you lock around your own submissions. Without one, the GUI uses a private
-mutex, which only protects it from its own threads. Keep in mind that presenting can
-block until vsync while the lock is held. If you have a second graphics queue, you can
-give the GUI a queue of its own to avoid that.
+**Threading.**
 
-While it records commands, the GUI copies its uploads into mapped memory on a separate
-thread, and waits for that thread before each submit. That thread never touches the
-queue.
+- The GUI locks `queueMutex` around every `vkQueueSubmit2`, `vkQueuePresentKHR` and
+  `vkDeviceWaitIdle`.
+- If other threads submit to the same queue, pass the mutex they lock. Without one the
+  GUI uses a private mutex that only guards its own threads.
+- Presenting can block until vsync while holding the lock. With a second graphics queue,
+  give the GUI its own to avoid that.
+- During recording the GUI copies uploads into mapped memory on a separate thread and
+  waits for it before each submit. That thread never touches the queue.
 
 ## Showing a host-rendered image
 
-You can render into an image you own and show it in the UI, for example as a 3D
-viewport:
+Show an image you render (e.g. a 3D viewport):
 
 ```cpp
 tachyon::ImageIndex index = vk->RegisterExternalImage(view, sampler);   // once
@@ -108,27 +101,23 @@ vk->UpdateExternalImage(index, newView, sampler);                          // af
 Image(index, tachyon::uint2{ width, height });   // in OnGUI
 ```
 
-You keep ownership of the view and sampler. They have to outlive every GUI frame that
-uses the index. `Image` uses `theme.imageStyleRef`. If you use a custom element or
-style, it only shows the image when the type of its background color style is
-`ColorType::StretchedTexture`.
+- You own the view and sampler; they must outlive every GUI frame that uses the index.
+- `Image` uses `theme.imageStyleRef`. A custom element or style shows the image only if
+  its background color style type is `ColorType::StretchedTexture`.
 
-The synchronization contract has three rules, all on the queue you passed to
-`SetExternalDevice`:
+Synchronization contract, all on the queue passed to `SetExternalDevice`:
 
-1. By the end of the command buffer you submit for the frame, leave the image in
-   `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL`, with your writes visible to the fragment
-   stage (destination stage `FRAGMENT_SHADER`, access `SHADER_SAMPLED_READ`).
-2. Before you write the image again, transition it out of that layout with a source
-   stage of `FRAGMENT_SHADER`. That way your write waits for the GUI's earlier reads.
-3. Submit while the UI is being built (in `OnGUI`), before the GUI submits the frame.
-   Because the submissions are ordered on one queue, both barriers take effect across
-   command buffers.
+1. By the end of your frame's command buffer, leave the image in
+   `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL`, writes visible to the fragment stage
+   (destination stage `FRAGMENT_SHADER`, access `SHADER_SAMPLED_READ`).
+2. Before writing it again, transition out of that layout with source stage
+   `FRAGMENT_SHADER`, so your write waits for the GUI's earlier reads.
+3. Submit during `OnGUI`, before the GUI submits the frame. Ordering on one queue makes
+   both barriers apply across command buffers.
 
-After a resize, make sure no GUI frame that's still in flight samples the old view. The
-easiest way is `vkDeviceWaitIdle`. `Host::Render` in
-`examples/host_device/host_device.cpp` follows this contract, and
-`tests/gpu/gpu_external_device_test.cpp` checks it under synchronization validation.
+After a resize, no in-flight GUI frame may still sample the old view; `vkDeviceWaitIdle`
+is simplest. Reference: `Host::Render` in `examples/host_device/host_device.cpp`;
+checked under synchronization validation by `tests/gpu/gpu_external_device_test.cpp`.
 
 ---
 

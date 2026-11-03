@@ -2,22 +2,20 @@
 
 ## Breadcrumb
 
-Shows a path such as Graphs > Terrain material, where the last segment is the current
-one. Clicking any other segment calls `onSelect(index)`, and `Breadcrumb` returns `true`
-that frame.
+Path such as Graphs > Terrain material; the last segment is current. Clicking another
+segment calls `onSelect(index)` and returns `true` that frame.
 
 ```cpp
 bool Breadcrumb(ID id, std::span<const std::string> segments, std::function<void(int)> onSelect, StyleRef style,
                 LayoutOverride&& constraints = {});
 ```
 
-It uses the classes `breadcrumb`, `breadcrumb-segment`, `breadcrumb-current` and
-`breadcrumb-separator`.
+Classes: `breadcrumb`, `breadcrumb-segment`, `breadcrumb-current`, `breadcrumb-separator`.
 
 ## Status bar
 
-A strip of short status texts, usually along the bottom edge of a window. To push some
-texts to the right, give the `StatusText` before them `FlexGrow(1)`.
+Strip of short texts. To push texts to the right, give the `StatusText` before them
+`FlexGrow(1)`.
 
 ```cpp
 bool BeginStatusBar(ID id, StyleRef style, LayoutOverride&& constraints = {});
@@ -25,7 +23,7 @@ void EndStatusBar();
 void StatusText(ID id, std::string_view text, StyleRef style, LayoutOverride&& constraints = {});
 ```
 
-It uses the classes `status-bar` and `status-text`.
+Classes: `status-bar`, `status-text`.
 
 ```cpp
 BeginStatusBar();
@@ -36,34 +34,33 @@ EndStatusBar();
 
 ## CommandSearch
 
-A search field that finds and runs the commands in `commandManager`. While it has focus,
-it lists the commands whose description contains what you typed. Up and Down move
-through the list, Enter or a click runs a command, and Escape leaves the field.
-
-`state` has to outlive the frame. `CommandSearch` returns `true` when a command has run
-since the last call. `FocusCommandSearch(state)` gives it the keyboard on the next frame,
-which is handy to bind to a shortcut such as Ctrl+K.
+Search field that finds and runs `commandManager` commands. While focused it lists
+commands whose description contains the typed text. Up / Down move, Enter or click runs,
+Escape leaves.
 
 ```cpp
 bool CommandSearch(ID id, CommandSearchState& state, StyleRef style, LayoutOverride&& constraints = {});
 static void FocusCommandSearch(CommandSearchState& state);
 ```
 
-It uses the classes `command-search`, `command-search-hint`, `command-search-key`,
-`command-search-list` and `command-search-current-row`.
+- `state` must outlive the frame.
+- Returns `true` when a command ran since the last call.
+- `FocusCommandSearch(state)` focuses it next frame (e.g. bind to Ctrl+K).
+
+Classes: `command-search`, `command-search-hint`, `command-search-key`,
+`command-search-list`, `command-search-current-row`.
 
 ## Settings panel
 
-A settings panel in two panes: a tree of pages on one side, then a sizer, then the
-content of the selected page. It renders into the current container. Add pages with
-stable IDs, and each page's `render` function builds its content.
+Two panes: page tree, sizer, selected page's content. Renders into the current container.
+Add pages with stable IDs; each page's `render` builds its content.
 
 ```cpp
 void RenderSettingsPanel(SettingsPanelState& state);
 ID   SettingsPanelState::AddPage(ID id, std::string_view name, std::function<void()> render);
 ```
 
-It uses the classes `settings-page` and `settings-page-selection`.
+Classes: `settings-page`, `settings-page-selection`.
 
 ---
 

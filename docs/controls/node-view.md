@@ -2,67 +2,65 @@
 
 ## RenderNodeView
 
-A graph editor with nodes, property rows, sockets and wires. It supports pan and zoom,
-box selection, a minimap, zoom controls and an optional breadcrumb. All of its state lives
-in a `NodeView` that your app owns, so you can have several views at once.
+Graph editor: nodes, property rows, sockets, wires, pan and zoom, box selection, minimap,
+zoom controls, optional breadcrumb. All state lives in a `NodeView` your app owns, so
+several views can coexist.
 
 ```cpp
 void RenderNodeView(NodeView& view);
 void NodeText(std::string_view text);
 ```
 
-Each node is a `NodeModel`. Give it a `stableID` once (for example from
-`idManager.CreateStaticID()`), a `title`, optionally a `category` and `categoryColor`, a
-`pos` in pixels, and its `properties`.
+**`NodeModel`** (one per node): `stableID` (set once, e.g. `idManager.CreateStaticID()`),
+`title`, optional `category` and `categoryColor`, `pos` in pixels, `properties`.
 
-Each row is a `NodeProperty`. Its `input` is the input socket: set it to
-`PropertyEndpoint{}` for an input with no wire, and once it's wired it holds the source
-output. `output` is a flag for the output socket. `renderBody` builds the row, with any
-controls you like. There's also a `socketColor` and a `rowSpan`. Inside a row, `NodeText`
-draws text aligned to the row's sockets: on the left for an input, on the right for an
-output, and centered when the row has both.
+**`NodeProperty`** (one per row):
 
-A property's `name`, `type` and `value` make up the tooltip on its pins. The tooltip shows
-the name, the type (muted, in a monospace font) and the current value. `value` is only
-called while the tooltip is showing. For a wired input, the tooltip also says where the
-value comes from, as in "from Noise.Value" (the source node's title and its property's
-name). A pin with none of the three has no tooltip. The tooltip uses the classes
-`tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-value` and
+| Field | Meaning |
+| --- | --- |
+| `input` | Input socket. `PropertyEndpoint{}` for an unwired input; once wired, holds the source output. |
+| `output` | Flag: has an output socket |
+| `renderBody` | Builds the row, with any controls |
+| `socketColor`, `rowSpan` | Socket color, rows spanned |
+| `name`, `type`, `value` | Pin tooltip: name, type (muted, monospace), current value. `value` is called only while the tooltip shows. None of the three: no tooltip. |
+
+A wired input's tooltip also names the source, e.g. "from Noise.Value". Tooltip classes:
+`tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-value`,
 `tooltip-note`.
 
-`NodeView` has a few callbacks:
+`NodeText` draws text aligned to the row's sockets: left for an input, right for an
+output, centered for both.
 
-- `canConnect(view, output, input)` lets you refuse a wire.
-- `onEdit` gets each finished edit as a `NodeViewEdit`, which is what you need for undo.
-  `ApplyNodeViewEdit` in `gui_node_view_helpers.h` applies or reverts one.
-- `onBreadcrumb(index)` handles clicks on the breadcrumb.
+**`NodeView`** members:
 
-`showZoomControls` and `showMinimap` turn those overlays on and off.
+- `canConnect(view, output, input)`: return false to refuse a wire.
+- `onEdit`: gets each finished edit as a `NodeViewEdit`, for undo. `ApplyNodeViewEdit` in
+  `gui_node_view_helpers.h` applies or reverts one.
+- `onBreadcrumb(index)`: breadcrumb clicks.
+- `showZoomControls`, `showMinimap`: toggle those overlays.
 
-Tab reaches the controls in every node, whether it's in view or not. When keyboard focus
-moves to a node that isn't fully visible, the view pans just far enough to show it,
-without changing the zoom. To do the same from code, use `ScrollNodeIntoView` and
+**Focus.** Tab reaches controls in every node, visible or not. Focusing a partly hidden
+node pans just enough to show it, zoom unchanged. From code: `ScrollNodeIntoView`,
 `FrameAllNodes` in `gui_node_view_helpers.h`.
 
-These keys work while the canvas has focus (click its background to give it focus):
+**Keys** (canvas focused; click its background):
 
-- Home frames all nodes.
-- The arrow keys move the selected nodes by one grid step (four with Shift), as a single
-  edit. With nothing selected, they pan the view.
-- + and - zoom in and out.
-- Ctrl+A selects every node, and Escape clears the selection.
-- Enter collapses or expands the selected nodes.
+| Key | Action |
+| --- | --- |
+| Home | Frame all nodes |
+| Arrows | Move selected nodes one grid step (four with Shift) as one edit; pan if nothing is selected |
+| + / - | Zoom in / out |
+| Ctrl+A / Escape | Select all / clear selection |
+| Enter | Collapse or expand selected nodes |
 
-Wires are made and removed with the mouse.
+Wires are made and removed with the mouse only.
 
-Pressing on a node and moving the pointer past the drag distance moves the node, along
-with the rest of the selection. A shorter movement counts as a click and only selects.
-Escape during a drag undoes it: it puts back the nodes during a move, a wire's lane, the
-selection during a box select, and the view during a right-button pan or a drag in the
-minimap.
+**Dragging.** Moving past the drag distance on a node moves it and the rest of the
+selection; less counts as a click (select only). Escape mid-drag undoes it: node move,
+wire lane, box selection, right-button pan, minimap drag.
 
-The node view uses the classes `node-view`, `node`, `node-header`, `node-title`,
-`node-category`, `node-row`, `node-socket`, `node-view-overlay` and `node-view-minimap`.
+Classes: `node-view`, `node`, `node-header`, `node-title`, `node-category`, `node-row`,
+`node-socket`, `node-view-overlay`, `node-view-minimap`.
 
 ```cpp
 NodeModel mix;

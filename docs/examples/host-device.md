@@ -1,18 +1,17 @@
 # Host device
 
-In this example a "host" application, such as a game engine, creates its own Vulkan
-instance and device and hands them to the GUI. Every frame the host renders into an
-image of its own, and the GUI shows that image in a window.
+A host application (such as a game engine) creates its own Vulkan instance and device and
+hands them to the GUI. Each frame the host renders into its own image, which the GUI shows
+in a window.
 Full source: [examples/host_device/host_device.cpp](https://github.com/LogicalError/TachyonUI/blob/main/examples/host_device/host_device.cpp).
 
-The example uses vk-bootstrap so it can create the device in a few lines. Your own host
-will have its own code for that. What matters is what it enables and what it hands over.
+The example creates the device with vk-bootstrap; what matters is what it enables and
+hands over.
 
 ## A device the GUI can use
 
-The host has to enable everything the GUI needs, and
-`VulkanDeviceContext::GetDeviceRequirements()` gives you that list. The instance also
-needs the extensions SDL uses to create window surfaces.
+Enable everything in `VulkanDeviceContext::GetDeviceRequirements()`. The instance also
+needs SDL's surface extensions.
 
 ```cpp
 // Enable everything the GUI needs on the device.
@@ -30,9 +29,8 @@ auto selected = vkb::PhysicalDeviceSelector{ instance }
 
 ## Handing it over
 
-The host describes its handles in an `ExternalDevice`. Since the host and the GUI submit
-to the same queue, the host also passes in the mutex it locks around its own
-submissions.
+Fill an `ExternalDevice`. Host and GUI share the queue, so pass the mutex the host locks
+around its own submissions.
 
 ```cpp
 tachyon::vulkan::VulkanDeviceContext::ExternalDevice external;
@@ -44,7 +42,7 @@ external.graphicsQueueFamily = queueFamily;
 external.queueMutex          = &queueMutex;
 ```
 
-The app gives that device to the Vulkan backend before calling `Initialize`:
+Give it to the Vulkan backend before `Initialize`:
 
 ```cpp
 auto backend = std::make_unique<tachyon::vulkan::VulkanGraphicsContext>();
@@ -58,16 +56,15 @@ SetGraphicsBackend(std::move(backend));
 
 ## Showing the host's image
 
-After `Initialize`, the app registers the host's image view and sampler once. The GUI
-samples them, but the host still owns them.
+After `Initialize`, register the host's view and sampler once. The host keeps owning them.
 
 ```cpp
 // The GUI samples the host's view and sampler; the host keeps owning them.
 hostImage = vk->RegisterExternalImage(host.view, host.sampler);
 ```
 
-Each frame, the host submits its rendering while the UI is being built, before the GUI
-submits its own work. `Image` then shows the result.
+Each frame the host submits its rendering during `OnGUI`, before the GUI submits. `Image`
+shows the result.
 
 ```cpp
 void OnGUI() override
@@ -87,20 +84,18 @@ void OnGUI() override
 }
 ```
 
-`Host::Render` follows the GUI's synchronization contract. Before it writes the image,
-it waits for the GUI's fragment-stage reads to finish. When it's done, it leaves the
-image in `SHADER_READ_ONLY_OPTIMAL` so the fragment stage can read it.
+`Host::Render` waits for the GUI's fragment-stage reads before writing the image, and
+leaves it in `SHADER_READ_ONLY_OPTIMAL` when done.
 
 ## Shutting down
 
-`Cleanup` only destroys what the GUI created. The host's device is still there
-afterwards, and the host destroys it itself.
+`Cleanup` destroys only what the GUI created; the host destroys its own device afterwards.
 
 ```cpp
 app.Cleanup();   // the GUI destroys only what it created; the device stays
 ```
 
-For the full requirements, the ownership rules and the synchronization contract, see
+Full requirements, ownership and synchronization rules:
 [Using your own Vulkan device](../integration/vulkan-device.md).
 
 ---

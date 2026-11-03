@@ -2,9 +2,8 @@
 
 ## Panels as classes
 
-Each panel is a small class that holds the values it shows and has a `Draw` function
-that builds its controls. Every control is a member function of
-`tachyon::GUIApplication`, so `Draw` takes the app as a parameter. Put this in
+Each panel is a class holding its values, with a `Draw` that builds its controls.
+Controls are members of `tachyon::GUIApplication`, so `Draw` takes the app. In
 `my_app.h`, after `#include <gui_controls/gui_application.h>`,
 `#include <gui_controls/gui_dock_node.h>` and `#include <string>`:
 
@@ -36,8 +35,6 @@ public:
 };
 ```
 
-In this step you'll draw the counter panel. The greeting panel comes in the next one.
-
 ## The counter panel
 
 In `my_app.cpp`:
@@ -61,23 +58,17 @@ ui.Button("Reset",   [this] { count = 0; });
 ui.EndHorizontal();
 ```
 
-Then close `Draw` with `}`.
+Close `Draw` with `}`.
 
-There are a few things to notice here. `Draw` runs every frame and describes the whole
-panel as it should look right now, so the text always shows the current count.
-
-You don't have to manage any IDs. Each control takes its ID from its call site (the file
-and line of the call), and that stays the same from one frame to the next.
-
-`BeginHorizontal` and `EndHorizontal` put the buttons in a row. Every `Begin*` needs its
-`End*`, and you call it whether or not the `Begin*` returned true.
-
-A button's callback runs when the button is clicked, after all the controls have been
-built. That means it can change the panel's values freely, and you'll see the result in
-the next frame.
-
-The `[this]` capture refers to the panel. That's safe because the app owns the panel,
-so the panel lives as long as the app does (you'll set that up in step 4).
+- `Draw` runs every frame and describes the panel as it is now, so the text always shows
+  the current count.
+- No IDs needed: each control takes its ID from its call site, which is stable across
+  frames.
+- `BeginHorizontal`/`EndHorizontal` put the buttons in a row. Every `Begin*` needs its
+  `End*`, whether or not the `Begin*` returned true.
+- A button's callback runs after all controls are built, so it can change the panel's
+  values freely; the next frame shows the result.
+- `[this]` is safe because the app owns the panel (step 4).
 
 ---
 

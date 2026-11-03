@@ -1,7 +1,7 @@
 # Custom drawing
 
-Any element can draw its own content with a callback at render time. Register the element
-with `RegisterElement`, then attach the callback with `elementStorage.AddCustomDraw`:
+Register the element with `RegisterElement`, then attach a render-time callback with
+`elementStorage.AddCustomDraw`:
 
 ```cpp
 ElementRef RegisterElement(Element&& element, LayoutOverride&& constraints);
@@ -13,31 +13,32 @@ ElementStorageResult AddCustomDrawAfter(const ElementRef& ref, CustomDrawCallbac
 ElementStorageResult AddPostLayout(const ElementRef& ref, PostLayoutCallback callback);
 ```
 
-`AddCustomDraw` runs before the element's children are drawn. `AddCustomDrawAfter` runs
-after the whole subtree, so call it once the element's children are closed.
-`AddPostLayout` runs after layout and before rendering. It can't draw, but it sees the
-final geometry, so use it for state that depends on where things ended up.
+| Function | Runs |
+| --- | --- |
+| `AddCustomDraw` | Before the element's children are drawn |
+| `AddCustomDrawAfter` | After the whole subtree; call it once the children are closed |
+| `AddPostLayout` | After layout, before rendering. Can't draw; sees final geometry |
 
-The callback gets a `CustomDrawContext`. By default you draw in the element's local
-space, where (0, 0) is the top-left corner of its padding box and any pan or zoom on its
-ancestors applies. `SetSpace(DrawSpace::Screen)` switches to absolute layout pixels, and
-`ScreenToCurrent(screenPos)` converts a cursor position into the current space.
+The callback gets a `CustomDrawContext`. Default space is element-local: (0, 0) is the
+top-left of the padding box, and ancestors' pan and zoom apply.
+`SetSpace(DrawSpace::Screen)` switches to absolute layout pixels;
+`ScreenToCurrent(screenPos)` converts a cursor position to the current space.
 
 | Method | Draws or returns |
 | --- | --- |
-| `ElementRect()`, `ElementInnerRect()` | The element's border box and padding box, in the current space |
+| `ElementRect()`, `ElementInnerRect()` | Border box and padding box, in the current space |
 | `GetElementRect(ref)`, `GetInnerRect(ref)` | Another element's rects |
-| `RenderBox(rect, boxStyle, state, ...)` | A styled box |
-| `RenderQuad(rect, colorStyle, cornerRadius, ...)` | A filled rectangle |
-| `RenderLine(p0, p1, lineStyle)` | A line (there's also a four-point form) |
-| `RenderPolyline(points, closed, lineStyle, cornerRadius)` | A polyline |
-| `RenderCircle`, `RenderDisc`, `RenderDot` | A circle outline, a filled disc and a dot. The circle is exactly round, and gradients and dashes run clockwise from the right. |
-| `RenderTriangle`, `RenderFilledPolygon` | A filled triangle and a convex polygon. A triangle's `hardEdges` (edges it shares with another triangle) get no soft edge, so no seam shows. |
+| `RenderBox(rect, boxStyle, state, ...)` | Styled box |
+| `RenderQuad(rect, colorStyle, cornerRadius, ...)` | Filled rectangle |
+| `RenderLine(p0, p1, lineStyle)` | Line (also a four-point form) |
+| `RenderPolyline(points, closed, lineStyle, cornerRadius)` | Polyline |
+| `RenderCircle`, `RenderDisc`, `RenderDot` | Circle outline, filled disc, dot. The circle is exactly round; gradients and dashes run clockwise from the right. |
+| `RenderTriangle`, `RenderFilledPolygon` | Filled triangle, convex polygon. `hardEdges` (edges shared with another triangle) get no soft edge, so no seam shows. |
 | `RenderText(textId, rect)` | Text registered with `textSystem->RegisterText` |
 
-Colors are style indices, such as `theme.lineWhiteStyle` or one you registered with
-`styleManager.RegisterColorStyle`. A `LineStyle` has `colorStyleIndex`, `lineWidth` and
-dash settings.
+Colors are style indices, e.g. `theme.lineWhiteStyle` or one from
+`styleManager.RegisterColorStyle`. `LineStyle` has `colorStyleIndex`, `lineWidth` and dash
+settings.
 
 ```cpp
 const ElementRef ref = RegisterElement(Element{ .id = canvasID, .styleRef = theme.GetStyle("my-canvas") },
@@ -50,8 +51,7 @@ VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)
 }));
 ```
 
-The callback runs at render time, after `OnGUI` has returned, so anything it captures
-has to outlive the frame.
+The callback runs after `OnGUI` returns: anything it captures must outlive the frame.
 
 ---
 

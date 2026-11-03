@@ -2,8 +2,7 @@
 
 ## The app class
 
-The app is a class derived from `tachyon::GUIApplication`. It owns the panels and keeps
-track of the window and the dock layout. Add it at the end of `my_app.h`:
+Owns the panels, the window and the dock layout. At the end of `my_app.h`:
 
 <!-- snippet: examples/tutorial/my_app.h [app] -->
 ```cpp
@@ -23,7 +22,7 @@ private:
 };
 ```
 
-Then close the namespace with `}`.
+Close the namespace with `}`.
 
 ## Setting up once
 
@@ -51,16 +50,11 @@ tachyon::Result<void> MyApp::Initialize(const InitializeOptions& options)
 }
 ```
 
-In step 2 you didn't need any IDs, but static IDs are the exception. A window and a dock
-layout remember their position, size and arrangement by ID, so they need an ID that
-doesn't depend on where in the code they're called from.
-
-`CreatePanel` registers a dockable panel with a title and a callback that draws it. Here
-the callback just calls the panel's `Draw`.
-
-The dock tree puts the counter in a 240 px column on the left and gives the greeting
-the rest of the space. The user can drag the tabs around to rearrange them, or drag one
-out of the window to float that panel in a window of its own.
+- The window and dock layout remember position, size and arrangement by ID, so they need
+  static IDs, not call-site IDs.
+- `CreatePanel` registers a dockable panel with a title and a draw callback.
+- The dock tree gives the counter a 240 px left column and the greeting the rest. Users
+  can drag tabs to rearrange, or out of the window to float a panel.
 
 ## Every frame
 
@@ -79,9 +73,8 @@ void MyApp::OnGUI()
 }
 ```
 
-`OnGUI` runs every frame. The docking container draws the visible panels, each through
-its own callback, and `EmitFloatingDockWindows` draws any panels the user has floated.
-Close the namespace with `}`.
+The docking container draws the visible panels through their callbacks;
+`EmitFloatingDockWindows` draws floated ones. Close the namespace with `}`.
 
 ## main
 
@@ -105,22 +98,19 @@ int main()
 }
 ```
 
-If `Initialize` or `Run` fails, the `Result<void>` it returns tells you why. That could
-happen, for example, on a GPU that's missing features the library needs.
+On failure (e.g. a GPU missing required features), the `Result<void>` says why.
 
 ## Run it
 
-Build it the same way as in [step 1](setup.md). Then run `build\Debug\my_app.exe` on
-Windows, or `build/Debug/my_app` on Linux and macOS. You can run it from any folder.
+Build as in [step 1](setup.md), then run `build\Debug\my_app.exe` (Windows) or
+`build/Debug/my_app` (Linux, macOS), from any folder.
 
 ## Where next
 
-- [Controls](../controls.md) has every control, with its options and its CSS class.
-- [CSS and theming](../css.md) shows how to write your own style file and switch
-  between dark and light.
-- [Overview](../overview.md) goes deeper into IDs, Begin and End, and how a frame works.
-- [Integration](../integration.md) covers using your own Vulkan device, window backend
-  or main loop.
+- [Controls](../controls.md): every control, its options and CSS class.
+- [CSS and theming](../css.md): your own style file, dark and light.
+- [Overview](../overview.md): IDs, Begin and End, the frame.
+- [Integration](../integration.md): your own Vulkan device, window backend or main loop.
 
 ---
 
