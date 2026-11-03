@@ -16,20 +16,9 @@ app with docked panels, buttons and fields. Then read the Overview.
 | [Integration](integration.md) | Adding the library to a build, your own Vulkan device, window, input and frame loop, and rendering into your own image. |
 | [Examples](examples.md) | Walkthroughs of the example programs, from hello world to hosting on your own Vulkan device. |
 
-The [API reference](https://logicalerror.github.io/TachyonUI/) is built from these guides
-and the headers' `///` comments, and is published with each change on main. Its
-**API by topic** pages group the classes by area: application, controls, layout, styling,
-text, input, graphics and windows.
-
-To build it locally, install [Doxygen](https://www.doxygen.nl/) 1.18 or newer, then
-configure the project and build the `tachyon_docs` target:
-
-```text
-cmake -S . -B build
-cmake --build build --target tachyon_docs
-```
-
-The reference is written to `build/docs/html/index.html`.
+The [API reference](https://logicalerror.github.io/TachyonUI/) documents every class and
+function, with these guides alongside. Its **API by topic** pages group the classes by area:
+application, controls, layout, styling, text, input, graphics and windows.
 
 <!--! Page tree for the API reference.
 \subpage md_docs_2tutorial
