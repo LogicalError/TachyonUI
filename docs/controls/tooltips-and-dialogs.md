@@ -118,8 +118,9 @@ Node pins have their own tooltips: see [Node view](node-view.md).
 
 Automatic, nothing to declare. Hovering text cut short (by its own ellipsis or by a box
 around it, such as a narrow row) shows the full text right over it, same font, position
-and alignment, icon included. It works for the part under the pointer, and for the focused
-control after Tab.
+and alignment, an icon beside it included. Under or over an icon (a grid's item) it's just
+the text's line, without the icon. It works for the part under the pointer, and for the
+focused control after Tab.
 
 - The target's own tooltip takes precedence.
 - Not shown for text in fields, wrapping text, text out of sight, or text under a canvas's

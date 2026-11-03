@@ -1779,19 +1779,45 @@ namespace tachyon
             ID disabled = ID::Invalid();
             return input.hitTest ? input.hitTest(windowID, input.mousePos, disabled) : ID::Invalid();
         };
+        // A cached scope drawn from its capture has no elements in it this frame, so nothing in
+        // it can be offered the drag; the scopes under it are built again next frame, as
+        // under a moving mouse.
+        auto replayed = [this](ID id)
+        {
+            const UICacheManager::Scope* scope = m_uiCache ? m_uiCache->Find(id) : nullptr;
+            return scope && !scope->missedThisFrame;
+        };
         const ID previousTarget = m_fileDragTargetID;
         m_fileDragTargetID = ID::Invalid();
         if (inputManager)
         {
             if (const FileDrag* drag = inputManager->GetFileDrag(); drag && drag->hasPosition)
-                m_fileDragTargetID = OfferFileDrop(EventType::FileDragOver, under(drag->windowID), input.mousePos, nullptr);
-            for (const FileDrop& drop : inputManager->TakeFileDrops())
             {
-                const ID taker = OfferFileDrop(EventType::FileDrop, under(drop.windowID), input.mousePos, &drop);
+                const ID over = under(drag->windowID);
+                InvalidateCachedScopesAbove(over);
+                m_fileDragTargetID = OfferFileDrop(EventType::FileDragOver, over, input.mousePos, nullptr);
+            }
+            auto offer = [&](const FileDrop& drop, ID over)
+            {
+                const ID taker = OfferFileDrop(EventType::FileDrop, over, input.mousePos, &drop);
                 if (taker != ID::Invalid())
                     InvalidateCachedScopesAbove(taker);
                 else if (m_fileDropHandler)
                     m_fileDropHandler(drop);
+            };
+            // A drop on one is offered next frame, once what's in it is there again; only once.
+            for (const FileDrop& drop : std::exchange(m_heldFileDrops, {}))
+                offer(drop, under(drop.windowID));
+            for (FileDrop& drop : inputManager->TakeFileDrops())
+            {
+                const ID over = under(drop.windowID);
+                if (replayed(over))
+                {
+                    InvalidateCachedScopesAbove(over);
+                    m_heldFileDrops.push_back(std::move(drop));
+                }
+                else
+                    offer(drop, over);
             }
         }
         // The drop target is drawn as one: redraw where it was and where it is.

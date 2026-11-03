@@ -2592,9 +2592,10 @@ namespace tachyon
             ID      id = ID::Invalid();
             ID      windowID = ID::Invalid();  ///< the top-level window it's in
             int2    windowPos{};               ///< ... where that window was
-            int2    at{};                      ///< where its text starts, at its padding box's top
-            int32_t width = 0;                 ///< its text (and icon) whole, on one line
-            int32_t height = 0;                ///< its padding box's height
+            int2    at{};                      ///< where its text starts, at the top of its line
+            int32_t width = 0;                 ///< its text (and an icon beside it) whole, on one line
+            int32_t height = 0;                ///< its padding box's height; its text's, under an icon
+            bool    textOnly = false;          ///< an icon above or below it stays out
             int16_t monitorIndex = -1;         ///< its window's monitor (the primary when unknown)
         };
         /// Before construction, from last frame's layout: the text in the tooltip's target (its
@@ -2813,6 +2814,7 @@ namespace tachyon
         /// The first element from `overID` up whose handler takes `type`; Invalid when none does.
         ID   OfferFileDrop(EventType type, ID overID, int2 screenPos, const FileDrop* drop);
         ID   m_fileDragTargetID = ID::Invalid();
+        std::vector<FileDrop> m_heldFileDrops;   ///< dropped on a cached scope drawn from its capture: offered next frame
         std::function<void(const FileDrop&)> m_fileDropHandler;
         std::vector<TextStyle> m_mnemonicStyles;  ///< this frame's underlined mnemonic letters (MessageDialog)
         /// Windows dimmed under a modal dialog, by window ID: fading in while wanted, out after.

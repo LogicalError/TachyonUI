@@ -2,6 +2,7 @@
 
 #include <gui_core/text/gui_utf8.h>
 #include <gui_core/text/gui_text_system.h>
+#include <gui_core/style/gui_style_manager.h>
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_hash.h>
 
@@ -59,6 +60,10 @@ namespace tachyon
 
         // -------------------- Font Registration --------------------
 
+        /// The styles a text's icon is measured by (its side, size and gap); without them an icon
+        /// isn't measured.
+        void SetStyleManager(const StyleManager* styleManager) { m_styleManager = styleManager; }
+
         void SetFontDirectory(std::string_view /*directory*/) override {}
         void SetFallbackFontDirectory(std::string_view /*directory*/) override {}
         void SetLanguage(std::string_view /*languageTag*/) override {}
@@ -72,21 +77,21 @@ namespace tachyon
 
         // -------------------- Text Registration --------------------
 
-        TextID RegisterText(ID elementId, IconID /*iconId*/, std::string_view text, tachyon::StyleRef styleIndex, tachyon::ElementState state) override
+        TextID RegisterText(ID elementId, IconID iconId, std::string_view text, tachyon::StyleRef styleIndex, tachyon::ElementState state) override
         {
-            uint64_t key = Hash::Combine(Hash::Calculate(elementId), Hash::Calculate(text), Hash::Calculate(styleIndex));
+            uint64_t key = Hash::Combine(Hash::Combine(Hash::Calculate(elementId), Hash::Calculate(text), Hash::Calculate(styleIndex)),
+                                         Hash::Calculate(iconId));
             
             if (auto it = m_elementIdToTextIdMap.find(key); it != m_elementIdToTextIdMap.end())
                 return it->second;
-
-            TextMeasurement base = MeasureTextInternal(text, styleIndex);
 
             RegisteredText entry;
             entry.elementId = elementId;
             entry.text = text;
             entry.styleIndex = styleIndex;
             entry.state = state;
-            entry.baseMeasurement = base;
+            entry.iconId = iconId;
+            entry.baseMeasurement = WithIcon(iconId, styleIndex, state, MeasureTextInternal(text, styleIndex));
 
             uint32_t newIndex = static_cast<uint32_t>(m_registry.size() + 1);
             m_registry.push_back(entry);
@@ -156,7 +161,15 @@ namespace tachyon
             if (wrapContext.maxWidth == INT32_MAX)
                 return entry.baseMeasurement;
 
-            return MeasureTextInternal(entry.text, entry.styleIndex, wrapContext.maxWidth);
+            return WithIcon(entry.iconId, entry.styleIndex, entry.state, MeasureTextInternal(entry.text, entry.styleIndex, wrapContext.maxWidth));
+        }
+
+        int32_t GetTextHeightWithoutIcon(TextID textId) const override
+        {
+            if (textId == TextID::Invalid || ((uint32_t)textId) > m_registry.size())
+                return 0;
+            const auto& entry = m_registry[((uint32_t)textId) - 1];
+            return MeasureTextInternal(entry.text, entry.styleIndex).minHeight;
         }
 
         IconMeasurement GetIconMeasurement(IconID iconId) const override
@@ -353,7 +366,7 @@ namespace tachyon
                 m_elementIdToTextIdMap.erase(it);
 
             entry.text = std::string(text);
-            entry.baseMeasurement = MeasureTextInternal(entry.text, entry.styleIndex);
+            entry.baseMeasurement = WithIcon(entry.iconId, entry.styleIndex, entry.state, MeasureTextInternal(entry.text, entry.styleIndex));
 
             uint64_t newKey = entry.GetHashCode();
             m_elementIdToTextIdMap[newKey] = textId;
@@ -443,6 +456,38 @@ namespace tachyon
         }
 
 
+        // The text's icon counted in, beside or above or below it, as the real text system does:
+        // at the style's icon size (the icon's own without one), the style's gap from the text.
+        TextMeasurement WithIcon(IconID iconId, StyleRef styleIndex, ElementState state, TextMeasurement measurement) const
+        {
+            if (iconId == IconID::Invalid || !m_styleManager)
+                return measurement;
+            const VisualTextStyle* style = m_styleManager->GetVisualTextStyle(styleIndex.visualTextStyleIndex,
+                                                                              state & ~ElementState::Selected);
+            if (!style)
+                return measurement;
+            IconMeasurement icon = MeasureIcon(iconId);
+            if (style->iconSize > 0)
+                icon.width = icon.height = style->iconSize;
+            switch (style->iconSide)
+            {
+                case IconSide::Left: case IconSide::Right:
+                    measurement.minWidth += style->iconTextGap + icon.width;
+                    measurement.maxWidth += style->iconTextGap + icon.width;
+                    measurement.minHeight = std::max(measurement.minHeight, icon.height);
+                    measurement.maxHeight = std::max(measurement.maxHeight, icon.height);
+                    break;
+                case IconSide::Top: case IconSide::Bottom:
+                    measurement.minHeight += style->iconTextGap + icon.height;
+                    measurement.maxHeight += style->iconTextGap + icon.height;
+                    measurement.minWidth = std::max(measurement.minWidth, icon.width);
+                    measurement.maxWidth = std::max(measurement.maxWidth, icon.width);
+                    break;
+                default: break;
+            }
+            return measurement;
+        }
+
         TextMeasurement MeasureTextInternal(std::string_view text, const tachyon::StyleRef /*styleIndex*/,
                                             int32_t maxWidth = INT32_MAX) const
         {
@@ -476,6 +521,7 @@ namespace tachyon
             std::string text;
             tachyon::StyleRef styleIndex;
             tachyon::ElementState state;
+            IconID iconId = IconID::Invalid;
             TextMeasurement baseMeasurement;
 
             uint64_t GetHashCode() const
@@ -515,6 +561,7 @@ namespace tachyon
         int32_t  m_defaultCharWidth;
         int32_t  m_defaultLineHeight;
         int32_t  m_defaultIconSize;
+        const StyleManager* m_styleManager = nullptr;
     };
 
 } // namespace tachyon

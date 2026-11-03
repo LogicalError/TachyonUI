@@ -89,11 +89,12 @@ namespace tachyon
         StyleRef WithFlexWrap(StyleRef base, FlexWrap wrap) noexcept;
 
         /// A variant of `base` whose text is set as `from`'s is in `state`: its font, text layout
-        /// (alignment, trim), icon size and gap, and vertical padding, so at `from`'s height the
-        /// text sits as high; on one line and never cut short. The colors and text shadows stay
-        /// `base`'s, and so does the rest of its layout and its box. For text shown again
-        /// elsewhere, looking the same. ClearAll drops the variants.
-        StyleRef WithTextOf(StyleRef base, StyleRef from, tachyon::ElementState state) noexcept;
+        /// (alignment, trim), icon size and gap, and vertical padding (with `padding`), so at
+        /// `from`'s height the text sits as high; on one line and never cut short. The colors and
+        /// text shadows stay `base`'s, and so does the rest of its layout and its box. For text
+        /// shown again elsewhere, looking the same. Without `padding`, `base`'s vertical padding:
+        /// for the text's line alone. ClearAll drops the variants.
+        StyleRef WithTextOf(StyleRef base, StyleRef from, tachyon::ElementState state, bool padding = true) noexcept;
 
         /// @name Lookups
         /// Each returns nullptr for an out-of-range index. The per-state getters ignore

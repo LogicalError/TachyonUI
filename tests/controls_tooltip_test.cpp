@@ -796,6 +796,64 @@ namespace tachyon
             EXPECT_EQ(layout->textLayoutStyle.textOverflow, TextOverflow::Clip) << "not cut short again";
         }
 
+        // A grid's item, its icon above its name: only the name's line shows whole, where the
+        // name is drawn under the icon, without the icon.
+        TEST_F(ControlsTooltipTest, UnderAnIconOnlyTheTextsLineShowsWhole)
+        {
+            const IconID icon = app.textSystem->RegisterIconFromSVG("file", "", 0);
+            ID gridID = ID::Invalid(), itemID = ID::Invalid();
+            const Expansion e = PointAtCutText(app, [&](ID& at, ID& cut) {
+                // Away from the screen's edge, which the whole name would pass.
+                app.BeginHorizontal(app.idManager.AllocateDynamicID("line"), app.theme.emptyHorzStyleRef);
+                app.BeginHorizontal(app.idManager.AllocateDynamicID("indent"), app.theme.emptyHorzStyleRef, LayoutOverride{}.Width(Pixels{ 300 }));
+                app.EndHorizontal();
+                gridID = app.idManager.AllocateDynamicID("grid");
+                app.BeginGridView(gridID);
+                cut = app.idManager.AllocateDynamicID("item");
+                // An icon drawn larger than it is, and a gap under it, as the showcase's files.
+                Style item = app.styleManager.ToPixels(app.theme.gridViewItemBaseStyle);
+                item.iconSize    = 34;
+                item.iconTextGap = 6;
+                app.GridViewItem(cut, GUIContent{ icon, kLongName }, ElementState::None, nullptr,
+                                 app.styleManager.Register(item, StyleUnits::Pixels), LayoutOverride{}.Size(80, 86));
+                app.EndGridView();
+                app.EndHorizontal();
+                at = itemID = cut;
+            });
+            ASSERT_EQ(e.shown, kLongName);
+            EXPECT_EQ(e.icon, IconID::Invalid) << "the icon stays out";
+
+            const ElementRef item = app.elementStorage.FindElementRefByID(itemID);
+            ASSERT_TRUE(item.IsValid());
+            const Element& cutElement = app.elementStorage.GetElementUnsafe(item);
+            const ElementRect& rect = app.elementStorage.GetElementRectUnsafe(item);
+            ASSERT_EQ(rect.layoutStyle->iconSide, IconSide::Top) << "test setup: the icon above the text";
+            const IntRect content = rect.layoutStyle->GetPaddingBoxContentRect(rect.rect);
+            const VisualTextStyle* visual = app.styleManager.GetVisualTextStyle(cutElement.styleRef.visualTextStyleIndex, cutElement.state);
+            ASSERT_NE(visual, nullptr);
+            ASSERT_GT(visual->iconSize, 0) << "test setup: an icon size of the style's own";
+            ASSERT_GT(visual->iconTextGap, 0) << "test setup: a gap";
+            // The text's measurement has the icon and the gap in it, as the real text system's.
+            const int line = 16;   // the stub's line
+            ASSERT_EQ(app.textSystem->GetTextMeasurement(cutElement.textID).minHeight, visual->iconSize + visual->iconTextGap + line)
+                << "test setup: measured with its icon";
+            EXPECT_EQ(e.text.h, line) << "the text's line, not the item nor the icon";
+            EXPECT_EQ(e.box.h, line + 2) << "and the box just around it";
+            const LayoutStyle* shown = app.styleManager.GetLayoutStyle(e.style.layoutStyleIndex);
+            ASSERT_NE(shown, nullptr);
+            ASSERT_GT(rect.layoutStyle->padding.Vertical(), 0) << "test setup: the item is padded";
+            EXPECT_EQ(shown->padding.Vertical(), 0) << "its text at the top of its line, not pushed down by the item's padding";
+            EXPECT_EQ(e.text.w, int(kLongName.size()) * 8) << "all of it";
+            EXPECT_EQ(e.text.x, content.x + (content.w - e.text.w) / 2) << "centered where the item's is";
+            // Under the icon at its drawn size and the gap, the icon and the name aligned as one
+            // block in the item.
+            const int block = visual->iconSize + visual->iconTextGap + line;
+            const TextAlign down = rect.layoutStyle->textLayoutStyle.verticalAlignment;
+            const int blockTop = content.y + (down == TextAlign::Center ? (content.h - block) / 2
+                                              : down == TextAlign::End || down == TextAlign::Bottom ? content.h - block : 0);
+            EXPECT_EQ(e.text.y, blockTop + visual->iconSize + visual->iconTextGap) << "where the name is drawn";
+        }
+
         // Text that fits shows nothing.
         TEST_F(ControlsTooltipTest, TextThatFitsShowsNothing)
         {

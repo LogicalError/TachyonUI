@@ -612,6 +612,15 @@ namespace tachyon
 		return UpdateBaseMeasurementWhenNecessary(registeredText);
 	}
 
+	int32_t SkribidiTextSystem::GetTextHeightWithoutIcon(TextID textId) const
+	{
+		if (!m_skribidiContext) return 0;
+		auto registeredText = m_skribidiContext->GetRegisteredText(textId);
+		if (registeredText == nullptr) return 0;
+		UpdateBaseMeasurementWhenNecessary(registeredText);
+		return registeredText->baseTextHeight;
+	}
+
 	TextMeasurement SkribidiTextSystem::MeasureText(TextID textId, const TextWrapContext& wrapContext) const
 	{
 		if (!m_skribidiContext) return {};
@@ -712,6 +721,7 @@ namespace tachyon
 		// Max-content: one unconstrained line per paragraph.
 		skb_layout_t* layout = m_skribidiContext->CreateLayout(entry, 16384.0f, 16384.0f);
 		entry->baseMeasurement = MeasureTextInternal(entry, layout);
+		entry->baseTextHeight  = layout ? static_cast<int32_t>(std::ceil(skb_layout_get_content_bounds(layout).height)) : 0;
 		skb_layout_destroy(layout);
 
 		// Min-content: wrapping text laid out as narrow as it goes (one word, or one

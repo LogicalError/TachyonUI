@@ -359,6 +359,93 @@ namespace tachyon
             EXPECT_TRUE(appDrops.empty());
         }
 
+        // A pane in a cached scope (a docked panel's content) takes the drag and the drop even on
+        // frames it's drawn from its capture, when nothing in it is built: the OS sends no mouse
+        // moves while another application drags, which would have it built again.
+        TEST(FileDrop, APaneInACachedScopeTakesTheDragAndTheDrop)
+        {
+            HeadlessGUIApp app;
+            ASSERT_TRUE(app.Initialize());
+            const ID scopeID = app.idManager.CreateStaticID(), paneID = app.idManager.CreateStaticID();
+            std::vector<std::string> taken;
+            std::vector<FileDrop> appDrops;
+            app.SetFileDropHandler([&](const FileDrop& drop) { appDrops.push_back(drop); });
+            app.SetDrawCacheEnabled(true);
+            app.InjectMouseMove({ 1900, 1000 });   // away from it, or it's built for the pointer
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    if (app.BeginCached(scopeID, app.theme.emptyVertStyleRef, 1, LayoutOverride{}.Size(400, 300)))
+                    {
+                        Element pane{ .id = paneID, .styleRef = app.theme.emptyVertStyleRef };
+                        pane.eventHandler = [&](ElementEvent&& event) -> bool {
+                            if (event.type == EventType::FileDragOver) return true;
+                            if (event.type != EventType::FileDrop) return false;
+                            taken = event.state.droppedFiles;
+                            return true;
+                        };
+                        app.RegisterElement(std::move(pane), LayoutOverride{}.Size(300, 200));
+                    }
+                    app.EndCached();
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            const int2 at = app.CenterOf(paneID);
+            for (int i = 0; i < 8 && app.elementStorage.FindElementRefByID(paneID).IsValid(); ++i)
+                frame();
+            ASSERT_FALSE(app.elementStorage.FindElementRefByID(paneID).IsValid()) << "test setup: drawn from its capture";
+
+            // As while another application drags: the OS reports no window of ours under the
+            // pointer, so hover doesn't have the scope built for it.
+            ID elsewhere;
+            elsewhere.value.dynamicParts.mode      = IDMode::Static;
+            elsewhere.value.dynamicParts.hashValue = 0x77;
+            app.mouseWindow = elsewhere;
+            app.SetMousePos(at);
+            app.inputManager->OnFileDrop(app.RootWindowID(), {}, FileDropAction::Begin, "");
+            app.inputManager->OnFileDrop(app.RootWindowID(), at, FileDropAction::Move, "");
+            frame();
+            frame();
+            EXPECT_EQ(app.FileDragTargetID(), paneID) << "the drag";
+            app.inputManager->OnFileDrop(app.RootWindowID(), {}, FileDropAction::Complete, "");
+            frame();
+
+            // Dropped at once, with no drag over it first, while it's drawn from its capture.
+            for (int i = 0; i < 8 && app.elementStorage.FindElementRefByID(paneID).IsValid(); ++i)
+                frame();
+            ASSERT_FALSE(app.elementStorage.FindElementRefByID(paneID).IsValid()) << "test setup: drawn from its capture";
+            app.inputManager->OnFileDrop(app.RootWindowID(), {}, FileDropAction::Begin, "");
+            app.inputManager->OnFileDrop(app.RootWindowID(), at, FileDropAction::Move, "");
+            app.inputManager->OnFileDrop(app.RootWindowID(), at, FileDropAction::File, "C:/a.png");
+            app.inputManager->OnFileDrop(app.RootWindowID(), at, FileDropAction::Complete, "");
+            frame();
+            frame();
+            EXPECT_EQ(taken, (std::vector<std::string>{ "C:/a.png" })) << "the drop";
+            EXPECT_TRUE(appDrops.empty());
+
+            // Taken once: not again next frame.
+            taken.clear();
+            frame();
+            EXPECT_TRUE(taken.empty());
+
+            // Built (the pointer over it): a drop on it, past the pane, is the application's at once.
+            app.mouseWindow = app.RootWindowID();
+            const IntRect scope = app.GetElementRect(scopeID);
+            const int2 past{ scope.x + scope.w - 10, scope.y + scope.h - 10 };
+            app.InjectMouseMove(past);
+            frame();
+            frame();
+            ASSERT_TRUE(app.elementStorage.FindElementRefByID(paneID).IsValid()) << "test setup: built";
+            app.SetMousePos(past);
+            app.inputManager->OnFileDrop(app.RootWindowID(), {}, FileDropAction::Begin, "");
+            app.inputManager->OnFileDrop(app.RootWindowID(), past, FileDropAction::File, "C:/b.png");
+            app.inputManager->OnFileDrop(app.RootWindowID(), past, FileDropAction::Complete, "");
+            frame();
+            ASSERT_EQ(appDrops.size(), 1u) << "not held a frame";
+            EXPECT_EQ(appDrops[0].files, (std::vector<std::string>{ "C:/b.png" }));
+        }
+
         // The controls take no drags or drops from other applications by themselves: every
         // one is the application's.
         TEST(FileDrop, NoControlTakesADropOfItsOwn)

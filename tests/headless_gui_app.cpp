@@ -61,6 +61,7 @@ tachyon::Result<void> HeadlessGUIApp::Initialize(const InitializeOptions& option
     // Slots GUIApplication's Initialize() normally fills. StubTextSystem measures
     // text by character count; no font backend.
     textSystem    = &ownedTextSystem;
+    ownedTextSystem.SetStyleManager(&styleManager);
     windowBackend = &mockBackend;
     inputManager  = std::make_unique<tachyon::InputManager>();
     layoutEngine  = std::make_unique<tachyon::LayoutEngine>(*textSystem, guiStateManager.GetScrollManagement());

@@ -69,8 +69,10 @@ namespace
     {
     public:
         ID windowID = ID::Invalid(), labelID = ID::Invalid();
-        IntRect labelRect{}, windowLaid{}, tooltipLaid{}, textLaid{};
+        IntRect labelRect{}, windowLaid{}, tooltipLaid{}, boxLaid{}, textLaid{};
+        bool gridItem = false;   // a grid's item, its icon above its name, as the showcase's files
         WindowImage window, tooltip;
+        IconID icon = IconID::Invalid;
         bool drawn = false;
         int frame = 0;
 
@@ -80,7 +82,18 @@ namespace
                             ElementFlags::WindowRenderToImage))
             {
                 BeginVertical(LayoutOverride{}.FlexGrow(1));
-                Label(labelID, kText, LayoutOverride{}.Width(90));
+                if (gridItem)
+                {
+                    BeginGridView(idManager.AllocateDynamicID("grid"));
+                    Style item = styleManager.ToPixels(theme.gridViewItemBaseStyle);
+                    item.iconSize = static_cast<uint16_t>(styleManager.Px(34));
+                    GridViewItem(labelID, GUIContent{ icon, kText }, ElementState::None, nullptr,
+                                 styleManager.Register(item, StyleUnits::Pixels),
+                                 LayoutOverride{}.Size(Pixels{ styleManager.Px(96) }, Pixels{ styleManager.Px(86) }));
+                    EndGridView();
+                }
+                else
+                    Label(labelID, kText, LayoutOverride{}.Width(90));
                 EndVertical();
             }
             EndWindow();
@@ -121,6 +134,9 @@ namespace
                 return false;
             windowID = idManager.CreateStaticID();
             labelID  = idManager.CreateStaticID();
+            // A picture, as the OS's file icons are.
+            static constexpr uint8_t kPicture[] = { 255, 0, 0, 255, 0, 0, 255, 255 };
+            icon     = textSystem->RegisterIconFromPixels("file", uint2{ 2, 1 }, kPicture);
             tooltipManager.delaySeconds = 0.0f;
             m_frame.OnPostLayout([this](FrameContext&)
             {
@@ -134,6 +150,8 @@ namespace
                     return;
                 tooltipLaid = elementStorage.GetElementRectPtr(win)->rect;
                 const ElementRef box = elementStorage.FindElementRefByID(elementStorage.GetChildrenSpan(win)[0].id);
+                if (box.IsValid())
+                    boxLaid = elementStorage.GetElementRectPtr(box)->rect;
                 if (box.IsValid() && !elementStorage.GetChildrenSpan(box).empty())
                     if (const ElementRef text = elementStorage.FindElementRefByID(elementStorage.GetChildrenSpan(box)[0].id); text.IsValid())
                         textLaid = elementStorage.GetElementRectPtr(text)->rect;
@@ -186,4 +204,60 @@ namespace
     }
 
     INSTANTIATE_TEST_SUITE_P(Scales, GpuCutText, ::testing::Values(1.0f, 1.25f));
+
+    // A grid's item, its icon above its name: the box is just the name's line, as high as its
+    // text, and lies over the name where it's drawn.
+    TEST_P(GpuCutText, UnderAnIconTheBoxIsTheNamesLine)
+    {
+        const float scale = GetParam();
+        CutTextApp app;
+        app.gridItem = true;
+        if (!app.Start(scale))
+        {
+            app.Cleanup();
+            GTEST_SKIP() << "no Vulkan device available";
+        }
+        ASSERT_TRUE(app.Run());
+        ASSERT_GT(app.textLaid.w, 0) << "the text didn't show whole";
+        const ElementRef item = app.elementStorage.FindElementRefByID(app.labelID);
+        ASSERT_TRUE(item.IsValid());
+        const Element& cut = app.elementStorage.GetElementUnsafe(item);
+        ASSERT_NE(cut.iconID, IconID::Invalid) << "test setup: an icon";
+        const int32_t line = app.textSystem->GetTextHeightWithoutIcon(cut.textID);
+        ASSERT_GT(line, 0);
+        ASSERT_GT(app.textSystem->GetTextMeasurement(cut.textID).minHeight, line) << "test setup: measured with its icon";
+        const LayoutStyle* box = app.styleManager.GetLayoutStyle(app.theme.tooltipExpandStyleRef.layoutStyleIndex);
+        ASSERT_NE(box, nullptr);
+        EXPECT_EQ(app.textLaid.h, line) << "the text's line";
+        EXPECT_EQ(app.boxLaid.h, line + box->borderWidths.Vertical() + box->padding.top + box->padding.bottom)
+            << "the box around just that";
+        if (!app.drawn)
+        {
+            app.Cleanup();
+            GTEST_SKIP() << "the tooltip's box never shows up in what its window reads back here";
+        }
+
+        // Its first letters as high as the name's under the icon, in the same font: the name's
+        // from where it starts in the item, cut short (with an ellipsis), the tooltip's from
+        // where its whole text starts.
+        const IntRect content = app.elementStorage.GetElementRectUnsafe(item).layoutStyle->GetPaddingBoxContentRect(app.labelRect);
+        const int span  = int(std::round(30.0f * scale));
+        const int itemX = content.x - app.windowLaid.x;
+        const int rowY  = app.textLaid.y - app.windowLaid.y;
+        const int margin = int(std::round(4.0f * scale));   // a little above and below the line, not up to the icon
+        const Ink name  = FindInk(app.window, itemX, span, rowY - margin, rowY + line + margin, itemX - 1);
+        const int textX = app.textLaid.x - app.tooltipLaid.x;
+        const int textY = app.textLaid.y - app.tooltipLaid.y;
+        const Ink whole = FindInk(app.tooltip, textX, span, textY, textY + app.textLaid.h, textX - 3);
+        ASSERT_GE(name.firstColumn, 0) << "no ink in the name";
+        ASSERT_GE(whole.firstColumn, 0) << "no ink in the tooltip's text";
+        // The name is in a muted color: its faintest top row may not stand out as ink.
+        EXPECT_NEAR(whole.firstRow, name.firstRow, 1) << "as high";
+        EXPECT_EQ(whole.lastRow, name.lastRow) << "on the same baseline";
+        int differ = 0;
+        for (int i = 0; i < span; ++i)
+            differ += whole.columns[size_t(i)] != name.columns[size_t(i)];
+        EXPECT_LE(differ, 2) << "the same letters, the same width: in the same font";
+        app.Cleanup();
+    }
 }
