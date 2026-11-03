@@ -58,7 +58,7 @@ already has a Vulkan renderer.
 
 ### macOS
 
-Not tested on a Mac yet. CI builds it and runs the tests that need no GPU.
+Not tested on a Mac yet (help would be appreciated!). CI builds it and runs the tests that need no GPU.
 
 - Apple Clang
 - CMake 3.22 or newer and Ninja
