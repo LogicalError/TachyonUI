@@ -230,6 +230,14 @@ bool BeginToolbar(bool horizontal = true);
 void EndToolbar();
 ```
 
+```cpp
+BeginToolbar();
+Button(saveIcon, [this] { Save(); });
+SetTooltip("Save", "Ctrl+S");
+Toggle(snapToGrid, "Snap");
+EndToolbar();
+```
+
 ### RenderToolbarDock
 
 Free function (`controls_toolbar_dock.h`): toolbars on the four sides of some content.
@@ -242,6 +250,15 @@ void ReleaseToolbarDockState(ToolbarDockState& state, GUIApplication& app);
 void RenderToolbarDock(GUIApplication& app, ToolbarDockState& state,
                        const std::vector<ToolbarItem> (&itemsPerSide)[kToolbarSideCount],
                        const ToolbarDockCallbacks& callbacks, std::function<void()> renderContent);
+```
+
+```cpp
+// Once, after InitializeToolbarDockState(dockState, *this):
+sides[int(ToolbarSide::Top)].push_back(ToolbarItem{ .id = idManager.CreateStaticID(), .debugName = "File",
+    .renderBody = [this] { Button(saveIcon, [this] { Save(); }); } });
+
+// Each frame (members: std::vector<ToolbarItem> sides[kToolbarSideCount]; ToolbarDockCallbacks callbacks):
+RenderToolbarDock(*this, dockState, sides, callbacks, [this] { ViewportPanel(); });
 ```
 
 - `ToolbarItem`: `id`, `debugName`, `renderBody` (emits its controls; wrapped in

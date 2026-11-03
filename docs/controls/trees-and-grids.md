@@ -50,6 +50,15 @@ bool GridViewItem(ID id, const GUIContent& content, ElementState extraState = El
 bool IsRenaming() const;
 ```
 
+```cpp
+if (BeginGridView(&selectedAsset))
+{
+    for (const Asset& asset : assets)
+        GridViewItem({ asset.icon, asset.name });
+    EndGridView();
+}
+```
+
 - `GridViewItem` returns `true` in the frame after the item was clicked.
 - `renameBuffer` enables rename in place: F2, Ctrl+Shift+Click or slow second click starts
   it; Enter commits; Escape or losing focus cancels. `IsRenaming` says whether an editor is

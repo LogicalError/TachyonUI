@@ -10,6 +10,10 @@ bool Breadcrumb(ID id, std::span<const std::string> segments, std::function<void
                 LayoutOverride&& constraints = {});
 ```
 
+```cpp
+Breadcrumb(path, [this](int segment) { path.resize(size_t(segment) + 1); });   // member: std::vector<std::string> path
+```
+
 Classes: `breadcrumb`, `breadcrumb-segment`, `breadcrumb-current`, `breadcrumb-separator`.
 
 ## Status bar
@@ -43,6 +47,10 @@ bool CommandSearch(ID id, CommandSearchState& state, StyleRef style, LayoutOverr
 static void FocusCommandSearch(CommandSearchState& state);
 ```
 
+```cpp
+CommandSearch(commandSearch, LayoutOverride{}.Width(300));   // member: CommandSearchState commandSearch
+```
+
 - `state` must outlive the frame.
 - Returns `true` when a command ran since the last call.
 - `FocusCommandSearch(state)` focuses it next frame (e.g. bind to Ctrl+K).
@@ -58,6 +66,15 @@ Add pages with stable IDs; each page's `render` builds its content.
 ```cpp
 void RenderSettingsPanel(SettingsPanelState& state);
 ID   SettingsPanelState::AddPage(ID id, std::string_view name, std::function<void()> render);
+```
+
+```cpp
+if (settings.pages.empty())   // member: SettingsPanelState settings
+{
+    settings.AddPage(idManager.CreateStaticID(), "General",    [this] { Switch(autosave, "Autosave"); });
+    settings.AddPage(idManager.CreateStaticID(), "Appearance", [this] { Dropdown(themeIndex, { "Dark", "Light" }); });
+}
+RenderSettingsPanel(settings);
 ```
 
 Classes: `settings-page`, `settings-page-selection`.

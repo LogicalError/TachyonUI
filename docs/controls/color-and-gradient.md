@@ -34,6 +34,11 @@ gradient.
 bool GradientField(ID id, Gradient& value, StyleRef style, LayoutOverride&& constraints = {});
 ```
 
+```cpp
+DragLabel("Gradient");
+GradientField(gradient);   // member: Gradient gradient
+```
+
 Classes: `gradient-swatch`; editor `gradient-editor` and `gradient-editor-*`.
 
 ---

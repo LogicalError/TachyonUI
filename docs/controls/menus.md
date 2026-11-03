@@ -61,6 +61,18 @@ void MenuHeader(std::string_view text);
 void MenuFilter();
 ```
 
+```cpp
+if (BeginMenu("Edit"))
+{
+    MenuFilter();
+    MenuHeader("Clipboard");
+    MenuItem("Copy", "Ctrl+C", [this] { Copy(); });
+    MenuSeparator();
+    DestructiveMenuItem({ theme.deleteIcon, "Delete" }, "Del", [this] { DeleteSelection(); });
+}
+EndMenu();
+```
+
 | Call | Effect |
 | --- | --- |
 | `DestructiveMenuItem` | Item in the error color, for Delete/Discard (`menu-item-label-destructive`, `menu-item-icon-destructive`) |

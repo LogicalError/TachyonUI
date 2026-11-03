@@ -22,6 +22,11 @@ Tooltip: the command's description plus its shortcut.
 bool CommandButton(CommandID command, StyleRef style, LayoutOverride&& constraints = {});
 ```
 
+```cpp
+CommandButton(cmdUndo);   // member: CommandID cmdUndo = commandManager.RegisterCommand(...)
+CommandButton(cmdRedo);
+```
+
 Class: `button`.
 
 ## Toggle

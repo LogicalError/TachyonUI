@@ -21,6 +21,7 @@ First public preview. The API is not stable yet.
 - The guides' landing page (`docs/README.md`) is about using the library only; the steps for building the API reference locally are gone.
 - The README lists the requirements per OS; the CMake options and running the tests are on the wiki.
 - The guides are rewritten to be short and to the point; what they say about the API is unchanged.
+- Every control in the guides has a short usage example, and the API reference lists the controls by family under API by topic (fields, sliders, buttons and the rest).
 - `Dropdown`: pick one of a list of options; the list opens on the current option.
 - `AutocompleteField`: a text field that lists the suggestions matching what's typed.
 - Keyboard focus: Tab reaches every control (not disabled ones, which also ignore keys) and every control shows it has the focus; [Writing a control](docs/controls/writing-controls.md) lists what each control must do.
