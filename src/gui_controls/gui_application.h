@@ -1089,8 +1089,8 @@ namespace tachyon
         /// Whether files or text from another application are dragged over one of the app's
         /// windows. What's dragged is known only once it's dropped.
         bool IsFileDragging() const { return inputManager && inputManager->GetFileDrag() != nullptr; }
-        /// The element that takes that drag where it is now: the first from the one under it
-        /// up whose handler returned true to EventType::FileDragOver. Invalid when none does.
+        /// The element that takes that drag where it is now: the first from the one under the
+        /// pointer up whose handler returned true to EventType::FileDragOver. Invalid when none does.
         /// Draw it as the drop target.
         ID FileDragTargetID() const { return m_fileDragTargetID; }
         /// Gets the drops no element took (none returned true to EventType::FileDrop): the
@@ -2806,12 +2806,12 @@ namespace tachyon
         void CloseOnPressOutside(ID inside, ID alsoInside, std::function<void()> onPressOutside)
         { m_pressOutsideWatches.push_back({ { inside, alsoInside }, std::move(onPressOutside) }); }
         void RunPressOutsideWatches();
-        /// After dispatch: offers a drag from another application to the elements under it,
-        /// and its drop, then gives a drop none took to the file drop handler.
-        void DispatchFileDrops();
-        /// The first element from the one at `screenPos` in `windowID` up whose handler takes
-        /// `type`; Invalid when none does.
-        ID   OfferFileDrop(EventType type, ID windowID, int2 screenPos, const FileDrop* drop);
+        /// After dispatch: offers a drag from another application to the element under the
+        /// pointer in the window it's over (by `input`'s hit test) and up, and its drop; then
+        /// gives a drop none took to the file drop handler.
+        void DispatchFileDrops(const FrameInput& input);
+        /// The first element from `overID` up whose handler takes `type`; Invalid when none does.
+        ID   OfferFileDrop(EventType type, ID overID, int2 screenPos, const FileDrop* drop);
         ID   m_fileDragTargetID = ID::Invalid();
         std::function<void(const FileDrop&)> m_fileDropHandler;
         std::vector<TextStyle> m_mnemonicStyles;  ///< this frame's underlined mnemonic letters (MessageDialog)

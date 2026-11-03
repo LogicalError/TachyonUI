@@ -259,7 +259,7 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
 
     // -- Dispatch the queued input events to element handlers.
     inputManager->Process(guiStateManager, elementStorage, tabChainManager, textSystem, overID);
-    DispatchFileDrops();
+    DispatchFileDrops(frameInput);
 
     m_frame.RunStage(tachyon::FrameStage::PostInput, ctx);
 

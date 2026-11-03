@@ -67,7 +67,7 @@ namespace tachyon
         // Panels to bring to the front of their tab groups at startup, by title.
         void AddStartPanel(std::string title) { m_startPanels.push_back(std::move(title)); }
         void AddFloatPanel(std::string title) { m_floatPanels.push_back(std::move(title)); }
-        // The disk folder the Files panel shows a copy of; the home folder when empty.
+        // The disk folder the Files panel shows a copy of; the workdirectory when empty.
         void SetFilesRoot(std::filesystem::path path) { m_filesRoot = std::move(path); }
 
         // ---- Toolbar model (used by the View panel) -----------------------------
@@ -555,7 +555,7 @@ namespace tachyon
         void RenderFilesPanel();
         void MoveFileInto(uintptr_t payload, const std::string& folder);
         void ApplyFileRenames();
-        void AddDroppedFiles(const std::vector<std::string>& paths);
+        void AddDroppedFiles(const std::vector<std::string>& paths, const std::string& folder);
         IconID FileIcon(std::string_view name, bool isFolder, bool open = false);
 
         // Build/tear down panel data; wired into CreatePanel's onEnable/onDisable.

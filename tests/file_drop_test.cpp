@@ -161,11 +161,13 @@ namespace tachyon
 
             void DragTo(int2 pos)
             {
+                app.SetMousePos(pos);
                 app.inputManager->OnFileDrop(app.RootWindowID(), pos, FileDropAction::Move, "");
                 Frame();
             }
             void Drop(int2 pos, std::vector<std::string> paths, std::string dropped = {})
             {
+                app.SetMousePos(pos);
                 app.inputManager->OnFileDrop(app.RootWindowID(), {}, FileDropAction::Begin, "");
                 app.inputManager->OnFileDrop(app.RootWindowID(), pos, FileDropAction::Move, "");
                 for (const std::string& path : paths)
@@ -254,6 +256,31 @@ namespace tachyon
             ASSERT_EQ(appDrops.size(), 3u) << "outside every element";
         }
 
+        // While another application drags, the OS sends the window no mouse moves and gives it
+        // no focus: hover knows neither the window under the pointer nor has the focus it needs.
+        // The drag and the drop go by the window they came to and the pointer's position.
+        TEST_F(FileDropTest, ADropNeedsNeitherHoverNorFocus)
+        {
+            Frame();
+            Frame();
+            ID elsewhere;
+            elsewhere.value.dynamicParts.mode      = IDMode::Static;
+            elsewhere.value.dynamicParts.hashValue = 0x77;
+            app.activeWindow = elsewhere;   // another application has the focus
+            app.mouseWindow  = elsewhere;   // and the OS reports no window of ours under the mouse
+            const int2 taker = app.CenterOf(takerID);
+            app.inputManager->OnFileDrop(app.RootWindowID(), {}, FileDropAction::Begin, "");
+            DragTo(taker);
+            EXPECT_EQ(app.FileDragTargetID(), takerID);
+            EXPECT_EQ(app.guiStateManager.Interaction().GetHoveredID(), ID::Invalid()) << "test setup: no hover";
+            app.inputManager->OnFileDrop(app.RootWindowID(), taker, FileDropAction::File, "C:/a.png");
+            app.inputManager->OnFileDrop(app.RootWindowID(), taker, FileDropAction::Complete, "");
+            Frame();
+            EXPECT_EQ(seen, (std::vector<ID>{ takerID }));
+            EXPECT_EQ(files, (std::vector<std::string>{ "C:/a.png" }));
+            EXPECT_TRUE(appDrops.empty());
+        }
+
         TEST_F(FileDropTest, WithoutAHandlerADropNoElementTakesIsLeft)
         {
             app.SetFileDropHandler({});
@@ -261,6 +288,74 @@ namespace tachyon
             Frame();
             Drop(app.CenterOf(otherID), { "C:/a.png" });
             EXPECT_EQ(seen, (std::vector<ID>{ otherID }));
+            EXPECT_TRUE(appDrops.empty());
+        }
+
+        // A pane that takes drops, holding a tree view and a grid view (the showcase's Files
+        // panel): a drop on a row, an item or the background is the pane's.
+        TEST(FileDrop, AGridOrTreeInAPaneLetsItTakeTheDrop)
+        {
+            HeadlessGUIApp app;
+            ASSERT_TRUE(app.Initialize());
+            const ID paneID = app.idManager.CreateStaticID(), gridID = app.idManager.CreateStaticID(),
+                     treeID = app.idManager.CreateStaticID();
+            std::vector<std::string> taken;
+            std::vector<FileDrop> appDrops;
+            app.SetFileDropHandler([&](const FileDrop& drop) { appDrops.push_back(drop); });
+            GridViewVirtualState vstate;
+            MultiSelectState multi;
+            std::vector<ID> itemIDs(3);
+            std::vector<TreeViewRow> rows(2);
+            rows[0].name = "Root"; rows[0].isOpen = true;
+            rows[1].name = "Child"; rows[1].depth = 1;
+            GUIApplication::RebuildTreeViewIndex(rows);
+            std::vector<int> visibleIdx;
+            TableState treeState;
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    Element pane{ .id = paneID, .styleRef = app.theme.emptyVertStyleRef };
+                    pane.eventHandler = [&](ElementEvent&& event) -> bool {
+                        if (event.type == EventType::FileDragOver) return true;
+                        if (event.type != EventType::FileDrop) return false;
+                        taken = event.state.droppedFiles;
+                        return true;
+                    };
+                    app.RegisterElement(std::move(pane), LayoutOverride{}.Size(600, 500));
+                    VERIFY(app.elementStorage.BeginChildren());
+                    app.VirtualTreeView(treeID, rows, visibleIdx, treeState, StyleRef{}, LayoutOverride{}.Size(200, 100));
+                    app.VirtualGridView(gridID, vstate, 3, int2{ 100, 50 },
+                                        [&](int i, ID itemID) {
+                                            itemIDs[size_t(i)] = itemID;
+                                            app.GridViewItem(itemID, "item", ElementState::None, nullptr, StyleRef{}, LayoutOverride{}.Size(100, 50));
+                                        },
+                                        nullptr, &multi, nullptr, {}, {}, LayoutOverride{}.Size(400, 300));
+                    VERIFY(app.elementStorage.EndChildren());
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            frame();
+            auto drop = [&](int2 at) {
+                taken.clear();
+                app.SetMousePos(at);
+                app.inputManager->OnFileDrop(app.RootWindowID(), {}, FileDropAction::Begin, "");
+                app.inputManager->OnFileDrop(app.RootWindowID(), at, FileDropAction::Move, "");
+                frame();
+                const ID target = app.FileDragTargetID();
+                app.inputManager->OnFileDrop(app.RootWindowID(), at, FileDropAction::File, "C:/a.png");
+                app.inputManager->OnFileDrop(app.RootWindowID(), at, FileDropAction::Complete, "");
+                frame();
+                return target;
+            };
+            const IntRect grid = app.GetElementRect(gridID);
+            for (const auto& [where, at] : { std::pair{ "a grid item", app.CenterOf(itemIDs[1]) },
+                                             std::pair{ "the grid's background", int2{ grid.x + grid.w - 10, grid.y + grid.h - 10 } },
+                                             std::pair{ "a tree row", app.CenterOf(treeID) } })
+            {
+                EXPECT_EQ(drop(at), paneID) << where;
+                EXPECT_EQ(taken, (std::vector<std::string>{ "C:/a.png" })) << where;
+            }
             EXPECT_TRUE(appDrops.empty());
         }
 
@@ -335,6 +430,7 @@ namespace tachyon
 
             for (const auto& [id, center] : centers)
             {
+                app.SetMousePos(center);
                 app.inputManager->OnFileDrop(app.RootWindowID(), {}, FileDropAction::Begin, "");
                 app.inputManager->OnFileDrop(app.RootWindowID(), center, FileDropAction::Move, "");
                 frame();

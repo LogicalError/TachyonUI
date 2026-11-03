@@ -6,14 +6,16 @@
 #include <cctype>
 #include <cstdlib>
 #include <memory>
+#include <optional>
 #include <unordered_set>
 
 //
 // This file is a file browser panel demo, meant to test and demonstrate the grid view and
 // drag & drop features - including dragging files and folders between the grid and the
-// folder tree. It browses an IFileSystem: a copy of a folder on the disk (the home folder,
-// or the one given with --files), read as it's browsed. Moves and renames change only the
-// copy; the disk is never written.
+// folder tree, and dropping them in from other applications. It browses an IFileSystem: a
+// copy of a folder on the disk (the showcase's workdirectory, or the one given with
+// --files), read as it's browsed. Moves, renames and dropped files change only the copy;
+// the disk is never written.
 //
 
 namespace tachyon
@@ -43,6 +45,10 @@ namespace tachyon
         std::string renameBuffer;   // a rename edits this; it goes to the file system once it's done
     };
     static std::vector<GridEntry> gridEntries;
+    // The grid's items built this frame: their IDs, and their entries' indices.
+    static std::vector<std::pair<tachyon::ID, int>> gridItemIDs;
+    // The folder a drag from another application would drop into now; none while there's none.
+    static std::optional<std::string> fileDropFolder;
     // Grid of icons, or a list (the toolbar's grid/list toggles).
     static bool filesListMode = false;
 
@@ -242,6 +248,30 @@ namespace tachyon
         return true;
     }
 
+    // The folder at `screenPos`: a folder in the grid or a row of the tree, else the folder
+    // on view (a file in the grid, the grid's background).
+    static std::string FolderAt(const ElementStorage& storage, tachyon::int2 screenPos)
+    {
+        auto under = [&](tachyon::ID id) {
+            const tachyon::ElementRef ref = storage.FindElementRefByID(id);
+            return ref.IsValid() && storage.ElementRectOnScreen(ref).Contains(screenPos);
+        };
+        for (const auto& [id, index] : gridItemIDs)
+            if (index < int(gridEntries.size()) && under(id))
+                return gridEntries[size_t(index)].file.isFolder ? JoinPath(currentFolder, gridEntries[size_t(index)].file.name)
+                                                                : currentFolder;
+        const bool searching = !filesQueryLower.empty();
+        const tachyon::TableState& state      = searching ? filteredFolderState : folderTreeState;
+        const std::vector<int>&    visibleIdx = searching ? filteredFolderVisibleIdx : folderVisibleIdx;
+        for (size_t vi = 0; vi < visibleIdx.size(); ++vi)
+            if (under(state.RowIDForIndex(static_cast<int>(vi))))
+            {
+                const int flat = searching ? filteredToMaster[size_t(visibleIdx[vi])] : visibleIdx[vi];
+                return folderPaths[size_t(flat)];
+            }
+        return currentFolder;
+    }
+
     // Whether what `payload` stands for may go into the folder `folder`: not where it is
     // already, and a folder not into itself or its own subtree.
     static bool CanDropInto(uintptr_t payload, const std::string& folder)
@@ -290,25 +320,19 @@ namespace tachyon
 
     void Application::EnableFilesPanel()
     {
-        // The folder to show: --files, else the home folder, else the working folder.
+        // The folder to show: --files, else the showcase's workdirectory, else the working folder.
         std::filesystem::path root = m_filesRoot;
         if (root.empty())
         {
-#ifdef _WIN32
-            wchar_t* home = nullptr;
-            size_t length = 0;
-            if (_wdupenv_s(&home, &length, L"USERPROFILE") == 0 && home)
-                root = home;
-            std::free(home);
-#else
-            if (const char* home = std::getenv("HOME"))
-                root = home;
-#endif
+            const std::string& resources = GetResourceRoot();
+            root = std::filesystem::path(std::u8string(resources.begin(), resources.end()));
         }
         std::error_code ec;
         if (root.empty() || !std::filesystem::is_directory(root, ec))
             root = std::filesystem::current_path(ec);
-        root = std::filesystem::absolute(root, ec);
+        root = std::filesystem::absolute(root, ec).lexically_normal();
+        if (!root.has_filename() && root.has_relative_path())
+            root = root.parent_path();   // named after its last folder, not the separator after it
         const std::u8string name = (root.has_filename() ? root.filename() : root).u8string();
         rootName = std::string(name.begin(), name.end());
 
@@ -390,38 +414,31 @@ namespace tachyon
         filteredToMaster.clear();
         openFolders.clear();
         currentFolder.clear();
+        gridItemIDs.clear();
+        fileDropFolder.reset();
         folderTreeState.rowDragDrop = nullptr;
         fileIcons.reset();
         files.reset();
     }
 
-    // Files dropped from another application go into the folder on view, in the copy only.
-    // A folder isn't copied, nor a name already there.
-    void Application::AddDroppedFiles(const std::vector<std::string>& paths)
+    // Files and folders dropped from another application are copied into `folder` through
+    // the file system; here that's the copy in memory, which reads a dropped folder from the
+    // disk as it's browsed. What can't be added is said, with why.
+    void Application::AddDroppedFiles(const std::vector<std::string>& paths, const std::string& folder)
     {
         if (!files)
             return;
-        std::vector<std::string> skipped;
+        std::string refused;
         for (const std::string& path : paths)
         {
-            const std::filesystem::path disk(std::u8string(path.begin(), path.end()));
-            const std::u8string name8 = disk.filename().u8string();
-            const std::string name(name8.begin(), name8.end());
-            std::error_code ec;
-            const bool isFile = std::filesystem::is_regular_file(disk, ec);
-            const uint64_t size = isFile ? std::filesystem::file_size(disk, ec) : 0;
-            if (!isFile)
-                skipped.push_back((name.empty() ? path : name) + " (not a file)");
-            else if (!files->AddFile(JoinPath(currentFolder, name), ec ? 0 : size))
-                skipped.push_back(name + " (the name is taken)");
+            std::string error;
+            if (!files->Import(std::filesystem::path(std::u8string(path.begin(), path.end())), folder, error))
+                refused += (refused.empty() ? "" : "\n") + error;
         }
-        if (!skipped.empty())
-        {
-            std::string body;
-            for (const std::string& line : skipped)
-                body += (body.empty() ? "" : "\n") + line;
-            ShowToast(ToastDesc{ .severity = Severity::Warning, .title = "Not added", .body = body });
-        }
+        if (!refused.empty())
+            ShowToast(ToastDesc{ .severity = Severity::Warning,
+                                 .title = "Not added to " + (folder.empty() ? rootName : std::string(FileName(folder))),
+                                 .body = refused });
     }
 
     // Folders in the showcase's own icons; a file in the OS's where there is one, else the
@@ -485,16 +502,37 @@ namespace tachyon
         // Horizontal split: folder tree (left) | draggable sizer | file grid (right).
         // flexFillRow (flex-basis:0) bounds the split to the panel height so the
         // grid's virtual content scrolls inside it instead of stretching the row.
-        BeginHorizontal(idManager.AllocateDynamicID("filesSplit"),
-                        theme.flexFillRowStyleRef,
-                        tachyon::LayoutOverride::Auto().FlexGrow(1));
+        // It takes files and folders dragged from other applications, into the folder under
+        // the pointer (FolderAt).
+        const tachyon::ID splitID = idManager.AllocateDynamicID("filesSplit");
+        if (FileDragTargetID() != splitID)
+            fileDropFolder.reset();
+        {
+            tachyon::Element split{ .id = splitID, .styleRef = theme.flexFillRowStyleRef };
+            split.state = guiStateManager.GetCurrentState(splitID);
+            split.eventHandler = [this](tachyon::ElementEvent&& event) -> bool
+            {
+                if (event.type == tachyon::EventType::FileDragOver)
+                {
+                    fileDropFolder = FolderAt(elementStorage, event.state.screenPos);
+                    return true;
+                }
+                if (event.type != tachyon::EventType::FileDrop || event.state.droppedFiles.empty())
+                    return false;   // text isn't a file
+                AddDroppedFiles(event.state.droppedFiles, FolderAt(elementStorage, event.state.screenPos));
+                return true;
+            };
+            RegisterElement(std::move(split), tachyon::LayoutOverride::Auto().FlexGrow(1));
+            VERIFY(elementStorage.BeginChildren());
+        }
 
         if (searching)
         {
             // Reduced tree: only folders with search hits. Own state; clicks
             // map back to the master folder through filteredToMaster.
             for (size_t i = 0; i < filteredFolderRows.size(); ++i)
-                filteredFolderRows[i].icon = FileIcon({}, true, filteredFolderRows[i].HasChildren());
+                filteredFolderRows[i].icon = FileIcon({}, true, filteredFolderRows[i].HasChildren() ||
+                                                                (fileDropFolder && folderPaths[size_t(filteredToMaster[i])] == *fileDropFolder));
             VirtualTreeView(idManager.AllocateDynamicID("filesFolderTree"),
                             filteredFolderRows, filteredFolderVisibleIdx, filteredFolderState,
                             theme.treeViewStyleRef,
@@ -518,7 +556,8 @@ namespace tachyon
             for (size_t i = 0; i < folderRows.size(); ++i)
             {
                 auto& row = folderRows[i];
-                row.icon = FileIcon(row.name, true, (row.HasChildren() && row.isOpen) || int(i) == dropFlat);
+                row.icon = FileIcon(row.name, true, (row.HasChildren() && row.isOpen) || int(i) == dropFlat ||
+                                                    (fileDropFolder && folderPaths[i] == *fileDropFolder));
                 row.renameBuffer = i == 0 ? nullptr : &row.name;
             }
 
@@ -565,23 +604,9 @@ namespace tachyon
         // flex-fill-col (flex-basis:0) bounds it to its share of the split width,
         // otherwise the stretched cells floor its min width and it can't shrink.
         // MinHeight(0) bounds it to the split height so the grid scrolls.
-        // It takes files dragged from other applications, into the folder on view.
-        const tachyon::ID gridPaneID = idManager.AllocateDynamicID("filesGridPane");
-        {
-            tachyon::Element pane{ .id = gridPaneID, .styleRef = theme.flexFillColStyleRef };
-            pane.state = guiStateManager.GetCurrentState(gridPaneID);
-            pane.eventHandler = [this](tachyon::ElementEvent&& event) -> bool
-            {
-                if (event.type == tachyon::EventType::FileDragOver)
-                    return true;
-                if (event.type != tachyon::EventType::FileDrop || event.state.droppedFiles.empty())
-                    return false;   // text isn't a file
-                AddDroppedFiles(event.state.droppedFiles);
-                return true;
-            };
-            RegisterElement(std::move(pane), tachyon::LayoutOverride::Auto().FlexGrow(1).MinHeight(0));
-            VERIFY(elementStorage.BeginChildren());
-        }
+        BeginVertical(idManager.AllocateDynamicID("filesGridPane"),
+                      theme.flexFillColStyleRef,
+                      tachyon::LayoutOverride::Auto().FlexGrow(1).MinHeight(0));
 
         BeginHorizontal(idManager.AllocateDynamicID("filesToolbar"), filesToolbarStyleRef,
                         tachyon::LayoutOverride::Auto().NoShrink());
@@ -617,11 +642,6 @@ namespace tachyon
         }
         EndHorizontal();
 
-        if (FileDragTargetID() == gridPaneID)
-            Banner(idManager.AllocateDynamicID("filesDropHere"), Severity::Info,
-                   "Drop to add to " + (currentFolder.empty() ? rootName : std::string(FileName(currentFolder))),
-                   {}, tachyon::LayoutOverride::Auto().NoShrink());
-
         const bool listMode = filesListMode;
         const int  cellW    = styleManager.Px(96);
         const int  cellH    = styleManager.Px(86);
@@ -644,17 +664,22 @@ namespace tachyon
         // List mode forces one column by making the cell wider than any viewport.
         const tachyon::int2 cellSize = listMode ? tachyon::int2{ 1 << 20, rowH }
                                             : tachyon::int2{ cellW, cellH };
+        gridItemIDs.clear();
         VirtualGridView(idManager.AllocateDynamicID("filesGrid"), gridScrollState,
                         static_cast<int>(gridEntries.size()), cellSize,
                         [this, listMode, itemStyleFor, cellW, cellH, rowH](int i, tachyon::ID itemID)
                         {
                             if (i < 0 || i >= int(gridEntries.size())) return;
                             GridEntry& entry = gridEntries[size_t(i)];
+                            gridItemIDs.emplace_back(itemID, i);
 
-                            // Open-folder icon while hovered by a drag this folder accepts.
-                            const bool dropTarget = entry.file.isFolder
-                                && guiStateManager.Drag().IsDropTargetFor(itemID, kGridPayload)
-                                && CanDropInto(guiStateManager.Drag().GetPayloadValue(), JoinPath(currentFolder, entry.file.name));
+                            // Open-folder icon while hovered by a drag this folder accepts, or one
+                            // from another application would drop into it.
+                            const std::string path = JoinPath(currentFolder, entry.file.name);
+                            const bool dropTarget = entry.file.isFolder &&
+                                ((guiStateManager.Drag().IsDropTargetFor(itemID, kGridPayload) &&
+                                  CanDropInto(guiStateManager.Drag().GetPayloadValue(), path)) ||
+                                 (fileDropFolder && *fileDropFolder == path));
                             const IconID icon = FileIcon(entry.file.name, entry.file.isFolder, dropTarget);
                             std::string_view name = entry.file.name;
 

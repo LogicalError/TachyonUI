@@ -1,7 +1,7 @@
 #pragma once
 
 // File systems a file view browses and changes, behind one interface: a folder's entries,
-// moving and renaming. A view relists when Generation() changes.
+// moving, renaming and copying in from the disk. A view relists when Generation() changes.
 //
 // Paths are relative to the file system's root, with '/' between names; "" is the root.
 
@@ -44,7 +44,12 @@ namespace tachyon
         /// when it can't: there's no such file or folder, the name is empty, has a '/' or '\',
         /// is "." or "..", or is taken.
         virtual bool Rename(std::string_view path, std::string_view newName, std::string& error) = 0;
-        /// Changes whenever what List returns may have: after a move or a rename.
+        /// Copies the file or folder at `source`, on the disk (a file dropped from another
+        /// application), into the folder `toFolder` under its own name. False, with `error`
+        /// saying why, when it can't: there's no such file or folder on the disk, no folder
+        /// `toFolder`, or the name is taken there.
+        virtual bool Import(const std::filesystem::path& source, std::string_view toFolder, std::string& error) = 0;
+        /// Changes whenever what List returns may have: after a move, a rename or an import.
         virtual uint64_t Generation() const = 0;
     };
 
@@ -57,7 +62,8 @@ namespace tachyon
 
     /// A file system kept in memory. Filled with AddFolder / AddFile, or a copy of a folder on
     /// the disk: each folder's entries are read from the disk the first time they're needed
-    /// (listed, or looked into by a move). Moves and renames change only the copy.
+    /// (listed, or looked into by a move). Moves, renames and imports change only the copy:
+    /// an imported folder is read from the disk as it's browsed, like the rest.
     class MemoryFileSystem final : public IFileSystem
     {
     public:
@@ -77,6 +83,7 @@ namespace tachyon
         std::vector<FileEntry> List(std::string_view path) override;
         bool Move(std::string_view path, std::string_view toFolder, std::string& error) override;
         bool Rename(std::string_view path, std::string_view newName, std::string& error) override;
+        bool Import(const std::filesystem::path& source, std::string_view toFolder, std::string& error) override;
         uint64_t Generation() const override { return m_generation; }
 
     private:

@@ -207,6 +207,52 @@ namespace tachyon
             EXPECT_EQ(Names(fs, "Docs"), (std::vector<std::string>{ "photo.jpg", "todo.txt" }));
         }
 
+        // A file or folder from the disk copied in: a folder read as it's browsed; the disk as
+        // it was.
+        TEST_F(DiskFileSystemTest, ImportsCopyFromTheDiskIntoTheCopy)
+        {
+            const std::filesystem::path outside = root / "Outside";
+            std::filesystem::create_directories(outside / "Album" / "Inner");
+            std::ofstream(outside / "song.mp3") << "1234567";
+            std::ofstream(outside / "Album" / "cover.png") << "";
+
+            MemoryFileSystem fs(root / "Images");
+            std::string error;
+            uint64_t generation = fs.Generation();
+            EXPECT_TRUE(fs.Import(outside / "song.mp3", "Deep", error)) << error << " (into a folder not read yet)";
+            EXPECT_GT(fs.Generation(), generation);
+            const std::vector<FileEntry> deep = fs.List("Deep");
+            const auto song = std::find_if(deep.begin(), deep.end(), [](const FileEntry& e) { return e.name == "song.mp3"; });
+            ASSERT_NE(song, deep.end());
+            EXPECT_FALSE(song->isFolder);
+            EXPECT_EQ(song->size, 7u);
+            EXPECT_EQ(Names(fs, "Deep"), (std::vector<std::string>{ "far.png", "song.mp3" })) << "with what's there";
+
+            EXPECT_TRUE(fs.Import(outside / "Album" / "", "", error)) << error << " (a folder, named with a separator at its end)";
+            EXPECT_EQ(Names(fs, ""), (std::vector<std::string>{ "Album/", "Deep/", "photo.jpg" }));
+            EXPECT_EQ(Names(fs, "Album"), (std::vector<std::string>{ "Inner/", "cover.png" })) << "read from the disk";
+
+            generation = fs.Generation();
+            EXPECT_FALSE(fs.Import(outside / "song.mp3", "Deep", error)) << "the name is taken";
+            EXPECT_NE(error.find("song.mp3"), std::string::npos);
+            EXPECT_FALSE(fs.Import(root / "Images" / "photo.jpg", "", error)) << "taken by the disk's own";
+            EXPECT_FALSE(fs.Import(outside / "nothing.txt", "", error)) << "not on the disk";
+            EXPECT_NE(error.find("nothing.txt"), std::string::npos);
+            EXPECT_FALSE(fs.Import(outside / "song.mp3", "Nowhere", error)) << "no such folder";
+            EXPECT_FALSE(fs.Import(outside / "song.mp3", "photo.jpg", error)) << "into a file";
+            EXPECT_FALSE(fs.Import(outside.root_path(), "", error)) << "a drive has no name";
+            EXPECT_EQ(fs.Generation(), generation) << "a refused import changes nothing";
+
+            // Into a folder not read yet: what's on the disk there is in the way too.
+            std::ofstream(outside / "far.png") << "";
+            MemoryFileSystem fresh(root / "Images");
+            EXPECT_FALSE(fresh.Import(outside / "far.png", "Deep", error)) << "Deep/far.png is on the disk";
+
+            EXPECT_TRUE(std::filesystem::exists(outside / "song.mp3")) << "the disk is as it was";
+            EXPECT_FALSE(std::filesystem::exists(root / "Images" / "song.mp3"));
+            EXPECT_FALSE(std::filesystem::exists(root / "Images" / "Album"));
+        }
+
         TEST_F(DiskFileSystemTest, AFolderThatIsntThereIsEmpty)
         {
             MemoryFileSystem fs(root / "missing");
