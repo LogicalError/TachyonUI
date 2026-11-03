@@ -2,28 +2,29 @@
 
 ## Classes from the theme
 
-`theme.GetStyle("class")` returns the `StyleRef` registered for a class, from any loaded
-file. Pass it to a control:
+`theme.GetStyle("class")` returns the `StyleRef` registered for a class from any loaded
+file. You pass it to a control:
 
 ```cpp
 Text("My themed app", theme.GetStyle("banner"));
 Button("Careful!", [] {}, theme.GetStyle("warning-button"));
 ```
 
-A class no file defines gives an empty `StyleRef` and logs a warning once;
-`theme.FindStyle("class")` returns a `Result<StyleRef>` with an error instead.
-`theme.GetColor("--accent", fallback)` reads a palette color as `color4f`.
+If no file defines the class, you get an empty `StyleRef` and a warning is logged once. If
+you'd rather handle that yourself, `theme.FindStyle("class")` returns a `Result<StyleRef>`
+with an error instead. To read a palette color as a `color4f`, use
+`theme.GetColor("--accent", fallback)`.
 
-The library's own controls use styles the theme registers by name (for example
-`theme.labelStyleRef`, `theme.windowStyleRef`, `theme.regularControls.button`). Changing the
-matching class (`.label`, `.window`, `.button`) in a style file restyles them.
+The library's own controls use styles that the theme registers by name, for example
+`theme.labelStyleRef`, `theme.windowStyleRef` and `theme.regularControls.button`. Change the
+matching class (`.label`, `.window`, `.button`) in a style file and they're restyled.
 
-A reload clears all registered styles, so `StyleRef`s from before it are stale. Look classes
-up each frame, or store them again in `OnStylesReloaded`.
+A reload clears every registered style, so any `StyleRef` you got before it is stale. Either
+look classes up each frame, or store them again in `OnStylesReloaded`.
 
 ## Styles built in code
 
-A style can also be filled in code and registered with the `StyleManager`:
+You can also fill in a style in code and register it with the `StyleManager`:
 
 ```cpp
 tachyon::Style s;
@@ -35,24 +36,25 @@ s.states[tachyon::ElementState::Hover].backgroundColor = tachyon::ColorStyle::Cr
 tachyon::StyleRef ref = styleManager.Register(s);
 ```
 
-Each of the 33 state slots in `Style::states` is set separately. They are indexed by
-`ElementState`: any combination of `Active`, `Hover`, `Focused`, `Selected` and `Selection`
-(`ElementState::Active | ElementState::Hover`, say), plus `Disabled` on its own. Register
-such styles again in `OnStylesReloaded`. A code style doesn't get the font scale.
+`Style::states` has 33 state slots, and you set each one separately. They're indexed by
+`ElementState`, which is any combination of `Active`, `Hover`, `Focused`, `Selected` and
+`Selection` (for example `ElementState::Active | ElementState::Hover`), plus `Disabled` on
+its own. Register these styles again in `OnStylesReloaded`. Note that a style built in code
+doesn't get the font scale.
 
-Text is set in three places:
+Text settings live in three places:
 
-- `Style::textLayoutStyle`, for all states: direction, wrapping, alignment, baseline and
-  overflow.
-- Each state's `textStyle`: the font, its size and spacing, the line height, the language
-  and the decoration lines (`underLine`, `overLine`, ...) with their thickness, offset and
-  line style.
-- Each state's colors: `textColor` (CSS `color`; text without one is transparent) and
-  `decorationColors`, indexed by `DecorationLine` (a line without one takes the text
-  color).
+- `Style::textLayoutStyle` applies to all states. It holds the direction, wrapping,
+  alignment, baseline and overflow.
+- Each state's `textStyle` holds the font, its size and spacing, the line height, the
+  language, and the decoration lines (`underLine`, `overLine`, ...) with their thickness,
+  offset and line style.
+- Each state's colors are `textColor` (CSS `color`; text without one is transparent) and
+  `decorationColors`, indexed by `DecorationLine`. A line without its own color takes the
+  text color.
 
-A state that changes only colors keeps the text's layout; one that changes its `textStyle`
-lays it out again.
+A state that only changes colors keeps the text's layout. A state that changes its
+`textStyle` lays the text out again.
 
 ```cpp
 for (tachyon::StyleState& state : s.states)
@@ -67,19 +69,20 @@ s.states[tachyon::ElementState::Hover].decorationColors[size_t(tachyon::Decorati
 
 ## UI scale
 
-Styles are written in CSS pixels and stored in device pixels. `StyleManager::Register` scales
-a style by the UI scale, which is the main window's display scale times `SetUIScale`:
+You write styles in CSS pixels, and they're stored in device pixels. `StyleManager::Register`
+scales a style by the UI scale, which is the main window's display scale multiplied by the
+value you pass to `SetUIScale`:
 
-- Font sizes, letter and word spacing and pixel line heights scale exactly.
+- Font sizes, letter and word spacing, and pixel line heights are scaled exactly.
 - Everything else (margins, padding, sizes, gaps, radii, shadows, icon sizes, fixed grid
-  tracks) is rounded to whole pixels. A border or text decoration that is set stays at least
-  1 pixel. `auto` sizes stay `auto`.
+  tracks) is rounded to whole pixels. A border or text decoration that's set stays at least
+  1 pixel wide. `auto` sizes stay `auto`.
 
-`Register(style, tachyon::StyleUnits::Pixels)` registers a style that is already in device
-pixels, and `styleManager.ToPixels(style)` gives the scaled copy. For sizes in code,
-`styleManager.Px(n)` converts CSS pixels to whole device pixels (a non-zero size stays at
-least 1).
+If your style is already in device pixels, register it with
+`Register(style, tachyon::StyleUnits::Pixels)`. `styleManager.ToPixels(style)` gives you the
+scaled copy. For sizes in code, `styleManager.Px(n)` converts CSS pixels to whole device
+pixels, and a non-zero size stays at least 1.
 
 ---
 
-[← Properties](properties.md) · [CSS and theming](../css.md)
+[Previous: Properties](properties.md) | [CSS and theming](../css.md)

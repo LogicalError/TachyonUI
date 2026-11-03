@@ -2,51 +2,67 @@
 
 ## RenderNodeView
 
-A graph editor: nodes with property rows, sockets and wires, pan and zoom, marquee
-selection, a minimap, zoom controls and an optional breadcrumb. All state lives in the
-`NodeView` the app owns, so several views can coexist.
+A graph editor with nodes, property rows, sockets and wires. It supports pan and zoom,
+box selection, a minimap, zoom controls and an optional breadcrumb. All of its state lives
+in a `NodeView` that your app owns, so you can have several views at once.
 
 ```cpp
 void RenderNodeView(NodeView& view);
 void NodeText(std::string_view text);
 ```
 
-A `NodeModel` has a `stableID` (assign once, e.g. `idManager.CreateStaticID()`), a
-`title`, an optional `category` and `categoryColor`, a `pos` in pixels and its
-`properties`. A `NodeProperty` has an `input` socket (set to `PropertyEndpoint{}` for an
-unwired input; it holds the source output when wired), an `output` socket flag, a
-`renderBody` that builds the row with any controls, a `socketColor` and a `rowSpan`.
-`NodeText` is row text aligned by the row's sockets: input left, output right, both
-centered.
+Each node is a `NodeModel`. Give it a `stableID` once (for example from
+`idManager.CreateStaticID()`), a `title`, optionally a `category` and `categoryColor`, a
+`pos` in pixels, and its `properties`.
 
-A property's `name`, `type` and `value` are its pins' tooltip: the name, the type (muted,
-monospace) and the value now (`value` is asked for only while the tooltip shows), and for a
-wired input where the value comes from ("from Noise.Value": the source node's title and its
-property's name). A pin with none of them has no tooltip. Classes: `tooltip-lines`,
-`tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-value`, `tooltip-note`.
+Each row is a `NodeProperty`. Its `input` is the input socket: set it to
+`PropertyEndpoint{}` for an input with no wire, and once it's wired it holds the source
+output. `output` is a flag for the output socket. `renderBody` builds the row, with any
+controls you like. There's also a `socketColor` and a `rowSpan`. Inside a row, `NodeText`
+draws text aligned to the row's sockets: on the left for an input, on the right for an
+output, and centered when the row has both.
 
-`NodeView` callbacks: `canConnect(view, output, input)` refuses wires, `onEdit` gets
-each finished edit as a `NodeViewEdit` (for undo; `ApplyNodeViewEdit` in
-`gui_node_view_helpers.h` applies or reverts one), `onBreadcrumb(index)` handles the
-breadcrumb. `showZoomControls` and `showMinimap` turn the overlays on and off.
+A property's `name`, `type` and `value` make up the tooltip on its pins. The tooltip shows
+the name, the type (muted, in a monospace font) and the current value. `value` is only
+called while the tooltip is showing. For a wired input, the tooltip also says where the
+value comes from, as in "from Noise.Value" (the source node's title and its property's
+name). A pin with none of the three has no tooltip. The tooltip uses the classes
+`tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-value` and
+`tooltip-note`.
 
-Tab reaches the controls in every node, in or out of view; when keyboard focus moves to
-a node that isn't fully in view, the view pans just enough to show it, at the same zoom.
-`ScrollNodeIntoView` and `FrameAllNodes` in `gui_node_view_helpers.h` do the same from
-code.
+`NodeView` has a few callbacks:
 
-With the canvas focused (click its background): Home frames all nodes; the arrows move the
-selected nodes a grid step (Shift: four) as one edit, or pan the view when none is
-selected; + and - zoom; Ctrl+A selects every node and Escape none; Enter collapses or
-expands the selected nodes. Wires are made and removed with the mouse.
+- `canConnect(view, output, input)` lets you refuse a wire.
+- `onEdit` gets each finished edit as a `NodeViewEdit`, which is what you need for undo.
+  `ApplyNodeViewEdit` in `gui_node_view_helpers.h` applies or reverts one.
+- `onBreadcrumb(index)` handles clicks on the breadcrumb.
 
-A press on a node moves it (and the rest of the selection) once the pointer has moved the
-drag distance; less is a click, which only selects. Escape during a drag puts things back:
-the nodes during a move, a wire's lane, the selection during a box select, the view during a
-right-button pan or a drag in the minimap.
+`showZoomControls` and `showMinimap` turn those overlays on and off.
 
-Classes: `node-view`, `node`, `node-header`, `node-title`, `node-category`,
-`node-row`, `node-socket`, `node-view-overlay`, `node-view-minimap`.
+Tab reaches the controls in every node, whether it's in view or not. When keyboard focus
+moves to a node that isn't fully visible, the view pans just far enough to show it,
+without changing the zoom. To do the same from code, use `ScrollNodeIntoView` and
+`FrameAllNodes` in `gui_node_view_helpers.h`.
+
+These keys work while the canvas has focus (click its background to give it focus):
+
+- Home frames all nodes.
+- The arrow keys move the selected nodes by one grid step (four with Shift), as a single
+  edit. With nothing selected, they pan the view.
+- + and - zoom in and out.
+- Ctrl+A selects every node, and Escape clears the selection.
+- Enter collapses or expands the selected nodes.
+
+Wires are made and removed with the mouse.
+
+Pressing on a node and moving the pointer past the drag distance moves the node, along
+with the rest of the selection. A shorter movement counts as a click and only selects.
+Escape during a drag undoes it: it puts back the nodes during a move, a wire's lane, the
+selection during a box select, and the view during a right-button pan or a drag in the
+minimap.
+
+The node view uses the classes `node-view`, `node`, `node-header`, `node-title`,
+`node-category`, `node-row`, `node-socket`, `node-view-overlay` and `node-view-minimap`.
 
 ```cpp
 NodeModel mix;
@@ -63,4 +79,4 @@ RenderNodeView(view);
 
 ---
 
-[← Tabs, docking and toolbars](tabs-docking-toolbars.md) · [Controls](../controls.md) · [Other controls →](other-controls.md)
+[Previous: Tabs, docking and toolbars](tabs-docking-toolbars.md) | [Controls](../controls.md) | [Next: Other controls](other-controls.md)

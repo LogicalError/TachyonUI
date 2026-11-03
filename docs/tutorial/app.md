@@ -2,8 +2,8 @@
 
 ## The app class
 
-The app derives from `tachyon::GUIApplication`, owns the panels, and keeps the window and
-the dock layout. At the end of `my_app.h`:
+The app is a class derived from `tachyon::GUIApplication`. It owns the panels and keeps
+track of the window and the dock layout. Add it at the end of `my_app.h`:
 
 <!-- snippet: examples/tutorial/my_app.h [app] -->
 ```cpp
@@ -23,7 +23,7 @@ private:
 };
 ```
 
-and close the namespace with `}`.
+Then close the namespace with `}`.
 
 ## Setting up once
 
@@ -51,14 +51,16 @@ tachyon::Result<void> MyApp::Initialize(const InitializeOptions& options)
 }
 ```
 
-- **Static IDs** are the exception to "no IDs": a window and a dock layout keep their
-  position, size and arrangement by ID, so they need one that doesn't depend on where the
-  code is.
-- **`CreatePanel`** registers a dockable panel with a title and the callback that draws
-  it; the callback calls the panel's `Draw`.
-- **The dock tree** puts the counter in a 240 px column on the left and the greeting in
-  the rest. The user can drag the tabs to rearrange them, or out of the window to float a
-  panel in its own window.
+In step 2 you didn't need any IDs, but static IDs are the exception. A window and a dock
+layout remember their position, size and arrangement by ID, so they need an ID that
+doesn't depend on where in the code they're called from.
+
+`CreatePanel` registers a dockable panel with a title and a callback that draws it. Here
+the callback just calls the panel's `Draw`.
+
+The dock tree puts the counter in a 240 px column on the left and gives the greeting
+the rest of the space. The user can drag the tabs around to rearrange them, or drag one
+out of the window to float that panel in a window of its own.
 
 ## Every frame
 
@@ -78,8 +80,8 @@ void MyApp::OnGUI()
 ```
 
 `OnGUI` runs every frame. The docking container draws the visible panels, each through
-its callback; `EmitFloatingDockWindows` draws the panels the user floated. Close the
-namespace with `}`.
+its own callback, and `EmitFloatingDockWindows` draws any panels the user has floated.
+Close the namespace with `}`.
 
 ## main
 
@@ -103,21 +105,23 @@ int main()
 }
 ```
 
-`Initialize` and `Run` return a `Result<void>` that says why when they fail, for example
-on a GPU without the features the library needs.
+If `Initialize` or `Run` fails, the `Result<void>` it returns tells you why. That could
+happen, for example, on a GPU that's missing features the library needs.
 
 ## Run it
 
-Build as in [step 1](setup.md), then run `build\Debug\my_app.exe` on Windows, or
-`build/Debug/my_app` on Linux and macOS. It runs from any folder.
+Build it the same way as in [step 1](setup.md). Then run `build\Debug\my_app.exe` on
+Windows, or `build/Debug/my_app` on Linux and macOS. You can run it from any folder.
 
 ## Where next
 
-- [Controls](../controls.md): every control, with its options and its CSS class.
-- [CSS and theming](../css.md): your own style file, and switching between dark and light.
-- [Overview](../overview.md): how IDs, Begin / End and the frame work in more depth.
-- [Integration](../integration.md): your own Vulkan device, window backend or main loop.
+- [Controls](../controls.md) has every control, with its options and its CSS class.
+- [CSS and theming](../css.md) shows how to write your own style file and switch
+  between dark and light.
+- [Overview](../overview.md) goes deeper into IDs, Begin and End, and how a frame works.
+- [Integration](../integration.md) covers using your own Vulkan device, window backend
+  or main loop.
 
 ---
 
-[← 3. Fields](fields.md) · [Tutorial](../tutorial.md)
+[Previous: 3. Fields](fields.md) | [Tutorial](../tutorial.md)

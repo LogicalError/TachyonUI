@@ -1,10 +1,10 @@
 # Begin and End
 
-Containers are pairs of calls: `BeginWindow` / `EndWindow`, `BeginMenu` / `EndMenu`,
-`BeginVertical` / `EndVertical`, and so on. The rule is the same for all of them:
+Containers come as pairs of calls: `BeginWindow` and `EndWindow`, `BeginMenu` and
+`EndMenu`, `BeginVertical` and `EndVertical`, and so on. They all follow one rule:
 
-**Every `Begin*` has its `End*`, called whether or not the `Begin*` returned true.**
-The result only says whether to build the content.
+**Every `Begin*` needs its `End*`, and you call it whether or not the `Begin*` returned
+true.** The return value only tells you whether to build the content.
 
 ```cpp
 if (BeginMenu(menuID, "File"))
@@ -15,13 +15,13 @@ if (BeginMenu(menuID, "File"))
 EndMenu();   // also when the menu is closed
 ```
 
-A closed menu, a tooltip that isn't showing or a window the user closed returns false;
-layout containers such as `BeginVertical` always return true.
+You'll get false for a closed menu, a tooltip that isn't showing, or a window the user
+closed. Layout containers such as `BeginVertical` always return true.
 
 ## Scopes
 
-Each pair also has a scope object that calls the `End*` when it leaves. It takes the
-same arguments as the `Begin*` and converts to the `Begin*`'s result:
+Every pair also has a scope object that calls the `End*` for you when it goes out of
+scope. It takes the same arguments as the `Begin*`, and converts to the same result:
 
 ```cpp
 if (auto menu = Menu(menuID, "File"))
@@ -32,23 +32,24 @@ if (!window)
     return;   // the scope ends the window, open or not
 ```
 
-The scopes are named after the pair without `Begin`: `Window`, `Menu`, `MenuBar`,
+A scope has the name of its pair without the `Begin`: `Window`, `Menu`, `MenuBar`,
 `ContextMenu`, `Tooltip`, `Horizontal`, `Vertical`, `LabelGroup`, `Table`, `Row`,
-`ListView`, `TabBar`, `Disabled` and the others in `gui_application.h`. `End()` ends
-the container early; the scope then doesn't end it again.
+`ListView`, `TabBar`, `Disabled`, and the rest you'll find in `gui_application.h`. If
+you want to end the container early, call `End()` on the scope. It won't end it a second
+time when it goes out of scope.
 
 ## Misuse
 
-Misuse is reported, not fatal. The library logs an error and carries on:
+Getting a pair wrong won't crash your program. The library logs an error and carries on:
 
-- An `End*` without its `Begin*` is reported and ignored.
-- A `Begin*` left without its `End*` is reported at the end of the frame and closed,
-  and the next frame starts clean.
-- Calls in the wrong place, such as a `MenuItem` outside an open menu, are reported
-  and ignored.
+- An `End*` without a matching `Begin*` is reported and ignored.
+- A `Begin*` that never gets its `End*` is reported at the end of the frame and closed
+  for you, so the next frame starts clean.
+- A call in the wrong place, such as a `MenuItem` outside an open menu, is reported and
+  ignored.
 
-Each message is logged once, as the same mistake usually repeats every frame.
+Since the same mistake usually happens every frame, each message is only logged once.
 
 ---
 
-[← IDs](ids.md) · [Overview](../overview.md) · [Return values, content and units →](values.md)
+[Previous: IDs](ids.md) | [Overview](../overview.md) | [Next: Return values, content and units](values.md)

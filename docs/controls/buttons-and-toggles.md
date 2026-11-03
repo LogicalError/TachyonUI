@@ -7,8 +7,8 @@ bool Button(ID id, const GUIContent& content, std::function<void()> onClick, Sty
             LayoutOverride&& constraints = {});
 ```
 
-Returns `true` in the frame after a click; `onClick` runs when the click is handled.
-Default class: `button` (`toolbar-button` inside a toolbar).
+`onClick` runs when the click is handled, and `Button` returns `true` in the frame after
+the click. The default class is `button`, or `toolbar-button` inside a toolbar.
 
 ```cpp
 Button("Click me", [this] { ++clicks; });
@@ -16,18 +16,19 @@ Button("Click me", [this] { ++clicks; });
 
 ## CommandButton
 
-An icon button for a command in `commandManager`. Its icon and callback come from the
-command; the tooltip shows the command's description, and its shortcut in a chip after it.
+An icon button that runs a command from `commandManager`. The icon and the callback come
+from the command. Its tooltip shows the command's description, followed by the shortcut
+in a small chip.
 
 ```cpp
 bool CommandButton(CommandID command, StyleRef style, LayoutOverride&& constraints = {});
 ```
 
-Default class: `button`.
+The default class is `button`.
 
 ## Toggle
 
-A button that stays pressed while on.
+A button that stays pressed while it's on.
 
 ```cpp
 bool Toggle(ID id, bool value, const GUIContent& content, std::function<void(bool)> onToggle, StyleRef style,
@@ -35,21 +36,23 @@ bool Toggle(ID id, bool value, const GUIContent& content, std::function<void(boo
 bool Toggle(ID id, bool& value, const GUIContent& content, StyleRef style, LayoutOverride&& constraints = {});
 ```
 
-The `bool&` form toggles `value` itself. `onToggle` gets the new value. Returns `true`
-in the frame after a click. Default class: `toggle` (`toolbar-toggle` in a toolbar).
-Turning on or off blends over 120 ms (see [Changing state](../css/syntax.md#changing-state)).
+If you pass a `bool&`, the toggle flips `value` itself. Otherwise `onToggle` gets the new
+value. Either way it returns `true` in the frame after a click. The default class is
+`toggle`, or `toolbar-toggle` in a toolbar. Switching on or off blends over 120 ms (see
+[Changing state](../css/syntax.md#changing-state)).
 
 ```cpp
 Toggle(bold, "B");
 Toggle(mode == Mode::Row, "Row", [this](bool) { mode = Mode::Row; });
 ```
 
-`Field(bool& value, std::string_view text)` is the same toggle.
+`Field(bool& value, std::string_view text)` gives you the same toggle.
 
 ## Switch
 
-An on/off switch (track and knob) with an optional label after it. Turning it on or off
-slides the knob across over 120 ms, as the track and knob change color.
+An on/off switch, drawn as a track and a knob, with an optional label after it. When you
+turn it on or off, the knob slides across over 120 ms while the track and knob change
+color.
 
 ```cpp
 bool Switch(ID id, bool value, std::string_view text, std::function<void(bool)> onToggle, StyleRef style,
@@ -57,7 +60,7 @@ bool Switch(ID id, bool value, std::string_view text, std::function<void(bool)> 
 bool Switch(ID id, bool& value, std::string_view text = {}, LayoutOverride&& constraints = {});
 ```
 
-Classes: `switch`, `switch-track`, `switch-knob`, `switch-label`.
+It uses the classes `switch`, `switch-track`, `switch-knob` and `switch-label`.
 
 ```cpp
 Switch(enabled, enabled ? "On" : "Off");
@@ -65,8 +68,9 @@ Switch(enabled, enabled ? "On" : "Off");
 
 ## Checkbox
 
-A box with a tick, and its label. A click calls onToggle with the new value; the forms with
-a `bool&` change it themselves. The box's color blends over 120 ms; the tick shows at once.
+A box with a tick, followed by its label. A click calls `onToggle` with the new value,
+and the forms that take a `bool&` change the value themselves. The box's color blends
+over 120 ms, but the tick appears straight away.
 
 ```cpp
 bool Checkbox(ID id, bool value, std::string_view text, std::function<void(bool)> onToggle,
@@ -74,7 +78,7 @@ bool Checkbox(ID id, bool value, std::string_view text, std::function<void(bool)
 bool Checkbox(ID id, bool& value, std::string_view text, StyleRef style, LayoutOverride&& constraints = {});
 ```
 
-Classes: `checkbox`, `checkbox-box`, `checkbox-label`.
+It uses the classes `checkbox`, `checkbox-box` and `checkbox-label`.
 
 ```cpp
 Checkbox(gridCheckID, showGrid, "Show grid", [this](bool on) { showGrid = on; });
@@ -82,4 +86,4 @@ Checkbox(gridCheckID, showGrid, "Show grid", [this](bool on) { showGrid = on; })
 
 ---
 
-[← Text and images](text-and-images.md) · [Controls](../controls.md) · [Fields →](fields.md)
+[Previous: Text and images](text-and-images.md) | [Controls](../controls.md) | [Next: Fields](fields.md)

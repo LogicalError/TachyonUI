@@ -1,6 +1,6 @@
 # 3. Fields
 
-The greeting panel has one row per field. In `my_app.cpp`:
+The greeting panel has one row for each field. In `my_app.cpp`:
 
 ```cpp
 void GreetingPanel::Draw(tachyon::GUIApplication& ui)
@@ -23,15 +23,19 @@ ui.Field(excited, excited ? "Yes" : "No");
 ui.EndLabelGroup();
 ```
 
-- **`Field` picks its editor from the value's type:** a text field for the `std::string`,
-  a number field for the `int`, a toggle for the `bool`. Each edits the value in place.
-- **`NumericFieldConfig`** limits a number: `times` stays between 1 and 5.
-- **A label group** lines each `Label` up with the control after it, in a label column the
-  user can resize. Clicking a label focuses its field.
-- **The toggle's text** is worked out each frame, so it reads "Yes" or "No" as the value
-  changes.
+`Field` picks the right editor for the type of value you give it. You get a text field
+for the `std::string`, a number field for the `int` and a toggle for the `bool`. Each one
+edits the value in place.
 
-Under the fields, the greeting they make:
+`NumericFieldConfig` sets limits on a number, so here `times` stays between 1 and 5.
+
+The label group lines up each `Label` with the control that follows it, in a label
+column the user can resize. Clicking a label focuses its field.
+
+The toggle's text is worked out again every frame, so it switches between "Yes" and "No"
+as the value changes.
+
+Below the fields, draw the greeting they make:
 
 <!-- snippet: examples/tutorial/my_app.cpp [greeting-text] -->
 ```cpp
@@ -40,12 +44,12 @@ for (int i = 0; i < times; ++i)
     ui.Text(text);
 ```
 
-Typing a name changes the greeting on the next frame; nothing has to tell the text to
-update. The loop draws the line `times` times: controls made in a loop get their own IDs,
-even though they share a call site.
+When you type a name, the greeting changes on the next frame. You don't have to tell the
+text to update. The loop draws the line `times` times. Even though those `Text` calls
+share a call site, each one gets its own ID because they're made in a loop.
 
 Close `GreetingPanel::Draw` with `}`.
 
 ---
 
-[← 2. Buttons](buttons.md) · [Tutorial](../tutorial.md) · [4. The app →](app.md)
+[Previous: 2. Buttons](buttons.md) | [Tutorial](../tutorial.md) | [Next: 4. The app](app.md)

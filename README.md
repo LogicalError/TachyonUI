@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="docs/banner.png" alt="TachyonUI: tool UI that keeps up with your engine" width="100%">
+  <img src="docs/banner.png" alt="TachyonUI: high-performance UI for building tools" width="100%">
 </p>
 
 <p align="center">
   An immediate-mode <b>C++20</b> GUI library for editors and tools,<br>
-  with docking, the controls tools need and CSS themes, on <b>Vulkan</b>.
+  with docking, the controls tools need and CSS themes, running on your <b>GPU</b>.
 </p>
 
 <p align="center">
@@ -26,23 +26,17 @@
 
 ![The showcase application: docking, a node graph, the profiler, a file browser and a log](docs/screenshot.png)
 
-<p align="center">
-  The UI above is built and drawn in <b>under a millisecond</b> a frame: 0.91 ms (1,097 fps), with the
-  profiler recording.<br>
-  <sub>Release build of <code>examples/showcase</code> on a Ryzen 9 7950X3D with a GeForce RTX 4070 Ti SUPER.</sub>
-</p>
-
-TachyonUI is for any desktop tool: level and material editors, asset browsers, profilers,
-debug overlays, node-based tools or a standalone utility. It can run on its own window or
-inside an application that already has a Vulkan renderer.
+TachyonUI is for building tools: game and level editors, audio editors, image and 3D tools.
+It opens its own windows out of the box, and can also be embedded in an application that
+already has a Vulkan renderer.
 
 ## Features
 
 | **Docking and windows** | **Controls** | **CSS themes** |
 | --- | --- | --- |
 | Dock, tab and tear off panels into OS windows. Menus, tooltips, drag and drop. | Fields, sliders, color and gradient editors, tables, trees, list and grid views, node graphs. | Dark and light palettes, UI and font scaling, your own stylesheets, reloaded while the app runs. |
-| **Layout** | **Text** | **Your own renderer** |
-| Flexbox and grid, in CSS pixels scaled by the UI scale. | Shaping, bidi and font fallback for most scripts. | Share your Vulkan device, show your images, render the UI into a texture. |
+| **Layout** | **Text** | **Standalone or embedded** |
+| Flexbox and grid, in CSS pixels scaled by the UI scale. | Shaping, bidi and font fallback for most scripts. | Its own windows by default, or inside your Vulkan renderer. |
 
 ## Requirements
 
@@ -146,9 +140,10 @@ The shaders, default themes and fonts are built into the library and SDL is link
 statically, so there are no extra files or DLLs to ship. Packaging, subprojects, your own
 themes and system libraries are covered in [docs/integration.md](docs/integration.md).
 
-## Inside your own application
+## Embedding in your own renderer
 
-If your application already renders with Vulkan, TachyonUI can work with it:
+This part is optional: by default the library creates its own device and windows. If your
+application already renders with Vulkan, TachyonUI can work with it:
 
 - **Share your Vulkan device.** One instance, device and queue; the GUI only destroys what it created.
 - **Show an image you render**, such as a 3D viewport, as a control.
