@@ -265,7 +265,7 @@ namespace tachyon
 	// it out: a shadow of a picture's box would be a block.
 	static void DrawPixelIcon(SkribidiContext& ctx, const SkribidiContext::PixelIcon& icon, IntRect rect, IntRect clipRect)
 	{
-		if (!ctx.shadow.IsNone() || !ctx.guiRenderer || !ctx.styleManager)
+		if (!ctx.shadow.IsNone() || !ctx.guiRenderer || !ctx.styleManager || icon.index == ImageIndex::Invalid)
 			return;
 		const float scale = std::min(float(rect.w) / float(icon.size.x), float(rect.h) / float(icon.size.y));
 		const int32_t w = int32_t(std::round(float(icon.size.x) * scale)), h = int32_t(std::round(float(icon.size.y) * scale));
@@ -283,7 +283,7 @@ namespace tachyon
 			return IconID::Invalid;
 		auto& icons = m_skribidiContext->pixelIcons;
 		for (size_t i = 0; i < icons.size(); i++)
-			if (icons[i].name == name)
+			if (icons[i].image && icons[i].name == name)
 				return IconID{ SkribidiContext::kPixelIconBit | uint32_t(i + 1) };
 
 		std::vector<uint8_t> pixels(rgba.begin(), rgba.begin() + std::ptrdiff_t(size_t(size.x) * size.y * 4));
@@ -302,6 +302,26 @@ namespace tachyon
 		                                                              float(size.x), float(size.y));
 		icons.push_back(SkribidiContext::PixelIcon{ .name = name, .image = image, .index = index, .size = size, .handle = handle });
 		return IconID{ SkribidiContext::kPixelIconBit | uint32_t(icons.size()) };
+	}
+
+	void SkribidiTextSystem::UnregisterIcon(IconID iconId)
+	{
+		if (!m_skribidiContext)
+			return;
+		// The entry stays, empty, so its ID doesn't come back as another picture.
+		if (!m_skribidiContext->GetPixelIcon(iconId))
+			return;
+		SkribidiContext::PixelIcon* icon = &m_skribidiContext->pixelIcons[((uint32_t)iconId & ~SkribidiContext::kPixelIconBit) - 1];
+		if (!icon->image)
+			return;
+		GraphicsContext* gc = m_skribidiContext->graphicsContext;
+		if (gc && icon->index != ImageIndex::Invalid)
+			gc->UnregisterImage(icon->index);
+		if (gc)
+			gc->DestroyImageAtEnd(icon->image, DeviceScope::Frame);
+		icon->image = nullptr;
+		icon->index = ImageIndex::Invalid;
+		icon->name.clear();
 	}
 
 	// -------------------- Icon Measurement --------------------

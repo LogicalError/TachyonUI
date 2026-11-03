@@ -117,6 +117,28 @@ const IconID icon = icons.Get("photo.jpg", false);
 The icons are pictures: `ITextSystem::RegisterIconFromPixels(name, size, rgba)` makes an
 icon of RGBA pixels, drawn in its own colors (not tinted by the style's icon color, and
 without text shadows), fit to its box keeping its shape, on its own and in text.
+`ITextSystem::UnregisterIcon` lets go of one again, freeing its image slot.
+
+`FileThumbnails` (`gui_controls/gui_file_thumbnails.h`) gives a file's thumbnail, what
+Explorer shows for it: a picture's contents, a frame of a video. They're read from the
+Windows shell on a thread of their own, so `Get` is `IconID::Invalid` until one is ready,
+and for a file without one: show the type's icon meanwhile. A `FileEntry` from a disk
+folder, or imported from the disk, says where its file is (`disk`) and when it was last
+written (`modified`); one that's only in memory has no `disk`, and no thumbnail.
+
+```cpp
+FileThumbnails thumbnails(*textSystem);   // the 512 asked for last are kept
+IconID icon = thumbnails.Get(entry.disk, entry.modified, uint32_t(styleManager.Px(34)));
+if (icon == IconID::Invalid)
+    icon = icons.Get(entry.name, entry.isFolder);
+```
+
+They're kept by path, modification time and size, so a file that changed is read again.
+Past the cap, the one asked for longest ago goes, and its icon is unregistered; one let go
+before it was read isn't read. One asked for in the last half second (on screen still)
+isn't let go: with more files on screen than the cap, the rest keep their type icons.
+Destroy it before the text system. Elsewhere than Windows
+there are none; pass a `FileThumbnails::Reader` of your own to read them another way.
 
 ---
 

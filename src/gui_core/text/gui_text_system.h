@@ -378,6 +378,11 @@ namespace tachyon
         /// fonts, gradients and images. IconID::Invalid if `rgba` is too short.
         virtual IconID RegisterIconFromPixels(const char* name, uint2 size, std::span<const uint8_t> rgba) = 0;
 
+        /// Lets go of an icon from RegisterIconFromPixels: its image slot is freed, the ID draws
+        /// nothing from then on and isn't given out again, and its name can be registered anew.
+        /// Does nothing for other icons.
+        virtual void UnregisterIcon(IconID iconId) = 0;
+
         // -------------------- Icon Rendering --------------------
 
         /// Draws `iconId` fitted into `rect` (aspect kept, centered), clipped to `clipRect`.

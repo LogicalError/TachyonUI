@@ -10,7 +10,8 @@ namespace tachyon
         std::string                        name;
         bool                               isFolder = false;
         uint64_t                           size     = 0;
-        std::filesystem::path              disk;            ///< the disk folder it copies; empty when none
+        std::filesystem::path              disk;            ///< the disk file or folder it copies; empty when none
+        std::filesystem::file_time_type    modified {};     ///< a disk file's last write
         bool                               loaded   = true; ///< its entries are read from the disk
         Node*                              parent   = nullptr;
         std::vector<std::unique_ptr<Node>> children;
@@ -74,15 +75,18 @@ namespace tachyon
             node->parent = &folder;
             std::error_code entryError;
             node->isFolder = it->is_directory(entryError);
+            node->disk     = it->path();
             if (node->isFolder)
-            {
-                node->disk   = it->path();
                 node->loaded = false;
-            }
             else
                 node->size = it->file_size(entryError);
             if (entryError)
                 node->size = 0;
+            if (!node->isFolder)
+            {
+                std::error_code timeError;
+                node->modified = it->last_write_time(timeError);
+            }
             folder.children.push_back(std::move(node));
         }
     }
@@ -158,7 +162,7 @@ namespace tachyon
         Load(*folder);
         entries.reserve(folder->children.size());
         for (const auto& c : folder->children)
-            entries.push_back(FileEntry{ c->name, c->isFolder, c->size });
+            entries.push_back(FileEntry{ c->name, c->isFolder, c->size, c->disk, c->modified });
         return entries;
     }
 
@@ -265,16 +269,15 @@ namespace tachyon
         node->name   = name;
         node->parent = target;
         node->isFolder = std::filesystem::is_directory(status);
+        node->disk     = disk;
         if (node->isFolder)
-        {
-            node->disk   = disk;
             node->loaded = false;
-        }
         else
         {
             node->size = std::filesystem::file_size(disk, ec);
             if (ec)
                 node->size = 0;
+            node->modified = std::filesystem::last_write_time(disk, ec);
         }
         target->children.push_back(std::move(node));
         ++m_generation;
