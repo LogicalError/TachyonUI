@@ -275,6 +275,17 @@ namespace tachyon
         EXPECT_EQ(layout->margin.top, 2);
 
         EXPECT_EQ(sm.WithTextOf(box, text, ElementState::Hover), shown) << "repeat calls reuse the variant";
+
+        // For the text's line alone: its own vertical padding, the rest the same.
+        const LayoutStyle* line = sm.GetLayoutStyle(sm.WithTextOf(box, text, ElementState::Hover, false).layoutStyleIndex);
+        const LayoutStyle* own  = sm.GetLayoutStyle(box.layoutStyleIndex);
+        ASSERT_TRUE(line && own);
+        EXPECT_EQ(line->padding.top, own->padding.top);
+        EXPECT_EQ(line->padding.bottom, own->padding.bottom);
+        EXPECT_EQ(line->iconSide, IconSide::Top);
+        EXPECT_EQ(line->textLayoutStyle.verticalAlignment, TextAlign::Center);
+        EXPECT_EQ(sm.GetLayoutStyle(sm.WithTextOf(box, text, ElementState::Hover).layoutStyleIndex)->padding.top, 3)
+            << "and the padded one is still there";
         EXPECT_NE(sm.WithTextOf(box, text, ElementState::None).visualTextStyleIndex, shown.visualTextStyleIndex);
 
         sm.ClearAll();

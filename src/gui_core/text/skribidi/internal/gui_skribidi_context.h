@@ -107,6 +107,7 @@ namespace tachyon
 
 		bool	            base_measurement_valid = false;	
 		TextMeasurement		baseMeasurement {};
+		int32_t				baseTextHeight = 0;   ///< baseMeasurement's height without the icon
 
 		float				wrap_width = 0;
 		skb_layout_t*		wrap_layout = nullptr;

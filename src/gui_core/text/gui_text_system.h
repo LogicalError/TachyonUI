@@ -329,6 +329,10 @@ namespace tachyon
         /// The measurement of `textId` wrapped to `wrapContext.maxWidth`, in pixels.
         virtual TextMeasurement MeasureText(TextID textId, const TextWrapContext& wrapContext) const = 0;
 
+        /// How high `textId`'s text is unwrapped, in pixels, without the icon it was registered
+        /// with (which its measurement has in it).
+        virtual int32_t GetTextHeightWithoutIcon(TextID textId) const = 0;
+
         // -------------------- Text Rendering --------------------
 
         /// Draws `textId` into `rect` (renderer space, window-local), clipped to `clipRect`.

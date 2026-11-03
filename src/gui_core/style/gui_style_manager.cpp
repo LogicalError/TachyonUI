@@ -465,7 +465,7 @@ namespace tachyon
         return StyleRef{ RegisterLayoutStyle(variant, false), base.visualBoxStyleIndex, base.visualTextStyleIndex };
     }
 
-    StyleRef StyleManager::WithTextOf(StyleRef base, StyleRef from, tachyon::ElementState state) noexcept
+    StyleRef StyleManager::WithTextOf(StyleRef base, StyleRef from, tachyon::ElementState state, bool padding) noexcept
     {
         const LayoutStyle*           baseLayout = GetLayoutStyle(base.layoutStyleIndex);
         const LayoutStyle*           fromLayout = GetLayoutStyle(from.layoutStyleIndex);
@@ -474,7 +474,8 @@ namespace tachyon
         if (!baseLayout || !fromLayout || !baseText || !fromText)
             return base;
 
-        const uint64_t key = Hash::Combine(Hash::Calculate(base), Hash::Calculate(from), Hash::Calculate(state));
+        const uint64_t key = Hash::Combine(Hash::Combine(Hash::Calculate(base), Hash::Calculate(from), Hash::Calculate(state)),
+                                           Hash::Calculate(padding));
         if (auto it = m_textOfVariants.find(key); it != m_textOfVariants.end())
             return it->second;
 
@@ -486,8 +487,11 @@ namespace tachyon
         layout.iconTextGap = fromLayout->iconTextGap;
         layout.iconSize    = fromLayout->iconSize;
         layout.iconOffsetY = fromLayout->iconOffsetY;
-        layout.padding.top    = fromLayout->padding.top;
-        layout.padding.bottom = fromLayout->padding.bottom;
+        if (padding)
+        {
+            layout.padding.top    = fromLayout->padding.top;
+            layout.padding.bottom = fromLayout->padding.bottom;
+        }
 
         VisualTextStyle states[Style::kStateCount];
         uint64_t hash = 0;

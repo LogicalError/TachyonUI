@@ -117,6 +117,7 @@ namespace tachyon
         // -------------------- Text Measurement --------------------
 
         TextMeasurement GetTextMeasurement(TextID textId) const override;
+        int32_t GetTextHeightWithoutIcon(TextID textId) const override;
         TextMeasurement MeasureText(TextID textId, const TextWrapContext& wrapContext) const override;
 
         // -------------------- Text Rendering --------------------

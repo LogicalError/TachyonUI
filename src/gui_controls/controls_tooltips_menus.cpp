@@ -1,6 +1,7 @@
 #include <gui_controls/gui_application.h>
 
 #include <gui_core/graphics/gui_custom_draw_context.h>
+#include <gui_core/text/gui_icon_text_placement.h>
 
 #include <algorithm>
 #include <cmath>
@@ -367,11 +368,30 @@ namespace tachyon
                     while (window.depth > 0)
                         window = elementStorage.GetParentRef(window);
                     const ElementRect& windowRect = elementStorage.GetElementRectUnsafe(window);
-                    return CutShortText{ .id = element.id, .windowID = elementStorage.GetElementUnsafe(window).id,
-                                         .windowPos = windowRect.rect.position,
-                                         .at = { start, rect.rect.y + layout->borderWidths.top }, .width = natural,
-                                         .height = rect.rect.h - layout->borderWidths.Vertical(),
-                                         .monitorIndex = windowRect.monitorIndex };
+                    CutShortText found{ .id = element.id, .windowID = elementStorage.GetElementUnsafe(window).id,
+                                        .windowPos = windowRect.rect.position,
+                                        .at = { start, rect.rect.y + layout->borderWidths.top }, .width = natural,
+                                        .height = rect.rect.h - layout->borderWidths.Vertical(),
+                                        .monitorIndex = windowRect.monitorIndex };
+                    // An icon above or below the text (a grid's item): just the text's line, where
+                    // it's drawn, without the icon.
+                    const VisualTextStyle* visual = styleManager.GetVisualTextStyle(element.styleRef.visualTextStyleIndex, element.state);
+                    const IconSide iconSide = visual ? visual->iconSide : layout->iconSide;
+                    if (element.iconID != IconID::Invalid && (iconSide == IconSide::Top || iconSide == IconSide::Bottom))
+                    {
+                        IconMeasurement icon = textSystem->GetIconMeasurement(element.iconID);
+                        if (visual && visual->iconSize > 0)
+                            icon.width = icon.height = visual->iconSize;
+                        const int32_t gap  = visual ? visual->iconTextGap : layout->iconTextGap;
+                        const int32_t line = textSystem->GetTextHeightWithoutIcon(element.textID);
+                        const TextAlign across = layout->textLayoutStyle.horizontalAlignment;
+                        const IconTextPlacement placed = ComputeIconTextPlacement(
+                            content, natural, line, icon, iconSide, gap, across, layout->textLayoutStyle.verticalAlignment);
+                        found.at       = { content.x + HorizontalAlignOffset(across, content.w, natural), placed.textRect.y };
+                        found.height   = line;
+                        found.textOnly = true;
+                    }
+                    return found;
                 }
             }
             const IndexRange children = elementStorage.GetChildRange(ref);
@@ -389,7 +409,7 @@ namespace tachyon
         // Its parts, as registering elements may move it.
         const Element&     found    = elementStorage.GetElementUnsafe(ref);
         const TextID       textID   = found.textID;
-        const IconID       iconID   = found.iconID;
+        const IconID       iconID   = m_cutShort.textOnly ? IconID::Invalid : found.iconID;
         const StyleRef     cutStyle = found.styleRef;
         const ElementState cutState = found.state;
         const LayoutStyle* box = styleManager.GetLayoutStyle(theme.tooltipExpandStyleRef.layoutStyleIndex);
@@ -432,7 +452,8 @@ namespace tachyon
         VERIFY(elementStorage.BeginChildren());
         const std::string text{ textSystem->GetText(textID) };
         RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID(), .iconID = iconID,
-                                          .styleRef = styleManager.WithTextOf(theme.tooltipExpandTextStyleRef, cutStyle, cutState),
+                                          .styleRef = styleManager.WithTextOf(theme.tooltipExpandTextStyleRef, cutStyle, cutState,
+                                                                              !m_cutShort.textOnly),
                                           .flags = ElementFlags::NoInput },
                         text, LayoutOverride{}.Height(Pixels{ m_cutShort.height }));
         CloseTooltip();

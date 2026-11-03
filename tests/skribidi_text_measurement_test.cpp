@@ -144,5 +144,33 @@ namespace tachyon
             EXPECT_GT(m.maxWidth, 0);
             EXPECT_EQ(m.minWidth, m.maxWidth);
         }
+
+        // An icon above the text counts in its measurement, with the gap; its height without
+        // the icon is the text's alone, as measured without one.
+        TEST_F(SkribidiTextMeasurementTest, TheHeightWithoutTheIconIsTheTextsAlone)
+        {
+            static constexpr char kDot[] = R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="#000"/></svg>)";
+            const IconID icon = textSystem->RegisterIconFromSVG("dot", kDot, sizeof(kDot) - 1);
+            ASSERT_NE(icon, IconID::Invalid);
+            Style s{};
+            s.textLayoutStyle.textWrapping = TextWrap::NoWrap;
+            s.iconSide    = IconSide::Top;
+            s.iconSize    = 34;
+            s.iconTextGap = 6;
+            for (int i = 0; i < Style::kStateCount; ++i)
+                s.states[i].textStyle.fontSize = 13.0f;
+            const StyleRef style = styleManager.Register(s);
+            const TextID withIcon = textSystem->RegisterText(ID{ .value{ .integer = 6 } }, icon, "a file.mp4", style, ElementState::None);
+            const TextID alone    = textSystem->RegisterText(ID{ .value{ .integer = 7 } }, IconID::Invalid, "a file.mp4", style, ElementState::None);
+            // Asked before it's measured, too.
+            const int32_t first = textSystem->GetTextHeightWithoutIcon(withIcon);
+            const int32_t line = textSystem->GetTextMeasurement(alone).minHeight;
+            ASSERT_GT(line, 0);
+            EXPECT_EQ(first, line);
+            EXPECT_EQ(textSystem->GetTextMeasurement(withIcon).minHeight, line + 6 + 34) << "the icon and the gap counted in";
+            EXPECT_EQ(textSystem->GetTextHeightWithoutIcon(withIcon), line);
+            EXPECT_EQ(textSystem->GetTextHeightWithoutIcon(alone), line);
+            EXPECT_EQ(textSystem->GetTextHeightWithoutIcon(TextID::Invalid), 0);
+        }
     }
 }

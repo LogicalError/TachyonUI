@@ -140,6 +140,8 @@ Tracking a drag outside element events (a group, app-wide): drop it when
   `state.textInput`. Return true if taken.
 - Both events bubble from the element under the pointer to its parents. Disabled elements
   get neither. Content is only known at drop.
+- Elements in a cached panel get them too: the panel is built again under the drag, as
+  under the mouse.
 
 ```cpp
 element.eventHandler = [&](ElementEvent&& event) {
