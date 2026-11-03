@@ -140,6 +140,16 @@ namespace tachyon
 
         InitializeToolbarDockState(toolbars.dockState, *this);
 
+        // Files or text dropped from another application where nothing takes them (the Files
+        // panel does): noted in the log.
+        SetFileDropHandler([](const FileDrop& drop)
+        {
+            for (const std::string& path : drop.files)
+                TACHYON_LOG_INFO(kLogShowcase, "Dropped where nothing takes it: {}", path);
+            if (!drop.text.empty())
+                TACHYON_LOG_INFO(kLogShowcase, "Text dropped where nothing takes it: {}", drop.text);
+        });
+
         // Toolbars on several sides exercise wrap, in-side reorder and cross-side
         // drag. The dock wraps each renderBody in BeginToolbar / EndToolbar.
         toolbars.sides[(int)ToolbarSide::Top].push_back(ToolbarItem

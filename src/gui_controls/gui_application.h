@@ -1086,6 +1086,17 @@ namespace tachyon
         /// The tree row a drag is over (drives the drop indicator), or Invalid.
         ID TreeDropTargetRow() const { return m_treeDropState.targetRowID; }
 
+        /// Whether files or text from another application are dragged over one of the app's
+        /// windows. What's dragged is known only once it's dropped.
+        bool IsFileDragging() const { return inputManager && inputManager->GetFileDrag() != nullptr; }
+        /// The element that takes that drag where it is now: the first from the one under the
+        /// pointer up whose handler returned true to EventType::FileDragOver. Invalid when none does.
+        /// Draw it as the drop target.
+        ID FileDragTargetID() const { return m_fileDragTargetID; }
+        /// Gets the drops no element took (none returned true to EventType::FileDrop): the
+        /// application's own, such as opening the files.
+        void SetFileDropHandler(std::function<void(const FileDrop&)> handler) { m_fileDropHandler = std::move(handler); }
+
         /// Items emitted in between render as selected.
         bool BeginSelected() { guiStateManager.Construction().PushSelected(); return true; }
         /// Closes BeginSelected.
@@ -2795,6 +2806,14 @@ namespace tachyon
         void CloseOnPressOutside(ID inside, ID alsoInside, std::function<void()> onPressOutside)
         { m_pressOutsideWatches.push_back({ { inside, alsoInside }, std::move(onPressOutside) }); }
         void RunPressOutsideWatches();
+        /// After dispatch: offers a drag from another application to the element under the
+        /// pointer in the window it's over (by `input`'s hit test) and up, and its drop; then
+        /// gives a drop none took to the file drop handler.
+        void DispatchFileDrops(const FrameInput& input);
+        /// The first element from `overID` up whose handler takes `type`; Invalid when none does.
+        ID   OfferFileDrop(EventType type, ID overID, int2 screenPos, const FileDrop* drop);
+        ID   m_fileDragTargetID = ID::Invalid();
+        std::function<void(const FileDrop&)> m_fileDropHandler;
         std::vector<TextStyle> m_mnemonicStyles;  ///< this frame's underlined mnemonic letters (MessageDialog)
         /// Windows dimmed under a modal dialog, by window ID: fading in while wanted, out after.
         struct ScrimFade { float amount = 0.0f; bool wanted = false; VisualColorStyleIndex color = VisualColorStyleIndex::Invalid; };

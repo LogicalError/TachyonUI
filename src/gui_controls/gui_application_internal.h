@@ -50,6 +50,7 @@ namespace tachyon
         using GUIApplication::TooltipHoverID;
         using GUIApplication::ShowCutShortText;
         using GUIApplication::RunPressOutsideWatches;
+        using GUIApplication::DispatchFileDrops;
         using GUIApplication::UpdateMouseCursor;
         using GUIApplication::BeginDockingFrame;
         using GUIApplication::EndDockingFrame;

@@ -224,4 +224,60 @@ namespace tachyon
         ++m_generation;
         return true;
     }
+
+    bool MemoryFileSystem::Import(const std::filesystem::path& source, std::string_view toFolder, std::string& error)
+    {
+        // A folder named with a separator at its end ("C:/Photos/") is still that folder.
+        std::filesystem::path disk = source.lexically_normal();
+        if (!disk.has_filename() && disk.has_parent_path() && disk.parent_path() != disk.root_path())
+            disk = disk.parent_path();
+        const std::u8string name8 = disk.filename().u8string();
+        const std::string name(name8.begin(), name8.end());
+        const std::u8string shown8 = source.u8string();
+        const std::string shown(shown8.begin(), shown8.end());
+
+        std::error_code ec;
+        const std::filesystem::file_status status = std::filesystem::status(disk, ec);
+        if (ec || !std::filesystem::exists(status))
+        {
+            error = "There's no \"" + shown + "\".";
+            return false;
+        }
+        if (name.empty() || name == "." || name == "..")
+        {
+            error = "\"" + shown + "\" has no name to copy it under.";
+            return false;
+        }
+        Node* target = Find(toFolder);
+        if (!target || !target->isFolder)
+        {
+            error = "There's no folder \"" + std::string(toFolder) + "\".";
+            return false;
+        }
+        Load(*target);
+        if (target->Child(name))
+        {
+            error = "There's already a \"" + name + "\" in \"" + (toFolder.empty() ? std::string("the top folder") : std::string(toFolder)) + "\".";
+            return false;
+        }
+
+        auto node    = std::make_unique<Node>();
+        node->name   = name;
+        node->parent = target;
+        node->isFolder = std::filesystem::is_directory(status);
+        if (node->isFolder)
+        {
+            node->disk   = disk;
+            node->loaded = false;
+        }
+        else
+        {
+            node->size = std::filesystem::file_size(disk, ec);
+            if (ec)
+                node->size = 0;
+        }
+        target->children.push_back(std::move(node));
+        ++m_generation;
+        return true;
+    }
 }

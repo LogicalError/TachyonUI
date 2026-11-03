@@ -264,6 +264,40 @@ namespace tachyon
         m_recordedEvents.push_back({ EventType::MouseScroll, std::move(state), windowId });
     }
 
+    void InputManager::OnFileDrop(tachyon::ID windowId, tachyon::int2 screenPos, FileDropAction action, std::string_view data)
+    {
+        switch (action)
+        {
+            case FileDropAction::Begin:
+                // Where it is comes with its first move.
+                m_fileDrag = FileDrag{ .windowID = windowId };
+                m_dropping = FileDrop{};
+                break;
+            case FileDropAction::Move:
+                m_fileDrag = FileDrag{ .windowID = windowId, .screenPos = screenPos, .hasPosition = true };
+                break;
+            case FileDropAction::File:
+                m_dropping.files.emplace_back(data);
+                break;
+            case FileDropAction::Text:
+                if (!m_dropping.text.empty())
+                    m_dropping.text += '\n';
+                m_dropping.text += data;
+                break;
+            case FileDropAction::Complete:
+                // Nothing dropped: the drag left the window.
+                if (!m_dropping.files.empty() || !m_dropping.text.empty())
+                {
+                    m_dropping.windowID  = windowId;
+                    m_dropping.screenPos = m_fileDrag.hasPosition ? m_fileDrag.screenPos : screenPos;
+                    m_fileDrops.push_back(std::move(m_dropping));
+                }
+                m_dropping = FileDrop{};
+                m_fileDrag = FileDrag{};
+                break;
+        }
+    }
+
     void InputManager::SynthesizeMissingMouseEvents(int2 screenPos, MouseButtons /*unused*/, MouseButtons physicalButtons)
     {
         // A mismatch between physical and recorded buttons means SDL missed an event

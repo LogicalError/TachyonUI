@@ -349,6 +349,121 @@ TEST_F(GpuTest, TextEditingEventsReachTheInputHandler)
     EXPECT_EQ(recorder.cursor, 1);
 }
 
+// Records the drags from other applications a window's input handler is told of.
+struct FileDropRecorder : tachyon::IPlatformInputHandler
+{
+    struct Step { tachyon::FileDropAction action; tachyon::int2 pos; std::string data; };
+    std::vector<Step> steps;
+    tachyon::int2     mousePos{};
+    void OnKeyboard(tachyon::ID, tachyon::KeyCode, int, tachyon::KeyModifier, tachyon::KeyAction) override {}
+    void OnMouseMove(tachyon::ID, tachyon::int2 pos, tachyon::MouseButtons, tachyon::KeyModifier) override { mousePos = pos; }
+    void OnMouseButton(tachyon::ID, tachyon::int2, tachyon::MouseButtons, tachyon::KeyModifier, tachyon::MouseAction) override {}
+    void OnMouseScroll(tachyon::ID, tachyon::int2, tachyon::float2, tachyon::KeyModifier) override {}
+    void OnTextComposition(tachyon::ID, std::string_view, int32_t) override {}
+    void OnFileDrop(tachyon::ID, tachyon::int2 pos, tachyon::FileDropAction action, std::string_view data) override
+    {
+        steps.push_back({ action, pos, std::string(data) });
+    }
+};
+
+static void PushDrop(SDL_Window* window, SDL_EventType type, float x, float y, char* data = nullptr)
+{
+    SDL_Event event{};
+    event.type          = type;
+    event.drop.windowID = SDL_GetWindowID(window);
+    event.drop.x        = x;
+    event.drop.y        = y;
+    event.drop.data     = data;
+    SDL_PushEvent(&event);
+}
+
+// A drag from another application reaches the window's input handler: where it is, in the
+// same pixels as the mouse, what's dropped, and its end.
+TEST_F(GpuTest, FileDropsReachTheInputHandler)
+{
+    FileDropRecorder recorder;
+    tachyon::OSWindowHandle window = windowBackend->CreateWindow("gpu-test-drop", tachyon::int2{ 200, 100 },
+                                                             tachyon::WindowFlags::Hidden, nullptr);
+    if (window == nullptr)
+        GTEST_SKIP() << "no window available in this environment";
+    windowBackend->AttachInputHandlerToWindow(window, &recorder);
+    SDL_Window* sdl = tachyon::SDLWindowBackend::ToSDL(window);
+
+    SDL_Event move{};
+    move.type            = SDL_EVENT_MOUSE_MOTION;
+    move.motion.windowID = SDL_GetWindowID(sdl);
+    move.motion.x        = 30.0f;
+    move.motion.y        = 40.0f;
+    SDL_PushEvent(&move);
+
+    static char path[] = "C:/images/a b.png";
+    static char text[] = "dropped text";
+    PushDrop(sdl, SDL_EVENT_DROP_BEGIN, 0.0f, 0.0f);
+    PushDrop(sdl, SDL_EVENT_DROP_POSITION, 30.0f, 40.0f);
+    PushDrop(sdl, SDL_EVENT_DROP_FILE, 30.0f, 40.0f, path);
+    PushDrop(sdl, SDL_EVENT_DROP_TEXT, 30.0f, 40.0f, text);
+    PushDrop(sdl, SDL_EVENT_DROP_COMPLETE, 30.0f, 40.0f);
+    SDL_FlushEvents(SDL_EVENT_DROP_FILE, SDL_EVENT_DROP_POSITION);
+    SDL_FlushEvent(SDL_EVENT_MOUSE_MOTION);
+
+    // Another window's drop isn't this one's.
+    tachyon::OSWindowHandle other = windowBackend->CreateWindow("gpu-test-drop-other", tachyon::int2{ 200, 100 },
+                                                            tachyon::WindowFlags::Hidden, nullptr);
+    if (other != nullptr)
+    {
+        PushDrop(tachyon::SDLWindowBackend::ToSDL(other), SDL_EVENT_DROP_BEGIN, 0.0f, 0.0f);
+        SDL_FlushEvents(SDL_EVENT_DROP_FILE, SDL_EVENT_DROP_POSITION);
+        windowBackend->DestroyWindow(other);
+    }
+
+    windowBackend->AttachInputHandlerToWindow(window, nullptr);
+    windowBackend->DestroyWindow(window);
+
+    ASSERT_EQ(recorder.steps.size(), 5u);
+    EXPECT_EQ(recorder.steps[0].action, tachyon::FileDropAction::Begin);
+    EXPECT_EQ(recorder.steps[1].action, tachyon::FileDropAction::Move);
+    EXPECT_EQ(recorder.steps[1].pos, recorder.mousePos) << "in the mouse's pixels";
+    EXPECT_EQ(recorder.steps[2].action, tachyon::FileDropAction::File);
+    EXPECT_EQ(recorder.steps[2].data, path);
+    EXPECT_EQ(recorder.steps[3].action, tachyon::FileDropAction::Text);
+    EXPECT_EQ(recorder.steps[3].data, text);
+    EXPECT_EQ(recorder.steps[4].action, tachyon::FileDropAction::Complete);
+    EXPECT_TRUE(recorder.steps[4].data.empty());
+}
+
+// Behind a modal window nothing is dropped; the drag's end still gets through, so it ends.
+TEST_F(GpuTest, AModalWindowHoldsBackDropsButNotTheirEnd)
+{
+    FileDropRecorder recorder;
+    tachyon::OSWindowHandle window = windowBackend->CreateWindow("gpu-test-drop-owner", tachyon::int2{ 200, 100 },
+                                                             tachyon::WindowFlags::Hidden, nullptr);
+    if (window == nullptr)
+        GTEST_SKIP() << "no window available in this environment";
+    tachyon::OSWindowHandle modal = windowBackend->CreateWindow("gpu-test-drop-modal", tachyon::int2{ 100, 60 },
+                                                            tachyon::WindowFlags::Hidden | tachyon::WindowFlags::Modal, window);
+    if (modal == nullptr)
+    {
+        windowBackend->DestroyWindow(window);
+        GTEST_SKIP() << "no modal window available in this environment";
+    }
+    windowBackend->AttachInputHandlerToWindow(window, &recorder);
+    SDL_Window* sdl = tachyon::SDLWindowBackend::ToSDL(window);
+
+    static char path[] = "C:/a.png";
+    PushDrop(sdl, SDL_EVENT_DROP_BEGIN, 0.0f, 0.0f);
+    PushDrop(sdl, SDL_EVENT_DROP_POSITION, 10.0f, 10.0f);
+    PushDrop(sdl, SDL_EVENT_DROP_FILE, 10.0f, 10.0f, path);
+    PushDrop(sdl, SDL_EVENT_DROP_COMPLETE, 10.0f, 10.0f);
+    SDL_FlushEvents(SDL_EVENT_DROP_FILE, SDL_EVENT_DROP_POSITION);
+
+    windowBackend->AttachInputHandlerToWindow(window, nullptr);
+    windowBackend->DestroyWindow(modal);
+    windowBackend->DestroyWindow(window);
+
+    ASSERT_EQ(recorder.steps.size(), 1u);
+    EXPECT_EQ(recorder.steps[0].action, tachyon::FileDropAction::Complete);
+}
+
 // A window context torn down right after presenting must wait for its own
 // in-flight frames itself; destroying fences, semaphores and command pools the
 // GPU still uses is a validation error (and a driver crash in practice).

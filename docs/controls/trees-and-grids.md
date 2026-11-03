@@ -82,14 +82,16 @@ VirtualGridView(gridID, gridState, int(files.size()), int2{ styleManager.Px(96),
 ## File views
 
 A tree and a grid of files read from an `IFileSystem` (`gui_controls/gui_file_system.h`):
-`List(path)` gives a folder's entries, `Move` and `Rename` change them, and `Generation()`
+`List(path)` gives a folder's entries, `Move` and `Rename` change them, `Import` copies a
+file or folder in from the disk (one dropped from another application), and `Generation()`
 changes whenever a list may have, so a view knows when to read again. Paths are relative
 to the file system's root, with `/` between names; `""` is the root. A refused move or
 rename returns false with the reason in `error`, ready to show.
 
 `MemoryFileSystem` keeps it all in memory: filled with `AddFolder` / `AddFile`, or a copy
-of a folder on the disk, each folder read the first time it's needed. Its moves and
-renames change only the copy, so a demo can browse the real disk without writing to it.
+of a folder on the disk, each folder read the first time it's needed. Its moves, renames
+and imports change only the copy (an imported folder is read as it's browsed), so a demo can
+browse the real disk without writing to it.
 Implement `IFileSystem` over the disk itself, an archive or an asset database to change
 those instead.
 

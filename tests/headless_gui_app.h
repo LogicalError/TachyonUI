@@ -91,6 +91,10 @@ public:
     //
     // Queued events dispatch during the next Frame(), after construction +
     // layout, as with real input.
+    // Where the pointer is, without a mouse event: the OS sends none into a window while
+    // another application's drag is over it, though its position is known.
+    void SetMousePos(tachyon::int2 pos) { m_mousePos = pos; }
+
     void InjectMouseMove(tachyon::int2 pos,
                          tachyon::MouseButtons buttonsHeld = tachyon::MouseButtons::None,
                          tachyon::KeyModifier mods = tachyon::KeyModifier::None);

@@ -52,6 +52,12 @@ namespace tachyon
                 if (h) h->OnTextComposition(id, text, cursor);
         }
 
+        void OnFileDrop(tachyon::ID id, tachyon::int2 screenPos, FileDropAction action, std::string_view data) override
+        {
+            for (IPlatformInputHandler* h : m_handlers)
+                if (h) h->OnFileDrop(id, screenPos, action, data);
+        }
+
     private:
         std::vector<IPlatformInputHandler*> m_handlers;
     };

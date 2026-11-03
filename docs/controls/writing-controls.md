@@ -154,6 +154,41 @@ A drag kept outside an element's events (a whole group's, an app-wide one) is dr
 `InputManager::IsDragAbandoned` says its release won't come. A double-click is
 `DoubleClickTracker::IsDoubleClick`, which uses the OS's double-click time.
 
+## Files from other applications
+
+Files and text dragged from another application (a file manager, a browser) come to the
+elements under them. While the drag is over an element, its handler gets
+`EventType::FileDragOver` and returns true to take it; `FileDragTargetID()` is then that
+element, to draw as the drop target. A drop comes as `EventType::FileDrop`, with the paths in
+`state.droppedFiles` and any text in `state.textInput`; the handler returns true when it took
+them. Both go up from the element under the pointer to its parents, and a disabled element
+takes neither. What's dragged is known only once it's dropped.
+
+```cpp
+element.eventHandler = [&](ElementEvent&& event) {
+    if (event.type == EventType::FileDragOver)
+        return true;
+    if (event.type == EventType::FileDrop)
+    {
+        for (const std::string& path : event.state.droppedFiles)
+            Import(path);
+        return true;
+    }
+    return false;
+};
+```
+
+A drop no element takes goes to the application's handler, for opening the files:
+
+```cpp
+app.SetFileDropHandler([&](const FileDrop& drop) {
+    for (const std::string& path : drop.files)
+        Open(path);
+});
+```
+
+No control takes a drop by itself.
+
 ## Decide for each control
 
 These don't apply to every control. Decide them deliberately, the same way as the controls
@@ -167,6 +202,7 @@ like it:
 | Move in a list | Items the user orders (rows, tabs, columns) | Drag, and Alt + an arrow on the focused item (a reorderable group does both) |
 | Close | Items that close (tabs) | A "Close" context menu item, and Ctrl+W / Ctrl+F4 on the focused one |
 | Drag and drop | Values that move between controls | A drag source and drop target with a payload type |
+| Files dropped on it | Controls that import or open files (an image well, an asset list) | `FileDragOver` and `FileDrop` (above); shown as the target while `FileDragTargetID` is it |
 | Copy and paste | Values with a text form | Ctrl+C / Ctrl+V while focused |
 | Placeholder text | Empty text fields | The hint style, shown while empty |
 | Validation | Text that must be a number, a name, ... | A validator on the editable text |

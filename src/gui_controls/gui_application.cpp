@@ -1626,6 +1626,7 @@ namespace tachyon
                 inputManager->Process(guiStateManager, elementStorage,
                     tabChainManager, textSystem, overID);
             }
+            DispatchFileDrops(frameInput);
 
             // Keep the IME candidate window next to the caret being typed at.
             if (textSystem)
@@ -1746,5 +1747,60 @@ namespace tachyon
                     break;
                 }
             }
+    }
+
+    ID GUIApplication::OfferFileDrop(EventType type, ID overID, int2 screenPos, const FileDrop* drop)
+    {
+        InputState state;
+        state.screenPos     = screenPos;
+        state.prevScreenPos = screenPos;
+        if (drop)
+        {
+            state.droppedFiles = drop->files;
+            state.textInput    = drop->text;
+        }
+        for (ElementRef cur = elementStorage.FindElementRefByID(overID); cur.IsValid(); cur = elementStorage.GetParentRef(cur))
+        {
+            const Element& elem = elementStorage.GetElementUnsafe(cur);
+            if (elem.eventHandler &&
+                elem.eventHandler(ElementEvent{ .id = elem.id, .type = type, .state = state, .rect = &elementStorage.GetElementRectUnsafe(cur), .elementRef = cur }))
+                return elem.id;
+        }
+        return ID::Invalid();
+    }
+
+    void GUIApplication::DispatchFileDrops(const FrameInput& input)
+    {
+        // What's under the pointer in the window the drag is over, as hover finds it. The OS
+        // sends no mouse moves while another application drags, so hover itself doesn't know
+        // that window, nor has the app the focus hover needs.
+        auto under = [&input](ID windowID)
+        {
+            ID disabled = ID::Invalid();
+            return input.hitTest ? input.hitTest(windowID, input.mousePos, disabled) : ID::Invalid();
+        };
+        const ID previousTarget = m_fileDragTargetID;
+        m_fileDragTargetID = ID::Invalid();
+        if (inputManager)
+        {
+            if (const FileDrag* drag = inputManager->GetFileDrag(); drag && drag->hasPosition)
+                m_fileDragTargetID = OfferFileDrop(EventType::FileDragOver, under(drag->windowID), input.mousePos, nullptr);
+            for (const FileDrop& drop : inputManager->TakeFileDrops())
+            {
+                const ID taker = OfferFileDrop(EventType::FileDrop, under(drop.windowID), input.mousePos, &drop);
+                if (taker != ID::Invalid())
+                    InvalidateCachedScopesAbove(taker);
+                else if (m_fileDropHandler)
+                    m_fileDropHandler(drop);
+            }
+        }
+        // The drop target is drawn as one: redraw where it was and where it is.
+        if (m_fileDragTargetID != previousTarget)
+        {
+            if (previousTarget != ID::Invalid())
+                InvalidateCachedScopesAbove(previousTarget);
+            if (m_fileDragTargetID != ID::Invalid())
+                InvalidateCachedScopesAbove(m_fileDragTargetID);
+        }
     }
 }

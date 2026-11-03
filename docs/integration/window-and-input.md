@@ -25,10 +25,13 @@ pixels. The important parts:
   handles the OS's events and calls `cleanup` for windows the OS destroyed.
 - Input goes to the `IPlatformInputHandler` given by `AttachInputHandlerToWindow`
   (`gui_core/input/gui_platform_input_handler.h`): `OnMouseMove`, `OnMouseButton`,
-  `OnMouseScroll`, `OnKeyboard` and `OnTextComposition`. The ID passed is the window's,
+  `OnMouseScroll`, `OnKeyboard`, `OnTextComposition` and `OnFileDrop`. The ID passed is the window's,
   from the `IWindowContext` attached with `AttachContextToWindow`; positions are screen
   pixels. Typed text arrives as `OnKeyboard` with `KeyAction::KeyChar` and the
-  codepoint as the key code.
+  codepoint as the key code. A drag from another application is `OnFileDrop` steps:
+  `Begin`, `Move` to where it is, then for a drop a `File` per path and any `Text`, and
+  `Complete`; a `Complete` with nothing before it is the drag leaving the window. Behind a
+  modal window only `Complete` gets through, so the drag ends without dropping anything.
 - The Vulkan backend creates a surface for each window through a surface factory.
   `SDLWindowBackend` installs its own when the app calls `SetGraphicsContext` on it;
   another backend installs one with `VulkanGraphicsContext::SetSurfaceFactory`.
