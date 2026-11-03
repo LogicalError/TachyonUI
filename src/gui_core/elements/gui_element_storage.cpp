@@ -134,16 +134,19 @@ namespace tachyon
         return ElementStorageResult::Success;
     }
         
-    const ID ElementStorage::GetElementIDAt(ElementRef root, int2 position) const
+    const ID ElementStorage::GetElementIDAt(ElementRef root, int2 position, ID* disabledHit) const
     {
         // `pos` is in the parent's content space (where ref.rect/clipRect live).
         // Children are visited topmost-first; the first input-accepting hit wins.
         // overflow:visible elements are descended into even when the cursor is outside
         // them, since children may paint outside (e.g. sockets straddling a node border).
         // NoInput subtrees are transparent; a Disabled element under the cursor absorbs the hit.
+        // `inDisabled`: inside one, looking for the deepest element under the cursor.
         bool aborted = false;
+        if (disabledHit)
+            *disabledHit = ID::Invalid();
 
-        auto hitTest = [this, &aborted](auto&& self, ElementRef ref, float2 pos) -> ID
+        auto hitTest = [this, &aborted, disabledHit](auto&& self, ElementRef ref, float2 pos, bool inDisabled) -> ID
         {
             const ElementRect* r = GetElementRectPtr(ref);
             if (r == nullptr) return ID::Invalid();
@@ -162,9 +165,14 @@ namespace tachyon
                                      pos.y >= (float)rr.y && pos.y < (float)(rr.y + rr.h));
 
             const Element& elem = GetElementUnsafe(ref);
-            if ((elem.state & ElementState::Disabled) == ElementState::Disabled)
+            if (!inDisabled && (elem.state & ElementState::Disabled) == ElementState::Disabled)
             {
-                if (insideRect) aborted = true;   // disabled absorbs the hit
+                if (insideRect)
+                {
+                    if (disabledHit)
+                        *disabledHit = self(self, ref, pos, true);
+                    aborted = true;   // disabled absorbs the hit
+                }
                 return ID::Invalid();
             }
             if ((elem.flags & ElementFlags::NoInput) == ElementFlags::NoInput)
@@ -189,7 +197,7 @@ namespace tachyon
                 const IndexRange range = GetChildRange(ref);
                 for (auto i = range.end; i-- > range.begin; )
                 {
-                    const ID childHit = self(self, ElementRef{ ref.depth + 1, i }, childPos);
+                    const ID childHit = self(self, ElementRef{ ref.depth + 1, i }, childPos, inDisabled);
                     if (aborted) return ID::Invalid();
                     if (childHit != ID::Invalid()) return childHit;
                 }
@@ -198,7 +206,7 @@ namespace tachyon
             return insideRect ? elem.id : ID::Invalid();
         };
 
-        const ID result = hitTest(hitTest, root, float2{ (float)position.x, (float)position.y });
+        const ID result = hitTest(hitTest, root, float2{ (float)position.x, (float)position.y }, false);
         return aborted ? ID::Invalid() : result;
     }
 
@@ -231,6 +239,35 @@ namespace tachyon
             }
         }
         return int2{ (int32_t)p.x, (int32_t)p.y };
+    }
+
+    IntRect ElementStorage::ElementRectOnScreen(ElementRef ref) const
+    {
+        const IntRect rect = GetElementRectUnsafe(ref).rect;
+        // Its corners, through each ancestor's transform from the nearest out.
+        float2 corners[4] = { { (float)rect.x, (float)rect.y }, { (float)rect.Max(0), (float)rect.y },
+                              { (float)rect.x, (float)rect.Max(1) }, { (float)rect.Max(0), (float)rect.Max(1) } };
+        bool moved = false;
+        for (ElementRef cur = GetParentRef(ref); cur.IsValid(); cur = GetParentRef(cur))
+        {
+            const ElementRect& er = GetElementRectUnsafe(cur);
+            if (er.contentTransform.IsIdentity())
+                continue;
+            const float2 pivot{ (float)er.innerRect.position.x, (float)er.innerRect.position.y };
+            for (float2& c : corners)
+                c = pivot + er.contentTransform.TransformPoint(c - pivot);
+            moved = true;
+        }
+        if (!moved)
+            return rect;
+        float2 lo = corners[0], hi = corners[0];
+        for (const float2& c : corners)
+        {
+            lo = { std::min(lo.x, c.x), std::min(lo.y, c.y) };
+            hi = { std::max(hi.x, c.x), std::max(hi.y, c.y) };
+        }
+        const int32_t x = int32_t(std::floor(lo.x)), y = int32_t(std::floor(lo.y));
+        return IntRect{ x, y, int32_t(std::ceil(hi.x)) - x, int32_t(std::ceil(hi.y)) - y };
     }
 
     [[nodiscard]] ElementStorageResult ElementStorage::BeginChildren()

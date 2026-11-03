@@ -575,6 +575,7 @@ namespace tachyon
                         ctx.RenderDot(center, pin - 2.0f * ring, nodeColor);
                 }));
 
+            ShowPinTooltip(view, sockID, self, isOutput);
             return res.ref;
         };
 

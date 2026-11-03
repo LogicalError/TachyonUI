@@ -233,8 +233,9 @@ namespace tachyon
                 anchorRef = storage.GetParentRef(elementRef);
             if (anchorRef.IsValid())
             {
-                const auto& anchorTargetRect = storage.GetElementRectUnsafe(anchorRef);
-                targetRect = anchorTargetRect.rect;
+                // A window anchored to something in a canvas: where that is on the screen.
+                targetRect = isWindow && positionConstraints.x.type == PositionType::Anchored
+                                 ? storage.ElementRectOnScreen(anchorRef) : storage.GetElementRectUnsafe(anchorRef).rect;
             } else
             {
                 targetRect = osWindowManager.GetMonitorArea(elementRect.monitorIndex);
@@ -330,8 +331,9 @@ namespace tachyon
                 anchorRef = storage.GetParentRef(elementRef);
             if (anchorRef.IsValid())
             {
-                const auto& anchorTargetRect = storage.GetElementRectUnsafe(anchorRef);
-                targetRect = anchorTargetRect.rect;
+                // A window anchored to something in a canvas: where that is on the screen.
+                targetRect = isWindow && positionConstraints.y.type == PositionType::Anchored
+                                 ? storage.ElementRectOnScreen(anchorRef) : storage.GetElementRectUnsafe(anchorRef).rect;
             } else
             {
                 targetRect = osWindowManager.GetMonitorArea(elementRect.monitorIndex);

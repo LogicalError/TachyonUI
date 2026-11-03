@@ -18,6 +18,51 @@ namespace tachyon
     namespace
     {
         constexpr int kTooltipGap = 9;   // CSS px from the target to the box
+
+        // Where a text's start lines up in its box: 0 its left, 1 its right, 2 its middle.
+        int AlignSide(TextAlign align)
+        {
+            switch (align)
+            {
+                case TextAlign::End: case TextAlign::Right: case TextAlign::Bottom: return 1;
+                case TextAlign::Center: return 2;
+                default: return 0;
+            }
+        }
+
+        // How wide an element's text and icon are on one line.
+        int32_t NaturalWidth(const ITextSystem& textSystem, const Element& element, const LayoutStyle& layout)
+        {
+            const int32_t text = textSystem.GetTextMeasurement(element.textID).maxWidth;
+            if (element.iconID == IconID::Invalid)
+                return text;
+            const int32_t icon = textSystem.GetIconMeasurement(element.iconID).width;
+            switch (layout.iconSide)
+            {
+                case IconSide::Left: case IconSide::Right: return icon + layout.iconTextGap + text;
+                case IconSide::Top: case IconSide::Bottom: return std::max(icon, text);
+                default: return text;
+            }
+        }
+
+        // Where an element's text is drawn, on one line: from where, how much of it shows, and
+        // the side it's aligned to (see AlignSide).
+        struct TextSpan
+        {
+            int32_t start = 0, width = 0;
+            int     side  = 0;
+        };
+
+        TextSpan TextSpanOf(const ITextSystem& textSystem, const Element& element, const LayoutStyle& layout, const IntRect& borderBox)
+        {
+            const IntRect content = layout.GetPaddingBoxContentRect(borderBox);
+            TextSpan span;
+            span.side  = AlignSide(layout.textLayoutStyle.horizontalAlignment);
+            span.width = std::min(NaturalWidth(textSystem, element, layout), content.w);
+            span.start = span.side == 0 ? content.x : span.side == 1 ? content.Max(0) - span.width
+                                                                     : content.x + (content.w - span.width) / 2;
+            return span;
+        }
     }
 
     void GUIApplication::SetTooltip(ID targetID, std::string_view text)
@@ -68,7 +113,7 @@ namespace tachyon
                     label.textID = textSystem->RegisterText(label.id, label.iconID, textSystem->GetText(label.textID), underlined, label.state);
             }
         }
-        if (!OpenTooltip(targetID, true))
+        if (!OpenTooltip(targetID, TooltipBox::Help))
             return;
         auto part = [this](std::string_view text, StyleRef style) {
             if (!text.empty())
@@ -81,6 +126,65 @@ namespace tachyon
         CloseTooltip();
     }
 
+    void GUIApplication::SetErrorTooltip(ID targetID, std::string_view message)
+    {
+        if (!OpenTooltip(targetID, TooltipBox::Error))
+            return;
+        RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID(), .styleRef = theme.tooltipErrorTextStyleRef,
+                                          .flags = ElementFlags::NoInput }, message, LayoutOverride{});
+        CloseTooltip();
+    }
+
+    void GUIApplication::SetDisabledTooltip(ID targetID, std::string_view text, std::string_view reason)
+    {
+        const ElementRef ref = elementStorage.FindElementRefByID(targetID);
+        const bool disabled = ref.IsValid() && (elementStorage.GetElementUnsafe(ref).state & ElementState::Disabled) != ElementState::None;
+        if (!disabled || reason.empty())
+        {
+            SetTooltip(targetID, text);
+            return;
+        }
+        if (!OpenTooltip(targetID, TooltipBox::Lines))
+            return;
+        if (!text.empty())
+            RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID(), .styleRef = theme.tooltipTextStyleRef,
+                                              .flags = ElementFlags::NoInput }, text, LayoutOverride{});
+        RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID(), .styleRef = theme.tooltipNoteStyleRef,
+                                          .flags = ElementFlags::NoInput }, reason, LayoutOverride{});
+        CloseTooltip();
+    }
+
+    void GUIApplication::ShowPinTooltip(const NodeView& view, ID socketID, PropertyEndpoint pin, bool isOutput)
+    {
+        const NodeProperty& prop = view.nodes[size_t(pin.nodeIdx)].properties[size_t(pin.propIdx)];
+        if ((prop.name.empty() && prop.type.empty() && !prop.value) || !OpenTooltip(socketID, TooltipBox::Lines))
+            return;
+        auto line = [this](std::string_view text, StyleRef style) {
+            if (!text.empty())
+                RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID(), .styleRef = style,
+                                                  .flags = ElementFlags::NoInput }, text, LayoutOverride{});
+        };
+        // "Strength  float  0.75"
+        RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID(), .styleRef = theme.tooltipPinRowStyleRef,
+                                          .flags = ElementFlags::NoInput }, LayoutOverride{});
+        VERIFY(elementStorage.BeginChildren());
+        line(prop.name, theme.tooltipTextStyleRef);
+        line(prop.type, theme.tooltipPinTypeStyleRef);
+        if (prop.value)
+            line(prop.value(), theme.tooltipPinValueStyleRef);
+        VERIFY(elementStorage.EndChildren());
+        // "from Source.Value"
+        if (!isOutput && prop.input && prop.input->valid() && size_t(prop.input->nodeIdx) < view.nodes.size())
+        {
+            const NodeModel& source = view.nodes[size_t(prop.input->nodeIdx)];
+            std::string from = "from " + source.title;
+            if (size_t(prop.input->propIdx) < source.properties.size() && !source.properties[size_t(prop.input->propIdx)].name.empty())
+                from += "." + source.properties[size_t(prop.input->propIdx)].name;
+            line(from, theme.tooltipNoteStyleRef);
+        }
+        CloseTooltip();
+    }
+
     bool GUIApplication::BeginTooltip(ID targetID)
     {
         const bool open = OpenTooltip(targetID);
@@ -88,30 +192,64 @@ namespace tachyon
         return open;
     }
 
-    bool GUIApplication::OpenTooltip(ID targetID, bool rich)
+    bool GUIApplication::OpenTooltip(ID targetID, TooltipBox look)
     {
         if (!tooltipManager.ShouldShow(targetID))
             return false;
 
-        const StyleRef boxStyle = rich ? theme.tooltipRichStyleRef : theme.tooltipStyleRef;
+        const bool     popup    = look == TooltipBox::Help || look == TooltipBox::Error;
+        const StyleRef boxStyle = look == TooltipBox::Help  ? theme.tooltipRichStyleRef
+                                : look == TooltipBox::Error ? theme.tooltipErrorStyleRef
+                                : look == TooltipBox::Lines ? theme.tooltipLinesStyleRef
+                                                            : theme.tooltipStyleRef;
         // Below the target (above when there's no room), its arrow pointing at it. The window
-        // is see-through, the box's margin room for its arrow and shadow: the window is placed
-        // so the box lines up with the target, the gap away, and that room may reach past the
-        // screen's edges.
+        // is see-through, the box's margin room for its arrow and shadow, which may reach past
+        // the screen's edges. A target's text places it: its text starts where that starts
+        // (or ends where it ends, for text aligned to its end), or it's centered on centered
+        // text; without text (an icon, a pin), or under a canvas's pan and zoom (its text isn't
+        // drawn where it's laid out), it's centered under the target.
         const LayoutStyle* boxLayout = styleManager.GetLayoutStyle(boxStyle.layoutStyleIndex);
         const int marginLeft = boxLayout ? boxLayout->margin.left : 0;
         const int marginTop  = boxLayout ? boxLayout->margin.top : 0;
-        auto pos = LayoutOverride{}.Anchored(targetID,
-            AnchorPlacement::OutsideBottom | AnchorPlacement::InsideLeft,
-            { int16_t(-marginLeft), int16_t(styleManager.Px(kTooltipGap) - marginTop) }, AutoFlipMode::FlipAvoidTarget)
-            .Overhang({ marginLeft, marginTop });
+        const int boxLeft  = boxLayout ? boxLayout->borderWidths.left + boxLayout->padding.left : 0;    // to its text
+        const int boxRight = boxLayout ? boxLayout->borderWidths.right + boxLayout->padding.right : 0;
+        const int marginRight = boxLayout ? boxLayout->margin.right : 0;
+        AnchorPlacementAxis x = AnchorPlacementAxis::Center;
+        int offsetX = (marginRight - marginLeft) / 2;
+        const ElementRef targetRef = elementStorage.FindElementRefByID(targetID);
+        bool panned = false;
+        for (ElementRef up = targetRef.IsValid() ? elementStorage.GetParentRef(targetRef) : ElementRef::Invalid(); up.IsValid() && !panned;
+             up = elementStorage.GetParentRef(up))
+            panned = !elementStorage.GetElementRectUnsafe(up).contentTransform.IsIdentity();
+        if (const Element* target = targetRef.IsValid() ? &elementStorage.GetElementUnsafe(targetRef) : nullptr;
+            target && target->textID != TextID::Invalid && !panned)
+            if (const LayoutStyle* layout = styleManager.GetLayoutStyle(target->styleRef.layoutStyleIndex))
+            {
+                const int textLeft  = layout->borderWidths.left + layout->padding.left;
+                const int textRight = layout->borderWidths.right + layout->padding.right;
+                switch (AlignSide(layout->textLayoutStyle.horizontalAlignment))
+                {
+                    case 0:  x = AnchorPlacementAxis::InsideMin; offsetX = textLeft - boxLeft - marginLeft; break;
+                    case 1:  x = AnchorPlacementAxis::InsideMax; offsetX = boxRight + marginRight - textRight; break;
+                    default: x = AnchorPlacementAxis::Center;
+                             offsetX = ((textLeft - textRight) - (boxLeft + marginLeft - boxRight - marginRight)) / 2; break;
+                }
+            }
+        auto pos = LayoutOverride{}.Anchored(targetID, x, offsetX, AnchorPlacementAxis::OutsideMax,
+                                             styleManager.Px(kTooltipGap) - marginTop, AutoFlipMode::FlipAvoidTarget)
+                                   .Overhang({ marginLeft, marginTop });
+        pos.x.autoFlip = AutoFlipMode::Flip;   // across: moved onto the screen, not narrowed
 
         ElementFlags flags = ElementFlags::WindowNoCaption | ElementFlags::WindowIsPopup | ElementFlags::WindowIsTransparent
                            | ElementFlags::WindowNotFocusable;
 
+        // Not disabled, selected or invalid with what it's on.
+        m_tooltipScopes.push_back(guiStateManager.Construction().SetAside());
         if (!BeginWindow(tooltipWindowID, theme.tooltipFrameStyleRef, std::move(pos), flags))
         {
             EndWindow();   // the window's skipped scope
+            guiStateManager.Construction().Restore(m_tooltipScopes.back());
+            m_tooltipScopes.pop_back();
             return false;
         }
         if (const ElementRef winRef = elementStorage.FindElementRefByID(tooltipWindowID); winRef.IsValid())
@@ -120,40 +258,54 @@ namespace tachyon
         const ID boxID = idManager.AllocateDynamicID("tooltip_box");
         const ElementRef box = RegisterElement(tachyon::Element{ .id = boxID, .styleRef = boxStyle,
                                                                  .flags = ElementFlags::NoInput }, LayoutOverride{});
-        const VisualColorStyleIndex fill = rich ? theme.popupArrowFill : theme.tooltipArrowFill;
-        const VisualColorStyleIndex line = rich ? theme.popupArrowLine : theme.tooltipArrowLine;
+        const VisualColorStyleIndex fill = popup ? theme.popupArrowFill : theme.tooltipArrowFill;
+        const VisualColorStyleIndex line = look == TooltipBox::Error ? theme.invalidLine
+                                         : popup                     ? theme.popupArrowLine : theme.tooltipArrowLine;
         const float px = styleManager.GetUIScale();
         // The tip from the side the box lines up on, and the box's corner radius.
-        const float fromEdgeCss = rich ? 45.5f : 17.5f, cornerCss = rich ? 8.0f : 6.0f;
+        const bool  help = look == TooltipBox::Help;
+        const float fromEdgeCss = help ? 45.5f : 17.5f, cornerCss = help ? 8.0f : 6.0f;
         // Drawn before the box's children, not after them: an after-draw clips to the box itself.
-        VERIFY(elementStorage.AddCustomDraw(box, [this, targetID, fill, line, px, fromEdgeCss, cornerCss](CustomDrawContext& ctx)
+        VERIFY(elementStorage.AddCustomDraw(box, [this, targetID, fill, line, px, fromEdgeCss, cornerCss, boxLeft, boxRight](CustomDrawContext& ctx)
         {
             // A bordered square turned on its corner, the half out of the box pointing at the
             // target: a triangle in the border's color, and the fill's inside it one border
             // in, which also covers the box's own border under it.
             const IntRect r = ctx.ElementRect();
-            const ElementRect* target = elementStorage.GetElementRectPtr(elementStorage.FindElementRefByID(targetID));
+            const ElementRef targetRef = elementStorage.FindElementRefByID(targetID);
+            const ElementRect* target = elementStorage.GetElementRectPtr(targetRef);
             const ElementRect* self = elementStorage.GetElementRectPtr(ctx.Ref());
             if (!target || !self)
                 return;
             // The target is in another window: compare the two in layout space, where the
-            // tooltip was placed against it, then draw in this window's.
+            // tooltip was placed against it (through a canvas's pan and zoom), then draw in
+            // this window's.
             const IntRect laid = self->rect;
+            const IntRect onScreen = elementStorage.ElementRectOnScreen(targetRef);
             const float height = std::round(6.0f * px);      // the tip, out from the box's edge
             const float inner  = height - 1.41421356f * px;  // the fill's: one border in, at 45 degrees
             const float fromEdge = fromEdgeCss * px;
             const float inset = cornerCss * px + height + px;   // clear of the rounded corner
 
-            // Near the side the box is lined up with the target on (its left, or its right
-            // when it was kept on the screen), but not past the target's middle.
-            const float targetLeft  = float(target->rect.x - laid.x + r.x);
-            const float targetMid   = targetLeft + float(target->rect.w) * 0.5f;
-            const bool  onLeft = std::abs(laid.x - target->rect.x) <= std::abs(laid.Max(0) - target->rect.Max(0));
-            float x = onLeft ? std::min(float(r.x) + fromEdge, targetMid)
-                             : std::max(float(r.x + r.w) - fromEdge, targetMid);
+            float at;   // what it points at, in layout space
+            const Element& element = elementStorage.GetElementUnsafe(targetRef);
+            if (element.textID != TextID::Invalid && target->layoutStyle && onScreen == target->rect)
+            {
+                // At the target's text: as far into it as the box's own text is from the tip
+                // (where its text starts or ends where the target's does), at most its middle;
+                // centered text at its middle.
+                const TextSpan span = TextSpanOf(*textSystem, element, *target->layoutStyle, target->rect);
+                const float middle = float(span.start) + float(span.width) * 0.5f;
+                at = span.side == 0 ? std::min(float(span.start) + fromEdge - float(boxLeft), middle)
+                   : span.side == 1 ? std::max(float(span.start + span.width) - fromEdge + float(boxRight), middle)
+                                    : middle;
+            }
+            else
+                at = float(onScreen.x) + float(onScreen.w) * 0.5f;   // without text: its middle
+            float x = at - float(laid.x) + float(r.x);
             x = std::clamp(x, float(r.x) + inset, float(r.x + r.w) - inset);
 
-            const bool  below = target->rect.y + target->rect.h / 2 < laid.y;   // the target is above it
+            const bool  below = onScreen.y + onScreen.h / 2 < laid.y;   // the target is above it
             const float out   = below ? -1.0f : 1.0f;
             const float edge  = below ? float(r.y) : float(r.y + r.h);
             // The point on a pixel's middle, a whole number of pixels out: one pixel wide.
@@ -170,34 +322,10 @@ namespace tachyon
     {
         VERIFY(elementStorage.EndChildren());   // the box
         EndWindow();
-    }
-
-    namespace
-    {
-        // Where a text's start lines up in its box: 0 its left, 1 its right, 2 its middle.
-        int AlignSide(TextAlign align)
+        if (!m_tooltipScopes.empty())
         {
-            switch (align)
-            {
-                case TextAlign::End: case TextAlign::Right: case TextAlign::Bottom: return 1;
-                case TextAlign::Center: return 2;
-                default: return 0;
-            }
-        }
-
-        // How wide an element's text and icon are on one line.
-        int32_t NaturalWidth(const ITextSystem& textSystem, const Element& element, const LayoutStyle& layout)
-        {
-            const int32_t text = textSystem.GetTextMeasurement(element.textID).maxWidth;
-            if (element.iconID == IconID::Invalid)
-                return text;
-            const int32_t icon = textSystem.GetIconMeasurement(element.iconID).width;
-            switch (layout.iconSide)
-            {
-                case IconSide::Left: case IconSide::Right: return icon + layout.iconTextGap + text;
-                case IconSide::Top: case IconSide::Bottom: return std::max(icon, text);
-                default: return text;
-            }
+            guiStateManager.Construction().Restore(m_tooltipScopes.back());
+            m_tooltipScopes.pop_back();
         }
     }
 
@@ -288,9 +416,13 @@ namespace tachyon
 
         const ElementFlags flags = ElementFlags::WindowNoCaption | ElementFlags::WindowIsPopup | ElementFlags::WindowIsTransparent
                                  | ElementFlags::WindowNotFocusable;
+        // Not disabled, selected or invalid with what it's on.
+        m_tooltipScopes.push_back(guiStateManager.Construction().SetAside());
         if (!BeginWindow(tooltipWindowID, theme.tooltipFrameStyleRef, std::move(pos), flags))
         {
             EndWindow();   // the window's skipped scope
+            guiStateManager.Construction().Restore(m_tooltipScopes.back());
+            m_tooltipScopes.pop_back();
             return;
         }
         if (const ElementRef winRef = elementStorage.FindElementRefByID(tooltipWindowID); winRef.IsValid())

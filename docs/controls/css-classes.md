@@ -34,7 +34,7 @@ knob, a table's header) have their own classes, listed with the control above.
 | `MenuSeparator`, `MenuHeader` | `menu-separator`, `menu-header` |
 | `BeginMenuBar`, `BeginTitleBar` | `menu-bar`, `title-bar` |
 | `BeginContextMenu` | `menu` |
-| `SetTooltip`, `BeginTooltip` | window `tooltip-frame`, box `tooltip` (text: `tooltip-text`, shortcut: `tooltip-shortcut`); property help `tooltip-rich` (`tooltip-title`, `tooltip-description`, `tooltip-footer`), its label `label-help` (or `group-label-help`, `drag-label-help`, `group-drag-label-help`); text cut short, shown whole over itself: `tooltip-expand` (text: `tooltip-expand-text`) |
+| `SetTooltip`, `BeginTooltip` | window `tooltip-frame`, box `tooltip` (text: `tooltip-text`, shortcut: `tooltip-shortcut`); property help `tooltip-rich` (`tooltip-title`, `tooltip-description`, `tooltip-footer`), its label `label-help` (or `group-label-help`, `drag-label-help`, `group-drag-label-help`); text cut short, shown whole over itself: `tooltip-expand` (text: `tooltip-expand-text`); a value that isn't accepted: `tooltip-error` (`tooltip-error-text`); a few lines (a disabled control's reason, a node pin's): `tooltip-lines`, the muted line `tooltip-note`, a pin's first line `tooltip-pin-row` (`tooltip-pin-type`, `tooltip-pin-value`) |
 | `MessageDialog` | `message-box` |
 | `Toasts` | `toast-stack`, `toast`, `toast-circle-<severity>` |
 | `Banner` | `banner-<severity>`, `banner-message-<severity>` |

@@ -1132,6 +1132,7 @@ namespace tachyon
                     auto& childElement      = elementStorage.GetElementUnsafe(childRef);
                     auto  state             = childElement.state;
                     auto  baseBoxStyleIndex = childElement.styleRef.visualBoxStyleIndex;
+                    IntRect textClipRectScreen = contentClipRectScreen;   // short of an error icon
 
                     {
                         TransitionState ts = transitionManager.Resolve(childElement.id, baseBoxStyleIndex, state, elapsedTimeSecs);
@@ -1174,6 +1175,16 @@ namespace tachyon
                         // ... and its error border, over the box's own in whatever state it's in.
                         if (invalid)
                             RenderInvalidBorder(rectLayout, parentClipRectScreen, ts, elementSnappedRect);
+                        // A field's value: an error icon at its end, its text kept short of it.
+                        if (invalid && (childElement.flags & ElementFlags::DoNotMeasureText) != ElementFlags::None)
+                        {
+                            const int32_t size = styleManager.Px(13), gap = styleManager.Px(6);
+                            const IntRect icon{ visualInnerRectLayout.Max(0) - size,
+                                                visualInnerRectLayout.y + (visualInnerRectLayout.h - size) / 2, size, size };
+                            textSystem->RenderIcon(theme.invalidIcon, icon, contentClipRectScreen, theme.invalidLine);
+                            const IntRect beforeIcon = transformRectToScreen(IntRect{ icon.x - gap, icon.y, gap, size });
+                            textClipRectScreen.w = std::max(0, std::min(textClipRectScreen.Max(0), beforeIcon.x) - textClipRectScreen.x);
+                        }
                     }
 
                     // RenderText handles plain text, rich text with inline icons, and TextEditor rendering.
@@ -1196,7 +1207,7 @@ namespace tachyon
                             screenToLayout = float3x2::Translate(pivot) * parentState.contentTransformAccum.Inverse()
                                            * float3x2::Translate(float2{ -pivot.x, -pivot.y });
                         }
-                        textSystem->RenderText(childElement.textID, textRectLayout, childElementRect.innerRect, contentClipRectScreen,
+                        textSystem->RenderText(childElement.textID, textRectLayout, childElementRect.innerRect, textClipRectScreen,
                                                textPixelScale, screenToLayout);
                     }
                     else if (childElement.iconID != IconID::Invalid)
@@ -1481,7 +1492,7 @@ namespace tachyon
                         if (e.type == EventType::MouseScroll)  hasScroll = true;
                     }
                 }
-                tooltipManager.BeginFrame(guiStateManager.Interaction().GetHoveredID(), guiStateManager.Interaction().GetFocusedID(),
+                tooltipManager.BeginFrame(TooltipHoverID(), guiStateManager.Interaction().GetFocusedID(),
                     elapsedTimeSecs, hasMouseMove, hasMousePress, hasKeyboard, hasScroll,
                     menuManager.IsOpen(), windowManager->GetMouseButtons() != MouseButtons::None);
                 NoteTargetAncestors(windowManager->GetScreenMousePos());
@@ -1577,10 +1588,10 @@ namespace tachyon
                 .windowUnderMouse = windowManager->GetWindowUnderMouse(),
                 .mousePos         = mousePosition,
                 .mouseButtons     = windowManager->GetMouseButtons(),
-                .hitTest = [this](ID window, int2 pos)
+                .hitTest = [this](ID window, int2 pos, ID& disabled)
                 {
                     const ElementRef windowRef = windowRegistry.GetWindowRef(window);
-                    return windowRef != ElementRef::Invalid() ? elementStorage.GetElementIDAt(windowRef, pos) : ID::Invalid();
+                    return windowRef != ElementRef::Invalid() ? elementStorage.GetElementIDAt(windowRef, pos, &disabled) : ID::Invalid();
                 },
             };
             if (textSystem)
@@ -1676,8 +1687,22 @@ namespace tachyon
         // The tooltip follows the focus after a Tab, else the mouse.
         const auto& interaction = guiStateManager.Interaction();
         const ID target = tooltipManager.GetActiveTargetID();
-        tooltipManager.SetTargetAncestors(target == interaction.GetFocusedID() && target != interaction.GetHoveredID()
-                                          ? interaction.GetPropagatedFocusedIDs() : interaction.GetPropagatedHoverIDs());
+        if (target != ID::Invalid() && target == interaction.GetHoveredDisabledID())
+        {
+            // A part of a disabled control: the disabled elements around it are its control.
+            std::vector<ID> around;
+            for (ElementRef up = elementStorage.GetParentRef(elementStorage.FindElementRefByID(target)); up.IsValid();
+                 up = elementStorage.GetParentRef(up))
+            {
+                if ((elementStorage.GetElementUnsafe(up).state & ElementState::Disabled) == ElementState::None)
+                    break;
+                around.push_back(elementStorage.GetElementUnsafe(up).id);
+            }
+            tooltipManager.SetTargetAncestors(std::move(around));
+        }
+        else
+            tooltipManager.SetTargetAncestors(target == interaction.GetFocusedID() && target != interaction.GetHoveredID()
+                                              ? interaction.GetPropagatedFocusedIDs() : interaction.GetPropagatedHoverIDs());
         m_contextMenuClaimed = false;
         m_cutShort = FindCutShortText(mousePos);
     }

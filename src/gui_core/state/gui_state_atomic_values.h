@@ -72,6 +72,10 @@ namespace tachyon
         bool IsInvalid()       const { return m_invalidLevel       > 0; }
 
         void Reset()            { m_disabledLevel = 0; m_selectedLevel = 0; m_indeterminateLevel = 0; m_invalidLevel = 0; }
+        /// Clears the scopes for something built inside them that isn't part of them (a
+        /// tooltip on a disabled control isn't disabled); Restore puts them back.
+        ConstructionScopes SetAside() { const ConstructionScopes kept = *this; Reset(); return kept; }
+        void Restore(const ConstructionScopes& kept) { *this = kept; }
         bool IsBalanced() const { return m_disabledLevel == 0 && m_selectedLevel == 0 && m_indeterminateLevel == 0 && m_invalidLevel == 0; }
 
     private:

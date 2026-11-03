@@ -93,7 +93,7 @@ namespace tachyon
             hover.hoverWindowID = m_interactionWindowID;
 
         if (input.hitTest && hover.hoverWindowID != ID::Invalid())
-            hover.overID = input.hitTest(hover.hoverWindowID, input.mousePos);
+            hover.overID = input.hitTest(hover.hoverWindowID, input.mousePos, hover.disabledID);
 
         // No hover while the application doesn't have OS focus.
         if (input.activeWindowID == ID::Invalid())
@@ -104,6 +104,10 @@ namespace tachyon
             hover.hoverID = hover.overID;
         else
             hover.hoverID = m_interaction.GetActiveID();
+        // A disabled element counts only while nothing else holds the pointer.
+        if (input.activeWindowID == ID::Invalid() || m_interaction.GetCaptureID() != ID::Invalid() ||
+            m_interaction.GetActiveID() != ID::Invalid() || m_drag.IsDragging())
+            hover.disabledID = ID::Invalid();
 
         // During a drag only valid drop targets show hover; text drags have their own.
         ID textDragTarget = ID::Invalid();
@@ -119,7 +123,7 @@ namespace tachyon
         // Drag events last one frame.
         m_drag.ClearEvents();
 
-        m_interaction.EndFrame(overID, mouseButtons);
+        m_interaction.EndFrame(overID, mouseButtons, hover.disabledID);
 
         if (!m_construction.IsBalanced())
         {

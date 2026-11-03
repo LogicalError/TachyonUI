@@ -197,12 +197,18 @@ namespace tachyon
 
         // ---------------- Queries ----------------
 
-        const ID GetElementIDAt(ElementRef root, int2 position) const;
+        /// The element at `position` that takes input, or Invalid. A disabled element there
+        /// takes the hit (Invalid); `disabledHit`, when given, gets the deepest element under
+        /// `position` inside it, which shows its tooltip though it takes no input.
+        const ID GetElementIDAt(ElementRef root, int2 position, ID* disabledHit = nullptr) const;
 
         /// Converts a screen point into the space `ref`'s own rect is stored in, applying each
         /// ancestor's inverse contentTransform like hit-testing does. Use it to compare
         /// event.state.screenPos with an element's rect under transformed ancestors.
         int2 ScreenToElementSpace(int2 screenPos, ElementRef ref) const;
+        /// `ref`'s border box on the screen: through its ancestors' contentTransforms (a
+        /// canvas's pan and zoom), the box around it when it's turned.
+        IntRect ElementRectOnScreen(ElementRef ref) const;
 
         /// The element with `id`; Invalid when not found (always for ID::Invalid). O(1). If an
         /// ID is used twice, the shallowest, earliest element wins.

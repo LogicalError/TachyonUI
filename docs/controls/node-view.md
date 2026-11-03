@@ -19,6 +19,12 @@ unwired input; it holds the source output when wired), an `output` socket flag, 
 `NodeText` is row text aligned by the row's sockets: input left, output right, both
 centered.
 
+A property's `name`, `type` and `value` are its pins' tooltip: the name, the type (muted,
+monospace) and the value now (`value` is asked for only while the tooltip shows), and for a
+wired input where the value comes from ("from Noise.Value": the source node's title and its
+property's name). A pin with none of them has no tooltip. Classes: `tooltip-lines`,
+`tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-value`, `tooltip-note`.
+
 `NodeView` callbacks: `canConnect(view, output, input)` refuses wires, `onEdit` gets
 each finished edit as a `NodeViewEdit` (for undo; `ApplyNodeViewEdit` in
 `gui_node_view_helpers.h` applies or reverts one), `onBreadcrumb(index)` handles the
@@ -46,7 +52,8 @@ Classes: `node-view`, `node`, `node-header`, `node-title`, `node-category`,
 NodeModel mix;
 mix.stableID = idManager.CreateStaticID();
 mix.title    = "Mix";
-mix.properties.push_back(NodeProperty{ .input = PropertyEndpoint{}, .renderBody = [this] { NodeText("Strength"); } });
+mix.properties.push_back(NodeProperty{ .input = PropertyEndpoint{}, .renderBody = [this] { NodeText("Strength"); },
+                                       .name = "Strength", .type = "float", .value = [this] { return std::format("{:.2f}", strength); } });
 mix.properties.push_back(NodeProperty{ .output = true, .renderBody = [this] { Label("Gain"); Field(gain); } });
 view.nodes.push_back(std::move(mix));
 

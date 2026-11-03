@@ -58,10 +58,10 @@ pixels when given as `Pixels{ n }` or an `int2`. The builders are in
 
 | Pair | Effect |
 | --- | --- |
-| `BeginDisabled()` / `EndDisabled()` | Drawn at 40% opacity (menu items 45%), no input; menu items can't be chosen |
+| `BeginDisabled()` / `EndDisabled()` | Drawn at 40% opacity (menu items 45%), no input; menu items can't be chosen. Its tooltip still shows (`SetDisabledTooltip` says why) |
 | `BeginSelected()` / `EndSelected()` | Drawn selected; a menu item shows a check mark |
 | `BeginIndeterminate()` / `EndIndeterminate()` | Fields show a dash for mixed values and return `false` |
-| `BeginInvalid()` / `EndInvalid()` | The value isn't accepted: an error border and halo (`--error`, `--invalid-halo`) over the control in any state; the halo grows in over 150 ms |
+| `BeginInvalid()` / `EndInvalid()` | The value isn't accepted: an error border and halo (`--error`, `--invalid-halo`) over the control in any state; the halo grows in over 150 ms. A field gets an error icon at its end; `SetErrorTooltip` says why |
 
 **Scope objects.** Each Begin / End pair also has a scope object that calls the End
 when it leaves, taking the Begin's arguments: `Window`, `GhostWindow`,

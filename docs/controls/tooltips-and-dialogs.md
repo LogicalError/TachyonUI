@@ -2,12 +2,21 @@
 
 ## Tooltips
 
-A tooltip is a small box below its target, or above it when there's no room below, lined
-up with the target's left side (its right side at the right edge of the screen), with an
-arrow toward the target near that end, and a soft shadow. It fades in over 100 ms and out
-over 80 ms (not with reduced motion). Its window is see-through around the box, room for
-the arrow and the shadow that may reach past the edge of the screen, so the box itself
-lines up with the target there too.
+A tooltip is a small box below its target, or above it when there's no room below, with an
+arrow pointing at the target and a soft shadow. Where it goes follows the target's text:
+
+- Text aligned to its start (a label): the tooltip's text starts where the target's starts,
+  the arrow a little way into it.
+- Text aligned to its end: the tooltip's text ends where the target's ends, the arrow a
+  little way in from that end.
+- Centered text (a button): the box is centered on the text, the arrow at its middle.
+- No text (an icon, a node's pin), or a target under a canvas's pan and zoom: the box is
+  centered under the target, the arrow at its middle.
+
+It's kept on the screen, moved along when it would reach past an edge; the arrow still
+points at the text. It fades in over 100 ms and out over 80 ms (not with reduced motion).
+Its window is see-through around the box, room for the arrow and the shadow that may reach
+past the edge of the screen, so the box itself can lie right at the edge.
 
 ```cpp
 void SetTooltip(ID targetID, std::string_view text);
@@ -18,6 +27,10 @@ void SetTooltip(std::string_view text);           // the control just drawn
 void SetTooltip(std::string_view text, std::string_view shortcut);
 void SetTooltip(ID targetID, const PropertyHelp& help);
 void SetTooltip(const PropertyHelp& help);        // the control just drawn
+void SetErrorTooltip(ID targetID, std::string_view message);
+void SetErrorTooltip(std::string_view message);   // the control just drawn
+void SetDisabledTooltip(ID targetID, std::string_view text, std::string_view reason);
+void SetDisabledTooltip(std::string_view text, std::string_view reason);
 bool BeginTooltip(ID targetID);
 bool BeginTooltip();                              // the control just drawn
 void EndTooltip();
@@ -78,6 +91,39 @@ SetTooltip(PropertyHelp{ "Cast shadows",
                          "MeshRenderer.castShadows (bool)" });
 Checkbox(castShadows);
 ```
+
+### A value that isn't accepted
+
+`SetErrorTooltip` says why a value isn't accepted, on the popup surface with a 1 px error
+border (its arrow too). It goes with `BeginInvalid`, which gives the control its error
+border and halo; a field (a text or number field) also gets an error icon at its end, its
+text kept short of it. Classes: `tooltip-error`, `tooltip-error-text`.
+
+```cpp
+BeginInvalid();
+Field(opacity);
+SetErrorTooltip("Value must be between 0 and 1");
+EndInvalid();
+```
+
+### A disabled control
+
+A disabled control shows its tooltip, though it takes no input: pointed at, it's the
+tooltip's target (`InteractionState::GetHoveredDisabledID`), not hovered. A tooltip on the
+disabled elements around it shows too, as for an enabled control's parts. `SetDisabledTooltip`
+says why it's disabled while it is, on a second, muted line; enabled, it's a plain tooltip.
+A tooltip declared inside `BeginDisabled` (or `BeginSelected`, `BeginInvalid`) isn't
+disabled itself. Classes: `tooltip-lines` (the box of a few lines), `tooltip-note` (the
+muted line); color `--tooltip-muted`.
+
+```cpp
+BeginDisabled();
+Button("Publish", [this] { Publish(); });
+SetDisabledTooltip("Publish to asset store", "Sign in to enable publishing");
+EndDisabled();
+```
+
+A node's pins have tooltips of their own: see [Node view](node-view.md).
 
 ### Text cut short
 

@@ -13,6 +13,7 @@
 #include <gui_controls/gui_node_view_helpers.h>
 
 #include <algorithm>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
@@ -118,6 +119,32 @@ namespace tachyon
                         return c;
                 }
                 return { -1, -1 };
+            }
+
+            // The texts of the tooltip showing, in order (empty when none is).
+            std::vector<std::string> TooltipTexts() const
+            {
+                std::vector<std::string> out;
+                const tachyon::ElementRef window = app.elementStorage.FindElementRefByID(app.tooltipWindowID);
+                if (!window.IsValid())
+                    return out;
+                auto walk = [&](auto&& self, tachyon::ElementRef ref) -> void {
+                    for (const tachyon::Element& e : app.elementStorage.GetChildrenSpan(ref))
+                    {
+                        if (const std::string_view t = app.TextOf(e.id); !t.empty())
+                            out.emplace_back(t);
+                        self(self, app.elementStorage.FindElementRefByID(e.id));
+                    }
+                };
+                walk(walk, window);
+                return out;
+            }
+
+            // Points at `at` and waits past the tooltip's delay.
+            void Hover(tachyon::int2 at)
+            {
+                app.InjectMouseMove(at);
+                for (int i = 0; i < 8; ++i) { app.AdvanceTime(100); Frame(); }
             }
 
             // A left drag the way a mouse makes one: press, moves and release on frames of
@@ -636,5 +663,104 @@ namespace tachyon
             EXPECT_EQ(view.transform.r0.z, before.r0.z);
             EXPECT_EQ(view.transform.r1.z, before.r1.z);
         }
+        // A pin's tooltip: its name, its type and its value now, and for a wired input where
+        // the value comes from. The value is asked for only while it shows.
+        TEST_F(NodeViewControlTest, APinsTooltipSaysWhatFlowsThroughIt)
+        {
+            view.nodes[0].title = "Noise";
+            view.nodes[0].properties[0].name = "Value";
+            view.nodes[0].properties[0].type = "float";
+            int asked = 0;
+            auto& strength = view.nodes[1].properties[0];
+            strength.name  = "Strength";
+            strength.type  = "float";
+            strength.value = [&] { ++asked; return std::string("0.75"); };
+            strength.input = PropertyEndpoint{ 0, 0 };
+            Settle();
+            EXPECT_EQ(asked, 0);
+
+            Hover(SocketOf(nodeB));
+            EXPECT_EQ(TooltipTexts(), (std::vector<std::string>{ "Strength", "float", "0.75", "from Noise.Value" }));
+            EXPECT_GT(asked, 0);
+            const ID value = app.FindByText("0.75"), from = app.FindByText("from Noise.Value");
+            EXPECT_EQ(app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(value)).styleRef, app.theme.tooltipPinValueStyleRef);
+            EXPECT_EQ(app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(from)).styleRef, app.theme.tooltipNoteStyleRef);
+            EXPECT_EQ(app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(app.FindByText("float"))).styleRef,
+                      app.theme.tooltipPinTypeStyleRef);
+
+            // An output says nothing of a source; a source without a name, only its node.
+            view.nodes[0].properties[0].name.clear();
+            Hover(SocketOf(nodeA));
+            EXPECT_EQ(TooltipTexts(), (std::vector<std::string>{ "float" }));
+            Hover(SocketOf(nodeB));
+            ASSERT_FALSE(TooltipTexts().empty());
+            EXPECT_EQ(TooltipTexts().back(), "from Noise");
+        }
+
+        // A pin with nothing to say has no tooltip.
+        TEST_F(NodeViewControlTest, APinWithNothingToSayHasNoTooltip)
+        {
+            Settle();
+            Hover(SocketOf(nodeB));
+            EXPECT_FALSE(app.elementStorage.FindElementRefByID(app.tooltipWindowID).IsValid());
+        }
+
+        // A row with an input and an output: its output says nothing of the input's source.
+        TEST_F(NodeViewControlTest, AnOutputSaysNothingOfItsRowsSource)
+        {
+            view.nodes[0].properties[0].name = "Value";
+            auto& through = view.nodes[1].properties[0];
+            through.name   = "Through";
+            through.input  = PropertyEndpoint{ 0, 0 };
+            through.output = true;
+            Settle();
+            // B's output socket: right of B.
+            const tachyon::IntRect n = app.GetElementRect(nodeB);
+            tachyon::int2 out{ -1, -1 };
+            for (const auto& r : RectsWithStyle(app.theme.nodeSocketStyleRef))
+                if (r.x + r.w / 2 > n.x + n.w / 2 && r.y >= n.y && r.y < n.y + n.h)
+                    out = { r.x + r.w / 2, r.y + r.h / 2 };
+            ASSERT_NE(out.x, -1);
+            Hover(out);
+            EXPECT_EQ(TooltipTexts(), (std::vector<std::string>{ "Through" }));
+        }
+
+        // Panned and zoomed, the tooltip is still at its pin: below it, centered under it, on
+        // the screen.
+        TEST_F(NodeViewControlTest, APinsTooltipFollowsThePanAndZoom)
+        {
+            view.nodes[1].properties[0].name = "Strength";
+            view.transform = tachyon::float3x2::Translate(-150, -90) * tachyon::float3x2::Scale(1.5f);
+            Settle();
+            tachyon::ElementRef socket = tachyon::ElementRef::Invalid();
+            for (uint32_t d = 0; d < app.elementStorage.NumberOfDepthLevels() && !socket.IsValid(); d++)
+                for (uint32_t i = 0; i < app.elementStorage.DepthSizeOf(d); i++)
+                {
+                    const tachyon::ElementRef ref{ d, i };
+                    if (app.elementStorage.IsValidRef(ref) && app.elementStorage.GetElementUnsafe(ref).styleRef == app.theme.nodeSocketStyleRef &&
+                        app.elementStorage.GetElementRectUnsafe(ref).rect.Contains(SocketOf(nodeB)))
+                    { socket = ref; break; }
+                }
+            ASSERT_TRUE(socket.IsValid());
+            const tachyon::IntRect onScreen = app.elementStorage.ElementRectOnScreen(socket);
+            ASSERT_NE(onScreen, app.elementStorage.GetElementRectUnsafe(socket).rect) << "the view is panned and zoomed";
+
+            Hover(onScreen.position + tachyon::int2{ onScreen.w / 2, onScreen.h / 2 });
+            const ID name = app.FindByText("Strength");
+            ASSERT_NE(name, ID::Invalid());
+            tachyon::ElementRef box = app.elementStorage.FindElementRefByID(name);
+            while (app.elementStorage.GetElementUnsafe(app.elementStorage.GetParentRef(box)).id != app.tooltipWindowID)
+                box = app.elementStorage.GetParentRef(box);
+            const tachyon::IntRect tip = app.elementStorage.GetElementRectUnsafe(box).rect;
+            EXPECT_EQ(tip.y - onScreen.Max(1), 9) << "the gap below its pin";
+            EXPECT_NEAR(tip.x + tip.w / 2, onScreen.x + onScreen.w / 2, 1) << "centered under it";
+            // ... in its window, its margin in: the window is where the box is drawn.
+            const tachyon::IntRect window = app.GetElementRect(app.tooltipWindowID);
+            const tachyon::LayoutStyle* boxLayout = app.elementStorage.GetElementRectUnsafe(box).layoutStyle;
+            ASSERT_NE(boxLayout, nullptr);
+            EXPECT_EQ(tip.x - window.x, boxLayout->margin.left);
+            EXPECT_EQ(tip.y - window.y, boxLayout->margin.top);
+        }
+
     } // namespace
 }

@@ -16,6 +16,7 @@ namespace tachyon
     class InteractionState
     {
         ID m_hoveredID      = ID::Invalid();
+        ID m_hoveredDisabledID = ID::Invalid();
         ID m_activeID       = ID::Invalid();
         ID m_captureID      = ID::Invalid();
         ID m_focusedID      = ID::Invalid();
@@ -54,6 +55,9 @@ namespace tachyon
 
     public:
         ID GetHoveredID()      const { return m_hoveredID; }
+        /// The disabled element under the cursor when nothing is hovered: it takes no input,
+        /// but shows its tooltip (one saying why it is disabled).
+        ID GetHoveredDisabledID() const { return m_hoveredDisabledID; }
         ID GetActiveID()       const { return m_activeID;  }
         ID GetCaptureID()      const { return m_captureID; }
         ID GetFocusedID()      const { return m_focusedID; }
@@ -96,8 +100,8 @@ namespace tachyon
         void SetPropagatedFocusedIDs(std::vector<ID> v) { m_propagatedFocusedIDs = std::move(v); }
 
         /// Applies hover, active-ID edges and deferred capture release; clears the click
-        /// and expired flash.
-        void EndFrame(ID overID, MouseButtons mouseButtons);
+        /// and expired flash. `disabledID`: a disabled element under the cursor.
+        void EndFrame(ID overID, MouseButtons mouseButtons, ID disabledID = ID::Invalid());
     };
     /// @}
 }

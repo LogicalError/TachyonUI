@@ -793,6 +793,16 @@ namespace tachyon
         void SetTooltip(ID targetID, const PropertyHelp& help);
         /// As above, for the last control.
         inline void SetTooltip(const PropertyHelp& help) { SetTooltip(elementStorage.GetLastItemID(), help); }
+        /// Why a value isn't accepted, in a tooltip on the popup surface with an error border
+        /// (and arrow). Goes with BeginInvalid, which gives the control its error border and halo.
+        void SetErrorTooltip(ID targetID, std::string_view message);
+        /// As above, for the last control.
+        inline void SetErrorTooltip(std::string_view message) { SetErrorTooltip(elementStorage.GetLastItemID(), message); }
+        /// A text tooltip that, while targetID is disabled, also says why, on a second, muted
+        /// line. A disabled control shows its tooltip, though it takes no input.
+        void SetDisabledTooltip(ID targetID, std::string_view text, std::string_view reason);
+        /// As above, for the last control.
+        inline void SetDisabledTooltip(std::string_view text, std::string_view reason) { SetDisabledTooltip(elementStorage.GetLastItemID(), text, reason); }
 
         /// A tooltip with any content on targetID: build it while this returns true.
         /// EndTooltip is called either way.
@@ -2557,8 +2567,12 @@ namespace tachyon
         /// The bodies of the conditional Begin / End pairs (the public ones keep the open stacks).
         bool OpenMenu(ID menuID, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints);
         void CloseMenu();
-        /// `rich`: property help's box, on the popup surface, instead of the simple one.
-        bool OpenTooltip(ID targetID, bool rich = false);
+        /// A tooltip's box: the plain one; a few lines; property help's, on the popup surface; an
+        /// error's, on the popup surface with an error border.
+        enum class TooltipBox : uint8_t { Plain, Lines, Help, Error };
+        bool OpenTooltip(ID targetID, TooltipBox box = TooltipBox::Plain);
+        /// A node socket's tooltip: its pin's name, type and value, and a wired input's source.
+        void ShowPinTooltip(const NodeView& view, ID socketID, PropertyEndpoint pin, bool isOutput);
         /// Closes what OpenTooltip opened: the box and the window.
         void CloseTooltip();
         /// Text cut short, as last frame laid it out.
@@ -2676,6 +2690,9 @@ namespace tachyon
         /// Begin/End contract: whether each open BeginWindow / BeginMenu (and BeginContextMenu)
         /// / BeginTooltip / BeginCached scope is showing; its End pops it.
         std::vector<bool> m_windowOpen, m_menuOpen, m_tooltipOpen, m_cachedOpen;
+        /// The disabled, selected and invalid scopes around each open tooltip, set aside while
+        /// it's built (OpenTooltip) and put back when it's closed.
+        std::vector<ConstructionScopes> m_tooltipScopes;
         /// The theme that last loaded, for a reload that fails to fall back to.
         std::string m_loadedThemePath;
         float       m_loadedFontScale { 1.0f };
@@ -2715,6 +2732,12 @@ namespace tachyon
         /// states (PropagatesDescendantState) is for those parts too. Also notes the target's
         /// text cut short (FindCutShortText), with the pointer at `mousePos`.
         void NoteTargetAncestors(int2 mousePos);
+        /// What the tooltip follows the pointer to: the hovered element, else a disabled one.
+        ID TooltipHoverID() const
+        {
+            const ID hovered = guiStateManager.Interaction().GetHoveredID();
+            return hovered != ID::Invalid() ? hovered : guiStateManager.Interaction().GetHoveredDisabledID();
+        }
         /// Rebuilds, next frame, the cached scopes `id` is in.
         void        InvalidateCachedScopesAbove(ID id);
         /// As InvalidateCachedScopesAbove, from layout: this frame's capture would clear it, so

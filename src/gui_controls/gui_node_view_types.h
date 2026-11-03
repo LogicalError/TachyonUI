@@ -51,6 +51,14 @@ namespace tachyon
         /// Row height in row pitches, for tall bodies (previews, multi-line). Whole pitches
         /// keep later sockets on the grid.
         int rowSpan = 1;
+
+        /// What its sockets' tooltip says: the pin's name, its type (muted, monospace) and its
+        /// value now, asked for only while the tooltip shows; a wired input also says where
+        /// its value comes from ("from Noise.Value", the source node's title and this name of
+        /// its property). No tooltip when the name, type and value are all empty.
+        std::string                  name;
+        std::string                  type;
+        std::function<std::string()> value;
     };
 
     /// One node of a node view.

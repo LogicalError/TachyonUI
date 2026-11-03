@@ -365,6 +365,13 @@ namespace tachyon
         StyleRef tooltipFooterStyleRef {};    ///< its footer, under a line
         StyleRef tooltipExpandStyleRef {};    ///< text cut short, shown whole over itself: the box
         StyleRef tooltipExpandTextStyleRef {}; ///< its text's colors (the font is the cut text's)
+        StyleRef tooltipErrorStyleRef {};     ///< a value that isn't accepted: the box, error border
+        StyleRef tooltipErrorTextStyleRef {}; ///< its message
+        StyleRef tooltipLinesStyleRef {};     ///< a tooltip of a few lines: a disabled control's, a pin's
+        StyleRef tooltipNoteStyleRef {};      ///< a muted line: why it's disabled, where a pin's value comes from
+        StyleRef tooltipPinRowStyleRef {};    ///< a pin's first line: its name, type and value
+        StyleRef tooltipPinTypeStyleRef {};   ///< ... its type, muted and monospace
+        StyleRef tooltipPinValueStyleRef {};  ///< ... its value, monospace, at the end
         StyleRef labelHelpStyleRef {};        ///< a Label() with property help: underlined, dotted
         StyleRef groupLabelHelpStyleRef {};   ///< the same inside a label group
         StyleRef dragLabelHelpStyleRef {};    ///< a DragLabel() with property help
@@ -514,6 +521,7 @@ namespace tachyon
         IconID questionIcon   = IconID::Invalid;  ///< message severity: question
         IconID infoIcon       = IconID::Invalid;  ///< message severity: information
         IconID errorIcon      = IconID::Invalid;  ///< message severity: error
+        IconID invalidIcon    = IconID::Invalid;  ///< in a field whose value isn't accepted
         IconID chevronRightIcon = IconID::Invalid; ///< next; a collapsed section
         IconID searchIcon     = IconID::Invalid;  ///< SearchField
         IconID windowMinimizeIcon = IconID::Invalid; ///< title bar: minimize
@@ -549,6 +557,7 @@ namespace tachyon
         tachyon::VisualColorStyleIndex tooltipArrowLine;      ///< --tooltip-border: its edges
         tachyon::VisualColorStyleIndex popupArrowFill;        ///< --bg-popup: property help's arrow
         tachyon::VisualColorStyleIndex popupArrowLine;        ///< --line-strong: its edges
+        tachyon::VisualColorStyleIndex invalidLine;           ///< --error: an error tooltip's arrow edges, a field's error icon
 
         /// Table row height in pixels, measured from real font metrics in ComputeRowMetrics.
         /// Must match the rendered rows exactly, or the max scroll oscillates.

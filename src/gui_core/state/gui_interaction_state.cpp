@@ -2,7 +2,7 @@
 
 namespace tachyon
 {
-    void InteractionState::EndFrame(ID overID, MouseButtons mouseButtons)
+    void InteractionState::EndFrame(ID overID, MouseButtons mouseButtons, ID disabledID)
     {
         m_clickID = ID::Invalid();
         if (m_activeFlashID != ID::Invalid()
@@ -21,6 +21,7 @@ namespace tachyon
             m_pendingCaptureClear = true;
 
         m_hoveredID = overID;
+        m_hoveredDisabledID = disabledID;
 
         // Latches to hovered on the left-press edge, clears on release.
         const bool leftButtonDown     = (mouseButtons           & MouseButtons::Left) != MouseButtons::None;
