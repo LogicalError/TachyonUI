@@ -1,10 +1,8 @@
 # Rendering the UI into a host image
 
-A window opened with `ElementFlags::WindowRenderToImage` doesn't get an OS window. It
-lays out and draws like any other window, but into an image instead of onto the screen.
-You can use this to put the UI inside an engine viewport, to composite it into your own
-frame, or to render it without anything showing up on screen, which is what the GPU
-tests do.
+`ElementFlags::WindowRenderToImage` gives a window no OS window: it lays out and draws
+into an image. Use it for engine viewports, compositing, or off-screen rendering (as the
+GPU tests do).
 
 ```cpp
 if (BeginWindow(windowID, "Panel", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(400, 300),
@@ -17,34 +15,31 @@ EndWindow();
 
 ## Copying into the host's image
 
-If the GUI runs on your device (see
-[Using your own Vulkan device](vulkan-device.md)), each frame of the window can be
-copied into an image you own:
+When the GUI runs on your device ([Using your own Vulkan device](vulkan-device.md)), each
+frame can be copied into your image:
 
 ```cpp
 vk->SetWindowImageTarget(windowID, hostImage, VkExtent2D{ 400, 300 });
 ```
 
-You can set this before the window exists. Passing `VK_NULL_HANDLE` stops the copies.
-The window's pixels are scaled to the extent you give.
+Can be set before the window exists. `VK_NULL_HANDLE` stops the copies. Pixels are scaled
+to the given extent.
 
-The target image follows this synchronization contract, on the queue you passed to
-`SetExternalDevice`:
+Synchronization contract, on the queue passed to `SetExternalDevice`:
 
-1. The image needs `TRANSFER_DST` usage. After your fragment-stage reads, the GUI's
-   frame moves it from `SHADER_READ_ONLY_OPTIMAL` (or `UNDEFINED` the first time) to
-   `TRANSFER_DST_OPTIMAL` and copies the window into it. It then leaves the image in
+1. The image needs `TRANSFER_DST` usage. After your fragment-stage reads, the GUI's frame
+   moves it from `SHADER_READ_ONLY_OPTIMAL` (`UNDEFINED` the first time) to
+   `TRANSFER_DST_OPTIMAL`, copies the window in, and leaves it in
    `SHADER_READ_ONLY_OPTIMAL`, visible to the fragment stage.
-2. You read the image in work you submit after the GUI's frame (after `RecordFrame`),
-   and leave it in `SHADER_READ_ONLY_OPTIMAL`.
+2. Read it in work submitted after the GUI's frame (after `RecordFrame`), and leave it in
+   `SHADER_READ_ONLY_OPTIMAL`.
 
-Recording draw commands straight into your own command buffer isn't supported yet.
+Recording draw commands into your own command buffer is not supported yet.
 
 ## Reading the pixels back
 
-`ReadWindowPixels` copies the window's last frame into memory as BGRA8, with tightly
-packed rows. It also works on the GUI's own device. It waits for that frame to finish on
-the GPU before copying.
+`ReadWindowPixels` copies the window's last frame to memory as tightly packed BGRA8. Works
+on the GUI's own device too. Waits for that frame to finish on the GPU.
 
 ```cpp
 const tachyon::IntRect rect = app.windowManager->GetWindowRect(windowID);   // pixels
@@ -53,14 +48,12 @@ if (tachyon::Result<void> read = app.ReadWindowPixels(windowID, pixels); !read)
     std::fprintf(stderr, "%s\n", read.GetError().message.c_str());
 ```
 
-It fails with `ErrorCode::NotFound` if it doesn't know the window. It fails with
-`ErrorCode::Unsupported` if the window isn't a render-to-image window, if it hasn't
-rendered a frame yet, or if the span is too small.
+Errors: `ErrorCode::NotFound` for an unknown window; `ErrorCode::Unsupported` if not a
+render-to-image window, no frame rendered yet, or the span is too small.
 
 ## Input for render-to-image windows
 
-The window doesn't get any input from the OS, so you pass it in yourself. Positions are
-in the window's pixels.
+No OS input arrives; inject it. Positions are in the window's pixels.
 
 ```cpp
 app.InjectMouseMove(windowID, pos);
@@ -73,10 +66,9 @@ app.InjectText(windowID, "text");   // UTF-8
 app.InjectFocus(windowID, false);
 ```
 
-Where it makes sense, each call also takes an optional `KeyModifier`. After any mouse
-event the window counts as being under the pointer, until you call `InjectMouseLeave`.
-After any injected input it has keyboard focus, until you call
-`InjectFocus(windowID, false)`.
+- Calls take an optional `KeyModifier` where it makes sense.
+- After any mouse event the window is under the pointer until `InjectMouseLeave`.
+- After any injected input it has keyboard focus until `InjectFocus(windowID, false)`.
 
 ---
 

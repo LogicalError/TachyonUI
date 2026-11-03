@@ -1,26 +1,20 @@
 # TachyonUI documentation
 
-TachyonUI is an immediate-mode GUI library for C++20. It draws on the GPU (through Vulkan
-for now) and gets its windows and input from SDL3 by default. You describe the whole UI
-in code every frame, and the library keeps track of the state, lays everything out with
-flexbox and grid, and draws it.
+An immediate-mode C++20 GUI library for tools. You build the UI in `OnGUI()` every frame;
+the library keeps the state, lays it out and draws it on the GPU.
 
-If you're new, start with the [Tutorial](tutorial.md). It takes you from an empty folder
-to an app with docked panels, buttons and fields. After that, read the Overview.
+New? Start with the [Tutorial](tutorial.md).
 
-| Guide | Read it for |
+| Guide | Covers |
 | --- | --- |
-| [Tutorial](tutorial.md) | Your first app, step by step: the project, panels, buttons, fields and docking. |
-| [Overview](overview.md) | The frame model, IDs, the Begin/End rules, return values, units, errors and saved state. |
-| [Controls](controls.md) | Every control and container, grouped by family, with what each one takes, returns and how it's styled. |
-| [CSS and theming](css.md) | How themes are loaded, the selectors and states, values, and every supported property. |
-| [Integration](integration.md) | Adding the library to your build, using your own Vulkan device, window, input and frame loop, and rendering into your own image. |
-| [Examples](examples.md) | Walkthroughs of the example programs, from hello world to hosting on your own Vulkan device. |
+| [Tutorial](tutorial.md) | Your first app, step by step |
+| [Overview](overview.md) | The frame, IDs, Begin/End, return values, units, errors, saved state |
+| [Controls](controls.md) | Every control: signatures, return values, CSS classes |
+| [CSS and theming](css.md) | Themes, selectors, values, properties |
+| [Integration](integration.md) | Build setup, your own Vulkan device, window, input and loop |
+| [Examples](examples.md) | The example programs |
 
-The [API reference](https://logicalerror.github.io/TachyonUI/) covers every class and
-function, and has these guides alongside it. If you'd rather browse by area, its
-**API by topic** pages group the classes into application, controls, layout, styling,
-text, input, graphics and windows.
+[API reference](https://logicalerror.github.io/TachyonUI/): every class and function, also grouped by topic.
 
 <!--!
 \htmlonly <div class="page-tree"> \endhtmlonly

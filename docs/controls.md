@@ -1,35 +1,27 @@
 # Controls
 
-Every control and container is a member function of `tachyon::GUIApplication`, and you
-call it from `OnGUI()` each frame. The pages below group the controls by family. For each
-one you'll find its main signatures, what it returns, the callback it takes and the CSS
-class it uses by default. The [Overview](overview.md) explains how IDs, Begin / End pairs
-and return values work in general, and [CSS and theming](css.md) shows how to style the
-classes named here.
+`tachyon::GUIApplication` members, called in `OnGUI()`, with `using namespace tachyon;`.
 
-The snippets assume they run inside `OnGUI()` of a `GUIApplication` subclass, with
-`using namespace tachyon;`. The programs in `examples/` show the same calls in context.
-
-| Page | What it covers |
+| Page | Covers |
 | --- | --- |
-| [Common conventions](controls/conventions.md) | Signatures, return values, callbacks, IDs and styles shared by every control. |
-| [Windows and layout](controls/windows-and-layout.md) | Windows, horizontal and vertical groups, areas, scroll bars, caching, label and button groups. |
-| [Text and images](controls/text-and-images.md) | `Text`, `Label`, `DragLabel`, `SelectableText` and `Image`. |
-| [Buttons and toggles](controls/buttons-and-toggles.md) | `Button`, `CommandButton`, `Toggle`, `Switch` and `Checkbox`. |
-| [Fields](controls/fields.md) | Text, search, numeric, vector and typed fields, dropdowns, lists and dictionaries. |
-| [Sliders](controls/sliders.md) | `SliderField` and `Slider`. |
-| [Color and gradient fields](controls/color-and-gradient.md) | `ColorField` and `GradientField` with their picker popups. |
-| [Menus](controls/menus.md) | Menus, menu items, the menu bar and title bar, and context menus. |
-| [Tooltips and message dialogs](controls/tooltips-and-dialogs.md) | Tooltips on any control, and modal `MessageDialog` questions. |
-| [Lists and reorderable groups](controls/lists.md) | List views and drag-to-reorder groups. |
-| [Tables](controls/tables.md) | Tables, virtual tables for large data, and tree cells. |
-| [Tree and grid views](controls/trees-and-grids.md) | `VirtualTreeView`, grid views and virtual grid views. |
-| [Tabs, docking and toolbars](controls/tabs-docking-toolbars.md) | Tab bars, docking containers, toolbars and the toolbar dock. |
-| [Node view](controls/node-view.md) | `RenderNodeView`, a self-contained node graph editor. |
-| [Other controls](controls/other-controls.md) | Breadcrumb, status bar, command search and the settings panel. |
-| [Custom drawing](controls/custom-drawing.md) | Drawing your own shapes and text inside an element. |
-| [Default CSS classes](controls/css-classes.md) | The CSS class each control uses unless you pass your own style. |
-| [Writing a control](controls/writing-controls.md) | What every control must do, and what to decide for the optional features. |
+| [Common conventions](controls/conventions.md) | Parameter order, return values, callbacks, `LayoutOverride`, state scopes |
+| [Windows and layout](controls/windows-and-layout.md) | Windows, horizontal and vertical groups, areas, scroll bars, caching, label and button groups |
+| [Text and images](controls/text-and-images.md) | `Text`, `Label`, `DragLabel`, `SelectableText`, `Image` |
+| [Buttons and toggles](controls/buttons-and-toggles.md) | `Button`, `CommandButton`, `Toggle`, `Switch`, `Checkbox` |
+| [Fields](controls/fields.md) | Text, search, numeric, vector and typed fields, dropdowns, lists, dictionaries |
+| [Sliders](controls/sliders.md) | `SliderField`, `Slider` |
+| [Color and gradient fields](controls/color-and-gradient.md) | `ColorField`, `GradientField` and their pickers |
+| [Menus](controls/menus.md) | Menus, menu items, menu bar, title bar, context menus |
+| [Tooltips and message dialogs](controls/tooltips-and-dialogs.md) | Tooltips, modal `MessageDialog` |
+| [Lists and reorderable groups](controls/lists.md) | List views, drag-to-reorder groups |
+| [Tables](controls/tables.md) | Tables, virtual tables, tree cells |
+| [Tree and grid views](controls/trees-and-grids.md) | `VirtualTreeView`, grid views, virtual grid views |
+| [Tabs, docking and toolbars](controls/tabs-docking-toolbars.md) | Tab bars, docking containers, toolbars, toolbar dock |
+| [Node view](controls/node-view.md) | `RenderNodeView` node graph editor |
+| [Other controls](controls/other-controls.md) | Breadcrumb, status bar, command search, settings panel |
+| [Custom drawing](controls/custom-drawing.md) | Drawing shapes and text inside an element |
+| [Default CSS classes](controls/css-classes.md) | Each control's class when you pass no style |
+| [Writing a control](controls/writing-controls.md) | Required and optional parts of a new control |
 
 <!--!
 \htmlonly <div class="page-tree"> \endhtmlonly

@@ -4,52 +4,45 @@ A theme is a palette file followed by one or more style files:
 
 | File | Contents |
 | --- | --- |
-| `themes/dark.css`, `themes/light.css` | The palette. These hold only `:root` custom properties (colors, shadows). |
-| `themes/styles.css` | The library's rules: shared dimensions in `:root`, `@font-face`, and one class per control part. |
-| `themes/showcase.css` | Classes used only by the showcase app, which is the only thing that loads it. |
+| `themes/dark.css`, `themes/light.css` | The palette: only `:root` custom properties (colors, shadows). |
+| `themes/styles.css` | The library's rules: shared dimensions in `:root`, `@font-face`, one class per control part. |
+| `themes/showcase.css` | Showcase app only. |
 
-`dark.css`, `light.css` and `styles.css` are built into the library, along with the fonts
-their `@font-face` rules name, so your app doesn't need to ship any of them. If a file with
-the same name exists on disk, it's used instead of the built-in one.
+`dark.css`, `light.css`, `styles.css` and their fonts are built into the library. A file
+with the same name on disk replaces the built-in one.
 
-The files are joined into one text in the order above and parsed once. `var()` is resolved
-at parse time against the variables defined so far, which means the palette has to come
-before the files that use it. The same goes within a file. A rule only sees variables
-defined above it, and redefining a variable further down doesn't change rules that already
-used it.
-
-Your application picks the files with these `GUIApplication` calls:
+The files are joined in the order above and parsed once. `var()` resolves at parse time
+against variables defined above it, so the palette must come first. Redefining a variable
+later doesn't change rules that already used it.
 
 | Call (`GUIApplication`) | What it does |
 | --- | --- |
-| `SetResourceRoot(dir)` | Sets the folder that relative theme and font paths load from. If a file is missing there and the library has a built-in copy, the built-in one is used. An empty path means the working directory. Call it before `Initialize`. |
-| `SetStyleFiles(files)` | Sets the style files loaded after the palette, in order. The default is `{ "styles.css" }`. Relative paths are resolved next to the palette file. Call it before `Initialize`, or call `RequestReloadTheme` afterwards. |
-| `RequestReloadTheme(path, fontScale)` | Loads another palette, another font scale, or both, at the start of the next frame. Called before `Initialize`, it picks the starting palette. It does nothing when nothing changed. Switching palettes crossfades: the old look fades out over the new one in 200 ms (unless reduced motion is on). |
-| `GetThemePath()`, `GetGlobalFontScale()` | Return the current palette path (default `themes/dark.css`) and font scale. |
-| `ThemeReloadResult()` | Tells you how the last reload went. If it failed (say a file couldn't be opened), the previous theme stays in place. |
-| `OnStylesReloaded()` | A virtual function called after each reload. Fetch or register your `StyleRef`s again here. |
+| `SetResourceRoot(dir)` | Folder for relative theme and font paths; missing files fall back to the built-in copy. Empty means the working directory. Call before `Initialize`. |
+| `SetStyleFiles(files)` | Style files loaded after the palette, in order. Default `{ "styles.css" }`. Relative to the palette's folder. Call before `Initialize`, or call `RequestReloadTheme` after. |
+| `RequestReloadTheme(path, fontScale)` | Loads another palette and/or font scale at the start of the next frame. Before `Initialize`, picks the starting palette. No-op if nothing changed. Palette switches crossfade over 200 ms (not with reduced motion). |
+| `GetThemePath()`, `GetGlobalFontScale()` | Current palette path (default `themes/dark.css`) and font scale. |
+| `ThemeReloadResult()` | Result of the last reload. On failure the previous theme stays. |
+| `OnStylesReloaded()` | Virtual, called after each reload. Fetch or register your `StyleRef`s again here. |
 
-If your application adds its own classes, keep the library's file first:
+Your own classes go after the library's file:
 
 ```cpp
 const std::string_view styleFiles[] = { "styles.css", "my_app.css" };
 SetStyleFiles(styleFiles);
 ```
 
-Here's how you switch palettes or text size at runtime (from
-`examples/custom_theme/custom_theme.cpp`):
+Switching palette or text size at runtime (`examples/custom_theme/custom_theme.cpp`):
 
 ```cpp
 Button("Light", [this] { RequestReloadTheme("themes/light.css", GetGlobalFontScale()); });
 Button("Larger text", [this] { RequestReloadTheme(GetThemePath(), GetGlobalFontScale() * 1.1f); });
 ```
 
-The font scale multiplies every CSS `font-size`. The theme also reloads when the UI scale
-changes (`SetUIScale`), or when the main window moves to a monitor with a different display
-scale.
-
-Parse errors don't stop loading. Each one is logged as `file:line:column: message`. The bad
-declaration or rule is skipped, and parsing carries on.
+- The font scale multiplies every CSS `font-size`.
+- The theme also reloads on `SetUIScale` and when the main window moves to a monitor with a
+  different display scale.
+- Parse errors are logged as `file:line:column: message`; the bad declaration or rule is
+  skipped and parsing continues.
 
 ---
 

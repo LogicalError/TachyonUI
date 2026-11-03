@@ -2,8 +2,7 @@
 
 ## The application
 
-Your application is a class derived from `tachyon::GUIApplication` that implements
-`OnGUI`:
+Derive from `tachyon::GUIApplication` and implement `OnGUI`:
 
 ```cpp
 #include <gui_controls/gui_application.h>
@@ -44,35 +43,30 @@ int main()
 }
 ```
 
-You don't need to ship any files next to the program. The shaders, the default themes
-and the fonts are built into the library. If you want to change the defaults, you can
-call `SetResourceRoot` (for your own themes and fonts), `SetGraphicsBackend`,
-`SetWindowBackend`, `SetClipboard` and `SetStyleFiles` before `Initialize`. They're all
-optional. `Cleanup` releases everything `Initialize` created.
+Shaders, default themes and fonts are built in; no files ship next to the program.
+Optional, before `Initialize`: `SetResourceRoot` (your own themes and fonts),
+`SetGraphicsBackend`, `SetWindowBackend`, `SetClipboard`, `SetStyleFiles`. `Cleanup`
+releases everything `Initialize` created.
 
 
 ## The frame
 
-Every frame goes through four steps, always in this order:
+Each frame runs these steps in order:
 
-1. **Build.** The library calls your `OnGUI`. Each control you call adds an element to
-   this frame's tree, but nothing is drawn yet. A control reads its state (hovered,
-   focused, pressed, checked) from what the library remembered from the last frame.
-2. **Layout.** The tree is laid out using the styles from the CSS files and the
-   `LayoutOverride` you passed to each call. OS windows are created, moved and resized
-   to match their window elements.
-3. **Input.** Any input that arrived since the last frame is hit-tested against the new
-   layout and sent to the elements. This is where event handlers and control callbacks
-   run, after `OnGUI` has already returned.
-4. **Render.** The tree is drawn into each window.
+1. **Build.** The library calls `OnGUI`. Each control adds an element to the frame's
+   tree; nothing is drawn yet. Control state (hovered, focused, pressed, checked) comes
+   from the previous frame.
+2. **Layout.** The tree is laid out from the CSS and each call's `LayoutOverride`. OS
+   windows are created, moved and resized to match.
+3. **Input.** Input since the last frame is hit-tested against the new layout. Event
+   handlers and control callbacks run here, after `OnGUI` has returned.
+4. **Render.** Each window is drawn.
 
-This means a click shows up in two places. The button's callback runs during the input
-step of the frame that received the click, and the UI you build in the next frame sees
-the result.
+So a click's callback runs in the input step of the frame that received it, and the next
+frame's `OnGUI` sees the result.
 
-Since callbacks run after `OnGUI` returns, anything they capture has to outlive the
-frame. Capturing members of your application, objects you own, or copies is fine.
-Capturing references to locals of `OnGUI` is not.
+Callbacks run after `OnGUI` returns, so anything they capture must outlive the frame.
+Capture members, objects you own or copies, never references to `OnGUI` locals:
 
 ```cpp
 // Fine: captures `this` and a copy of the index.
@@ -85,8 +79,7 @@ Button("Add", [&count] { ++count; });
 
 ### Run and the split frame calls
 
-`Run()` keeps going until `applicationQuit` is set or the last window closes. The loop
-inside it looks like this:
+`Run()` loops until `applicationQuit` is set or the last window closes:
 
 ```cpp
 while (app.UpdateFrame())
@@ -97,12 +90,14 @@ while (app.UpdateFrame())
 }
 ```
 
-`UpdateFrame` pumps OS events and input, and returns false once the app quits.
-`RecordFrame` runs the frame described above and submits every window. It only returns
-an error when the GPU device was lost and can't be recreated, which can happen when you
-supply your own device. `PresentFrame` presents the OS windows. If you have your own
-main loop, call these three yourself. [Integration](../integration/frame-loop.md) shows
-how.
+| Call | Does |
+| --- | --- |
+| `UpdateFrame` | Pumps OS events and input; false once the app quits |
+| `RecordFrame` | Runs the frame and submits every window; fails only if the GPU device was lost and can't be recreated (possible with your own device) |
+| `PresentFrame` | Presents the OS windows |
+
+With your own main loop, call these yourself: see
+[Integration](../integration/frame-loop.md).
 
 ---
 

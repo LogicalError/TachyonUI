@@ -4,40 +4,36 @@
 
 ### BeginTabBar / Tab
 
-A bar of tabs. `*selectedIndex` holds the selected tab, and the user changes it by
-clicking or with the arrow keys. Tabs can be dragged into a new order, which calls
-`onReorder(from, to)`. If you set `onClose(index)`, each tab also gets a "Close Panel"
-context menu (Shift+F10 opens it from the keyboard), and Ctrl+W or Ctrl+F4 closes the
-focused tab. Clicking a tab focuses it, and Alt+Left / Right moves the focused tab.
+A bar of tabs; `*selectedIndex` is the selected tab (click or arrow keys).
 
-When the tabs don't fit on one row, the bar's layout (`TabBarLayout`) decides what
-happens. The user can switch it per bar from the context menu of the strip, of any tab or
-of the "+N" button, by choosing "Collapse Rows" or "Multiple Rows":
+| Input | Effect |
+| --- | --- |
+| Drag a tab | Reorders; calls `onReorder(from, to)` |
+| `onClose(index)` set | "Close Panel" context menu (Shift+F10), Ctrl+W / Ctrl+F4 close the focused tab |
+| Alt+Left / Right | Moves the focused tab (clicking a tab focuses it) |
 
-- **One row** ("Collapse Rows") is the default. The bar shows the first tabs and a "+N"
-  button that lists the rest, and picking one from that list selects it. The selected tab
-  is always in the bar, taking the place of the last tabs that fit, so the arrow keys and
-  Home/End can reach the listed tabs too. A `Tab` that's in the list builds nothing and
-  returns false. Which tabs fit is worked out from the previous frame's sizes, so after a
-  resize the bar settles one frame later.
-- **Several rows** ("Multiple Rows") shows every tab, wrapping onto as many rows as it
-  needs. Dragging a tab onto another row moves it there. The arrow keys and Alt + the
-  arrows carry on from the end of one row to the start of the next.
+When tabs don't fit, `TabBarLayout` decides. The user switches it per bar from the context
+menu of the strip, a tab or the "+N" button:
 
-If you want to keep track of the choice yourself, pass `layout`. Without it, the bar
-remembers the choice by its ID for the rest of the session. A docked tab group stores it
-on its dock node, so it's part of the saved layout. `onDragOut` and `dragVisualizer` work
-the same way as in the reorderable group. What goes under the bar is up to your app.
+- **One row** ("Collapse Rows", default): first tabs plus a "+N" button listing the rest.
+  The selected tab is always shown, replacing the last ones that fit, so arrows and
+  Home/End reach listed tabs too. A `Tab` in the list builds nothing and returns false. Fit
+  uses the previous frame's sizes, so after a resize the bar settles one frame later.
+- **Several rows** ("Multiple Rows"): all tabs, wrapping. Dragging a tab to another row
+  moves it there. Arrows and Alt+arrows continue across rows.
 
-`TabBarOptions` covers the remaining settings:
+Pass `layout` to own the choice; otherwise the bar remembers it by ID for the session. A
+docked tab group stores it on its dock node (saved with the layout). `onDragOut` and
+`dragVisualizer` work as in the reorderable group. Content under the bar is yours.
 
-- `closeLabel` is the text of the context menu's close item ("Close Panel").
-- `listHidden = false` leaves out the "+N" button, for when you list the hidden tabs some
-  other way.
-- `layoutMenu = false` leaves out the "Collapse Rows" / "Multiple Rows" choice.
-- `dropArea` names an element around the bar that counts as part of the bar while a tab is
-  being dragged. Inside it the tab is reordered, and past the last tab it goes to the end.
-  Only outside it is the tab dragged out.
+`TabBarOptions`:
+
+| Field | Effect |
+| --- | --- |
+| `closeLabel` | Text of the close item ("Close Panel") |
+| `listHidden = false` | No "+N" button, for listing hidden tabs yourself |
+| `layoutMenu = false` | No "Collapse Rows" / "Multiple Rows" choice |
+| `dropArea` | Element around the bar that counts as the bar while dragging: reorders inside, past the last tab goes to the end; only outside it drags out |
 
 ```cpp
 bool BeginTabBar(ID id, int* selectedIndex, std::function<void(int, int)> onReorder,
@@ -53,15 +49,14 @@ bool BeginTab(ID id, const GUIContent& content, StyleRef style, StyleRef content
 void EndTab();
 ```
 
-Use `BeginTab` / `EndTab` when a tab needs more than an icon and text. It draws the icon
-and text (in `contentStyle`, or `tab-content` by default), followed by whatever you add
-before `EndTab`. Every `BeginTab` needs a matching `EndTab`. When `BeginTab` returns false,
-the tab is in the "+N" list and you shouldn't add anything to it.
+`BeginTab` / `EndTab`: for tabs with more than icon and text. Draws icon and text (in
+`contentStyle`, default `tab-content`), then what you add before `EndTab`. Always pair with
+`EndTab`. If `BeginTab` returns false the tab is in the "+N" list; add nothing.
 
-The forms without an ID use the call site as the ID. Classes: `tab-bar`, `tab`,
-`tab-content` and `tab-overflow` (the "+N" button, whose list uses the menu classes). In
-the several-rows layout the bar's style is used with `flex-wrap: wrap`
-(`StyleManager::WithFlexWrap`), and in the one-row layout with `nowrap`.
+Forms without an ID use the call site. Classes: `tab-bar`, `tab`, `tab-content`,
+`tab-overflow` (the "+N" button; its list uses menu classes). The bar's style gets
+`flex-wrap: wrap` in several-rows layout (`StyleManager::WithFlexWrap`), `nowrap` in
+one-row.
 
 ```cpp
 BeginTabBar(idManager.AllocateDynamicID("tabs"), &selectedTab, nullptr);
@@ -76,10 +71,9 @@ Text(selectedTab == 0 ? "Content of the first tab" : "Content of the second tab"
 
 ### BeginDockingContainer / EndDockingContainer
 
-A docking container arranges panels in a tree of splits, where each leaf holds a group of
-tabs. The tree lives in a `DockingLayout`. The user can drag a tab to move a panel, drop it
-on another leaf to dock it there, or drag it out of the window to float it. You create each
-panel once with `CreatePanel`, and it builds its content in its callback.
+Panels in a tree of splits stored in a `DockingLayout`; each leaf is a tab group. Users drag
+tabs to move, dock on another leaf, or float outside the window. Create each panel once
+with `CreatePanel`; its callback builds its content.
 
 ```cpp
 ID   CreatePanel(std::unordered_map<ID, Panel>& panels, std::string title, IconID icon,
@@ -91,17 +85,14 @@ void EndDockingContainer();
 void EmitFloatingDockWindows();
 ```
 
-Build the tree with `MakeLeaf({ panelIDs... })` and `MakeSplit(mode, size, first,
-second)` from `gui_dock_node.h`. `DockSplitMode` is `LeftPinned`, `RightPinned`,
-`TopPinned` or `BottomPinned`, which says which child keeps the given size. Call
-`EmitFloatingDockWindows()` after the container to give floating panels their own windows.
-
-A panel's `onEnable` and `onDisable` run when it becomes visible or hidden, and its
-`cacheSignature` controls the render cache. Closing a panel destroys it.
-
-Other calls you can use: `FloatPanel(layout, panelID, screenPos)`,
-`CloseDockedPanel(layout, leaf, tabIndex)`, `CloseFloatingDockWindow(index)` and
-`DisableAllPanels(layout)`.
+- Build the tree with `MakeLeaf({ panelIDs... })` and `MakeSplit(mode, size, first,
+  second)` (`gui_dock_node.h`). `DockSplitMode`: `LeftPinned`, `RightPinned`, `TopPinned`,
+  `BottomPinned` (which child keeps `size`).
+- Call `EmitFloatingDockWindows()` after the container for floating panels.
+- `onEnable` / `onDisable` run when a panel becomes visible / hidden. `cacheSignature`
+  controls the render cache. Closing a panel destroys it.
+- Also: `FloatPanel(layout, panelID, screenPos)`, `CloseDockedPanel(layout, leaf,
+  tabIndex)`, `CloseFloatingDockWindow(index)`, `DisableAllPanels(layout)`.
 
 Classes: `dock-container`, `dock-leaf`, `dock-content`, `dock-split-horz`,
 `dock-split-vert`, `dock-sizer-horz`, `dock-sizer-vert`, `dock-window`,
@@ -128,63 +119,54 @@ EndWindow();
 
 ### Documents
 
-Documents sit one level above panels. Think of levels, prefabs, material graphs, layouts or
-animations, each with its own `DockingLayout`. A bar of document tabs sits under the title
-bar, and the active document's panels fill the window below it. Clicking another tab swaps
-out the whole workspace. Only the active document's panels are built (the others get
-`onDisable`), and only they accept drops.
+Documents (levels, prefabs, graphs...) each have their own `DockingLayout`. A document tab
+bar sits under the title bar; the active document's panels fill the window. Only the active
+document's panels are built and accept drops; the others get `onDisable`.
 
-Each tab shows the document's icon and its name, followed by its extension in a muted
-color ("Forest" + ".level"). The active or hovered tab also shows a close button, and a
-document that's `dirty` shows a dot instead.
+Tabs show icon, name and a muted extension ("Forest" + ".level"). The active or hovered tab
+shows a close button; a `dirty` document shows a dot instead.
 
-A tab's colors come from the document's `kind`, through three classes:
+Tab colors come from the document's `kind`:
 
-- `document-tab-<kind>` tints the tab, and fills it solid when it's active.
-- `document-name-<kind>` sets the icon's color.
-- `document-line-<kind>` colors the line under the bar, in the active document's color.
+| Class | Colors |
+| --- | --- |
+| `document-tab-<kind>` | Tab tint; solid fill when active |
+| `document-name-<kind>` | Icon |
+| `document-line-<kind>` | Line under the bar (active document's color) |
 
-The themes define `level`, `material`, `layout`, `prefab` and `animation`. A kind without
-its own classes falls back to `document-tab`, `document-name` and `document-line`.
+Themes define `level`, `material`, `layout`, `prefab`, `animation`. Other kinds fall back
+to `document-tab`, `document-name`, `document-line`.
 
-The user reorders tabs by dragging. Tabs that don't fit are left out, but the "N open"
-list on the right names every document. The "+" after the tabs calls `onNew`, and it isn't
-shown if you don't set `onNew`.
+Behavior:
 
-The close button, "Close Document" in a tab's context menu, and Ctrl+W all ask `onClose`
-first and then close the document on the next frame. If `onClose` returns false, the
-document stays open. That's where you ask about unsaved changes, and then call
-`CloseDocument` yourself. Closing a document destroys its panels and closes any of its
-panel windows that were torn off.
+- Drag to reorder. Tabs that don't fit are hidden; the "N open" list names all.
+- "+" calls `onNew`; hidden if `onNew` is unset.
+- Close button, "Close Document" in the context menu and Ctrl+W call `onClose` first, then
+  close next frame. If `onClose` returns false the document stays open; ask about unsaved
+  changes there and call `CloseDocument` yourself. Closing destroys its panels and their
+  torn-off windows.
+- Dragging a tab off the bar: dropped on another document bar (any main window), it moves
+  there at the phantom tab's spot. Dropped elsewhere, `onTearOff` gets the document
+  (already removed from its set) and screen position, to open a new main window. Without
+  `onTearOff` it goes back.
+- Document tabs drop only on document bars, panel tabs only on panel docks. A document
+  dropped on panels is torn off; a panel dropped on a document bar floats. Drops apply at
+  the start of the next frame.
 
-Dragging a tab off the bar moves its document. If it's dropped on another document bar
-(in another main window, or another set in the same window), it goes there, at the spot
-where a phantom tab showed it would land. If it's dropped anywhere else, `onTearOff` gets
-the document, already removed from its set, and the screen position, so you can give it a
-new main window of its own. A preview of the window follows the cursor while dragging.
-Without `onTearOff`, the tab goes back where it was.
+Each main window is built by your app: title bar and menus, `Documents` for its
+`DocumentSet`, status bar, then `EmitFloatingDockWindows(set)` (windows for panels torn off
+from that set; they belong to that main window and follow a document that moves). Close a
+window with no documents left. A set must stay alive until the end of the frame it was
+built in.
 
-Document tabs only drop onto document bars, and panel tabs only onto panel docks. A
-document dropped on panels is torn off, and a panel dropped on a document bar floats. Drops
-take effect at the start of the next frame.
+Saving: `PersistDocuments(key, windows)` takes a function listing main windows and their
+sets (`DocumentWindowRef`). `SaveUIState` saves each window's position, document order,
+active document, and each document's name, extension, kind and dock tree.
 
-Your app builds each main window itself: its title bar and menus, `Documents` for its own
-`DocumentSet`, its status bar, and then `EmitFloatingDockWindows(set)`. That last call
-builds the windows for panels torn off from that set's documents. Those windows belong to
-that main window, and they move along with a document when it moves to another window. A
-window that has no documents left should close. A set must stay alive until the end of the
-frame it was built in.
-
-You can keep the open documents between runs. `PersistDocuments(key, windows)` takes a
-function that lists the main windows and their sets (`DocumentWindowRef`). `SaveUIState`
-then saves each window's position, the document order, the active document and, for each
-document, its name, extension, kind and dock tree.
-
-The library can't create documents for you, because their panels belong to your app. So
-after `RestoreUIState`, get them with `TakeSavedDocuments(key)`. For each window, create
-its documents with their panels, lay each one out with `RestoreDocumentLayout`, and set
-`active`. For any extra window, call `RestoreWindowPlace` before declaring it so it opens
-where it was.
+Restoring (the library can't create your panels): after `RestoreUIState`, call
+`TakeSavedDocuments(key)`. Per window, create its documents with panels, lay each out with
+`RestoreDocumentLayout`, set `active`. For extra windows, call `RestoreWindowPlace` before
+declaring them.
 
 ```cpp
 // Initialize:
@@ -208,11 +190,10 @@ void      Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
 void      EmitFloatingDockWindows(const DocumentSet& documents);
 ```
 
-A `DocumentSet` holds the documents in tab order, plus `active`, `onNew`, `onClose` and
-`onTearOff`. `Active()` returns the document that's shown. It's a good idea to name the
-active document in the window's title or status bar. Other classes: `documents`,
-`document-bar`, `document-row`, `document-tab-bar`, `document-extension`,
-`document-mark`, `document-close`, `document-dirty`, `document-new`, `document-list`.
+`DocumentSet` holds documents in tab order, plus `active`, `onNew`, `onClose`, `onTearOff`.
+`Active()` returns the shown document. Other classes: `documents`, `document-bar`,
+`document-row`, `document-tab-bar`, `document-extension`, `document-mark`,
+`document-close`, `document-dirty`, `document-new`, `document-list`.
 
 ```cpp
 // Once:
@@ -240,9 +221,9 @@ documents.onTearOff = [this](std::unique_ptr<Document> document, int2 at) {
 
 ### BeginToolbar / EndToolbar
 
-A row (or column) that wraps. Inside it, controls that use their default style switch to
-their toolbar versions: `toolbar-button`, `toolbar-toggle`, `toolbar-textbox`,
-`toolbar-number-field` and `toolbar-menu-trigger`.
+A wrapping row (or column). Controls with default style inside use their toolbar versions:
+`toolbar-button`, `toolbar-toggle`, `toolbar-textbox`, `toolbar-number-field`,
+`toolbar-menu-trigger`.
 
 ```cpp
 bool BeginToolbar(bool horizontal = true);
@@ -251,9 +232,9 @@ void EndToolbar();
 
 ### RenderToolbarDock
 
-A free function (`controls_toolbar_dock.h`) that lays out toolbars on the four sides of
-some content. The user can drag toolbar items between sides or tear them off into
-floating windows. Your app owns the item lists and moves the items in the callbacks.
+Free function (`controls_toolbar_dock.h`): toolbars on the four sides of some content.
+Users drag items between sides or tear them off to floating windows. Your app owns the item
+lists and moves items in the callbacks.
 
 ```cpp
 void InitializeToolbarDockState(ToolbarDockState& state, GUIApplication& app);
@@ -263,12 +244,13 @@ void RenderToolbarDock(GUIApplication& app, ToolbarDockState& state,
                        const ToolbarDockCallbacks& callbacks, std::function<void()> renderContent);
 ```
 
-A `ToolbarItem` has an `id`, a `debugName` and a `renderBody` that emits its controls. The
-dock wraps each body in `BeginToolbar` for you. `ToolbarDockCallbacks` has `onReorder`,
-`onCrossSideDrop` and `onTearOff`. To show the torn-off toolbars, call
-`EmitFloatingToolbarWindows(floatingItems, &options)`. Classes: `toolbar-side-horz`,
-`toolbar-side-vert`, `toolbar-item-horz`, `toolbar-item-vert`, `toolbar-thumb-horz`,
-`toolbar-thumb-vert`, `toolbar-floating-window`.
+- `ToolbarItem`: `id`, `debugName`, `renderBody` (emits its controls; wrapped in
+  `BeginToolbar` for you).
+- `ToolbarDockCallbacks`: `onReorder`, `onCrossSideDrop`, `onTearOff`.
+- Show torn-off toolbars with `EmitFloatingToolbarWindows(floatingItems, &options)`.
+- Classes: `toolbar-side-horz`, `toolbar-side-vert`, `toolbar-item-horz`,
+  `toolbar-item-vert`, `toolbar-thumb-horz`, `toolbar-thumb-vert`,
+  `toolbar-floating-window`.
 
 ---
 

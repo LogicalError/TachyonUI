@@ -1,22 +1,21 @@
 # Tutorial: your first app
 
-In this tutorial you'll go from an empty folder to an app with two docked panels. One
-panel has buttons that change a count, and the other has fields that change a greeting.
+From an empty folder to an app with two docked panels: buttons that change a count, and
+fields that change a greeting.
 
-You'll need a C++20 compiler, CMake 3.22 or newer, the [Vulkan SDK](https://vulkan.lunarg.com/)
-and [Git LFS](https://git-lfs.com/). The [README](https://github.com/LogicalError/TachyonUI#readme)
-lists the exact versions.
+Needs a C++20 compiler, CMake 3.22+, the [Vulkan SDK](https://vulkan.lunarg.com/) and
+[Git LFS](https://git-lfs.com/); exact versions are in the
+[README](https://github.com/LogicalError/TachyonUI#readme).
 
-The finished program is in [`examples/tutorial`](https://github.com/LogicalError/TachyonUI/tree/main/examples/tutorial).
-It's built along with the other examples, so you can run it first to see where you're
-headed.
+Finished program: [`examples/tutorial`](https://github.com/LogicalError/TachyonUI/tree/main/examples/tutorial)
+(built with the other examples).
 
 | Step | |
 | --- | --- |
-| [1. Set up the project](tutorial/setup.md) | Add TachyonUI to a CMake project and build it. |
-| [2. Buttons](tutorial/buttons.md) | Write panels as classes, starting with a count and buttons that change it. |
-| [3. Fields](tutorial/fields.md) | Add a panel with text, number and toggle fields. |
-| [4. The app](tutorial/app.md) | Open a window with the panels docked side by side, and write `main`. |
+| [1. Set up the project](tutorial/setup.md) | Add TachyonUI to a CMake project and build it |
+| [2. Buttons](tutorial/buttons.md) | Panels as classes; a count and buttons that change it |
+| [3. Fields](tutorial/fields.md) | A panel with text, number and toggle fields |
+| [4. The app](tutorial/app.md) | A window with the panels docked side by side, and `main` |
 
 <!--!
 \htmlonly <div class="page-tree"> \endhtmlonly

@@ -1,14 +1,13 @@
 # Docking
 
-This example shows four panels in a dock layout. You can drag a tab to move its panel,
-drop it on another leaf to dock it there, or drag it outside the window to float it in
-its own OS window.
+Four panels in a dock layout. Drag a tab to move its panel, drop it on another leaf to
+dock it, or drag it outside the window to float it in its own OS window.
 Full source: [examples/docking/docking.cpp](https://github.com/LogicalError/TachyonUI/blob/main/examples/docking/docking.cpp).
 
 ## Panels
 
-You create each panel once, in `Initialize`, with a title and a callback that draws its
-content. The callback only runs while the panel is visible.
+Create each panel once, in `Initialize`, with a title and a content callback. The
+callback runs only while the panel is visible.
 
 ```cpp
 // Panels are created once; each draws its content in its callback.
@@ -19,13 +18,12 @@ const tachyon::ID log     = CreatePanel(layout.panels, "Log",     noIcon, [this]
 const tachyon::ID help    = CreatePanel(layout.panels, "Help",    noIcon, [this] { Text("Drag the tabs around."); });
 ```
 
-`layout` is a `tachyon::DockingLayout` member of the app. It owns the panels and the
-dock tree.
+`layout` is a `tachyon::DockingLayout` member; it owns the panels and the dock tree.
 
 ## The dock tree
 
-The dock tree is made of splits and leaves. A leaf holds tabs. A pinned split keeps one
-side at a fixed size in CSS px and gives the rest of the space to the other side.
+Splits and leaves; a leaf holds tabs. A pinned split keeps one side at a fixed size in
+CSS px and gives the rest to the other.
 
 ```cpp
 // Left column of 220 px, the rest split over a 150 px bottom row.
@@ -39,9 +37,8 @@ layout.root = tachyon::MakeSplit(DockSplitMode::LeftPinned, 220,
 
 ## Building it each frame
 
-The docking container builds the panels that are visible. After it,
-`EmitFloatingDockWindows` builds the panels the user has dragged out into their own
-windows.
+The docking container builds the visible panels. `EmitFloatingDockWindows` then builds
+the panels dragged out into their own windows.
 
 ```cpp
 void OnGUI() override
@@ -59,7 +56,7 @@ void OnGUI() override
 
 ## Panel content
 
-A panel's callback is ordinary UI code that runs inside the panel:
+A panel callback is ordinary UI code:
 
 ```cpp
 void DetailsPanel()
@@ -72,10 +69,10 @@ void DetailsPanel()
 }
 ```
 
-If you want the arrangement to survive a restart, give the layout a name once with
-`PersistDocking("dock", layout)` and save the text that `SaveUIState` returns (see
-[Errors and saved state](../overview/errors-and-state.md)). Docking is covered in full
-on the [Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md) page.
+To keep the arrangement across restarts, call `PersistDocking("dock", layout)` once and
+save the text `SaveUIState` returns (see
+[Errors and saved state](../overview/errors-and-state.md)). Full docking reference:
+[Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md).
 
 ---
 

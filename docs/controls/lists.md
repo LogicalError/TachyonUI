@@ -2,11 +2,6 @@
 
 ## BeginListView / ListItem
 
-A list of selectable items. `selectedIndex` holds the index of the selected item, and Up
-and Down move it while the list has focus. `itemCount` keeps that keyboard movement
-within the list. If you pass an `ItemDragDropConfig` with a `payloadType` other than 0,
-each item gets a drag handle and can be dragged and dropped onto.
-
 ```cpp
 bool BeginListView(ID id, int* selectedIndex, int itemCount, ItemDragDropConfig* dragDrop, StyleRef style,
                    LayoutOverride&& constraints = {});
@@ -15,10 +10,15 @@ bool ListItem(ID id, const GUIContent& content, StyleRef style, LayoutOverride&&
 int  FindListItemIndex(ID id) const;
 ```
 
-`ListItem` returns `true` in the frame after a click. In end-of-frame handlers, such as
-drag and drop, `FindListItemIndex` turns an item ID back into its index. The list uses
-the classes `list-view` and `list-item`. With drag and drop on, it also uses
-`list-item-row`, `list-item-body` and `list-item-drag-knob-vert`.
+- `selectedIndex`: the selected item; Up / Down move it while the list has focus.
+- `itemCount`: keeps keyboard movement inside the list.
+- `dragDrop`: with a `payloadType` other than 0, items get a drag handle and accept drops.
+- `ListItem` returns `true` the frame after a click.
+- `FindListItemIndex` maps an item ID back to its index, for end-of-frame handlers such as
+  drag and drop.
+
+Classes: `list-view`, `list-item`; with drag and drop also `list-item-row`,
+`list-item-body`, `list-item-drag-knob-vert`.
 
 ```cpp
 BeginListView(&selected, int(names.size()));
@@ -28,21 +28,6 @@ EndListView();
 ```
 
 ## BeginReorderableGroup / BeginReorderableItem
-
-A container whose items you can drag into a new order. When an item is dropped,
-`onReorder(fromIndex, toIndex)` is called, and it's up to your app to move its data. Set
-`isWrapped` to let the items wrap onto more lines. If an item is released outside the
-group, `onDragOut(index, screenPos)` is called. While an item is dragged outside the
-group, `dragVisualizer(index, screenPos)` runs every frame, usually to draw a ghost
-window.
-
-Items can be moved from the keyboard too. Alt plus an arrow key along the group moves
-the item that has the focus by one place: Up / Down in a vertical group, Left / Right in
-a horizontal one, and any arrow in a wrapped one. This goes through the same
-`onReorder`, which is called once `EndReorderableGroup` has seen every item. The focus
-stays with the moved item. If the item's IDs travel with its data (as with tabs), the
-focus is already in the right place. If the IDs belong to the slot (as with the rows of
-a `Field` list), the focus moves to the same control in the item's new slot.
 
 ```cpp
 bool BeginReorderableGroup(ID id, ReorderDirection direction, bool isWrapped,
@@ -58,10 +43,23 @@ void EndReorderableItem();
 void EmitDragHandle();
 ```
 
-`EmitDragHandle` adds a grip inside an item, and clicks on the grip reach the item. The
-group uses `horzReorderableGroup` or `vertReorderableGroup` (`horzReorderableGroupWrap`
-or `vertReorderableGroupWrap` when wrapped). Items use `reorderableItem`, and the drag
-uses `reorder-drop-slot` and `reorder-lifted`.
+| Parameter | Meaning |
+| --- | --- |
+| `onReorder(fromIndex, toIndex)` | Called on drop. Your app moves the data. |
+| `isWrapped` | Items wrap onto more lines |
+| `onDragOut(index, screenPos)` | Item released outside the group |
+| `dragVisualizer(index, screenPos)` | Every frame while dragged outside the group, e.g. to draw a ghost window |
+
+`EmitDragHandle` adds a grip inside an item; clicks on it reach the item.
+
+Keyboard: Alt plus an arrow along the group moves the focused item one place (Up / Down
+vertical, Left / Right horizontal, any arrow wrapped). It calls the same `onReorder`, once
+`EndReorderableGroup` has seen every item. Focus stays with the moved item: if IDs travel
+with the data (tabs), it already is; if IDs belong to the slot (`Field` list rows), focus
+moves to the same control in the new slot.
+
+Classes: group `horzReorderableGroup` / `vertReorderableGroup` (`...Wrap` when wrapped),
+item `reorderableItem`, drag `reorder-drop-slot`, `reorder-lifted`.
 
 ```cpp
 BeginReorderableGroup(groupID, ReorderDirection::Vertical, [this](int from, int to)

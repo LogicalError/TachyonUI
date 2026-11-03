@@ -1,8 +1,7 @@
 # Default CSS classes
 
-This is the class each control uses when you don't pass a style. Parts of a control,
-such as a switch's knob or a table's header, have classes of their own, which are listed
-on that control's page.
+Class each control uses when you pass no style. Classes for parts (a switch's knob, a
+table's header) are on the control's page.
 
 | Control | Class |
 | --- | --- |
@@ -35,7 +34,7 @@ on that control's page.
 | `MenuSeparator`, `MenuHeader` | `menu-separator`, `menu-header` |
 | `BeginMenuBar`, `BeginTitleBar` | `menu-bar`, `title-bar` |
 | `BeginContextMenu` | `menu` |
-| `SetTooltip`, `BeginTooltip` | Window `tooltip-frame`, box `tooltip`, text `tooltip-text`, shortcut `tooltip-shortcut`. Property help uses `tooltip-rich` (with `tooltip-title`, `tooltip-description` and `tooltip-footer`), and its label uses `label-help` (or `group-label-help`, `drag-label-help`, `group-drag-label-help`). Text that was cut short and is shown whole over itself uses `tooltip-expand` (text `tooltip-expand-text`). A value that isn't accepted uses `tooltip-error` (`tooltip-error-text`). A few lines, such as a disabled control's reason or a node pin's tooltip, use `tooltip-lines`, with `tooltip-note` for the muted line and `tooltip-pin-row` (`tooltip-pin-type`, `tooltip-pin-value`) for a pin's first line. |
+| `SetTooltip`, `BeginTooltip` | Window `tooltip-frame`, box `tooltip`, text `tooltip-text`, shortcut `tooltip-shortcut`. Property help: `tooltip-rich` (`tooltip-title`, `tooltip-description`, `tooltip-footer`), its label `label-help` (`group-label-help`, `drag-label-help`, `group-drag-label-help`). Truncated text shown whole: `tooltip-expand` (`tooltip-expand-text`). Rejected value: `tooltip-error` (`tooltip-error-text`). Short lines (disabled reason, node pin): `tooltip-lines`, muted line `tooltip-note`, pin's first line `tooltip-pin-row` (`tooltip-pin-type`, `tooltip-pin-value`). |
 | `MessageDialog` | `message-box` |
 | `Toasts` | `toast-stack`, `toast`, `toast-circle-<severity>` |
 | `Banner` | `banner-<severity>`, `banner-message-<severity>` |
@@ -57,9 +56,8 @@ on that control's page.
 | `RenderNodeView` | `node-view` |
 | Links in rich text (`theme.linkStyle`) | `link` (`color`, `:hover` `color`, `cursor`) |
 
-The classes are defined in `workdirectory/themes/styles.css`, and their colors come from
-the palette in `dark.css` or `light.css`. [CSS and theming](../css.md) shows how to change
-them or add your own.
+Defined in `workdirectory/themes/styles.css`; colors from the palette in `dark.css` or
+`light.css`. See [CSS and theming](../css.md).
 
 ---
 

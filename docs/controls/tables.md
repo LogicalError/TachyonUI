@@ -1,46 +1,51 @@
 # Tables
 
-A table keeps its column widths, selection and sort state in a `TableState`, which your app
-owns. You describe the columns every frame as an array of `VirtualTableColumn`s. To change
-the column order, reorder the array.
+Column widths, selection and sort state live in a `TableState` your app owns. Columns are
+an array of `VirtualTableColumn`s passed every frame; reorder the array to reorder columns.
 
-A `VirtualTableColumn` has these fields:
+`VirtualTableColumn`:
 
-- `column`, a `TableColumn` (see below).
-- `generateCell`, which builds the column's cell in a `VirtualTable`.
-- `sortAscending(rowA, rowB)`, which you need if a `VirtualTable` should sort by this
-  column.
-- `sectionId` and `sectionSizing`. Columns with the same section scroll together (see
-  "frozen columns" below).
+| Field | Meaning |
+| --- | --- |
+| `column` | A `TableColumn` (below) |
+| `generateCell` | Builds the column's cell in a `VirtualTable` |
+| `sortAscending(rowA, rowB)` | Needed for a `VirtualTable` to sort by this column |
+| `sectionId`, `sectionSizing` | Columns in the same section scroll together (see frozen columns below) |
 
-A `TableColumn` has a `header`, an `initialWidth`, a `minWidth` and a `maxWidth`, all in
-CSS pixels. It can be `sortable`. A `locked` column can't be dragged, and other columns
-can't be moved past it. `sizing` is `ColumnSizing::Resizable`, `Fixed` or `Stretch`. Set
-`interactiveContent` to keep the widgets in its cells clickable in row selection mode. You
-can also give it a `columnBackground` and a `cellStyle`.
+`TableColumn` (sizes in CSS pixels):
 
-The `TableState` options are:
+| Field | Meaning |
+| --- | --- |
+| `header` | Header text |
+| `initialWidth`, `minWidth`, `maxWidth` | Width limits |
+| `sortable` | Header click sorts |
+| `locked` | Can't be dragged; other columns can't move past it |
+| `sizing` | `ColumnSizing::Resizable`, `Fixed` or `Stretch` |
+| `interactiveContent` | Cell widgets stay clickable in row selection mode |
+| `columnBackground`, `cellStyle` | Styles |
 
-- `selectionMode`, either `TableSelectionMode::Row` or `Cell`, plus `selectedRowID`,
-  `selectedColumn` and `multiSelect`.
-- `rowDragDrop`.
-- `sortColumn` and `sortDescending`.
-- `followTail`, which keeps the table scrolled to the bottom as rows are added.
-- `selectionBar`, `rowStyle`, `cellStyle`, `showHeaders` and `columnSeparators`.
-- `onReorderColumns`. When you set it, the user can drag headers to reorder columns.
-- `onRowDoubleClick`.
+`TableState`:
 
-A header that sorts or moves its column is a Tab stop. When it has focus, Space or Enter
-sorts by that column, and pressing it again sorts the other way. Alt+Left and Alt+Right
-move the column, and the focus moves with it.
+| Field | Meaning |
+| --- | --- |
+| `selectionMode` | `TableSelectionMode::Row` or `Cell` |
+| `selectedRowID`, `selectedColumn`, `multiSelect` | Selection |
+| `rowDragDrop` | Row drag and drop |
+| `sortColumn`, `sortDescending` | Sort state |
+| `followTail` | Stay scrolled to the bottom as rows are added |
+| `selectionBar`, `rowStyle`, `cellStyle`, `showHeaders`, `columnSeparators` | Look |
+| `onReorderColumns` | When set, headers can be dragged to reorder |
+| `onRowDoubleClick` | Row double-click callback |
 
-Classes: `table` (`table-fill` makes it fill its parent), `table-header`, `table-row`,
+Keyboard: a header that sorts or moves is a Tab stop. Space/Enter sorts (again reverses);
+Alt+Left/Right moves the column, focus follows.
+
+Classes: `table` (`table-fill` fills the parent), `table-header`, `table-row`,
 `table-row-alt`, `table-cell`, `table-cell-number`, `table-sizer`, `table-separator`.
 
 ## BeginTable / BeginRow / Cell
 
-Here you emit the rows and cells yourself. Each `Cell` moves on to the next column, and
-`EndTable` lays everything out.
+You emit rows and cells. Each `Cell` advances one column; `EndTable` does the layout.
 
 ```cpp
 bool BeginTable(ID id, VirtualTableColumn* columns, size_t columnCount, TableState& state, StyleRef style,
@@ -54,8 +59,8 @@ void Cell(std::string_view text);
 void Cell(std::function<void()> emit);
 ```
 
-`Cell(emit)` lets you build custom content in a cell. The function runs during `EndTable`,
-so anything it captures has to stay alive until then.
+`Cell(emit)` builds custom content. It runs during `EndTable`, so its captures must stay
+alive until then.
 
 ```cpp
 VirtualTableColumn columns[] = {
@@ -77,19 +82,17 @@ if (BeginTable(tableID, columns, tableState, LayoutOverride{}.Size(400, 200)))
 
 ## VirtualTable
 
-A `VirtualTable` only builds the rows that are visible, so it copes with a very large
-number of rows. Each column's `generateCell(rowIndex)` emits that column's cell, usually
-with `Cell` or `TreeCell`. If the columns have `sortAscending` set, clicking a header sorts
-the table. The table keeps the sorted order as a permutation, so your data isn't moved.
+Builds only visible rows, for very large row counts. Each column's `generateCell(rowIndex)`
+emits its cell, usually with `Cell` or `TreeCell`. Columns with `sortAscending` sort on
+header click; the order is kept as a permutation, your data isn't moved.
 
 ```cpp
 void VirtualTable(ID id, TableState& state, std::span<VirtualTableColumn> columns, int totalRowCount,
                   CssPx rowHeight = 0, StyleRef style = {}, LayoutOverride&& constraints = {});
 ```
 
-`rowHeight` is a minimum. Pass 0 to use the cell style's height. Give the table a bounded
-height, because if it were sized to fit all of its rows it would go past the range the
-layout can handle.
+`rowHeight` is a minimum; 0 uses the cell style's height. Give the table a bounded height:
+sized to fit all rows it would exceed the layout's range.
 
 ```cpp
 std::vector<VirtualTableColumn> columns = {
@@ -101,17 +104,15 @@ VirtualTable(tableID, tableState, columns, int(rows.size()), 0, theme.tableFillS
              LayoutOverride::Auto().FlexGrow(1).MinHeight(0));
 ```
 
-Frozen columns work through sections. Consecutive columns with the same `sectionId` form a
-section, and the sections sit side by side. They all scroll vertically together, but each
-one scrolls horizontally on its own, and columns can only be reordered within their
-section. A section with `SectionSizing::FitContent` is exactly as wide as its columns and
-has no horizontal scroll bar.
+Frozen columns: consecutive columns with the same `sectionId` form a section; sections sit
+side by side. All scroll vertically together, each scrolls horizontally on its own, and
+columns reorder only within their section. `SectionSizing::FitContent` makes a section
+exactly as wide as its columns, with no horizontal scroll bar.
 
 ## TreeCell
 
-A cell that looks like a tree node, with indentation, an expand arrow, an optional icon and
-text. Clicking the arrow toggles `*isOpen` without selecting the row. Clicking anywhere
-else selects the row.
+A tree-node cell: indentation, expand arrow, optional icon, text. Clicking the arrow
+toggles `*isOpen` without selecting; clicking elsewhere selects the row.
 
 ```cpp
 void TreeCell(std::string_view text, int depth, bool* isOpen, IconID icon = IconID::Invalid,
@@ -119,10 +120,11 @@ void TreeCell(std::string_view text, int depth, bool* isOpen, IconID icon = Icon
               std::string* renameBuffer = nullptr, bool reserveExpander = true);
 ```
 
-Pass null for `isOpen` on leaf rows. A `renameBuffer` lets the user rename in place with
-F2, Ctrl+Shift+Click or a slow second click. `ancestorLineMask` and `isLastSibling` control
-the guide lines, and `RebuildTreeViewIndex` can compute them for you. Classes:
-`tree-table-cell`, `tree-table-arrow`, `tree-table-icon`, `tree-table-text`,
+- `isOpen`: null on leaf rows.
+- `renameBuffer`: enables rename in place (F2, Ctrl+Shift+Click or slow second click).
+- `ancestorLineMask`, `isLastSibling`: guide lines; `RebuildTreeViewIndex` computes them.
+
+Classes: `tree-table-cell`, `tree-table-arrow`, `tree-table-icon`, `tree-table-text`,
 `tree-table-text-edit`.
 
 ---

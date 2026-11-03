@@ -1,6 +1,6 @@
 # 3. Fields
 
-The greeting panel has one row for each field. In `my_app.cpp`:
+In `my_app.cpp`:
 
 ```cpp
 void GreetingPanel::Draw(tachyon::GUIApplication& ui)
@@ -23,19 +23,14 @@ ui.Field(excited, excited ? "Yes" : "No");
 ui.EndLabelGroup();
 ```
 
-`Field` picks the right editor for the type of value you give it. You get a text field
-for the `std::string`, a number field for the `int` and a toggle for the `bool`. Each one
-edits the value in place.
+- `Field` picks the editor from the type: text for `std::string`, number for `int`,
+  toggle for `bool`. Each edits the value in place.
+- `NumericFieldConfig` limits `times` to 1..5.
+- The label group lines each `Label` up with the next control, in a resizable label
+  column. Clicking a label focuses its field.
+- The toggle's text is recomputed every frame, so it follows the value.
 
-`NumericFieldConfig` sets limits on a number, so here `times` stays between 1 and 5.
-
-The label group lines up each `Label` with the control that follows it, in a label
-column the user can resize. Clicking a label focuses its field.
-
-The toggle's text is worked out again every frame, so it switches between "Yes" and "No"
-as the value changes.
-
-Below the fields, draw the greeting they make:
+Below the fields, the greeting:
 
 <!-- snippet: examples/tutorial/my_app.cpp [greeting-text] -->
 ```cpp
@@ -44,9 +39,8 @@ for (int i = 0; i < times; ++i)
     ui.Text(text);
 ```
 
-When you type a name, the greeting changes on the next frame. You don't have to tell the
-text to update. The loop draws the line `times` times. Even though those `Text` calls
-share a call site, each one gets its own ID because they're made in a loop.
+The greeting updates on the next frame after typing. The `Text` calls in the loop share
+a call site but each gets its own ID.
 
 Close `GreetingPanel::Draw` with `}`.
 

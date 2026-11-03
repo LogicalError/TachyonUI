@@ -2,29 +2,26 @@
 
 ## Errors
 
-Functions that can fail return a `Result<T>`. It holds either the value or an `Error`,
-which has an `ErrorCode` and a message. A `Result<T>` converts to true when it holds the
-value. `Result<void>` just tells you whether the call succeeded, and holds the error if
-it didn't.
+Functions that can fail return `Result<T>`: the value or an `Error` (an `ErrorCode` and
+a message). It converts to true when it holds the value.
 
 ```cpp
 if (tachyon::Result<void> result = app.Initialize(); !result)
     std::fprintf(stderr, "%s\n", result.GetError().message.c_str());
 ```
 
-To get at the value, use `Value()`, `operator*`, `operator->` or `ValueOr(fallback)`.
-The possible error codes are `Failed`, `InvalidArgument`, `NotFound`, `ParseFailed`,
-`Unsupported`, `OutOfMemory` and `DeviceLost`.
-
-`Initialize`, `Run`, `RecordFrame`, `ReadWindowPixels` and `RestoreUIState` all return a
-`Result`. To find out how the last `RequestReloadTheme` went, call `ThemeReloadResult()`.
+- Value access: `Value()`, `operator*`, `operator->`, `ValueOr(fallback)`.
+- Error codes: `Failed`, `InvalidArgument`, `NotFound`, `ParseFailed`, `Unsupported`,
+  `OutOfMemory`, `DeviceLost`.
+- Return a `Result`: `Initialize`, `Run`, `RecordFrame`, `ReadWindowPixels`,
+  `RestoreUIState`.
+- `ThemeReloadResult()` gives the outcome of the last `RequestReloadTheme`.
 
 
 ## Saved UI state
 
-The library can save the state of your UI as JSON text, and you store that text
-wherever you like. First you tell it, once, what to keep. Each item gets a key that
-stays the same between runs, and the objects you name have to outlive that call:
+UI state is saved as JSON text that you store. Register once what to keep. Keys must stay
+the same between runs; the named objects must outlive the call.
 
 ```cpp
 PersistWindow("main", mainWindowID);         // position, size, mode and monitor
@@ -33,10 +30,9 @@ PersistTable("assets", tableState, columns); // column widths and order
 PersistValue("zoom", zoom);                  // an app setting (bool, int, float, string)
 ```
 
-You can also keep the toolbars with `PersistToolbars`, and the documents of each main
-window with `PersistDocuments` (see Documents in
-[Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md)). Then save and
-restore:
+Also `PersistToolbars`, and `PersistDocuments` for each main window's documents (see
+Documents in [Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md)). Save
+and restore:
 
 ```cpp
 std::string json = app.SaveUIState();                        // e.g. after Run()
@@ -45,17 +41,18 @@ if (tachyon::Result<void> restored = RestoreUIState(json); !restored)
     std::fprintf(stderr, "UI state not restored: %s\n", restored.GetError().message.c_str());
 ```
 
-`RestoreUIState` applies everything right away, except windows, which are applied the
-next time you declare them. It skips any keys, panels and columns it doesn't recognize.
+`RestoreUIState` applies everything at once, except windows, which apply the next time
+you declare them. Unknown keys, panels and columns are skipped.
 
-A window comes back on the monitor it was saved on. If that monitor is gone, the window
-goes to the same place on a monitor of the same size, in case the displays were just
-rearranged. Failing that, it goes on the primary monitor, resized to fit inside its work
-area. If the window's top edge would still be off every monitor, so you couldn't grab or
-close it, only its size is restored and the app decides where to put it.
+Window placement on restore, in order:
 
-The demo shows the whole thing in use: it calls the `Persist*` functions and
-`RestoreUIState` at the end of `Initialize`, and `SaveUIState` after `Run()` returns.
+1. The monitor it was saved on.
+2. If that is gone, the same place on a monitor of the same size.
+3. Otherwise the primary monitor, resized to fit its work area.
+4. If the top edge would still be off every monitor, only the size is restored.
+
+The demo calls the `Persist*` functions and `RestoreUIState` at the end of `Initialize`,
+and `SaveUIState` after `Run()` returns.
 
 ---
 

@@ -1,15 +1,14 @@
 # Custom theme
 
-This app adds its own CSS classes next to the library's. It can also switch between the
-dark and light palettes and change the font size while it runs.
+Adds the app's own CSS classes next to the library's, and switches palette and font size
+at run time.
 Full source: [examples/custom_theme/custom_theme.cpp](https://github.com/LogicalError/TachyonUI/blob/main/examples/custom_theme/custom_theme.cpp)
 and [examples/custom_theme/custom_theme.css](https://github.com/LogicalError/TachyonUI/blob/main/examples/custom_theme/custom_theme.css).
 
 ## Adding a style file
 
-`SetStyleFiles` takes the list of CSS rule files, which load in order after the palette.
-Keep the library's `styles.css` first and add your own after it. Call it before
-`Initialize`:
+`SetStyleFiles` sets the CSS rule files, loaded in order after the palette. Keep
+`styles.css` first. Call it before `Initialize`:
 
 ```cpp
 // The library's rules first, then the app's (relative paths are next to the palette).
@@ -21,8 +20,8 @@ if (tachyon::Result<void> result = GUIApplication::Initialize(options); !result)
 
 ## The app's classes
 
-The app's file loads after the palette (`themes/dark.css` or `light.css`). That means it
-can use the palette's variables, and it follows along when the active palette changes.
+Style files load after the palette (`themes/dark.css` or `light.css`), so they can use its
+variables and follow palette changes.
 
 ```css
 .banner {
@@ -38,7 +37,7 @@ can use the palette's variables, and it follows along when the active palette ch
 }
 ```
 
-A class can define its own states, like `.warning-button` does here:
+A class can define its own states:
 
 ```css
 .warning-button:hover  { background-color: #7a5018; }
@@ -47,8 +46,8 @@ A class can define its own states, like `.warning-button` does here:
 
 ## Using the classes
 
-`theme.GetStyle` looks up a class by name. Do the lookup in `OnGUI` instead of storing
-the result, because reloading the theme registers the styles again.
+`theme.GetStyle(name)` looks up a class. Call it in `OnGUI`; don't store the result, a
+theme reload registers the styles again.
 
 ```cpp
 // Look the classes up every frame: a theme reload registers new styles.
@@ -61,8 +60,8 @@ Button("Careful!", [] {}, theme.GetStyle("warning-button"));
 
 ## Switching palettes and font size
 
-`RequestReloadTheme` takes a palette file and a font scale. You can call it from a
-callback, since the reload doesn't happen until the start of the next frame.
+`RequestReloadTheme(palette, fontScale)` reloads at the start of the next frame, so it is
+safe in a callback.
 
 ```cpp
 BeginHorizontal();
@@ -76,9 +75,8 @@ Button("Larger text",  [this] { RequestReloadTheme(GetThemePath(), GetGlobalFont
 EndHorizontal();
 ```
 
-If a reload fails, the previous theme stays in place and `ThemeReloadResult()` tells you
-what went wrong. The [CSS and theming](../css.md) guide lists every selector and
-property the parser accepts.
+On failure the previous theme stays and `ThemeReloadResult()` gives the error. Selectors
+and properties: [CSS and theming](../css.md).
 
 ---
 

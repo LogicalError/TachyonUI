@@ -1,34 +1,28 @@
 # Examples
 
 Each folder in [`examples/`](https://github.com/LogicalError/TachyonUI/tree/main/examples)
-is a complete application. The small ones each focus on one part of the library, and the
-showcase puts most of it together in an editor-style app. They build along with the
-project, and you can run any of them from any folder:
+is a complete application. Run from any folder:
 
 | | Build | Run |
 | --- | --- | --- |
 | Windows | `build.bat` | `bin\Debug\hello_world.exe` |
 | Linux and macOS | `./build.sh` | `bin/Debug/hello_world` |
 
-The small examples don't need any files. The shaders, the default themes and the fonts
-are built into the library, so what you see in them is what integrating TachyonUI into
-your own program looks like.
+- The small examples need no files: shaders, default themes and fonts are built in.
+- Built when TachyonUI is the top-level project. Turn off with `TACHYON_BUILD_EXAMPLES` /
+  `TACHYON_BUILD_SHOWCASE`.
 
-They're built when TachyonUI is the top-level project. Set `TACHYON_BUILD_EXAMPLES` or
-`TACHYON_BUILD_SHOWCASE` to off if you don't want them.
-
-| Example | What it shows |
+| Example | Shows |
 | --- | --- |
-| [Hello world](examples/hello-world.md) | The smallest app: a window with a text field and some buttons, plus the program around them. |
-| [Controls](examples/controls.md) | The common controls laid out as label/value rows: buttons, toggles, text and number fields, a slider, a color, a menu and tabs. |
-| [Docking](examples/docking.md) | Panels in a dock layout that the user can rearrange, tear off and dock again. |
-| [Custom theme](examples/custom-theme.md) | Adding your own CSS classes next to the library's, and switching palettes and font size while the app runs. |
-| [Host device](examples/host-device.md) | Running on a Vulkan device your application already owns, and showing an image it renders. |
-| [Showcase](examples/showcase.md) | An editor-style app that uses most of the library in its panels: docking, tables, trees, a file browser, a node graph and settings. |
-| [Tutorial](tutorial.md) (`examples/tutorial`) | The tutorial's app, built up step by step: two docked panels, one with buttons and one with fields. |
+| [Hello world](examples/hello-world.md) | The smallest app: a window, a text field, buttons, `main`. |
+| [Controls](examples/controls.md) | Common controls in label/value rows: buttons, toggles, text and number fields, slider, color, menu, tabs. |
+| [Docking](examples/docking.md) | Panels in a dock layout the user can rearrange, tear off and redock. |
+| [Custom theme](examples/custom-theme.md) | Your own CSS classes; switching palette and font size at run time. |
+| [Host device](examples/host-device.md) | Running on your own Vulkan device and showing an image it renders. |
+| [Showcase](examples/showcase.md) | Editor-style app: docking, tables, trees, file browser, node graph, settings. |
+| [Tutorial](tutorial.md) (`examples/tutorial`) | The tutorial's app: two docked panels, buttons and fields. |
 
-The API reference shows the full source of each program under **Examples**, and links
-the functions they use back to them.
+The API reference has each program's source under **Examples**.
 
 <!--!
 \htmlonly <div class="page-tree"> \endhtmlonly

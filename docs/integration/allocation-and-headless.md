@@ -2,8 +2,7 @@
 
 ## Allocation hooks
 
-If your program tracks its memory, you can give the library your own memory functions.
-Do this before `Initialize`:
+Route the library's allocations through your own functions. Set before `Initialize`:
 
 ```cpp
 #include <gui_core/memory/gui_allocation_hooks.h>
@@ -16,35 +15,31 @@ hooks.user       = &myHeap;
 app.SetAllocationHooks(hooks);
 ```
 
-The hooks receive every allocation that can be redirected: Vulkan objects, VMA,
-vk-bootstrap and SDL. SDL's memory functions apply to the whole process, so SDL's
-memory only goes through the hooks if the GUI is the one that starts SDL and SDL hasn't
-allocated anything yet.
+- Covers Vulkan objects, VMA, vk-bootstrap and SDL.
+- SDL's memory functions are process-wide: SDL uses the hooks only if the GUI starts SDL
+  and SDL hasn't allocated yet.
+- Hooks must be thread-safe (drivers call them from their own threads) and outlive the
+  GUI. SDL keeps using them for a few allocations after `SDL_Quit`, so keep them alive for
+  the whole process.
 
-The hooks have to outlive the GUI, and they have to be thread-safe, because drivers may
-call them from their own threads. SDL can hold on to a few allocations after `SDL_Quit`
-and keeps using the hooks for them, so it's best to keep the hooks alive for as long as
-the process runs.
-
-`tachyon::TrackingAllocator` (`gui_core/memory/gui_tracking_allocator.h`) is a ready-made
-set of hooks that counts live allocations and reports leaks. `Hooks()` returns them.
-
+`tachyon::TrackingAllocator` (`gui_core/memory/gui_tracking_allocator.h`): ready-made
+hooks that count live allocations and report leaks. `Hooks()` returns them.
 
 ## Headless backends
 
-`NullGraphicsContext` (`gui_core/graphics/null/gui_null_graphics_context.h`) draws
-nothing and doesn't need a GPU. The UI is still built, laid out and recorded as usual,
-but the windows stay empty. Add `NullWindowBackend` and there's no OS involved either,
-so input only comes from the `Inject*` calls. Used together, they run an app with no
-GPU and no display, which is handy for tests:
+- `NullGraphicsContext` (`gui_core/graphics/null/gui_null_graphics_context.h`): no GPU,
+  draws nothing. The UI is still built, laid out and recorded; windows stay empty.
+- `NullWindowBackend`: no OS; input only via the `Inject*` calls.
+
+Together: no GPU and no display, e.g. for tests.
 
 ```cpp
 app.SetGraphicsBackend(std::make_unique<tachyon::NullGraphicsContext>());
 app.SetWindowBackend(std::make_unique<tachyon::NullWindowBackend>());
 ```
 
-They're also the smallest examples of a graphics backend (`tachyon::GraphicsContext`)
-and a window backend, so they're a good place to start if you're writing your own.
+They are also the smallest graphics backend (`tachyon::GraphicsContext`) and window
+backend to start from when writing your own.
 
 ---
 

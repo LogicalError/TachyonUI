@@ -1,14 +1,12 @@
 # Hello world
 
-This is the smallest complete TachyonUI program: one window with a text field and three
-buttons.
+One window with a text field and three buttons.
 Full source: [examples/hello_world/hello_world.cpp](https://github.com/LogicalError/TachyonUI/blob/main/examples/hello_world/hello_world.cpp).
 
 ## The application class
 
-Your application derives from `tachyon::GUIApplication`. Anything that has to last
-between frames gets set up in `Initialize`, after the base class has created the window
-manager, the text system and the theme:
+Derive from `tachyon::GUIApplication`. Set up anything that lasts between frames in
+`Initialize`, after calling the base class:
 
 ```cpp
 class HelloApp : public tachyon::GUIApplication
@@ -24,16 +22,13 @@ public:
     }
 ```
 
-Most controls take their ID from the place they're called, so you don't have to give
-them one. Windows are different. The library remembers a window's position and size by
-its ID, so a window gets a static ID that you create once. [IDs](../overview/ids.md)
-explains the different kinds.
+Controls take their ID from the call site. Windows need a static ID, created once,
+because the library stores their position and size by ID. See [IDs](../overview/ids.md).
 
 ## Describing the UI
 
-`OnGUI` runs every frame and describes the whole UI. There's no tree of widget objects to
-keep in sync. The app's own members (`name` and `greeting`) hold its state, and the
-library keeps track of the rest, such as focus, the text cursor and the window's rect.
+`OnGUI` runs every frame and describes the whole UI. The app's members (`name`,
+`greeting`) hold its state; the library keeps focus, text cursor and window rect.
 
 ```cpp
 void OnGUI() override
@@ -62,22 +57,17 @@ void OnGUI() override
 }
 ```
 
-A few things worth noticing:
-
-- `EndWindow` is called whether or not `BeginWindow` returned true. The return value
-  only tells you whether to build the content. Every `Begin*` call works this way (see
+- Call `EndWindow` whether or not `BeginWindow` returned true; the return value only says
+  whether to build the content. Same for every `Begin*` (see
   [Begin and End](../overview/begin-end.md)).
-- `Field(name)` edits the string in place. The type of the value decides which editor
-  you get, so a `bool` gets a toggle, a `float` gets a number field and a `float3` gets
-  three of them.
-- A button's callback runs after the frame, when input is handled. That means it can
-  safely change anything the next frame reads.
-- Sizes such as `Size(360, 160)` are in CSS px and scale with the UI.
+- `Field(name)` edits in place. The value's type picks the editor: `bool` a toggle,
+  `float` a number field, `float3` three.
+- Button callbacks run after the frame, so they can change anything the next frame reads.
+- Sizes such as `Size(360, 160)` are CSS px and scale with the UI.
 
 ## The program
 
-`main` runs the app until the last window closes. You don't need any resource files,
-because the shaders, the default theme and the fonts are built into the library.
+`Run` returns when the last window closes. No resource files are needed.
 
 ```cpp
 int main()
@@ -96,9 +86,8 @@ int main()
 }
 ```
 
-`Initialize` and `Run` both return a `Result<void>`. If they fail, it tells you why, for
-example when the GPU doesn't have the features the library needs. See
-[Errors and saved state](../overview/errors-and-state.md) for the details.
+`Initialize` and `Run` return `Result<void>`; on failure it says why (for example, missing
+GPU features). See [Errors and saved state](../overview/errors-and-state.md).
 
 ---
 
