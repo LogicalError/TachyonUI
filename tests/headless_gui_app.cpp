@@ -168,7 +168,7 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
             if (e.type == tachyon::EventType::MouseScroll) hasScroll = true;
         }
     }
-    tooltipManager.BeginFrame(guiStateManager.Interaction().GetHoveredID(),
+    tooltipManager.BeginFrame(TooltipHoverID(),
                                guiStateManager.Interaction().GetFocusedID(),
                                static_cast<float>(m_timeMs) / 1000.0f,
                                hasMouseMove, hasMousePress, hasKeyboard, hasScroll,
@@ -238,10 +238,10 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
         .windowUnderMouse = mouseWindow != tachyon::ID::Invalid() ? mouseWindow : m_rootWindowID,
         .mousePos         = m_mousePos,
         .mouseButtons     = m_buttonsHeld,
-        .hitTest = [this](tachyon::ID window, tachyon::int2 pos)
+        .hitTest = [this](tachyon::ID window, tachyon::int2 pos, tachyon::ID& disabled)
         {
             const tachyon::ElementRef windowRef = windowRegistry.GetWindowRef(window);
-            return windowRef != tachyon::ElementRef::Invalid() ? elementStorage.GetElementIDAt(windowRef, pos)
+            return windowRef != tachyon::ElementRef::Invalid() ? elementStorage.GetElementIDAt(windowRef, pos, &disabled)
                                                                   : tachyon::ID::Invalid();
         },
     };

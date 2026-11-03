@@ -237,7 +237,12 @@ namespace tachyon
                 const ElementRef anchorRef = storage.FindElementRefByID(parentRect.constraints.x.anchorTarget);
                 if (anchorRef.IsValid())
                 {
-                    const int32_t moved = storage.GetElementRectUnsafe(anchorRef).rect.x - parentRect.anchorTargetX;                    parentRect.rect.x += moved;
+                    // A window was placed against where the target is on the screen (through a canvas's pan
+                    // and zoom): the same here.
+                    const bool    isWindow = (parentRect.flags & ElementFlags::IsWindow) != ElementFlags::None;
+                    const int32_t targetX  = isWindow ? storage.ElementRectOnScreen(anchorRef).x : storage.GetElementRectUnsafe(anchorRef).rect.x;
+                    const int32_t moved    = targetX - parentRect.anchorTargetX;
+                    parentRect.rect.x += moved;
                     parentRect.innerRect.x += moved;
                 }
             }

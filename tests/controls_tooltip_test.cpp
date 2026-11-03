@@ -290,22 +290,22 @@ namespace tachyon
             EXPECT_LT(app.GetElementRect(title).y, app.GetElementRect(description).y);
         }
 
-        // At the left edge of the screen too, the box lines up with its target: the room for
-        // its shadow may reach past the screen.
-        TEST_F(ControlsTooltipTest, AtTheLeftEdgeTheBoxLinesUpWithItsTarget)
+        // At the left edge of the screen, the box centered on a button's text is kept on the
+        // screen, right at its edge: the room for its shadow may reach past it.
+        TEST_F(ControlsTooltipTest, AtTheLeftEdgeTheBoxIsRightAtTheScreensEdge)
         {
-            const auto [tip, target] = TooltipAndTarget(app, 0);
+            const auto [tip, target] = TooltipAndTarget(app, 0, 0, "A tooltip wider than its button");
             ASSERT_GT(tip.w, 0);
-            EXPECT_EQ(tip.x, target.x);
+            ASSERT_LT(target.x + target.w / 2 - tip.w / 2, 0) << "centered, it would reach past the edge";
+            EXPECT_EQ(tip.x, 0);
         }
 
-        // At the right edge of the screen it lines up with its target's right edge instead.
+        // ... and at the right edge.
         TEST_F(ControlsTooltipTest, AtTheRightEdgeItStaysOnScreen)
         {
             const auto [tip, target] = TooltipAndTarget(app, 0, 1840, "A tooltip far too long to fit beside the right edge");
             ASSERT_GT(tip.w, 0);
-            EXPECT_LE(tip.Max(0), 1920);
-            EXPECT_EQ(tip.Max(0), target.Max(0));
+            EXPECT_EQ(tip.Max(0), 1920);
         }
 
         TEST_F(ControlsTooltipTest, MousePressDuringHoverDismissesTooltip)
@@ -1084,6 +1084,271 @@ namespace tachyon
                 at = cut;
             });
             EXPECT_TRUE(e.shown.empty()) << "wrapping text";
+        }
+
+        // ---------------------------------------------------------------------
+        // A value that isn't accepted, a disabled control
+        // ---------------------------------------------------------------------
+
+        // The children of `box`: the tooltip's lines.
+        std::vector<ID> ChildrenOf(HeadlessGUIApp& app, ID box)
+        {
+            std::vector<ID> out;
+            for (const Element& e : app.elementStorage.GetChildrenSpan(app.elementStorage.FindElementRefByID(box)))
+                out.push_back(e.id);
+            return out;
+        }
+
+        // The box of the tooltip showing `text`.
+        ID BoxOf(HeadlessGUIApp& app, ID text)
+        {
+            ElementRef ref = app.elementStorage.FindElementRefByID(text);
+            while (ref.IsValid() && app.elementStorage.GetParentRef(ref).IsValid() &&
+                   app.elementStorage.GetElementUnsafe(app.elementStorage.GetParentRef(ref)).id != app.tooltipWindowID)
+                ref = app.elementStorage.GetParentRef(ref);
+            return ref.IsValid() ? app.elementStorage.GetElementUnsafe(ref).id : ID::Invalid();
+        }
+
+        StyleRef StyleOf(HeadlessGUIApp& app, ID id)
+        {
+            const ElementRef ref = app.elementStorage.FindElementRefByID(id);
+            return ref.IsValid() ? app.elementStorage.GetElementUnsafe(ref).styleRef : StyleRef{};
+        }
+
+        // Builds the frame with `build`, which gives what to point at, and waits past the delay.
+        void PointAt(HeadlessGUIApp& app, const std::function<ID()>& build)
+        {
+            ID at = ID::Invalid();
+            auto frame = [&] { app.Frame([&] { app.BeginRootWindow(); at = build(); app.EndRootWindow(); }); };
+            frame();
+            app.InjectMouseMove(app.CenterOf(at));
+            for (int i = 0; i < 8; ++i) { app.AdvanceTime(100); frame(); }
+        }
+
+        // Why a value isn't accepted: on the popup surface, with an error border. (In the light
+        // theme, where its text's color isn't the plain tooltip's.)
+        TEST_F(ControlsTooltipTest, AnErrorTooltipSaysWhyAValueIsntAccepted)
+        {
+            HeadlessGUIApp light("themes/light.css");
+            ASSERT_TRUE(light.Initialize());
+            float opacity = 1.8f;
+            PointAt(light, [&] {
+                light.BeginInvalid();
+                light.Field(opacity);
+                const ID field = light.elementStorage.GetLastItemID();
+                light.SetErrorTooltip("Value must be between 0 and 1");
+                light.EndInvalid();
+                return field;
+            });
+            const ID message = light.FindByText("Value must be between 0 and 1");
+            ASSERT_NE(message, ID::Invalid());
+            EXPECT_EQ(StyleOf(light, message), light.theme.tooltipErrorTextStyleRef);
+            EXPECT_NE(light.theme.tooltipErrorTextStyleRef, light.theme.tooltipTextStyleRef);
+            EXPECT_EQ(StyleOf(light, BoxOf(light, message)), light.theme.tooltipErrorStyleRef);
+            light.Cleanup();
+        }
+
+        // A disabled control shows its tooltip, the reason on a second, muted line.
+        TEST_F(ControlsTooltipTest, ADisabledControlSaysWhy)
+        {
+            int clicks = 0;
+            ID button = ID::Invalid(), next = ID::Invalid();
+            PointAt(app, [&] {
+                app.BeginDisabled();
+                app.Button("Publish", [&] { ++clicks; });
+                button = app.elementStorage.GetLastItemID();
+                app.SetDisabledTooltip("Publish to asset store", "Sign in to enable publishing");
+                app.Button("Share", [] {});
+                next = app.elementStorage.GetLastItemID();
+                app.EndDisabled();
+                return button;
+            });
+            EXPECT_NE(app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(next)).state & ElementState::Disabled,
+                      ElementState::None) << "the next control is disabled still";
+            EXPECT_EQ(app.guiStateManager.Interaction().GetHoveredID(), ID::Invalid()) << "it takes no input";
+            EXPECT_EQ(app.guiStateManager.Interaction().GetHoveredDisabledID(), button);
+            const ID text = app.FindByText("Publish to asset store"), reason = app.FindByText("Sign in to enable publishing");
+            ASSERT_NE(text, ID::Invalid());
+            ASSERT_NE(reason, ID::Invalid());
+            const ID box = BoxOf(app, text);
+            EXPECT_EQ(StyleOf(app, box), app.theme.tooltipLinesStyleRef);
+            EXPECT_EQ(ChildrenOf(app, box), (std::vector<ID>{ text, reason })) << "the reason under the text";
+            EXPECT_EQ(StyleOf(app, reason), app.theme.tooltipNoteStyleRef);
+            for (const ID line : { box, text, reason })   // not dimmed with the button
+                EXPECT_EQ(app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(line)).state & ElementState::Disabled,
+                          ElementState::None);
+            EXPECT_TRUE(app.guiStateManager.Construction().IsBalanced());
+            app.ClickAt(app.CenterOf(button));
+            EXPECT_EQ(clicks, 0);
+        }
+
+        // Disabled with no reason given: a plain tooltip.
+        TEST_F(ControlsTooltipTest, ADisabledControlWithoutAReasonHasAPlainTooltip)
+        {
+            PointAt(app, [&] {
+                app.BeginDisabled();
+                app.Button("Publish", [] {});
+                const ID button = app.elementStorage.GetLastItemID();
+                app.SetDisabledTooltip("Publish to asset store", "");
+                app.EndDisabled();
+                return button;
+            });
+            const ID text = app.FindByText("Publish to asset store");
+            ASSERT_NE(text, ID::Invalid());
+            EXPECT_EQ(StyleOf(app, BoxOf(app, text)), app.theme.tooltipStyleRef);
+        }
+
+        // A press held on another control: a disabled one it's dragged over isn't pointed at.
+        TEST_F(ControlsTooltipTest, ADisabledControlIsntPointedAtDuringAPress)
+        {
+            ID enabled = ID::Invalid(), disabled = ID::Invalid();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.Button("Save", [] {});
+                    enabled = app.elementStorage.GetLastItemID();
+                    app.BeginDisabled();
+                    app.Button("Publish", [] {});
+                    disabled = app.elementStorage.GetLastItemID();
+                    app.EndDisabled();
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            app.InjectMouseMove(app.CenterOf(disabled));
+            frame();
+            EXPECT_EQ(app.guiStateManager.Interaction().GetHoveredDisabledID(), disabled);
+            app.InjectMouseMove(app.CenterOf(enabled));
+            app.InjectMouseDown(app.CenterOf(enabled));
+            frame();
+            app.InjectMouseMove(app.CenterOf(disabled), MouseButtons::Left);
+            frame();
+            EXPECT_EQ(app.guiStateManager.Interaction().GetHoveredDisabledID(), ID::Invalid());
+            app.InjectMouseUp(app.CenterOf(disabled));
+            frame();
+        }
+
+        // A disabled control in an enabled row: the row's tooltip isn't its, as for an enabled
+        // control in it.
+        TEST_F(ControlsTooltipTest, AnEnabledRowsTooltipIsntADisabledControlsInIt)
+        {
+            PointAt(app, [&] {
+                const ID row = app.idManager.AllocateDynamicID("row");
+                app.BeginHorizontal(row, app.theme.emptyHorzStyleRef);
+                app.BeginDisabled();
+                app.Button("Publish", [] {});
+                const ID button = app.elementStorage.GetLastItemID();
+                app.EndDisabled();
+                app.EndHorizontal();
+                app.SetTooltip(row, "The row's");
+                return button;
+            });
+            EXPECT_EQ(app.FindByText("The row's"), ID::Invalid());
+        }
+
+        // Inside a panned canvas, an element anchored to another stays in the canvas's space:
+        // it's drawn through the same pan.
+        TEST_F(ControlsTooltipTest, AnElementAnchoredInsideACanvasStaysInItsSpace)
+        {
+            const ID a = app.idManager.CreateStaticID(), b = app.idManager.CreateStaticID();
+            for (int i = 0; i < 2; ++i)
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    const ElementRef canvas = app.RegisterElement(Element{ .id = app.idManager.AllocateDynamicID("canvas"),
+                                                                           .styleRef = app.theme.emptyVertStyleRef },
+                                                                  LayoutOverride{}.Size(400, 200));
+                    app.elementStorage.SetContentTransform(canvas, float3x2::Translate(30, 20));
+                    ASSERT_EQ(app.elementStorage.BeginChildren(), ElementStorageResult::Success);
+                    app.RegisterElement(Element{ .id = a, .styleRef = app.theme.emptyVertStyleRef }, LayoutOverride{}.Size(50, 20));
+                    app.RegisterElement(Element{ .id = b, .styleRef = app.theme.emptyVertStyleRef },
+                                        LayoutOverride{}.Anchored(a, AnchorPlacement::OutsideBottom | AnchorPlacement::InsideLeft).Size(10, 10));
+                    ASSERT_EQ(app.elementStorage.EndChildren(), ElementStorageResult::Success);
+                    app.EndRootWindow();
+                });
+            EXPECT_EQ(app.GetElementRect(b).x, app.GetElementRect(a).x);
+            EXPECT_EQ(app.GetElementRect(b).y, app.GetElementRect(a).Max(1));
+        }
+
+        // Enabled, it's a plain tooltip: no reason.
+        TEST_F(ControlsTooltipTest, AnEnabledControlLeavesTheReasonOut)
+        {
+            PointAt(app, [&] {
+                app.Button("Publish", [] {});
+                const ID button = app.elementStorage.GetLastItemID();
+                app.SetDisabledTooltip("Publish to asset store", "Sign in to enable publishing");
+                return button;
+            });
+            const ID text = app.FindByText("Publish to asset store");
+            ASSERT_NE(text, ID::Invalid());
+            EXPECT_EQ(StyleOf(app, BoxOf(app, text)), app.theme.tooltipStyleRef);
+            EXPECT_EQ(app.FindByText("Sign in to enable publishing"), ID::Invalid());
+        }
+
+        // A control in a disabled row: its own tooltip, though the row took the hit. Without
+        // one, the row's.
+        TEST_F(ControlsTooltipTest, AControlInADisabledRowShowsItsTooltip)
+        {
+            for (bool own : { true, false })
+            {
+                HeadlessGUIApp rows;
+                ASSERT_TRUE(rows.Initialize());
+                PointAt(rows, [&] {
+                    rows.BeginDisabled();
+                    const ID row = rows.idManager.AllocateDynamicID("row");
+                    rows.BeginHorizontal(row, rows.theme.emptyHorzStyleRef);
+                    rows.Button("Publish", [] {});
+                    const ID button = rows.elementStorage.GetLastItemID();
+                    if (own)
+                        rows.SetTooltip("The button's");
+                    rows.EndHorizontal();
+                    rows.SetTooltip(row, "The row's");
+                    rows.EndDisabled();
+                    return button;
+                });
+                EXPECT_NE(rows.FindByText(own ? "The button's" : "The row's"), ID::Invalid()) << own;
+                EXPECT_EQ(rows.FindByText(own ? "The row's" : "The button's"), ID::Invalid()) << own;
+                rows.Cleanup();
+            }
+        }
+
+        // Placed by where the target's text is: its text starts where a label's starts, is
+        // centered on a button's, ends where text aligned to its end ends.
+        TEST_F(ControlsTooltipTest, ATooltipIsPlacedByItsTargetsText)
+        {
+            struct Case { const char* name; int align; };   // 0 start, 1 end, 2 middle
+            for (const Case c : { Case{ "start", 0 }, Case{ "end", 1 }, Case{ "middle", 2 } })
+            {
+                HeadlessGUIApp a;
+                ASSERT_TRUE(a.Initialize());
+                Style s{};
+                s.padding.left = 8;
+                s.padding.right = 12;
+                s.textLayoutStyle.horizontalAlignment = c.align == 0 ? TextAlign::Start : c.align == 1 ? TextAlign::End : TextAlign::Center;
+                const StyleRef style = a.styleManager.Register(s);
+                ID target = ID::Invalid();
+                PointAt(a, [&] {
+                    a.BeginHorizontal(a.idManager.AllocateDynamicID("indent"), a.theme.emptyHorzStyleRef, LayoutOverride{}.Width(Pixels{ 400 }));
+                    a.EndHorizontal();
+                    target = a.idManager.AllocateDynamicID("target");
+                    a.RegisterElement(Element{ .id = target, .styleRef = style }, "Opacity", LayoutOverride{}.Width(200));
+                    a.SetTooltip("Its tooltip");
+                    return target;
+                });
+                const IntRect t = a.GetElementRect(target), shown = a.GetElementRect(a.FindByText("Its tooltip"));
+                ASSERT_GT(shown.w, 0) << c.name;
+                const int textW = 7 * 8;   // "Opacity" in the stub's 8 px a character
+                if (c.align == 0)
+                    EXPECT_EQ(shown.x, t.x + 8) << "its text starts where the label's does";
+                else if (c.align == 1)
+                    EXPECT_EQ(shown.Max(0), t.Max(0) - 12) << "its text ends where the label's does";
+                else
+                {
+                    const IntRect box = a.GetElementRect(BoxOf(a, a.FindByText("Its tooltip")));
+                    const int textMid = t.x + 8 + (t.w - 20 - textW) / 2 + textW / 2;
+                    EXPECT_NEAR(box.x + box.w / 2, textMid, 1) << "centered on the text";
+                }
+                a.Cleanup();
+            }
         }
 
     } // namespace

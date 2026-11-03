@@ -64,6 +64,7 @@
     /* Tooltips: raised, with a border */
     --tooltip-bg: #2A2F39;   --tooltip-border: #363C48;   --tooltip-text: #E8EAEF;
     --tooltip-chip: #FFFFFF14;   --tooltip-chip-text: #AEB4C0;   /* white at 8% */
+    --tooltip-muted: #A3AAB7;   /* a tooltip's second line */
     /* Banners: the severity at 12% under the message, at 32% along its bottom */
     --info-banner: #6B9BFF1F;    --info-banner-line: #6B9BFF52;
     --ok-banner: #4FC48A1F;      --ok-banner-line: #4FC48A52;

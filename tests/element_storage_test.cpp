@@ -580,6 +580,70 @@ namespace tachyon
         EXPECT_EQ(hitInsideRootButOutsideClip, ID::Invalid());
     }
 
+    // A disabled element takes the hit, and says which of its parts is under the cursor: the
+    // deepest that takes input, past one that doesn't.
+    TEST_F(ElementStorageTest, GetElementIDAt_ADisabledElementSaysWhichPartIsUnderTheCursor)
+    {
+        ASSERT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        auto root = storage.Add(CreateElement(1));
+        ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        Element disabled = CreateElement(2);
+        disabled.state = ElementState::Disabled;
+        auto row = storage.Add(std::move(disabled));
+        ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        auto button = storage.Add(CreateElement(3));
+        auto glass  = storage.Add(CreateElement(4, ElementFlags::NoInput));   // over the button
+        ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        ASSERT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        storage.GetElementRectUnsafe(root.ref).rect   = IntRect{ 0, 0, 100, 100 };
+        storage.GetElementRectUnsafe(row.ref).rect    = IntRect{ 10, 10, 80, 30 };
+        storage.GetElementRectUnsafe(button.ref).rect = IntRect{ 20, 15, 30, 20 };
+        storage.GetElementRectUnsafe(glass.ref).rect  = IntRect{ 20, 15, 30, 20 };
+
+        ID disabledHit = ID::Invalid();
+        EXPECT_EQ(storage.GetElementIDAt(root.ref, int2{ 25, 20 }, &disabledHit), ID::Invalid()) << "it takes no input";
+        EXPECT_EQ(disabledHit, storage.GetElementUnsafe(button.ref).id);
+        EXPECT_EQ(storage.GetElementIDAt(root.ref, int2{ 70, 20 }, &disabledHit), ID::Invalid());
+        EXPECT_EQ(disabledHit, storage.GetElementUnsafe(row.ref).id) << "beside the button: the row itself";
+        EXPECT_EQ(storage.GetElementIDAt(root.ref, int2{ 50, 80 }, &disabledHit), storage.GetElementUnsafe(root.ref).id);
+        EXPECT_EQ(disabledHit, ID::Invalid()) << "not over it";
+    }
+
+    // An element's rect on the screen: through its ancestors' pan and zoom, about each one's
+    // inner rect.
+    TEST_F(ElementStorageTest, ElementRectOnScreen_GoesThroughTheAncestorsTransforms)
+    {
+        ASSERT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        auto canvas = storage.Add(CreateElement(1));
+        ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        auto group = storage.Add(CreateElement(2));
+        ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        auto pin = storage.Add(CreateElement(3));
+        ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        ASSERT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        auto& c = storage.GetElementRectUnsafe(canvas.ref);
+        c.rect = IntRect{ 100, 50, 400, 300 };
+        c.innerRect = IntRect{ 100, 50, 400, 300 };
+        storage.GetElementRectUnsafe(group.ref).rect = IntRect{ 120, 60, 100, 100 };
+        storage.GetElementRectUnsafe(pin.ref).rect   = IntRect{ 130, 70, 10, 10 };
+        EXPECT_EQ(storage.ElementRectOnScreen(pin.ref), (IntRect{ 130, 70, 10, 10 })) << "no transform";
+
+        ASSERT_TRUE(storage.SetContentTransform(canvas.ref, float3x2::Translate(5, 7) * float3x2::Scale(2.0f)));
+        EXPECT_EQ(storage.ElementRectOnScreen(pin.ref), (IntRect{ 100 + 5 + 60, 50 + 7 + 40, 20, 20 }));
+        EXPECT_EQ(storage.ElementRectOnScreen(canvas.ref), c.rect) << "its own transform is its children's";
+        // Back again, through ScreenToElementSpace.
+        const IntRect onScreen = storage.ElementRectOnScreen(pin.ref);
+        EXPECT_EQ(storage.ScreenToElementSpace(onScreen.position, pin.ref), (int2{ 130, 70 }));
+
+        // Mirrored: the box around it, its corners swapped.
+        ASSERT_TRUE(storage.SetContentTransform(canvas.ref, float3x2::Scale(-1.0f, 1.0f)));
+        EXPECT_EQ(storage.ElementRectOnScreen(pin.ref), (IntRect{ 100 - 40, 70, 10, 10 }));
+    }
+
     // ---------------------------------------------------------------------
     // ScreenToElementSpace - maps screen pixels through the ancestors'
     // contentTransforms into an element's own rect space.

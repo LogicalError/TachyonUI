@@ -2349,6 +2349,89 @@
     font-size: 10.5px;
 }
 
+/* A value that isn't accepted: on the popup surface, an error border (its arrow too). */
+.tooltip-error {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin: 56px;        /* its shadow's reach, as .tooltip-rich */
+    overflow: visible;   /* its arrow is drawn outside it */
+    border-width: 1px;
+    border-radius: 6px;
+    background-color: var(--bg-popup);
+    border-color: var(--error);
+    box-shadow: var(--shadow-popup);
+}
+.tooltip-error-text {
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    text-wrap: nowrap;
+    color: var(--text-1);
+    font-size: var(--font-size-tooltip);
+}
+/* A few lines: a disabled control's, saying why; a node pin's, with its value. */
+.tooltip-lines {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 2px;
+    padding: 6px 10px;
+    margin: 22px;        /* its shadow's reach, as .tooltip */
+    overflow: visible;
+    border-width: 1px;
+    border-radius: 6px;
+    background-color: var(--tooltip-bg);
+    border-color: var(--tooltip-border);
+    box-shadow: var(--shadow-tooltip);
+}
+/* "Sign in to enable publishing", "from Source.Value". */
+.tooltip-note {
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    text-wrap: nowrap;
+    color: var(--tooltip-muted);
+    font-size: var(--font-size-tooltip);
+}
+/* "Strength  float  0.75": a pin's name, its type and its value. */
+.tooltip-pin-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+.tooltip-pin-type {
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    text-wrap: nowrap;
+    color: var(--tooltip-muted);
+    font-family: monospace;
+    font-size: 10.5px;
+}
+.tooltip-pin-value {
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    flex-grow: 1;        /* at the line's end */
+    text-align: end;
+    text-wrap: nowrap;
+    color: var(--tooltip-text);
+    font-family: monospace;
+    font-size: 11px;
+}
+
 /* Text cut short, shown whole right over itself: the box lies on the cut text's
    row, its text exactly where the cut text is, in the same font. No arrow. */
 .tooltip-expand {

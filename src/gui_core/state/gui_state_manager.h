@@ -34,8 +34,9 @@ namespace tachyon
         int2         mousePos {};                        ///< screen pixels
         MouseButtons mouseButtons     = MouseButtons::None;
 
-        /// The element at `pos` in `window`, or Invalid.
-        std::function<ID(ID window, int2 pos)> hitTest;
+        /// The element at `pos` in `window`, or Invalid; `disabled` gets the disabled element
+        /// there, if one took the hit (see ElementStorage::GetElementIDAt).
+        std::function<ID(ID window, int2 pos, ID& disabled)> hitTest;
         /// While text is dragged: the text drop target at `pos` in `window`. Optional.
         std::function<bool(ID window, int2 pos, ID& target)> textDragTarget;
     };
@@ -46,6 +47,7 @@ namespace tachyon
         ID overID        = ID::Invalid();   ///< the element under the cursor
         ID hoverID       = ID::Invalid();   ///< what counts as hovered: capture, active element, drop target
         ID hoverWindowID = ID::Invalid();   ///< the window the pointer input belongs to
+        ID disabledID    = ID::Invalid();   ///< a disabled element under the cursor: tooltips only
     };
 
     /// Owns the per-frame state objects and runs their BeginFrame / EndFrame in order. Callers

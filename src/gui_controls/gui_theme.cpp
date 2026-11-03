@@ -83,6 +83,7 @@ namespace tachyon
             questionIcon    = registerIcon("question", R"(<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>)");
             infoIcon        = registerIcon("info", R"(<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 16v-4M12 8h.01"/>)");
             errorIcon       = registerIcon("error", R"(<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM15 9l-6 6M9 9l6 6"/>)");
+            invalidIcon     = registerIcon("invalid", R"(<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 8v5M12 16h.01"/>)");
             chevronRightIcon = registerIcon("chevron-right", R"(<path d="m9 18 6-6-6-6"/>)");
             eyedropperIcon  = registerIcon("eyedropper", R"(<path d="m2 22 1-1h3l9-9M3 21v-3l9-9M15 6l3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3Z"/>)");
             dockIcon        = registerIcon("dock", R"(<path d="M3 5h18v14H3ZM15 5v14M8 12h4M10 10l2 2-2 2"/>)");
@@ -260,6 +261,7 @@ namespace tachyon
         tooltipArrowLine      = lineColorFromCSS("--tooltip-border", color4f{ 0.21f, 0.24f, 0.28f, 1.0f });
         popupArrowFill        = lineColorFromCSS("--bg-popup", color4f{ 0.10f, 0.11f, 0.14f, 1.0f });
         popupArrowLine        = lineColorFromCSS("--line-strong", color4f{ 0.18f, 0.20f, 0.24f, 1.0f });
+        invalidLine           = lineColorFromCSS("--error", color4f{ 0.94f, 0.42f, 0.42f, 1.0f });
         if (textSystem)
             textSystem->SetCaretColor(lineColorFromCSS("--caret", color4f{ 0.42f, 0.61f, 1.0f, 1.0f }));
         nanTextColor          = lineColorFromCSS("--warn-text", color4f{ 0.9f, 0.7f, 0.33f, 1.0f });
@@ -764,6 +766,13 @@ namespace tachyon
         tooltipFooterStyleRef             = registerCSS("tooltip-footer");
         tooltipExpandStyleRef             = registerCSS("tooltip-expand");
         tooltipExpandTextStyleRef         = registerCSS("tooltip-expand-text");
+        tooltipErrorStyleRef              = registerCSS("tooltip-error");
+        tooltipErrorTextStyleRef          = registerCSS("tooltip-error-text");
+        tooltipLinesStyleRef              = registerCSS("tooltip-lines");
+        tooltipNoteStyleRef               = registerCSS("tooltip-note");
+        tooltipPinRowStyleRef             = registerCSS("tooltip-pin-row");
+        tooltipPinTypeStyleRef            = registerCSS("tooltip-pin-type");
+        tooltipPinValueStyleRef           = registerCSS("tooltip-pin-value");
         settingsPageSelectionRef          = registerCSS("settings-page-selection");
         settingsPageStyleRef              = registerCSS("settings-page");
 

@@ -63,6 +63,7 @@
     /* Tooltips: inverted, dark on the light theme, no border */
     --tooltip-bg: #1A1D23;   --tooltip-border: #1A1D23;   --tooltip-text: #FFFFFF;
     --tooltip-chip: #FFFFFF1F;   --tooltip-chip-text: #C3C9D2;   /* white at 12% */
+    --tooltip-muted: #AEB4C0;   /* a tooltip's second line */
     /* Banners: the severity at 10% under the message, at 30% along its bottom */
     --info-banner: #2F6FEB1A;    --info-banner-line: #2F6FEB4D;
     --ok-banner: #1E9E621A;      --ok-banner-line: #1E9E624D;
