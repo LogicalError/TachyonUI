@@ -10,6 +10,7 @@
 namespace tachyon
 {
     enum class CommandMode : uint32_t;
+    struct FileEntry;
 
     // Case-insensitive substring search for the panels' search boxes. Lowercase
     // the query once when it changes, then match each item against it.
@@ -557,6 +558,7 @@ namespace tachyon
         void ApplyFileRenames();
         void AddDroppedFiles(const std::vector<std::string>& paths, const std::string& folder);
         IconID FileIcon(std::string_view name, bool isFolder, bool open = false);
+        IconID FileIcon(const FileEntry& file, bool open = false);
 
         // Build/tear down panel data; wired into CreatePanel's onEnable/onDisable.
         void EnableHierarchyPanel();

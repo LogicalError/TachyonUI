@@ -231,10 +231,19 @@ namespace tachyon
                 return IconID::Invalid;
             if (const auto it = m_pixelIconNames.find(name); it != m_pixelIconNames.end())
                 return IconID{ it->second };
-            const uint32_t id = 0x20000000 + uint32_t(m_pixelIconNames.size());
+            const uint32_t id = 0x20000000 + m_pixelIconCount++;
             m_pixelIconNames[name] = id;
             m_pixelIconSizes[id]   = size;
             return IconID{ id };
+        }
+
+        std::vector<IconID> unregisteredIcons;   ///< UnregisterIcon calls, in order
+
+        void UnregisterIcon(IconID iconId) override
+        {
+            unregisteredIcons.push_back(iconId);
+            std::erase_if(m_pixelIconNames, [iconId](const auto& named) { return named.second == uint32_t(iconId); });
+            m_pixelIconSizes.erase(uint32_t(iconId));
         }
 
         // -------------------- Icon Rendering --------------------
@@ -488,6 +497,7 @@ namespace tachyon
         std::unordered_map<uint64_t, std::string> m_intTextMap;
         std::unordered_map<std::string, uint32_t> m_pixelIconNames;
         std::unordered_map<uint32_t, uint2>       m_pixelIconSizes;
+        uint32_t                                  m_pixelIconCount = 0;
 
         struct PendingEdit
         {

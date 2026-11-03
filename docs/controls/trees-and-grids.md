@@ -129,7 +129,33 @@ const IconID icon = icons.Get("photo.jpg", false);
 These icons are pictures rather than glyphs. `ITextSystem::RegisterIconFromPixels(name,
 size, rgba)` makes an icon from RGBA pixels. It's drawn in its own colors, so the style's
 icon color doesn't tint it and it gets no text shadow. It's scaled to fit its box while
-keeping its shape, both on its own and inside text.
+keeping its shape, both on its own and inside text. `ITextSystem::UnregisterIcon` removes
+one again and frees its image slot.
+
+`FileThumbnails` (`gui_controls/gui_file_thumbnails.h`) gets a file's thumbnail, the
+picture Explorer shows for it: a photo's contents, or a frame of a video. On Windows it
+reads them from the shell on a background thread, so `Get` returns `IconID::Invalid`
+until the thumbnail is ready, and also for a file that has none. Show the file's type
+icon in the meantime. On other systems there are no thumbnails, unless you pass your own
+`FileThumbnails::Reader`.
+
+A `FileEntry` read from a disk folder, or imported from the disk, knows where its file is
+(`disk`) and when it was last written (`modified`). A file that only exists in memory has
+no `disk`, so it gets no thumbnail.
+
+```cpp
+FileThumbnails thumbnails(*textSystem);   // keeps the last 512 asked for
+IconID icon = thumbnails.Get(entry.disk, entry.modified, uint32_t(styleManager.Px(34)));
+if (icon == IconID::Invalid)
+    icon = icons.Get(entry.name, entry.isFolder);
+```
+
+Thumbnails are cached by path, modification time and size, so a file that changed is read
+again. When the cache is full, the thumbnail asked for longest ago is dropped and its icon
+unregistered, and a file dropped before it was read isn't read at all. A thumbnail asked
+for in the last half second is still on screen, so it's never dropped: if more files are
+on screen than the cache holds, the extra ones keep their type icons. Destroy the
+`FileThumbnails` before the text system.
 
 ---
 

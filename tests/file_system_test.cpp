@@ -170,6 +170,8 @@ namespace tachyon
             const auto photo = std::find_if(images.begin(), images.end(), [](const FileEntry& e) { return e.name == "photo.jpg"; });
             ASSERT_NE(photo, images.end());
             EXPECT_EQ(photo->size, 5u);
+            EXPECT_EQ(photo->disk, root / "Images" / "photo.jpg");
+            EXPECT_EQ(photo->modified, std::filesystem::last_write_time(root / "Images" / "photo.jpg"));
             EXPECT_EQ(Names(fs, "Images/Deep"), (std::vector<std::string>{ "far.png" }));
 
             // Added to the disk after a folder was read: not seen; before: seen.
@@ -189,6 +191,12 @@ namespace tachyon
             EXPECT_TRUE(fs.Rename("Images", "Pictures", error)) << error;
             EXPECT_EQ(Names(fs, ""), (std::vector<std::string>{ "Docs/", "Pictures/" }));
             EXPECT_EQ(Names(fs, "Pictures"), (std::vector<std::string>{ "Deep/", "photo.jpg" }));
+            const std::vector<FileEntry> deep = fs.List("Pictures/Deep");
+            const auto moved = std::find_if(deep.begin(), deep.end(), [](const FileEntry& e) { return e.name == "todo.txt"; });
+            ASSERT_NE(moved, deep.end());
+            EXPECT_EQ(moved->disk, root / "Docs" / "todo.txt") << "moved in the copy, still that file on the disk";
+            EXPECT_TRUE(fs.AddFile("Docs/new.txt"));
+            EXPECT_TRUE(fs.List("Docs").front().disk.empty()) << "only in memory";
 
             // The disk is as it was.
             EXPECT_TRUE(std::filesystem::exists(root / "Docs" / "todo.txt"));
@@ -226,6 +234,8 @@ namespace tachyon
             ASSERT_NE(song, deep.end());
             EXPECT_FALSE(song->isFolder);
             EXPECT_EQ(song->size, 7u);
+            EXPECT_EQ(song->disk, outside / "song.mp3") << "where it came from, for its thumbnail";
+            EXPECT_EQ(song->modified, std::filesystem::last_write_time(outside / "song.mp3"));
             EXPECT_EQ(Names(fs, "Deep"), (std::vector<std::string>{ "far.png", "song.mp3" })) << "with what's there";
 
             EXPECT_TRUE(fs.Import(outside / "Album" / "", "", error)) << error << " (a folder, named with a separator at its end)";

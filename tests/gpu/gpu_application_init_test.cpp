@@ -937,6 +937,14 @@ namespace
         const tachyon::IconID green = app.textSystem->RegisterIconFromPixels("green", tachyon::uint2{ 2, 1 }, kOther);
         EXPECT_NE(green, tachyon::IconID::Invalid);
         EXPECT_NE(green, app.picture);
+
+        // Let go: the name can be registered anew, under another ID.
+        app.textSystem->UnregisterIcon(green);
+        app.textSystem->UnregisterIcon(green);
+        const tachyon::IconID again = app.textSystem->RegisterIconFromPixels("green", tachyon::uint2{ 2, 1 }, kOther);
+        EXPECT_NE(again, tachyon::IconID::Invalid);
+        EXPECT_NE(again, green) << "an ID isn't given out again";
+        EXPECT_TRUE(app.Frames(2)) << "drawing goes on without it";
         app.Cleanup();
     }
     // Three areas in a render-to-image window: an opaque red one, an opaque green one over

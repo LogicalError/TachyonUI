@@ -137,6 +137,7 @@ namespace tachyon
 
         IconID RegisterIconFromSVGFile(const char* path) override;
         IconID RegisterIconFromPixels(const char* name, uint2 size, std::span<const uint8_t> rgba) override;
+        void UnregisterIcon(IconID iconId) override;
 
         // -------------------- Icon Measurement --------------------
 

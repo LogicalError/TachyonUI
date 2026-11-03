@@ -23,6 +23,10 @@ namespace tachyon
         std::string name;
         bool        isFolder = false;
         uint64_t    size     = 0;   ///< bytes; 0 for a folder
+        /// The file or folder on the disk it is, or is a copy of; empty for one that's only in
+        /// the file system (MemoryFileSystem::AddFile).
+        std::filesystem::path           disk;
+        std::filesystem::file_time_type modified {};   ///< when the file on the disk was last written
     };
 
     /// What a file view reads and changes. Implement it over the disk, an archive, an asset

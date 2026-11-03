@@ -377,6 +377,8 @@ list(APPEND GUI_CONTROLS_FILES
   gui_controls/gui_file_system.cpp
   gui_controls/gui_file_icons.h
   gui_controls/gui_file_icons.cpp
+  gui_controls/gui_file_thumbnails.h
+  gui_controls/gui_file_thumbnails.cpp
 
   gui_controls/controls.cpp
   gui_controls/controls_color_internal.h

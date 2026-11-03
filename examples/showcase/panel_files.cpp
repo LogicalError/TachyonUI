@@ -1,6 +1,7 @@
 #include "application.h"
 #include <gui_controls/gui_file_icons.h>
 #include <gui_controls/gui_file_system.h>
+#include <gui_controls/gui_file_thumbnails.h>
 
 #include <algorithm>
 #include <cctype>
@@ -15,19 +16,21 @@
 // folder tree, and dropping them in from other applications. It browses an IFileSystem: a
 // copy of a folder on the disk (the showcase's workdirectory, or the one given with
 // --files), read as it's browsed. Moves, renames and dropped files change only the copy;
-// the disk is never written.
+// the disk is never written. Files on the disk show their thumbnails, as Explorer does.
 //
 
 namespace tachyon
 {
     static std::unique_ptr<MemoryFileSystem> files;
     static std::unique_ptr<FileIcons>        fileIcons;       // the OS's icons, where there are any
+    static std::unique_ptr<FileThumbnails>   fileThumbnails;  // and its pictures of what's in the files on the disk
     static uint64_t                          filesGeneration = 0;
 
     static tachyon::ItemDragDropConfig gridDnD;
     static tachyon::ItemDragDropConfig folderDnD;
     static tachyon::GridViewVirtualState gridScrollState;
     constexpr uint32_t kGridPayload = 0x47524944; // 'GRID'
+    constexpr int      kFileIconSize = 34;        // the grid's icons, CSS pixels
 
     // Drag payload: an entry's index in gridEntries, or a folder's flat folderRows index
     // tagged with the top bit (folders can be dragged from the grid and from the folder
@@ -338,6 +341,7 @@ namespace tachyon
 
         files     = std::make_unique<MemoryFileSystem>(root);
         fileIcons = std::make_unique<FileIcons>(*textSystem, 48);
+        fileThumbnails = std::make_unique<FileThumbnails>(*textSystem);
         openFolders   = { "" };
         currentFolder.clear();
         filesGeneration = files->Generation();
@@ -349,9 +353,8 @@ namespace tachyon
         auto ghost = [this](const tachyon::DragVisualContext& visual) {
             std::string path;
             if (!PayloadPath(visual.payloadValue, path)) return;
-            const bool isFolder = IsFolderPayload(visual.payloadValue) ||
-                                  GridEntryAt(static_cast<int>(visual.payloadValue))->file.isFolder;
-            const IconID icon = FileIcon(FileName(path), isFolder);
+            const GridEntry* entry = IsFolderPayload(visual.payloadValue) ? nullptr : GridEntryAt(static_cast<int>(visual.payloadValue));
+            const IconID icon = entry ? FileIcon(entry->file) : FileIcon(FileName(path), true);
             if (icon == IconID::Invalid) return;
             if (BeginCursorGhostWindow(showcase.dragGhostWindowID, visual.screenPos))
             {
@@ -417,6 +420,7 @@ namespace tachyon
         gridItemIDs.clear();
         fileDropFolder.reset();
         folderTreeState.rowDragDrop = nullptr;
+        fileThumbnails.reset();
         fileIcons.reset();
         files.reset();
     }
@@ -456,6 +460,17 @@ namespace tachyon
         if (ext == ".mp4" || ext == ".mov" || ext == ".mkv" || ext == ".webm")                     return showcase.fileVideoIcon;
         if (ext == ".zip" || ext == ".7z" || ext == ".rar" || ext == ".gz" || ext == ".tar")       return showcase.fileArchiveIcon;
         return showcase.fileTextIcon;
+    }
+
+    // A file on the disk in its thumbnail, at the grid's icon size, once it's read; until then,
+    // and for a file without one, its type's icon.
+    IconID Application::FileIcon(const FileEntry& file, bool open)
+    {
+        if (!file.isFolder && fileThumbnails)
+            if (const IconID thumbnail = fileThumbnails->Get(file.disk, file.modified, uint32_t(styleManager.Px(kFileIconSize)));
+                thumbnail != IconID::Invalid)
+                return thumbnail;
+        return FileIcon(file.name, file.isFolder, open);
     }
 
     void Application::RenderFilesPanel()
@@ -648,13 +663,13 @@ namespace tachyon
         const int  rowH     = std::max(1, theme.gridViewListRowHeight);   // measured list row height
 
         // Grid items: 34 px icons, the showcase's own tinted by their kind (folders keep
-        // their color, and the OS's icons are pictures in their own colors).
+        // their color, and the OS's icons and thumbnails are pictures in their own colors).
         auto itemStyleFor = [this](IconID icon) -> StyleRef {
             const char* color = (icon == showcase.fileModelIcon) ? "--text-link"
                               : (icon == showcase.fileImageIcon) ? "--ok"
                               :                                "--text-2";
             Style def = styleManager.ToPixels(theme.gridViewItemBaseStyle);
-            def.iconSize = static_cast<uint16_t>(styleManager.Px(34));
+            def.iconSize = static_cast<uint16_t>(styleManager.Px(kFileIconSize));
             for (auto& st : def.states)
                 st.iconColor = ColorStyle::Create(theme.GetColor(color));
             return styleManager.Register(def, StyleUnits::Pixels);   // Register dedupes, so per frame is cheap
@@ -680,7 +695,7 @@ namespace tachyon
                                 ((guiStateManager.Drag().IsDropTargetFor(itemID, kGridPayload) &&
                                   CanDropInto(guiStateManager.Drag().GetPayloadValue(), path)) ||
                                  (fileDropFolder && *fileDropFolder == path));
-                            const IconID icon = FileIcon(entry.file.name, entry.file.isFolder, dropTarget);
+                            const IconID icon = FileIcon(entry.file, dropTarget);
                             std::string_view name = entry.file.name;
 
                             if (listMode)

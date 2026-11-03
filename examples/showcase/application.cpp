@@ -111,6 +111,7 @@ namespace tachyon
                     idManager.ReleaseStaticID(tb.id);
         }
         ReleaseToolbarDockState(toolbars.dockState, *this);
+        DisableFilesPanel();   // its thumbnails go before the text system
 
         GUIApplication::Cleanup();
     }
