@@ -17,6 +17,17 @@
 #include <cstdlib>
 #include <vector>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#undef CreateWindow   // IWindowBackend::CreateWindow
+#endif
+
 namespace
 {
     using namespace tachyon;
@@ -125,6 +136,48 @@ namespace
             return true;
         }
     };
+
+#ifdef _WIN32
+    // A tooltip's window lets the pointer through: over it, the pointer is still over what's
+    // under it, which keeps it hovered (or the tooltip would close and open again under the
+    // pointer), and drops from other applications reach that too.
+    TEST(GpuTooltipWindow, ThePointerGoesThroughATooltip)
+    {
+        TooltipApp app;
+        if (!app.Start(1.0f))
+        {
+            app.Cleanup();
+            GTEST_SKIP() << "no Vulkan device available";
+        }
+        ASSERT_TRUE(app.Run());
+        ASSERT_GT(app.boxLaid.w, 0) << "the tooltip didn't show";
+        const OSWindowHandle tooltip = app.windowManager->GetWindowHandle(app.tooltipWindowID);
+        ASSERT_NE(tooltip, nullptr);
+        const HWND hwnd = static_cast<HWND>(app.windowBackend->GetNativeHandle(tooltip));
+        ASSERT_NE(hwnd, nullptr);
+        const LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        EXPECT_NE(exStyle & WS_EX_TRANSPARENT, 0) << "passed over by the OS's hit test";
+        EXPECT_NE(exStyle & WS_EX_LAYERED, 0);
+        app.Cleanup();
+
+        // A window that takes input doesn't.
+        IWindowBackend* backend = nullptr;
+        TooltipApp other;
+        if (other.Initialize())
+        {
+            backend = other.windowBackend;
+            const OSWindowHandle plain = backend->CreateWindow("gpu-test-plain", int2{ 100, 60 },
+                                                               WindowFlags::Hidden | WindowFlags::Transparent | WindowFlags::NotFocusable, nullptr);
+            if (plain != nullptr)
+            {
+                const HWND plainHwnd = static_cast<HWND>(backend->GetNativeHandle(plain));
+                EXPECT_EQ(GetWindowLongPtrW(plainHwnd, GWL_EXSTYLE) & WS_EX_TRANSPARENT, 0) << "without NoInput";
+                backend->DestroyWindow(plain);
+            }
+        }
+        other.Cleanup();
+    }
+#endif
 
     // At 100% and at a zoom that puts the arrow between pixels unless it's snapped to one; for
     // text at its start, its end and centered.

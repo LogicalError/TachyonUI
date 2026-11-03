@@ -38,6 +38,8 @@ namespace tachyon
                 windowFlags |= WindowFlags::CustomTitleBar;
             if ((elementFlags & ElementFlags::WindowConfirmClose) != ElementFlags::None)
                 windowFlags |= WindowFlags::ConfirmClose;
+            if ((elementFlags & ElementFlags::NoInput) != ElementFlags::None)
+                windowFlags |= WindowFlags::NoInput;
 
             if (noCaption)
             {

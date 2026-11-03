@@ -52,6 +52,11 @@ namespace tachyon
         /// app to decide on (IWindowBackend::TakeCloseRequest); the window stays.
         ConfirmClose    = 65536,
 
+        /// The pointer, clicks and drops from other applications go through it to what's under
+        /// it, as if it weren't there (tooltips, which may lie over what they're about). Where
+        /// the OS supports it: Windows, for a Transparent window.
+        NoInput         = 131072,
+
 
 		DefaultFlags = AllowHighDPI
     };

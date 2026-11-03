@@ -76,3 +76,4 @@ First public preview. The API is not stable yet.
 - `IFileSystem`: what a file view reads and changes (a folder's entries, moves, renames). `MemoryFileSystem` keeps it in memory, filled by hand or copied from a disk folder as it's browsed; its changes never reach the disk.
 - `FileIcons`: the OS's icon for a file, one per extension (the Windows shell's; none elsewhere). `ITextSystem::RegisterIconFromPixels` makes an icon of RGBA pixels, drawn in its own colors on its own and in text.
 - The showcase's Files panel browses a copy of the home folder (or `--files <folder>`) with the OS's file icons; moves and renames stay in memory, and a refused one says why in a toast.
+- Tooltips no longer blink under the pointer: their windows let the pointer, clicks and drops from other applications through to what's under them (a window element's `NoInput` becomes `WindowFlags::NoInput`; on Windows, a layered window that's click-through).
