@@ -1152,6 +1152,29 @@ namespace tachyon
                         windowContext->RenderWindowFrame(backend ? backend->m_graphicsContext : nullptr, tachyon::IntRect{ x, y, w, h }, true);
                         break;
                     }
+                    case SDL_EVENT_DROP_BEGIN:
+                    case SDL_EVENT_DROP_POSITION:
+                    case SDL_EVENT_DROP_FILE:
+                    case SDL_EVENT_DROP_TEXT:
+                    case SDL_EVENT_DROP_COMPLETE:
+                    {
+                        if (SDL_GetWindowFromID(event->drop.windowID) != (SDL_Window*)data)
+                            break;
+
+                        tachyon::IPlatformInputHandler* inputHandler = GetInputContext(data);
+                        if (inputHandler == nullptr)
+                            break;
+
+                        const tachyon::FileDropAction action =
+                            event->type == SDL_EVENT_DROP_BEGIN    ? tachyon::FileDropAction::Begin :
+                            event->type == SDL_EVENT_DROP_POSITION ? tachyon::FileDropAction::Move :
+                            event->type == SDL_EVENT_DROP_FILE     ? tachyon::FileDropAction::File :
+                            event->type == SDL_EVENT_DROP_TEXT     ? tachyon::FileDropAction::Text :
+                                                                     tachyon::FileDropAction::Complete;
+                        const tachyon::int2 pixelPos = PixelPointOf((SDL_Window*)data, event->drop.x, event->drop.y);
+                        inputHandler->OnFileDrop(GetWindowID(data), pixelPos, action, event->drop.data ? event->drop.data : "");
+                        break;
+                    }
                 }
                 return false;
             };
@@ -1823,6 +1846,12 @@ namespace tachyon
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP:    return SDL_GetWindowFromID(event->button.windowID);
             case SDL_EVENT_MOUSE_WHEEL:        return SDL_GetWindowFromID(event->wheel.windowID);
+            case SDL_EVENT_DROP_BEGIN:
+            case SDL_EVENT_DROP_POSITION:
+            case SDL_EVENT_DROP_FILE:
+            case SDL_EVENT_DROP_TEXT:          return SDL_GetWindowFromID(event->drop.windowID);
+            // SDL_EVENT_DROP_COMPLETE always gets through: a drag over a blocked window still
+            // ends, having dropped nothing there.
             default:                           return nullptr;
         }
     }

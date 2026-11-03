@@ -1,5 +1,6 @@
 #pragma once
 
+#include <utility>
 #include <vector>
 #include <gui_core/input/gui_input_state.h>
 #include <gui_core/input/gui_input_enums.h>
@@ -41,7 +42,14 @@ namespace tachyon
         void OnMouseButton(tachyon::ID windowId, tachyon::int2 screenPos, tachyon::MouseButtons buttons, KeyModifier modifiers, MouseAction action) override;
         void OnMouseScroll(tachyon::ID windowId, tachyon::int2 screenPos, tachyon::float2 scrollOffset, KeyModifier modifiers) override;
         void OnTextComposition(tachyon::ID, std::string_view, int32_t) override {} // the text editor shows it
+        void OnFileDrop(tachyon::ID windowId, tachyon::int2 screenPos, FileDropAction action, std::string_view data) override;
         ///@}
+
+        /// The drag from another application over one of the app's windows now; null when there's none.
+        const FileDrag* GetFileDrag() const { return m_fileDrag.windowID != ID::Invalid() ? &m_fileDrag : nullptr; }
+        /// The drops from other applications since the last call, oldest first. A drag that left
+        /// without dropping anything isn't one.
+        std::vector<FileDrop> TakeFileDrops() { return std::exchange(m_fileDrops, {}); }
 
         /// Pushes a global handler. Global handlers are tried last-pushed first, after
         /// element-level handlers had a chance to consume the input.
@@ -107,6 +115,10 @@ namespace tachyon
 
         std::vector<RecordedInputEvent> m_recordedEvents;
         std::vector<EventHandler>       m_globalHandlers;
+
+        FileDrag              m_fileDrag;
+        FileDrop              m_dropping;    ///< what the drag over a window dropped so far
+        std::vector<FileDrop> m_fileDrops;
     };
     /// @}
 }

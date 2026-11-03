@@ -555,6 +555,7 @@ namespace tachyon
         void RenderFilesPanel();
         void MoveFileInto(uintptr_t payload, const std::string& folder);
         void ApplyFileRenames();
+        void AddDroppedFiles(const std::vector<std::string>& paths);
         IconID FileIcon(std::string_view name, bool isFolder, bool open = false);
 
         // Build/tear down panel data; wired into CreatePanel's onEnable/onDisable.

@@ -5,6 +5,7 @@
 #include <gui_core/input/gui_input_enums.h>
 
 #include <string>
+#include <vector>
 
 namespace tachyon
 {
@@ -35,8 +36,10 @@ namespace tachyon
         uintptr_t dragPayloadValue = 0;
         ///@}
 
-        /// Text typed with this event (UTF-8).
+        /// Text typed with this event, or dropped (EventType::FileDrop); UTF-8.
         std::string textInput;
+        /// EventType::FileDrop: the paths of the files dropped (UTF-8).
+        std::vector<std::string> droppedFiles;
 
         /// True when the event was already handled (e.g. Tab by tab navigation).
         bool consumed = false;
@@ -52,6 +55,23 @@ namespace tachyon
         bool MiddleDown() const { return (buttons & tachyon::MouseButtons::Middle) != tachyon::MouseButtons::None; }
         bool MiddlePressed() const { return MiddleDown() && ((prevButtons & tachyon::MouseButtons::Middle) == tachyon::MouseButtons::None); }
         bool MiddleReleased() const { return !MiddleDown() && ((prevButtons & tachyon::MouseButtons::Middle) != tachyon::MouseButtons::None); }
+    };
+
+    /// A drag from another application, of files or text, over one of the app's windows.
+    struct FileDrag
+    {
+        tachyon::ID   windowID    = tachyon::ID::Invalid();
+        tachyon::int2 screenPos   {};
+        bool          hasPosition = false;   ///< where it is is known from its first move on
+    };
+
+    /// Files or text dropped from another application.
+    struct FileDrop
+    {
+        tachyon::ID              windowID = tachyon::ID::Invalid();
+        tachyon::int2            screenPos {};
+        std::vector<std::string> files;   ///< paths, UTF-8
+        std::string              text;    ///< UTF-8; lines joined with '\n'
     };
     /// @}
 }

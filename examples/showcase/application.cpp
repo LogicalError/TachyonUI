@@ -140,6 +140,20 @@ namespace tachyon
 
         InitializeToolbarDockState(toolbars.dockState, *this);
 
+        // Files or text dropped from another application where nothing takes them (the Files
+        // panel's grid does).
+        SetFileDropHandler([this](const FileDrop& drop)
+        {
+            std::string body;
+            for (const std::string& path : drop.files)
+                body += (body.empty() ? "" : "\n") + path;
+            if (!drop.text.empty())
+                body += (body.empty() ? "" : "\n") + drop.text;
+            ShowToast(ToastDesc{ .severity = Severity::Info,
+                                 .title = drop.files.empty() ? "Text dropped" : std::to_string(drop.files.size()) + (drop.files.size() == 1 ? " file dropped" : " files dropped"),
+                                 .body = body });
+        });
+
         // Toolbars on several sides exercise wrap, in-side reorder and cross-side
         // drag. The dock wraps each renderBody in BeginToolbar / EndToolbar.
         toolbars.sides[(int)ToolbarSide::Top].push_back(ToolbarItem

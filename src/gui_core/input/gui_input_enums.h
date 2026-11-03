@@ -60,6 +60,16 @@ namespace tachyon
         MouseUp
     };
 
+    /// A step of a drag from another application (files, text) over one of the app's windows.
+    enum class FileDropAction : uint8_t
+    {
+        Begin,     ///< a drag came over the window
+        Move,      ///< it's at screenPos
+        File,      ///< dropped: one of its files, the path in `data`
+        Text,      ///< dropped: text, in `data`
+        Complete,  ///< it's over: after a drop's files and text, or it left the window
+    };
+
     /// The kind of input event the GUI dispatches to element handlers.
     enum class EventType : uint8_t
     {
@@ -81,6 +91,13 @@ namespace tachyon
         LabelDrag,
         LabelDragEnd,     ///< label -> control: drag committed
         LabelDragCancel,  ///< label -> control: drag cancelled (Escape)
+
+        /// Files or text from another application are dragged over the element: return true
+        /// to take them. What's dragged is known only once it's dropped.
+        FileDragOver,
+        /// Dropped on the element: state.droppedFiles, state.textInput. Return true when it
+        /// took them; otherwise its parent is offered them, then the application's handler.
+        FileDrop,
     };
 
     /// Keys by what the keyboard layout makes them, not by position. KeyAction::KeyChar

@@ -1626,6 +1626,7 @@ namespace tachyon
                 inputManager->Process(guiStateManager, elementStorage,
                     tabChainManager, textSystem, overID);
             }
+            DispatchFileDrops();
 
             // Keep the IME candidate window next to the caret being typed at.
             if (textSystem)
@@ -1746,5 +1747,58 @@ namespace tachyon
                     break;
                 }
             }
+    }
+
+    ID GUIApplication::OfferFileDrop(EventType type, ID windowID, int2 screenPos, const FileDrop* drop)
+    {
+        const ElementRef windowRef = windowRegistry.GetWindowRef(windowID);
+        if (windowRef == ElementRef::Invalid())
+            return ID::Invalid();
+        // Disabled elements take nothing: the hit is the first enabled one.
+        ID disabled = ID::Invalid();
+        const ID hit = elementStorage.GetElementIDAt(windowRef, screenPos, &disabled);
+        InputState state;
+        state.screenPos     = screenPos;
+        state.prevScreenPos = screenPos;
+        if (drop)
+        {
+            state.droppedFiles = drop->files;
+            state.textInput    = drop->text;
+        }
+        for (ElementRef cur = elementStorage.FindElementRefByID(hit); cur.IsValid(); cur = elementStorage.GetParentRef(cur))
+        {
+            const Element& elem = elementStorage.GetElementUnsafe(cur);
+            if (elem.eventHandler &&
+                elem.eventHandler(ElementEvent{ .id = elem.id, .type = type, .state = state, .rect = &elementStorage.GetElementRectUnsafe(cur), .elementRef = cur }))
+                return elem.id;
+        }
+        return ID::Invalid();
+    }
+
+    void GUIApplication::DispatchFileDrops()
+    {
+        const ID previousTarget = m_fileDragTargetID;
+        m_fileDragTargetID = ID::Invalid();
+        if (inputManager)
+        {
+            if (const FileDrag* drag = inputManager->GetFileDrag(); drag && drag->hasPosition)
+                m_fileDragTargetID = OfferFileDrop(EventType::FileDragOver, drag->windowID, drag->screenPos, nullptr);
+            for (const FileDrop& drop : inputManager->TakeFileDrops())
+            {
+                const ID taker = OfferFileDrop(EventType::FileDrop, drop.windowID, drop.screenPos, &drop);
+                if (taker != ID::Invalid())
+                    InvalidateCachedScopesAbove(taker);
+                else if (m_fileDropHandler)
+                    m_fileDropHandler(drop);
+            }
+        }
+        // The drop target is drawn as one: redraw where it was and where it is.
+        if (m_fileDragTargetID != previousTarget)
+        {
+            if (previousTarget != ID::Invalid())
+                InvalidateCachedScopesAbove(previousTarget);
+            if (m_fileDragTargetID != ID::Invalid())
+                InvalidateCachedScopesAbove(m_fileDragTargetID);
+        }
     }
 }

@@ -3,19 +3,20 @@
 #include <stdint.h>
 #include <string_view>
 #include <gui_core/gui_base_types.h>
+#include <gui_core/gui_id.h>   // OnFileDrop's default body takes it by value
 
 namespace tachyon
 {
     /// @addtogroup input
     /// @{
 
-    struct ID;
     enum class KeyCode : uint32_t;
     enum class KeyModifier : uint8_t;
     enum class KeyAction : uint8_t;
 
     enum class MouseButtons : uint8_t;
     enum class MouseAction : uint8_t;
+    enum class FileDropAction : uint8_t;
 
     /// Platform-level input interface: receives raw OS events (keyboard, mouse)
     /// and forwards them into the GUI input pipeline.
@@ -36,6 +37,9 @@ namespace tachyon
         /// when composing ends. `cursor` is the caret's codepoint offset within it.
         /// Committed text still arrives as KeyChar.
         virtual void OnTextComposition(tachyon::ID id, std::string_view text, int32_t cursor) = 0;
+        /// A drag from another application over window `id`: it came, moved to screenPos (screen
+        /// pixels), dropped a file or text (`data`), or ended (dropped, or left the window).
+        virtual void OnFileDrop(tachyon::ID /*id*/, tachyon::int2 /*screenPos*/, FileDropAction /*action*/, std::string_view /*data*/) {}
     };
     /// @}
 };
