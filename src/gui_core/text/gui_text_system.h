@@ -372,6 +372,12 @@ namespace tachyon
         /// missing, unreadable or doesn't parse.
         virtual IconID RegisterIconFromSVGFile(const char* path) = 0;
 
+        /// Registers an icon from `size.x` x `size.y` RGBA pixels (straight alpha, rows from the
+        /// top) under a unique name: a picture in its own colors, drawn untinted. Registering a
+        /// name again returns the existing icon. Each takes one of the image slots shared with
+        /// fonts, gradients and images. IconID::Invalid if `rgba` is too short.
+        virtual IconID RegisterIconFromPixels(const char* name, uint2 size, std::span<const uint8_t> rgba) = 0;
+
         // -------------------- Icon Rendering --------------------
 
         /// Draws `iconId` fitted into `rect` (aspect kept, centered), clipped to `clipRect`.

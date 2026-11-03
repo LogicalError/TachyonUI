@@ -73,3 +73,6 @@ First public preview. The API is not stable yet.
 - CSS `text-shadow`: up to two shadows or glows under text, its decorations and its icon, blurred from the glyph atlas' distance field (now wider, so a blur has room).
 - CSS `:first-child`, `:last-child` and `:only-child` for the box properties (backgrounds, borders, shadows, margin, padding, gap, cursor). Button and toggle group items use one class, `group-button` / `group-toggle`, in place of `first-`, `mid-` and `last-button` / `-toggle`; style the ends with `:first-child` and `:last-child`.
 - Tab bars no longer wrap: the tabs that don't fit are listed by a "+N" button after the others, and the selected tab is always shown.
+- `IFileSystem`: what a file view reads and changes (a folder's entries, moves, renames). `MemoryFileSystem` keeps it in memory, filled by hand or copied from a disk folder as it's browsed; its changes never reach the disk.
+- `FileIcons`: the OS's icon for a file, one per extension (the Windows shell's; none elsewhere). `ITextSystem::RegisterIconFromPixels` makes an icon of RGBA pixels, drawn in its own colors on its own and in text.
+- The showcase's Files panel browses a copy of the home folder (or `--files <folder>`) with the OS's file icons; moves and renames stay in memory, and a refused one says why in a toast.

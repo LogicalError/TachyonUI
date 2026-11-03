@@ -709,15 +709,20 @@ namespace
 
     // An "I" drawn only by its green text-shadow (the text itself is transparent) on black,
     // in four boxes: a sharp shadow, the same moved right, a blurred one, and small text
-    // blurred further than its distance field reaches. A fifth box holds only an icon.
+    // blurred further than its distance field reaches. A fifth box holds only an icon, a
+    // sixth a picture icon: two pixels, red and blue; a seventh the same in a line of text,
+    // with a shadow moved right. The last two hold a half see-through red picture, with a
+    // shadow and without.
     class TextShadowApp : public tachyon::GUIApplicationInternals
     {
     public:
         tachyon::ID windowID = tachyon::ID::Invalid();
-        tachyon::ID ids[5] {};
-        tachyon::IntRect rects[5] {};
+        tachyon::ID ids[9] {};
+        tachyon::IntRect rects[9] {};
         tachyon::IconID dot = tachyon::IconID::Invalid;
-        enum { kSharp, kMoved, kBlurred, kWide, kIcon };
+        tachyon::IconID picture = tachyon::IconID::Invalid;
+        tachyon::IconID halfRed = tachyon::IconID::Invalid;
+        enum { kSharp, kMoved, kBlurred, kWide, kIcon, kPicture, kInline, kHalfShadowed, kHalfPlain };
 
         tachyon::StyleRef Shadowed(float fontSize, tachyon::BoxShadow shadow)
         {
@@ -743,13 +748,24 @@ namespace
                 Shadowed(40.0f, tachyon::BoxShadow{ .blur = 6, .color = kGreen }),
                 Shadowed(14.0f, tachyon::BoxShadow{ .blur = 16, .color = kGreen }),
             };
-            if (BeginWindow(windowID, "Image", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(500, 120),
+            if (BeginWindow(windowID, "Image", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(880, 120),
                             tachyon::ElementFlags::WindowRenderToImage))
             {
                 for (int i = 0; i < 4; ++i)
                     Text(ids[i], "I", styles[i], tachyon::LayoutOverride{}.Size(tachyon::Pixels{ 80 }, tachyon::Pixels{ 80 }).Position(10 + 95 * i, 20));
                 RegisterElement(tachyon::Element{ .id = ids[kIcon], .iconID = dot, .styleRef = styles[kSharp] },
                                 tachyon::LayoutOverride{}.Size(tachyon::Pixels{ 80 }, tachyon::Pixels{ 80 }).Position(10 + 95 * kIcon, 20));
+                RegisterElement(tachyon::Element{ .id = ids[kPicture], .iconID = picture, .styleRef = styles[kSharp] },
+                                tachyon::LayoutOverride{}.Size(tachyon::Pixels{ 80 }, tachyon::Pixels{ 80 }).Position(10 + 95 * kPicture, 20));
+                tachyon::ContentRun run[] = { { .type = tachyon::ContentRun::Icon, .iconID = picture, .iconWidth = 40, .iconHeight = 20 } };
+                const tachyon::TextID line = textSystem->RegisterRichText(ids[kInline], run, styles[kMoved], tachyon::ElementState::None);
+                RegisterElement(tachyon::Element{ .id = ids[kInline], .textID = line, .styleRef = styles[kMoved] },
+                                tachyon::LayoutOverride{}.Size(tachyon::Pixels{ 80 }, tachyon::Pixels{ 80 }).Position(10 + 95 * kInline, 20));
+                const tachyon::StyleRef plain = Shadowed(40.0f, tachyon::BoxShadow{});
+                RegisterElement(tachyon::Element{ .id = ids[kHalfShadowed], .iconID = halfRed, .styleRef = styles[kSharp] },
+                                tachyon::LayoutOverride{}.Size(tachyon::Pixels{ 80 }, tachyon::Pixels{ 80 }).Position(10 + 95 * kHalfShadowed, 20));
+                RegisterElement(tachyon::Element{ .id = ids[kHalfPlain], .iconID = halfRed, .styleRef = plain },
+                                tachyon::LayoutOverride{}.Size(tachyon::Pixels{ 80 }, tachyon::Pixels{ 80 }).Position(10 + 95 * kHalfPlain, 20));
             }
             EndWindow();
         }
@@ -764,9 +780,13 @@ namespace
                 id = idManager.CreateStaticID();
             static constexpr char kDot[] = R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="#000"/></svg>)";
             dot = textSystem->RegisterIconFromSVG("text-shadow-dot", kDot, sizeof(kDot) - 1);
+            static constexpr uint8_t kRedBlue[] = { 255, 0, 0, 255, 0, 0, 255, 255 };
+            picture = textSystem->RegisterIconFromPixels("red-blue", tachyon::uint2{ 2, 1 }, kRedBlue);
+            static constexpr uint8_t kHalfRed[] = { 255, 0, 0, 128 };
+            halfRed = textSystem->RegisterIconFromPixels("half-red", tachyon::uint2{ 1, 1 }, kHalfRed);
             m_frame.OnPostLayout([this](tachyon::FrameContext&)
             {
-                for (int i = 0; i < 5; ++i)
+                for (int i = 0; i < 9; ++i)
                 {
                     const tachyon::ElementRef ref = elementStorage.FindElementRefByID(ids[i]);
                     rects[i] = ref.IsValid() ? elementStorage.GetElementRectPtr(ref)->rect : tachyon::IntRect{};
@@ -785,16 +805,17 @@ namespace
             return true;
         }
 
-        // The red, green and blue of the middle row of box `box`, left to right (BGRA8 image).
+        // The red, green and blue of the middle row of box `box`, or `dy` rows below it, left
+        // to right (BGRA8 image).
         struct Row { std::vector<int> r, g, b; };
-        Row MiddleRow(int box)
+        Row MiddleRow(int box, int dy = 0)
         {
             Row row;
             const tachyon::IntRect window = windowManager->GetWindowRect(windowID);
             std::vector<uint8_t> pixels(size_t(window.w) * window.h * 4);
             if (window.w <= 0 || !ReadWindowPixels(windowID, pixels)) return row;
             const tachyon::IntRect& rect = rects[box];
-            const int y = rect.y + rect.h / 2;
+            const int y = rect.y + rect.h / 2 + dy;
             for (int x = rect.x; x < rect.x + rect.w; ++x)
             {
                 const size_t i = (size_t(y) * window.w + size_t(x)) * 4;
@@ -867,6 +888,55 @@ namespace
         const auto icon = app.MiddleRow(TextShadowApp::kIcon);
         const auto [i0, i1] = Extent(icon.g, 128);
         EXPECT_GE(i1 - i0, 20) << "the dot's shadow";
+
+        // A picture icon: in its own colors though the text is transparent, without the
+        // shadow, stretched to the box's width keeping its shape.
+        ASSERT_NE(app.picture, tachyon::IconID::Invalid);
+        const tachyon::IconMeasurement measured = app.textSystem->MeasureIcon(app.picture);
+        EXPECT_EQ(measured.width, 2);
+        EXPECT_EQ(measured.height, 1);
+        const auto picture = app.MiddleRow(TextShadowApp::kPicture);
+        ASSERT_EQ(picture.r.size(), 80u);
+        EXPECT_GE(picture.r[10], 240) << "red on the left";
+        EXPECT_LE(picture.b[10], 15);
+        EXPECT_GE(picture.b[69], 240) << "blue on the right";
+        EXPECT_LE(picture.r[69], 15);
+        EXPECT_EQ(Extent(picture.g, 8).first, -1) << "no green shadow";
+        const auto above = app.MiddleRow(TextShadowApp::kPicture, -30);
+        EXPECT_EQ(Extent(above.r, 8).first, -1) << "80x40 in the middle: nothing 30 rows up";
+        EXPECT_EQ(Extent(above.b, 8).first, -1);
+        const auto inside = app.MiddleRow(TextShadowApp::kPicture, -15);
+        EXPECT_GE(inside.r[10], 240) << "15 rows up is still in it";
+
+        // In a line of text: laid out at the run's size, drawn as the picture, not as a '?'.
+        const auto inlined = app.MiddleRow(TextShadowApp::kInline);
+        ASSERT_EQ(inlined.r.size(), 80u);
+        const auto [r0, r1] = Extent(inlined.r, 240);
+        const auto [q0, q1] = Extent(inlined.b, 240);
+        ASSERT_GE(r0, 0) << "red";
+        ASSERT_GE(q0, 0) << "blue";
+        EXPECT_LT(r1, q0) << "red left of blue";
+        EXPECT_NEAR(q1 - r0, 40, 3) << "40 wide: no copy of it moved right by the shadow";
+        EXPECT_EQ(Extent(inlined.g, 8).first, -1) << "no shadow, no '?'";
+
+        // Drawn once: a text shadow leaves a picture out (twice would be redder).
+        const auto shadowed = app.MiddleRow(TextShadowApp::kHalfShadowed);
+        const auto plain    = app.MiddleRow(TextShadowApp::kHalfPlain);
+        ASSERT_EQ(shadowed.r.size(), 80u);
+        ASSERT_EQ(plain.r.size(), 80u);
+        EXPECT_GT(plain.r[40], 40) << "the picture";
+        EXPECT_LT(plain.r[40], 230) << "half see-through";
+        EXPECT_NEAR(shadowed.r[40], plain.r[40], 2);
+
+        // The same name gives the same icon; too few pixels give none.
+        static constexpr uint8_t kOther[] = { 0, 255, 0, 255, 0, 255, 0, 255 };
+        EXPECT_EQ(app.textSystem->RegisterIconFromPixels("red-blue", tachyon::uint2{ 2, 1 }, kOther), app.picture);
+        EXPECT_EQ(app.textSystem->RegisterIconFromPixels("short", tachyon::uint2{ 3, 1 }, kOther), tachyon::IconID::Invalid);
+        EXPECT_EQ(app.textSystem->RegisterIconFromPixels("empty", tachyon::uint2{ 0, 1 }, kOther), tachyon::IconID::Invalid);
+        EXPECT_EQ(app.textSystem->RegisterIconFromPixels(nullptr, tachyon::uint2{ 2, 1 }, kOther), tachyon::IconID::Invalid);
+        const tachyon::IconID green = app.textSystem->RegisterIconFromPixels("green", tachyon::uint2{ 2, 1 }, kOther);
+        EXPECT_NE(green, tachyon::IconID::Invalid);
+        EXPECT_NE(green, app.picture);
         app.Cleanup();
     }
     // Three areas in a render-to-image window: an opaque red one, an opaque green one over

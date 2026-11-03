@@ -373,6 +373,11 @@ list(APPEND GUI_CONTROLS_FILES
 
   gui_controls/gui_tree_utils.h
 
+  gui_controls/gui_file_system.h
+  gui_controls/gui_file_system.cpp
+  gui_controls/gui_file_icons.h
+  gui_controls/gui_file_icons.cpp
+
   gui_controls/controls.cpp
   gui_controls/controls_color_internal.h
   gui_controls/controls_color.cpp

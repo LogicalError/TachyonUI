@@ -64,6 +64,7 @@ namespace tachyon
 
 		// A null GraphicsContext is allowed for measurement-only use (tests);
 		// guiRenderer is only dereferenced when rendering.
+		this->graphicsContext  = inGraphicsContext;
 		this->guiRenderer      = inGraphicsContext ? inGraphicsContext->guiRenderer : nullptr;
 		this->styleManager     = inStyleManager;
 		this->clipboard        = inClipboard;
@@ -194,6 +195,15 @@ namespace tachyon
 
 		rich_text_clipboard_hash = 0;
 		rich_text_clipboard = nullptr;
+		for (PixelIcon& icon : pixelIcons)
+		{
+			if (graphicsContext && icon.index != ImageIndex::Invalid)
+				graphicsContext->UnregisterImage(icon.index);
+			if (graphicsContext && icon.image)
+				graphicsContext->DestroyImageAtEnd(icon.image, DeviceScope::Application);
+		}
+		pixelIcons.clear();
+		graphicsContext  = nullptr;
 		guiRenderer      = nullptr;
 		styleManager     = nullptr;
 		clipboard        = nullptr;

@@ -27,6 +27,7 @@ Command-line options:
 | `--theme <palette>` | Starts with another palette, for example `themes/light.css`. |
 | `--panel <title>` | Brings that panel to the front of its tab group (repeatable). |
 | `--float <title>` | Starts with that panel in its own window (repeatable). |
+| `--files <folder>` | The folder the Files panel shows instead of the home folder; it's read, never written. |
 
 It saves its window and dock layout to `workdirectory/ui_state.json` when it quits, and
 restores it on the next start.
@@ -38,7 +39,7 @@ restores it on the next start.
 | `application.h`, `application.cpp` | Setup: style files, icons, commands and shortcuts, the dock layout, toolbars and saved UI state. |
 | `panel_hierarchy.cpp` | A scene tree: tree cells in a virtual table. |
 | `panel_inspector.cpp` | Fields, menus and context menus as an inspector. |
-| `panel_files.cpp` | A file browser: a folder tree and a grid of files, renaming, drag and drop. |
+| `panel_files.cpp` | A file browser over a copy of the home folder (or `--files <folder>`): a folder tree and a grid of files with the OS's icons, renaming, drag and drop. Changes stay in memory. |
 | `panel_console.cpp` | A log in a virtual table, with level filters. |
 | `panel_node_view.cpp` | The node graph editor, with undo. |
 | `panel_table.cpp`, `panel_split_scroll.cpp`, `panel_tree_table.cpp` | Tables: sizing, a 50,000-row virtual table, frozen columns and tree rows. |
