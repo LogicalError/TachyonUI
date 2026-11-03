@@ -1,18 +1,18 @@
 # Host device
 
-A "host" application, think of a game engine, creates its own Vulkan instance and device,
-hands them to the GUI, renders into an image of its own every frame, and the GUI shows
-that image in a window.
+In this example a "host" application, such as a game engine, creates its own Vulkan
+instance and device and hands them to the GUI. Every frame the host renders into an
+image of its own, and the GUI shows that image in a window.
 Full source: [examples/host_device/host_device.cpp](https://github.com/LogicalError/TachyonUI/blob/main/examples/host_device/host_device.cpp).
 
-The example uses vk-bootstrap to create the device in a few lines. A real host has its own
-code for that; what matters is what it enables and hands over.
+The example uses vk-bootstrap so it can create the device in a few lines. Your own host
+will have its own code for that. What matters is what it enables and what it hands over.
 
 ## A device the GUI can use
 
-The host enables everything the GUI needs, which
-`VulkanDeviceContext::GetDeviceRequirements()` lists. Its instance also needs the
-extensions SDL uses to create window surfaces:
+The host has to enable everything the GUI needs, and
+`VulkanDeviceContext::GetDeviceRequirements()` gives you that list. The instance also
+needs the extensions SDL uses to create window surfaces.
 
 ```cpp
 // Enable everything the GUI needs on the device.
@@ -30,8 +30,9 @@ auto selected = vkb::PhysicalDeviceSelector{ instance }
 
 ## Handing it over
 
-The host describes its handles in an `ExternalDevice`. Both sides submit to the same
-queue, so the host also passes the mutex it locks around its own submissions:
+The host describes its handles in an `ExternalDevice`. Since the host and the GUI submit
+to the same queue, the host also passes in the mutex it locks around its own
+submissions.
 
 ```cpp
 tachyon::vulkan::VulkanDeviceContext::ExternalDevice external;
@@ -43,7 +44,7 @@ external.graphicsQueueFamily = queueFamily;
 external.queueMutex          = &queueMutex;
 ```
 
-The app gives the Vulkan backend that device before `Initialize`:
+The app gives that device to the Vulkan backend before calling `Initialize`:
 
 ```cpp
 auto backend = std::make_unique<tachyon::vulkan::VulkanGraphicsContext>();
@@ -57,16 +58,16 @@ SetGraphicsBackend(std::move(backend));
 
 ## Showing the host's image
 
-After `Initialize`, the host's image view and sampler are registered once. The GUI
-samples them; the host keeps owning them:
+After `Initialize`, the app registers the host's image view and sampler once. The GUI
+samples them, but the host still owns them.
 
 ```cpp
 // The GUI samples the host's view and sampler; the host keeps owning them.
 hostImage = vk->RegisterExternalImage(host.view, host.sampler);
 ```
 
-Each frame, the host submits its rendering while the UI is built, before the GUI
-submits its own, and `Image` shows the result:
+Each frame, the host submits its rendering while the UI is being built, before the GUI
+submits its own work. `Image` then shows the result.
 
 ```cpp
 void OnGUI() override
@@ -86,22 +87,22 @@ void OnGUI() override
 }
 ```
 
-`Host::Render` follows the GUI's synchronization contract: it waits for the GUI's
-fragment-stage reads before writing the image, and leaves it in
-`SHADER_READ_ONLY_OPTIMAL`, readable by the fragment stage.
+`Host::Render` follows the GUI's synchronization contract. Before it writes the image,
+it waits for the GUI's fragment-stage reads to finish. When it's done, it leaves the
+image in `SHADER_READ_ONLY_OPTIMAL` so the fragment stage can read it.
 
 ## Shutting down
 
-`Cleanup` destroys only what the GUI created; the host's device survives it, and the
-host destroys it afterwards:
+`Cleanup` only destroys what the GUI created. The host's device is still there
+afterwards, and the host destroys it itself.
 
 ```cpp
 app.Cleanup();   // the GUI destroys only what it created; the device stays
 ```
 
-[Using your own Vulkan device](../integration/vulkan-device.md) has the full requirements,
-the ownership rules and the synchronization contract.
+For the full requirements, the ownership rules and the synchronization contract, see
+[Using your own Vulkan device](../integration/vulkan-device.md).
 
 ---
 
-[← Custom theme](custom-theme.md) · [Examples](../examples.md) · [Showcase →](showcase.md)
+[Previous: Custom theme](custom-theme.md) | [Examples](../examples.md) | [Next: Showcase](showcase.md)

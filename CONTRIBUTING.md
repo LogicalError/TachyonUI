@@ -8,7 +8,7 @@ Thanks for wanting to help! Bug reports, ideas and pull requests are all welcome
 
 ## Setting up
 
-Follow [Quick start](README.md#quick-start) and [Reference](README.md#reference) in the README. In short: clone with
+Follow [Requirements](README.md#requirements) and [Quick start](README.md#quick-start) in the README. In short: clone with
 `--recursive`, have [Git LFS](https://git-lfs.com/) installed (the fonts live in LFS) and the
 [Vulkan SDK](https://vulkan.lunarg.com/), then configure and build with CMake.
 
@@ -26,6 +26,9 @@ Follow [Quick start](README.md#quick-start) and [Reference](README.md#reference)
 * Say in the pull request what it changes and why, and how you tested it, on which platform and GPU.
 * For a bug fix, link the issue it fixes, and add a test that fails without the fix.
 * Add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) for anything a user of the library would notice.
+* A new control follows [Writing a control](docs/controls/writing-controls.md). It also needs its own page under
+  [Controls](docs/controls.md) (signature, return value, keys, CSS classes), headless tests for its mouse and keyboard
+  use, its return value and any popup, an entry in `KeyboardFocusTest`, and a row in the showcase.
 * The submodules in `third_party` are pinned on purpose. Update one only with a build and both test runs, and
   list a new third-party library in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
 

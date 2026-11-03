@@ -1,16 +1,14 @@
 # Controls
 
-Every control and container is a member function of `tachyon::GUIApplication`,
-called from `OnGUI()` each frame. The pages below list them by family, with their main
-signatures, what they return, the callback they take and the CSS class they use by
-default. How IDs, Begin / End pairs and return values work in general is in
-the [Overview](overview.md); how to style the classes named here is in [CSS and theming](css.md).
+Every control and container is a member function of `tachyon::GUIApplication`, and you
+call it from `OnGUI()` each frame. The pages below group the controls by family. For each
+one you'll find its main signatures, what it returns, the callback it takes and the CSS
+class it uses by default. The [Overview](overview.md) explains how IDs, Begin / End pairs
+and return values work in general, and [CSS and theming](css.md) shows how to style the
+classes named here.
 
-The snippets run inside `OnGUI()` of a `GUIApplication` subclass, with
-`using namespace tachyon;`. The programs in `examples/` show the same calls in
-context.
-
-This guide has these pages:
+The snippets assume they run inside `OnGUI()` of a `GUIApplication` subclass, with
+`using namespace tachyon;`. The programs in `examples/` show the same calls in context.
 
 | Page | What it covers |
 | --- | --- |
@@ -33,7 +31,8 @@ This guide has these pages:
 | [Default CSS classes](controls/css-classes.md) | The CSS class each control uses unless you pass your own style. |
 | [Writing a control](controls/writing-controls.md) | What every control must do, and what to decide for the optional features. |
 
-<!--! Page tree for the API reference.
+<!--!
+\htmlonly <div class="page-tree"> \endhtmlonly
 \subpage md_docs_2controls_2conventions
 \subpage md_docs_2controls_2windows-and-layout
 \subpage md_docs_2controls_2text-and-images
@@ -52,4 +51,5 @@ This guide has these pages:
 \subpage md_docs_2controls_2custom-drawing
 \subpage md_docs_2controls_2css-classes
 \subpage md_docs_2controls_2writing-controls
+\htmlonly </div> \endhtmlonly
 -->

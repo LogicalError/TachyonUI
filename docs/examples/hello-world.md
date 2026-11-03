@@ -1,13 +1,14 @@
 # Hello world
 
-One window with a text field and three buttons: the smallest complete TachyonUI program.
+This is the smallest complete TachyonUI program: one window with a text field and three
+buttons.
 Full source: [examples/hello_world/hello_world.cpp](https://github.com/LogicalError/TachyonUI/blob/main/examples/hello_world/hello_world.cpp).
 
 ## The application class
 
-An application derives from `tachyon::GUIApplication`. It sets up what lasts between
-frames in `Initialize`, after the base class has created the window manager, the text
-system and the theme:
+Your application derives from `tachyon::GUIApplication`. Anything that has to last
+between frames gets set up in `Initialize`, after the base class has created the window
+manager, the text system and the theme:
 
 ```cpp
 class HelloApp : public tachyon::GUIApplication
@@ -23,15 +24,16 @@ public:
     }
 ```
 
-Most controls take their ID from their call site, so they need none. A window is
-different: its position and size are kept by ID, so it gets a static ID, made once.
-[IDs](../overview/ids.md) explains the kinds.
+Most controls take their ID from the place they're called, so you don't have to give
+them one. Windows are different. The library remembers a window's position and size by
+its ID, so a window gets a static ID that you create once. [IDs](../overview/ids.md)
+explains the different kinds.
 
 ## Describing the UI
 
-`OnGUI` runs every frame and describes the whole UI. There is no tree of widget objects
-to keep in sync: the app's own members (`name`, `greeting`) are the state, and the
-library keeps the rest (focus, the text cursor, the window's rect).
+`OnGUI` runs every frame and describes the whole UI. There's no tree of widget objects to
+keep in sync. The app's own members (`name` and `greeting`) hold its state, and the
+library keeps track of the rest, such as focus, the text cursor and the window's rect.
 
 ```cpp
 void OnGUI() override
@@ -60,20 +62,22 @@ void OnGUI() override
 }
 ```
 
-Things to notice:
+A few things worth noticing:
 
-- `EndWindow` is called whether or not `BeginWindow` returned true; the result only says
-  whether to build the content. Every `Begin*` works this way ([Begin and End](../overview/begin-end.md)).
-- `Field(name)` edits the string in place. Its type picks the editor: a `bool` gets a
-  toggle, a `float` a number field, a `float3` three of them.
-- A button's callback runs after the frame, when input is handled, so it may change
-  anything the next frame reads.
-- Sizes such as `Size(360, 160)` are CSS px, scaled with the UI.
+- `EndWindow` is called whether or not `BeginWindow` returned true. The return value
+  only tells you whether to build the content. Every `Begin*` call works this way (see
+  [Begin and End](../overview/begin-end.md)).
+- `Field(name)` edits the string in place. The type of the value decides which editor
+  you get, so a `bool` gets a toggle, a `float` gets a number field and a `float3` gets
+  three of them.
+- A button's callback runs after the frame, when input is handled. That means it can
+  safely change anything the next frame reads.
+- Sizes such as `Size(360, 160)` are in CSS px and scale with the UI.
 
 ## The program
 
-`main` runs the app until the last window closes. It needs no resource files: the
-shaders, the default theme and the fonts are built into the library.
+`main` runs the app until the last window closes. You don't need any resource files,
+because the shaders, the default theme and the fonts are built into the library.
 
 ```cpp
 int main()
@@ -92,10 +96,10 @@ int main()
 }
 ```
 
-`Initialize` and `Run` return a `Result<void>` that carries the reason when they fail,
-for example a GPU without the features the library needs.
-[Errors and saved state](../overview/errors-and-state.md) has the details.
+`Initialize` and `Run` both return a `Result<void>`. If they fail, it tells you why, for
+example when the GPU doesn't have the features the library needs. See
+[Errors and saved state](../overview/errors-and-state.md) for the details.
 
 ---
 
-[Examples](../examples.md) · [Controls →](controls.md)
+[Examples](../examples.md) | [Next: Controls](controls.md)
