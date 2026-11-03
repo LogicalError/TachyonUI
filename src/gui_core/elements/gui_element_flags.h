@@ -43,7 +43,7 @@ namespace tachyon
 
         Shadows                   = 1u << 15, ///< OS drop shadow for windows (elements use CSS box-shadow)
         PropagatesDescendantState = 1u << 16, ///< Hover/Focused when any descendant is
-        NoInput                   = 1u << 17, ///< Mouse hits pass through
+        NoInput                   = 1u << 17, ///< Mouse hits pass through; a window's, to the windows under it
         IsCachedScope             = 1u << 20, ///< BeginCached scope; blits its cached primitives while clean
         /// Has an earlier element's ID on purpose: a part of it, e.g. a row's tree cell.
         SharesID                  = 1u << 22,

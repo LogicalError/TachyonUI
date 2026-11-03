@@ -880,6 +880,10 @@ namespace tachyon
             if (isTransparent)
             {
                 LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                // A layered window that's also WS_EX_TRANSPARENT is passed over by the OS's hit
+                // test: the pointer and drops go to the window under it.
+                if ((windowFlags & tachyon::WindowFlags::NoInput) != tachyon::WindowFlags::None)
+                    exStyle |= WS_EX_TRANSPARENT;
                 SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
             }
 

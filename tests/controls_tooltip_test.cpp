@@ -780,6 +780,11 @@ namespace tachyon
             EXPECT_EQ(e.box.y, e.text.y - 1);
             EXPECT_EQ(e.box.h, e.text.h + 2);
 
+            // Lying under the pointer, it lets it through to the text, which stays hovered.
+            const ElementRef window = app.elementStorage.FindElementRefByID(app.tooltipWindowID);
+            ASSERT_TRUE(window.IsValid());
+            EXPECT_NE(app.elementStorage.GetElementUnsafe(window).flags & ElementFlags::NoInput, ElementFlags::None);
+
             const VisualTextStyle* shown = app.styleManager.GetVisualTextStyle(e.style.visualTextStyleIndex, ElementState::None);
             const VisualTextStyle* label = app.styleManager.GetVisualTextStyle(app.theme.labelStyleRef.visualTextStyleIndex, ElementState::Hover);
             const VisualTextStyle* tip   = app.styleManager.GetVisualTextStyle(app.theme.tooltipExpandTextStyleRef.visualTextStyleIndex, ElementState::None);
