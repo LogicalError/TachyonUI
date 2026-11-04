@@ -1091,22 +1091,17 @@ namespace tachyon
         if (BeginMenu(idManager.AllocateDynamicID("menuView"), "View",
                       theme.menuBarTriggerStyleRef, theme.menuStyleRef, theme.menuItemRowStyleRef))
         {
-            // Theme submenu - mirrors the Appearance settings page; both mutate
-            // showcase.settingsThemeIndex so the two stay in sync.
-            static const char* const themeNames[] = { "Dark", "Light" };
-            static const char* const themePaths[] = { "themes/dark.css", "themes/light.css" };
+            // Theme submenu - as the Appearance settings page: the theme loaded is the current one.
             if (BeginMenu(idManager.AllocateDynamicID("menuViewTheme"), "Theme"))
             {
-                for (int i = 0; i < 2; i++)
+                const int current = CurrentThemeIndex();
+                for (int i = 0; i < int(std::size(kThemePaths)); i++)
                 {
-                    int idx = i;
-                    bool isCurrent = (idx == showcase.settingsThemeIndex);
-                    if (isCurrent) BeginSelected();
-                    MenuItem(themeNames[i], [this, idx]() {
-                        showcase.settingsThemeIndex = idx;
-                        RequestReloadTheme(themePaths[idx], showcase.settingsFontScalePct / 100.0f);
+                    if (i == current) BeginSelected();
+                    MenuItem(kThemeNames[i], [this, i]() {
+                        RequestReloadTheme(kThemePaths[i], showcase.settingsFontScalePct / 100.0f);
                     });
-                    if (isCurrent) EndSelected();
+                    if (i == current) EndSelected();
                 }
             }
             EndMenu();
@@ -1164,6 +1159,16 @@ namespace tachyon
         StatusText("Test");
 
         EndTitleBar();
+    }
+
+    int Application::CurrentThemeIndex() const
+    {
+        // Compared as paths: --theme may spell it another way (themes\light.css, ./themes/light.css).
+        const std::filesystem::path current = std::filesystem::path(GetThemePath()).lexically_normal();
+        for (int i = 0; i < int(std::size(kThemePaths)); i++)
+            if (std::filesystem::path(kThemePaths[i]).lexically_normal() == current)
+                return i;
+        return -1;
     }
 
     void Application::ToggleFullscreen(ID window, WindowMode fullscreen)

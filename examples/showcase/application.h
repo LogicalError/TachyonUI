@@ -56,6 +56,10 @@ namespace tachyon
         Default     = TexturedLit
     };
 
+    // The palettes the View menu and Settings > Appearance offer, by name and file.
+    inline constexpr std::string_view kThemeNames[] = { "Dark", "Light" };
+    inline constexpr const char*      kThemePaths[] = { "themes/dark.css", "themes/light.css" };
+
     // The showcase's saved UI state, under the resource root (workdirectory/ in the source tree).
     inline constexpr const char* kUIStateFile = "ui_state.json";
 
@@ -440,7 +444,6 @@ namespace tachyon
             SettingsPanelState settings;
 
             // Appearance page bound values
-            int     settingsThemeIndex = 0; // 0 = Dark, 1 = Light
             int     settingsMotionIndex = 0; // 0 = as the OS, 1 = reduced, 2 = full
             float   settingsFontScalePct = 100.0f; // percent; 100 = unscaled
 
@@ -527,6 +530,9 @@ namespace tachyon
         void RenderProfilerTreePanel();
 
         // Main menu bar across the top of the main window (File / Edit / View / Help).
+        /// Which of kThemePaths the theme is (however it was picked: the menu, the settings,
+        /// --theme); -1 for another.
+        int CurrentThemeIndex() const;
         /// The title bar's menus of `window`; `withSearch` adds the command search (one window has it).
         void RenderMainMenu(ID window, bool withSearch = true);
         /// State on the left, the active document in `documents`, frame time on the right.
