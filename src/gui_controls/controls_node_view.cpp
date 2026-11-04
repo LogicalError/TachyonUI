@@ -125,7 +125,19 @@ namespace tachyon
         view.pendingConnection.target = {};
 
         ID canvasID = idManager.AllocateDynamicID();
-        const ID wireMenuID = idManager.AllocateDynamicID("wire-menu");   // owns the wire context menu
+        const ID wireMenuID   = idManager.AllocateDynamicID("wire-menu");     // owns the wire context menu
+        const ID canvasMenuID = idManager.AllocateDynamicID("canvas-menu");   // the canvas's (onCanvasContextMenu)
+        const ID nodeMenuID   = idManager.AllocateDynamicID("node-menu");     // a node's (onNodeContextMenu)
+
+        // Opens one of the view's context menus at `screen`; the others close.
+        auto openMenu = [this, &view](ID menuID, int2 screen, std::optional<uint32_t> wire,
+                                      std::optional<float2> canvasPos, std::optional<ID> node)
+        {
+            view.wireMenuWire  = wire;
+            view.canvasMenuPos = canvasPos;
+            view.nodeMenuNode  = node;
+            OpenContextMenu(menuID, screen);
+        };
 
         // Edit-mode wiring: while this canvas has focus, set the command
         // manager to the view's mode; restore Default when focus leaves.
@@ -142,7 +154,7 @@ namespace tachyon
         tachyon::Element canvas
         {
             .id = canvasID,
-            .eventHandler = [this, &view, canvasID, wireMenuID](ElementEvent&& event)->bool
+            .eventHandler = [this, &view, canvasID, wireMenuID, canvasMenuID, nodeMenuID, openMenu](ElementEvent&& event)->bool
             {
                 switch (event.type)
                 {
@@ -223,12 +235,34 @@ namespace tachyon
                     }
                     case tachyon::EventType::MouseUp:
                     {
-                        // A right click (not a pan) on a wire offers to delete it.
-                        if (view.pan.Release(event) == PointerDrag::Ended::Click && view.hoveredWire)
+                        // A right click (not a pan): on a wire it offers to delete it; on a node
+                        // or the empty canvas it opens the app's menu for it, if there is one.
+                        // A node passes its right presses here, for the pan.
+                        if (view.pan.Release(event) == PointerDrag::Ended::Click)
                         {
-                            view.wireMenuWire = view.hoveredWire;
-                            OpenContextMenu(wireMenuID, event.state.screenPos);
-                            return true;
+                            if (view.hoveredWire)
+                            {
+                                openMenu(wireMenuID, event.state.screenPos, view.hoveredWire, std::nullopt, std::nullopt);
+                                return true;
+                            }
+                            const float2 at = NodeViewScreenToCanvas(view.transform,
+                                IntRect{ .position = event.rect->innerRect.position, .size = view.lastInnerSize }, event.state.screenPos);
+                            if (const int n = NodeAtCanvasPos(view, at); n >= 0)
+                            {
+                                if (!view.onNodeContextMenu)
+                                    return false;
+                                const ID id = view.nodes[size_t(n)].stableID;
+                                if (!view.selectedNodeIDs.contains(id))
+                                    view.selectedNodeIDs = { id };
+                                view.lastClickedNodeID = id;
+                                openMenu(nodeMenuID, event.state.screenPos, std::nullopt, std::nullopt, id);
+                                return true;
+                            }
+                            if (view.onCanvasContextMenu)
+                            {
+                                openMenu(canvasMenuID, event.state.screenPos, std::nullopt, at, std::nullopt);
+                                return true;
+                            }
                         }
                         if (const PointerDrag::Ended ended = view.marquee.Release(event); ended != PointerDrag::Ended::No)
                         {
@@ -297,6 +331,30 @@ namespace tachyon
                         const KeyCode key   = event.state.lastKey;
                         const bool    shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                         const bool    ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
+                        // The Menu key or Shift+F10: the selected node's menu (the one clicked last,
+                        // else the first), below it; else the canvas's, at its centre.
+                        if (key == KeyCode::Application || key == KeyCode::Menu || (key == KeyCode::F10 && shift))
+                        {
+                            int selected = -1;
+                            for (int i = 0; i < (int)view.nodes.size(); ++i)
+                                if (view.selectedNodeIDs.contains(view.nodes[size_t(i)].stableID)
+                                    && (selected < 0 || view.nodes[size_t(i)].stableID == view.lastClickedNodeID))
+                                    selected = i;
+                            if (selected >= 0 && view.onNodeContextMenu)
+                            {
+                                const NodeModel& node = view.nodes[size_t(selected)];
+                                const float2 below = NodeViewCanvasToScreen(view, float2{ float(node.pos.x), float(node.pos.y + node.lastSize.y) });
+                                openMenu(nodeMenuID, int2{ int32_t(below.x), int32_t(below.y) }, std::nullopt, std::nullopt, node.stableID);
+                                return true;
+                            }
+                            if (selected < 0 && view.onCanvasContextMenu)
+                            {
+                                const int2 centre = view.lastCanvasRect.position + int2{ view.lastCanvasRect.w / 2, view.lastCanvasRect.h / 2 };
+                                openMenu(canvasMenuID, centre, std::nullopt, NodeViewScreenToCanvas(view, centre), std::nullopt);
+                                return true;
+                            }
+                            return false;
+                        }
                         int2 dir{};
                         switch (key)
                         {
@@ -1120,7 +1178,8 @@ namespace tachyon
         VERIFY(elementStorage.AddPostLayout(canvasRes.ref,
             [this, &view, canvasID, centeredFor = view.lastInnerSize](tachyon::PostLayoutContext& ctx)
             {
-                view.lastInnerSize = ctx.ElementInnerRect().size;
+                view.lastInnerSize  = ctx.ElementInnerRect().size;
+                view.lastCanvasRect = ctx.ElementInnerRect();
                 // The nodes were centered for last frame's size. A cached panel around the
                 // view only rebuilds when its own size changes, so ask for the redraw.
                 if (view.lastInnerSize.x != centeredFor.x || view.lastInnerSize.y != centeredFor.y)
@@ -1388,6 +1447,32 @@ namespace tachyon
             else
                 view.wireMenuWire.reset();
             EndContextMenu();
+        }
+        // The app's menus for the canvas and for a node, built by it while open.
+        if (view.canvasMenuPos)
+        {
+            if (BeginContextMenu(canvasMenuID))
+            {
+                if (view.onCanvasContextMenu)
+                    view.onCanvasContextMenu(*view.canvasMenuPos);
+            }
+            else
+                view.canvasMenuPos.reset();
+            EndContextMenu();
+        }
+        if (view.nodeMenuNode)
+        {
+            // By its stableID: an edit may have moved it to another index meanwhile, or removed it.
+            const auto it = std::find_if(view.nodes.begin(), view.nodes.end(),
+                                         [&](const NodeModel& node) { return node.stableID == *view.nodeMenuNode; });
+            const bool there = it != view.nodes.end();
+            const bool open  = there && BeginContextMenu(nodeMenuID);
+            if (open && view.onNodeContextMenu)
+                view.onNodeContextMenu(int(it - view.nodes.begin()));
+            if (there)
+                EndContextMenu();
+            if (!open)
+                view.nodeMenuNode.reset();
         }
     }
 

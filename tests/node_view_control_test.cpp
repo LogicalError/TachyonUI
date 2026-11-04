@@ -463,6 +463,206 @@ namespace tachyon
             EXPECT_EQ(edits, 0);
         }
 
+        // ---- The app's context menus for the canvas and for a node ----
+
+        // Also where the canvas was laid out, which the harness's frames don't note.
+        class NodeViewContextMenuTest : public NodeViewWireDropTest
+        {
+        protected:
+            void Settle()
+            {
+                NodeViewWireDropTest::Settle();
+                view.lastCanvasRect = CanvasInner();
+            }
+            // The canvas element: the node-view style is unique to it.
+            tachyon::ID CanvasID() const
+            {
+                for (uint32_t d = 0; d < app.elementStorage.NumberOfDepthLevels(); d++)
+                    for (uint32_t i = 0; i < app.elementStorage.DepthSizeOf(d); i++)
+                    {
+                        const tachyon::ElementRef ref{ d, i };
+                        if (app.elementStorage.IsValidRef(ref) && app.elementStorage.GetElementUnsafe(ref).styleRef == app.theme.nodeViewStyleRef)
+                            return app.elementStorage.GetElementUnsafe(ref).id;
+                    }
+                return tachyon::ID::Invalid();
+            }
+            void RightClick(tachyon::int2 at)
+            {
+                app.InjectMouseMove(at);
+                Frame();
+                app.ClickAt(at, MouseButtons::Right);
+                Frame();
+                Frame();
+            }
+        };
+
+        // A right click on the empty canvas opens its menu, built by the app each frame,
+        // for where it was clicked.
+        TEST_F(NodeViewContextMenuTest, ARightClickOnTheCanvasOpensItsMenu)
+        {
+            Settle();
+            std::vector<float2> built;
+            int nodeMenus = 0;
+            view.onCanvasContextMenu = [&](float2 at) { built.push_back(at); app.MenuItem("Add node", [] {}); };
+            view.onNodeContextMenu   = [&](int) { nodeMenus++; };
+            const tachyon::int2 at = CanvasPoint();
+            RightClick(at);
+            ASSERT_FALSE(built.empty());
+            const float2 expected = NodeViewScreenToCanvas(view, at);
+            EXPECT_FLOAT_EQ(built.back().x, expected.x);
+            EXPECT_FLOAT_EQ(built.back().y, expected.y);
+            EXPECT_TRUE(app.menuManager.IsOpen());
+            EXPECT_EQ(nodeMenus, 0);
+            const size_t frames = built.size();
+            Frame();
+            EXPECT_EQ(built.size(), frames + 1) << "built again each frame it's open";
+
+            app.menuManager.CloseAll(app.guiStateManager);
+            Frame();
+            EXPECT_FALSE(view.canvasMenuPos) << "closed, it's forgotten";
+            EXPECT_EQ(built.size(), frames + 1);
+        }
+
+        // On a node: that node's menu, and the node selected.
+        TEST_F(NodeViewContextMenuTest, ARightClickOnANodeOpensItsMenuAndSelectsIt)
+        {
+            Settle();
+            view.selectedNodeIDs = { nodeA };
+            std::vector<int> built;
+            int canvasMenus = 0;
+            view.onNodeContextMenu   = [&](int n) { built.push_back(n); app.MenuItem("Rename", [] {}); };
+            view.onCanvasContextMenu = [&](float2) { canvasMenus++; };
+            RightClick(HeaderOf(nodeB));
+            ASSERT_FALSE(built.empty());
+            EXPECT_EQ(built.back(), 1);
+            EXPECT_EQ(view.selectedNodeIDs, std::unordered_set<tachyon::ID>{ nodeB });
+            EXPECT_EQ(view.lastClickedNodeID, nodeB);
+            EXPECT_EQ(canvasMenus, 0);
+
+            // A selected node keeps the rest of the selection.
+            view.selectedNodeIDs = { nodeA, nodeB };
+            RightClick(HeaderOf(nodeA));
+            EXPECT_EQ(built.back(), 0);
+            EXPECT_EQ(view.selectedNodeIDs.size(), 2u);
+        }
+
+        // A right drag pans; it opens nothing.
+        TEST_F(NodeViewContextMenuTest, ARightDragPansAndOpensNoMenu)
+        {
+            Settle();
+            int menus = 0;
+            view.onCanvasContextMenu = [&](float2) { menus++; };
+            view.onNodeContextMenu   = [&](int) { menus++; };
+            const tachyon::float3x2 before = view.transform;
+            const tachyon::int2 from = CanvasPoint();
+            app.DragFrom(from, { from.x - 120, from.y + 60 }, MouseButtons::Right);
+            Frame();
+            Frame();
+            EXPECT_NE(view.transform.TransformPoint(float2{}).x, before.TransformPoint(float2{}).x) << "it panned";
+            EXPECT_EQ(menus, 0);
+            EXPECT_FALSE(app.menuManager.IsOpen());
+        }
+
+        // Without the app's menus, a right click opens none.
+        TEST_F(NodeViewContextMenuTest, WithoutTheAppsMenusARightClickOpensNone)
+        {
+            Settle();
+            RightClick(HeaderOf(nodeB));
+            EXPECT_FALSE(app.menuManager.IsOpen());
+            RightClick(CanvasPoint());
+            EXPECT_FALSE(app.menuManager.IsOpen());
+            EXPECT_FALSE(view.nodeMenuNode);
+            EXPECT_FALSE(view.canvasMenuPos);
+        }
+
+        // From the keys, with the canvas focused: the selected node's menu (the one clicked
+        // last), else the canvas's, for its centre.
+        TEST_F(NodeViewContextMenuTest, TheMenuKeyOpensTheSelectedNodesMenuElseTheCanvas)
+        {
+            Settle();
+            std::vector<int> nodeMenus;
+            std::vector<float2> canvasMenus;
+            view.onNodeContextMenu   = [&](int n) { nodeMenus.push_back(n); app.MenuItem("Rename", [] {}); };
+            view.onCanvasContextMenu = [&](float2 at) { canvasMenus.push_back(at); app.MenuItem("Add node", [] {}); };
+            // With the canvas focused (and the menus closed), the key.
+            auto press = [&](KeyCode key, KeyModifier mods = KeyModifier::None) {
+                app.menuManager.CloseAll(app.guiStateManager);
+                app.guiStateManager.Interaction().SetFocusID(CanvasID());
+                app.InjectKey(key, KeyAction::KeyDown, mods);
+                Frame();
+                Frame();
+            };
+
+            press(KeyCode::Application);
+            ASSERT_FALSE(canvasMenus.empty());
+            const tachyon::IntRect inner = CanvasInner();
+            const float2 centre = NodeViewScreenToCanvas(view, inner.position + tachyon::int2{ inner.w / 2, inner.h / 2 });
+            EXPECT_FLOAT_EQ(canvasMenus.back().x, centre.x);
+            EXPECT_FLOAT_EQ(canvasMenus.back().y, centre.y);
+            EXPECT_TRUE(nodeMenus.empty());
+
+            view.selectedNodeIDs   = { nodeA, nodeB };
+            view.lastClickedNodeID = nodeB;
+            press(KeyCode::F10, KeyModifier::Shift);
+            ASSERT_FALSE(nodeMenus.empty());
+            EXPECT_EQ(nodeMenus.back(), 1) << "the one clicked last";
+            const NodeModel& b = view.nodes[1];
+            const float2 below = NodeViewCanvasToScreen(view, float2{ float(b.pos.x), float(b.pos.y + b.lastSize.y) });
+            ASSERT_TRUE(app.menuManager.IsOpen());
+            EXPECT_EQ(app.GetElementRect(app.menuManager.levels[0].windowID).position,
+                      (tachyon::int2{ int32_t(below.x), int32_t(below.y) })) << "the menu just below it";
+
+            view.lastClickedNodeID = tachyon::ID::Invalid();
+            press(KeyCode::Menu);
+            EXPECT_EQ(nodeMenus.back(), 0) << "else the first selected";
+
+            view.onNodeContextMenu = {};
+            const size_t canvasBefore = canvasMenus.size();
+            press(KeyCode::Application);
+            EXPECT_EQ(canvasMenus.size(), canvasBefore) << "a node is selected: not the canvas's";
+            EXPECT_FALSE(view.nodeMenuNode) << "and no node menu without the app's";
+            EXPECT_FALSE(app.menuManager.IsOpen());
+
+            view.selectedNodeIDs.clear();
+            press(KeyCode::F10);
+            EXPECT_EQ(canvasMenus.size(), canvasBefore) << "F10 alone isn't the menu key";
+        }
+
+        // After a frame the view knows where its canvas is, for the conversions.
+        TEST_F(NodeViewControlTest, TheViewNotesWhereItsCanvasIs)
+        {
+            app.runPostLayoutCallbacks = true;
+            Settle();
+            const tachyon::IntRect inner = CanvasInner();
+            EXPECT_EQ(view.lastCanvasRect, inner);
+            EXPECT_EQ(view.lastInnerSize, inner.size);
+        }
+
+        // A node removed while its menu is open: the menu goes. One moved to another index
+        // still gets its own.
+        TEST_F(NodeViewContextMenuTest, ANodesMenuFollowsTheNode)
+        {
+            Settle();
+            std::vector<int> built;
+            view.onNodeContextMenu = [&](int n) { built.push_back(n); app.MenuItem("Rename", [] {}); };
+            RightClick(HeaderOf(nodeB));
+            ASSERT_FALSE(built.empty());
+            EXPECT_EQ(built.back(), 1);
+
+            const int first[] = { 0 };
+            ApplyNodeViewEdit(view, RemoveNodesEdit(view, first));
+            Frame();
+            EXPECT_EQ(built.back(), 0) << "B is node 0 now";
+
+            const int last[] = { 0 };
+            ApplyNodeViewEdit(view, RemoveNodesEdit(view, last));
+            const size_t count = built.size();
+            Frame();
+            Frame();
+            EXPECT_EQ(built.size(), count) << "gone with its node";
+            EXPECT_FALSE(view.nodeMenuNode);
+        }
+
         TEST_F(NodeViewControlTest, NodesLayOutAtTheirPositions)
         {
             Settle();

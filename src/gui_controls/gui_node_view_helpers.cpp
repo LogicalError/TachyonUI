@@ -636,6 +636,18 @@ namespace tachyon
             float2{ (float)(screen.x - canvasCenter.x), (float)(screen.y - canvasCenter.y) });
     }
 
+    float2 NodeViewScreenToCanvas(const NodeView& view, int2 screen)
+    {
+        return NodeViewScreenToCanvas(view.transform, IntRect{ .position = view.lastCanvasRect.position, .size = view.lastInnerSize }, screen);
+    }
+
+    float2 NodeViewCanvasToScreen(const NodeView& view, float2 canvasPos)
+    {
+        const float2 p = view.transform.TransformPoint(canvasPos);
+        return float2{ p.x + float(view.lastCanvasRect.x + view.lastInnerSize.x / 2),
+                       p.y + float(view.lastCanvasRect.y + view.lastInnerSize.y / 2) };
+    }
+
     std::unordered_set<ID> ComputeNodesInMarquee(
         std::span<const NodeModel> nodes,
         IntRect                    canvasInnerRectScreen,

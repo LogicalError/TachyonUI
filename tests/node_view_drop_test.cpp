@@ -102,6 +102,25 @@ namespace
         EXPECT_EQ(NodeAtCanvasPos(view, { 10.0f, 10.0f }), 0) << "indices out of range are skipped";
     }
 
+    // Through the place and pan/zoom the view was last drawn with, and back.
+    TEST(NodeViewDrop, CanvasAndScreenPointsThroughTheView)
+    {
+        NodeView view;
+        view.lastCanvasRect = { 100, 50, 800, 600 };
+        view.lastInnerSize  = { 800, 600 };
+        view.transform      = float3x2::Scale(0.5f);
+        const float2 screen = NodeViewCanvasToScreen(view, { 100.0f, -100.0f });
+        EXPECT_FLOAT_EQ(screen.x, 550.0f);
+        EXPECT_FLOAT_EQ(screen.y, 300.0f);
+        const float2 back = NodeViewScreenToCanvas(view, { 550, 300 });
+        EXPECT_FLOAT_EQ(back.x, 100.0f);
+        EXPECT_FLOAT_EQ(back.y, -100.0f);
+        view.transform = float3x2::Translate(float2{ 40.0f, -20.0f });
+        const float2 panned = NodeViewCanvasToScreen(view, { 0.0f, 0.0f });
+        EXPECT_FLOAT_EQ(panned.x, 540.0f);
+        EXPECT_FLOAT_EQ(panned.y, 330.0f);
+    }
+
     // A screen point in node.pos space: from the canvas centre, through the inverse pan/zoom.
     TEST(NodeViewDrop, AScreenPointOnTheCanvas)
     {
