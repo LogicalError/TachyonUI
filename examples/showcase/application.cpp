@@ -42,7 +42,13 @@ namespace tachyon
         SetDrawCacheEnabled(true);
 
         // The saved UI state (the showcase stores it next to its themes): the main window, the
-        // toolbars, and the documents of each window, made again on the first frame.
+        // toolbars, the documents of each window (made again on the first frame), the
+        // Appearance settings and the shortcuts the user changed.
+        showcase.settingsThemePath = GetThemePath();
+        PersistValue("theme", showcase.settingsThemePath);
+        PersistValue("fontSize", showcase.settingsFontScalePct);
+        PersistValue("motion", showcase.settingsMotionIndex);
+        PersistShortcuts("shortcuts", commandManager);
         PersistWindow("main", showcase.windowLayoutID2);
         PersistToolbars("toolbars", toolbars.sides);
         PersistDocuments("documents", [this] {
@@ -59,11 +65,32 @@ namespace tachyon
             if (Result<void> restored = RestoreUIState(showcase.savedUIState); !restored)
                 TACHYON_LOG_WARNING(kLogShowcase, "{} not restored: {}", kUIStateFile, restored.GetError().message);
         }
+        ApplySavedAppearance();
         return {};
+    }
+
+    void Application::ApplySavedAppearance()
+    {
+        if (!m_startTheme.empty())
+            showcase.settingsThemePath = m_startTheme;
+        showcase.settingsFontScalePct = std::clamp(std::round(showcase.settingsFontScalePct / 10.0f) * 10.0f, 100.0f, 300.0f);
+        showcase.settingsMotionIndex  = std::clamp(showcase.settingsMotionIndex, 0, 2);
+        // Loaded before the first frame; one that won't load leaves the theme as it is.
+        RequestReloadTheme(showcase.settingsThemePath, showcase.settingsFontScalePct / 100.0f);
+        ApplyMotionSetting();
+    }
+
+    void Application::ApplyMotionSetting()
+    {
+        SetReducedMotion(showcase.settingsMotionIndex == 0 ? std::nullopt
+                                                           : std::optional<bool>(showcase.settingsMotionIndex == 1));
     }
 
     void Application::OnStylesReloaded()
     {
+        // The palette that loaded (another that wouldn't goes back to this one): the one saved.
+        showcase.settingsThemePath = GetThemePath();
+
         // A theme reload wipes styleManager, so every showcase StyleRef is stale and
         // gets re-registered. Icons and textures survive the reload.
         boxStyleRefs.clear();

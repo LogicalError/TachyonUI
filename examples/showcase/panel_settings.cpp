@@ -75,8 +75,7 @@ namespace tachyon
         Label("Motion");
         static constexpr std::string_view motionNames[] = { "As the system", "Reduced", "Full" };
         if (Dropdown(idManager.AllocateDynamicID("settingsMotionMenu"), showcase.settingsMotionIndex, motionNames))
-            SetReducedMotion(showcase.settingsMotionIndex == 0 ? std::nullopt
-                                                               : std::optional<bool>(showcase.settingsMotionIndex == 1));
+            ApplyMotionSetting();
 
         EndLabelGroup();
     }

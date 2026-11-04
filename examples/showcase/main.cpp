@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
         if (std::string_view(argv[i]) == "--ui-scale")
             application->SetUIScale(std::strtof(argv[i + 1], nullptr));
         else if (std::string_view(argv[i]) == "--theme")
-            application->RequestReloadTheme(argv[i + 1], application->GetGlobalFontScale());
+            application->SetStartTheme(argv[i + 1]);
         else if (std::string_view(argv[i]) == "--panel")
             application->AddStartPanel(argv[i + 1]);
         else if (std::string_view(argv[i]) == "--float")

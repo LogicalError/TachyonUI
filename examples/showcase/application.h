@@ -81,6 +81,8 @@ namespace tachyon
         void AddFloatPanel(std::string title) { m_floatPanels.push_back(std::move(title)); }
         // The disk folder the Files panel shows a copy of; the workdirectory when empty.
         void SetFilesRoot(std::filesystem::path path) { m_filesRoot = std::move(path); }
+        // The palette to start with, over the one saved at the last exit.
+        void SetStartTheme(std::string path) { m_startTheme = std::move(path); }
 
         // ---- Toolbar model (used by the View panel) -----------------------------
         struct ToolbarLayoutModel
@@ -443,7 +445,8 @@ namespace tachyon
             // state lives in the fields below.
             SettingsPanelState settings;
 
-            // Appearance page bound values
+            // Appearance page bound values, kept in the saved UI state
+            std::string settingsThemePath;            // the palette loaded
             int     settingsMotionIndex = 0; // 0 = as the OS, 1 = reduced, 2 = full
             float   settingsFontScalePct = 100.0f; // percent; 100 = unscaled
 
@@ -510,6 +513,10 @@ namespace tachyon
         void RenderSettingsAdvanced();
         void RenderSettingsShortcuts();
         void RenderSettingsAbout();
+        /// Reduced motion as settingsMotionIndex says.
+        void ApplyMotionSetting();
+        /// The Appearance settings read from the saved UI state, applied (--theme wins).
+        void ApplySavedAppearance();
 
         // Dock-panel body renderers (one per panel_*.cpp), called each frame
         // while the panel is the active tab.
@@ -593,6 +600,7 @@ namespace tachyon
         std::vector<std::string> m_startPanels;
         std::vector<std::string> m_floatPanels;   // --float: start in their own windows
         std::filesystem::path    m_filesRoot;     // --files
+        std::string              m_startTheme;    // --theme
     };
 
 } // namespace tachyon

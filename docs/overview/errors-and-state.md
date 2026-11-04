@@ -49,6 +49,13 @@ PersistValue("zoom", zoom);                  // an app setting (bool, int, float
 There is also:
 
 - `PersistToolbars`
+- `PersistShortcuts`, for the shortcuts the user changed. Register the commands before
+  `RestoreUIState`; the others keep the shortcuts the app gives them:
+
+  ```cpp
+  PersistShortcuts("shortcuts", commandManager);
+  ```
+
 - `PersistDocuments`, for each main window's documents (see Documents in
   [Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md))
 

@@ -90,6 +90,95 @@ namespace
         EXPECT_EQ(count, 7);
     }
 
+    TEST_F(UIStateTest, ChangedShortcutsComeBack)
+    {
+        auto registerCommands = [](CommandManager& m, KeyCode copyKey) {
+            const CommandMode sculpt = m.RegisterMode("Sculpt");
+            m.RegisterCommand(KeyCode::KeyS, KeyModifier::Control, [] {}, "Save");
+            m.RegisterCommand(KeyCode::KeyZ, KeyModifier::Control, [] {}, "Undo");
+            m.RegisterCommand(copyKey,       KeyModifier::Control, [] {}, "Copy");
+            m.RegisterCommand(sculpt, KeyCode::KeyB, KeyModifier::None, [] {}, "Tool");
+            m.RegisterCommand(sculpt, KeyCode::KeyE, KeyModifier::None, [] {}, "Tool");
+            m.RegisterCommand(KeyCode::KeyV, KeyModifier::Control, [] {}, "Paste");
+            m.RegisterCommand(KeyCode::Insert, KeyModifier::Shift, [] {}, "Paste");
+        };
+        CommandManager before;
+        registerCommands(before, KeyCode::KeyC);
+        before.SetShortcut(CommandManager::IDAt(1), KeyCode::KeyS, KeyModifier::Control);   // Undo takes Save's
+        before.SetShortcut(CommandManager::IDAt(4), KeyCode::KeyR, KeyModifier::Shift);     // the second Tool
+        before.SetShortcut(CommandManager::IDAt(5), KeyCode::KeyP, KeyModifier::Control);   // the first Paste
+        app.PersistShortcuts("keys", before);
+        const std::string saved = app.SaveUIState();
+
+        // Only the ones changed are saved.
+        const Result<JsonValue> doc = JsonValue::Parse(saved);
+        ASSERT_TRUE(doc);
+        const JsonValue* list = doc->Find("shortcuts")->Find("keys");
+        ASSERT_TRUE(list && list->IsArray());
+        ASSERT_EQ(list->Items().size(), 4u);
+        EXPECT_EQ(list->Items()[0].Find("command")->AsString(), "Save");
+        EXPECT_EQ(list->Items()[0].Find("mode")->AsString(), "Default");
+        EXPECT_EQ(list->Items()[2].Find("mode")->AsString(), "Sculpt");
+        EXPECT_EQ(list->Items()[0].Find("nth"), nullptr) << "the first of its name";
+        ASSERT_NE(list->Items()[2].Find("nth"), nullptr);
+        EXPECT_EQ(list->Items()[2].Find("nth")->AsNumber(), 1.0) << "the second Tool";
+        EXPECT_EQ(list->Items()[3].Find("nth"), nullptr) << "the first Paste, with another after it";
+
+        // A later version of the app: Copy has another key, and keeps it.
+        CommandManager after;
+        registerCommands(after, KeyCode::Insert);
+        app.PersistShortcuts("keys", after);
+        ASSERT_TRUE(app.RestoreUIState(saved));
+        const auto& commands = after.GetCommands();
+        EXPECT_FALSE(commands[0].HasShortcut()) << "Save";
+        EXPECT_EQ(commands[1].key, KeyCode::KeyS);
+        EXPECT_EQ(commands[1].modifiers, KeyModifier::Control);
+        EXPECT_EQ(commands[2].key, KeyCode::Insert) << "not changed, so the app's own";
+        EXPECT_EQ(commands[3].key, KeyCode::KeyB) << "the first Tool";
+        EXPECT_EQ(commands[4].key, KeyCode::KeyR) << "the second Tool";
+        EXPECT_EQ(commands[4].modifiers, KeyModifier::Shift);
+        EXPECT_EQ(commands[4].displayString, "Shift+R");
+        EXPECT_EQ(commands[5].key, KeyCode::KeyP) << "the first Paste";
+        EXPECT_EQ(commands[6].key, KeyCode::Insert) << "the second Paste";
+    }
+
+    TEST_F(UIStateTest, ShortcutsItCanNotPlaceAreSkipped)
+    {
+        CommandManager m;
+        m.RegisterCommand(KeyCode::KeyS, KeyModifier::Control, [] {}, "Save");
+        app.PersistShortcuts("keys", m);
+        const char* entries[] = {
+            R"({"mode":"Default","command":"Gone","key":20,"modifiers":0})",
+            R"({"mode":"Nowhere","command":"Save","key":20,"modifiers":0})",
+            R"({"mode":"Default","command":"Save","key":-1,"modifiers":0})",
+            R"({"mode":"Default","command":"Save","key":65536,"modifiers":0})",
+            R"({"mode":"Default","command":"Save","key":20,"modifiers":256})",
+            R"({"mode":"Default","command":"Save","key":"S","modifiers":0})",
+            R"({"mode":"Default","command":"Save","modifiers":0})",
+            R"({"mode":"Default","command":"Save","key":20})",
+            R"({"mode":"Default","command":"Save","key":20,"modifiers":0,"nth":1})",
+            R"({"mode":"Default","command":"Save","key":20,"modifiers":0,"nth":-1})",
+            R"({"mode":"Default","command":"Save","key":20,"modifiers":0,"nth":"first"})",
+            R"("Save")",
+        };
+        for (const char* entry : entries)
+        {
+            ASSERT_TRUE(app.RestoreUIState(std::string(R"({"shortcuts":{"keys":[)") + entry + "]}}")) << entry;
+            EXPECT_FALSE(m.GetCommands()[0].IsRebound()) << entry;
+        }
+        ASSERT_TRUE(app.RestoreUIState(R"({"shortcuts":{"keys":{}}})"));
+        EXPECT_FALSE(m.GetCommands()[0].IsRebound()) << "not a list";
+
+        // Key 0 is none: saved for a command the user left without one.
+        ASSERT_TRUE(app.RestoreUIState(R"({"shortcuts":{"keys":[{"mode":"Default","command":"Save","key":0,"modifiers":0}]}})"));
+        EXPECT_FALSE(m.GetCommands()[0].HasShortcut());
+
+        // The largest values still in range are taken.
+        ASSERT_TRUE(app.RestoreUIState(R"({"shortcuts":{"keys":[{"mode":"Default","command":"Save","key":65535,"modifiers":255}]}})"));
+        EXPECT_EQ(uint32_t(m.GetCommands()[0].key), 65535u);
+        EXPECT_EQ(uint32_t(m.GetCommands()[0].modifiers), 255u);
+    }
+
     TEST_F(UIStateTest, TableColumnOrderAndWidthsComeBack)
     {
         auto makeColumns = [] {
