@@ -111,7 +111,11 @@ namespace tachyon
                     idManager.ReleaseStaticID(tb.id);
         }
         ReleaseToolbarDockState(toolbars.dockState, *this);
-        DisableFilesPanel();   // its thumbnails go before the text system
+        // Their thumbnails and icons go before the text system.
+        for (const std::weak_ptr<FilesPanel>& weak : m_filesPanels)
+            if (const std::shared_ptr<FilesPanel> panel = weak.lock())
+                DisableFilesPanel(*panel);
+        m_filesPanels.clear();
 
         GUIApplication::Cleanup();
     }
@@ -1217,12 +1221,10 @@ namespace tachyon
         if (title == "Viewport")  return CreatePanel(panels, name, showcase.panelViewportIcon, [this] { RenderViewportPanel(); });
         if (title == "NodeView")  return CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderNodeViewPanel(); });
         if (title == "BoxTest")   return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderBoxTestPanel(); });
-        if (title == "Inspector")
-            return CreatePanel(panels, name, showcase.panelInspectorIcon, [this] { RenderInspectorPanel(); }, {},
-                               [this] { EnableInspectorPanel(); }, [this] { DisableInspectorPanel(); });
-        if (title == "Hierarchy")
-            return CreatePanel(panels, name, showcase.panelHierarchyIcon, [this] { RenderHierarchyPanel(); }, {},
-                               [this] { EnableHierarchyPanel(); }, [this] { DisableHierarchyPanel(); });
+        if (title == "Inspector") return CreateInspectorPanel(panels, name);
+        if (title == "Hierarchy") return CreateHierarchyPanel(panels, name);
+        if (title == "Log")       return CreateLogPanel(panels, name);
+        if (title == "Files")     return CreateFilesPanel(panels, name);
         if (title == "Profiler")
         {
             const ID id = CreatePanel(panels, name, showcase.panelProfilerIcon, [this] { RenderProfilerTreePanel(); }, {},
@@ -1248,10 +1250,10 @@ namespace tachyon
     void Application::FillForest(Document& document)
     {
         DockingLayout& dock = document.layout;
-        auto hierarchyPanelID   = CreatePanel(dock.panels, "Hierarchy",   showcase.panelHierarchyIcon, [this]() { RenderHierarchyPanel(); }, {}, [this]() { EnableHierarchyPanel(); }, [this]() { DisableHierarchyPanel(); });
-        auto inspectorPanelID   = CreatePanel(dock.panels, "Inspector",   showcase.panelInspectorIcon, [this]() { RenderInspectorPanel(); }, {}, [this]() { EnableInspectorPanel(); }, [this]() { DisableInspectorPanel(); });
-        auto consolePanelID     = CreatePanel(dock.panels, "Log",         showcase.panelLogIcon,       [this]() { RenderLogPanel(); },       {}, [this]() { EnableLogPanel(); },       [this]() { DisableLogPanel(); });
-        auto filesPanelID       = CreatePanel(dock.panels, "Files",       showcase.panelFilesIcon,     [this]() { RenderFilesPanel(); }, {}, [this]() { EnableFilesPanel(); }, [this]() { DisableFilesPanel(); });
+        auto hierarchyPanelID   = CreateHierarchyPanel(dock.panels, "Hierarchy");
+        auto inspectorPanelID   = CreateInspectorPanel(dock.panels, "Inspector");
+        auto consolePanelID     = CreateLogPanel(dock.panels, "Log");
+        auto filesPanelID       = CreateFilesPanel(dock.panels, "Files");
         auto nodeViewPanelID    = CreatePanel(dock.panels, "NodeView",    showcase.panelNodeViewIcon,  [this]() { RenderNodeViewPanel(); });
         auto viewportPanelID    = CreatePanel(dock.panels, "Viewport",    showcase.panelViewportIcon,  [this]() { RenderViewportPanel(); });
         auto profilerPanelID    = CreatePanel(dock.panels, "Profiler",    showcase.panelProfilerIcon,  [this]() { RenderProfilerTreePanel(); }, {}, [this]() { EnableProfilerTreePanel(); });
