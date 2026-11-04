@@ -115,8 +115,9 @@ namespace tachyon
     std::string FileThumbnails::Key(const std::filesystem::path& file, std::filesystem::file_time_type modified, uint32_t pixels)
     {
         const std::u8string path = file.generic_u8string();
-        return std::string(path.begin(), path.end()) + '|' + std::to_string(modified.time_since_epoch().count()) + '|' +
-               std::to_string(pixels);
+        // libc++ counts the time in a 128-bit integer, which std::to_string doesn't take.
+        const long long ticks = static_cast<long long>(modified.time_since_epoch().count());
+        return std::string(path.begin(), path.end()) + '|' + std::to_string(ticks) + '|' + std::to_string(pixels);
     }
 
     IconID FileThumbnails::Get(const std::filesystem::path& file, std::filesystem::file_time_type modified, uint32_t pixels)
