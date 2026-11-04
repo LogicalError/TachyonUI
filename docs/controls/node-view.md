@@ -114,6 +114,34 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
   };
   ```
 
+- `onCanvasContextMenu(canvasPos)` and `onNodeContextMenu(node)`: build the right-click
+  menus, with `MenuItem` and the like. They're called each frame while their menu is open;
+  without them there's no menu.
+  - A right click on the empty canvas opens the canvas's, for where it was clicked.
+  - One on a node opens the node's and selects the node, if it wasn't.
+  - A right drag pans instead; a right click on a wire still offers to delete it.
+  - With the canvas focused, the Menu key or Shift+F10 opens the selected node's (the
+    one clicked last), or the canvas's when none is selected.
+
+  ```cpp
+  view.onCanvasContextMenu = [this](float2 at)
+  {
+      MenuItem("Add node here", [this, at] { AddNodeAt(at); });
+  };
+  view.onNodeContextMenu = [this](int node)
+  {
+      MenuItem("Delete", [this] { DeleteSelectedNodes(); });
+  };
+  ```
+
+- `NodeViewScreenToCanvas(view, screenPos)` and `NodeViewCanvasToScreen(view, canvasPos)`
+  in `gui_node_view_helpers.h` convert between screen pixels (as events have them) and
+  node positions, as the view was last drawn.
+
+  ```cpp
+  const float2 at = NodeViewScreenToCanvas(view, event.state.screenPos);
+  ```
+
 - `onBreadcrumb(index)`: breadcrumb clicks.
 
   ```cpp

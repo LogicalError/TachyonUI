@@ -575,27 +575,14 @@ namespace tachyon
 
             // A new wire dropped on the empty canvas: a Reroute node there, of the wire's kind,
             // wired to where the wire came from. An app would offer the nodes it could take.
+            // A new wire dropped on the empty canvas: a Reroute node there, of the wire's kind,
+            // wired to where the wire came from. An app would offer the nodes it could take.
             showcase.nodeView.onWireDroppedOnCanvas = [this](PropertyEndpoint from, bool fromOutput, float2 at)
             {
-                NodeView& view  = showcase.nodeView;
-                const int grid  = std::max(1, theme.nodeGridSize);
-                // Its one row's socket on the drop point: below the header, and for an output
-                // on its right edge (a node is six grid cells wide at least).
-                const int2 socketAt{ fromOutput ? 0 : 6 * grid, 3 * grid };
-                NodeModel reroute;
-                reroute.stableID = idManager.CreateStaticID();
-                reroute.title    = "Reroute";
-                reroute.pos      = { GridLineNearest(int32_t(at.x) - socketAt.x, 0, grid),
-                                     GridLineNearest(int32_t(at.y) - socketAt.y, 0, grid) };
-                reroute.properties.push_back(NodeProperty
-                {
-                    .input       = PropertyEndpoint{},
-                    .output      = true,
-                    .renderBody  = [this]() { NodeText("Value"); },
-                    .socketColor = view.nodes[size_t(from.nodeIdx)].properties[size_t(from.propIdx)].socketColor
-                });
+                NodeView& view = showcase.nodeView;
                 // Added and wired in one step, so one undo takes both back.
-                NodeViewEdit edit = AddNodeEdit(view, std::move(reroute));
+                NodeViewEdit edit = AddNodeEdit(view, RerouteNode(at, !fromOutput,
+                    view.nodes[size_t(from.nodeIdx)].properties[size_t(from.propIdx)].socketColor));
                 const PropertyEndpoint added{ edit.nodes[0].index, 0 };
                 if (fromOutput)
                     edit.rewires.push_back({ .input = added, .from = {}, .to = from });
@@ -604,17 +591,33 @@ namespace tachyon
                 CommitNodeViewEdit(view, edit);
             };
 
+            // Right-click menus: the canvas's adds a node where it was clicked; a node's
+            // collapses or removes the selection (the node is in it).
+            showcase.nodeView.onCanvasContextMenu = [this](float2 at)
+            {
+                MenuItem("Add Reroute here", [this, at] {
+                    CommitNodeViewEdit(showcase.nodeView, AddNodeEdit(showcase.nodeView, RerouteNode(at, false, { 0.20f, 0.75f, 0.72f, 1.0f })));
+                });
+                MenuItem("Frame all", [this] { FrameAllNodes(showcase.nodeView); });
+            };
+            showcase.nodeView.onNodeContextMenu = [this](int node)
+            {
+                const bool collapsed = showcase.nodeView.nodes[size_t(node)].collapsed;
+                MenuItem(collapsed ? "Expand" : "Collapse", [this] {
+                    NodeView& view = showcase.nodeView;
+                    NodeViewEdit edit;
+                    for (int n = 0; n < int(view.nodes.size()); ++n)
+                        if (view.selectedNodeIDs.contains(view.nodes[size_t(n)].stableID))
+                            edit.collapses.push_back({ n, view.nodes[size_t(n)].collapsed, !view.nodes[size_t(n)].collapsed });
+                    CommitNodeViewEdit(view, edit);
+                });
+                MenuItem({ showcase.deleteIcon, "Delete" }, "Delete", [this] { DeleteSelectedNodes(); });
+            };
+
             // Delete removes the selected nodes, their wires with them, as one edit. Their IDs
             // stay taken while the edit can be undone (Cleanup releases the ones still shown).
-            commandManager.RegisterCommand(nodeViewMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None, [this]()
-            {
-                NodeView& view = showcase.nodeView;
-                std::vector<int> selected;
-                for (int n = 0; n < int(view.nodes.size()); ++n)
-                    if (view.selectedNodeIDs.contains(view.nodes[size_t(n)].stableID))
-                        selected.push_back(n);
-                CommitNodeViewEdit(view, RemoveNodesEdit(view, selected));
-            }, "Delete Nodes");
+            commandManager.RegisterCommand(nodeViewMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None,
+                                           [this]() { DeleteSelectedNodes(); }, "Delete Nodes");
 
             // One initial connection: Source.Name (0,0) output -> Mix.Strength (1,0) input
             showcase.nodeView.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };

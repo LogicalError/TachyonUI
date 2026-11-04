@@ -185,6 +185,12 @@ namespace tachyon
     /// `canvasInnerRectScreen` (screen pixels) and whose pan/zoom is `viewTransform`
     /// (view.transform).
     float2 NodeViewScreenToCanvas(const float3x2& viewTransform, IntRect canvasInnerRectScreen, int2 screen);
+    /// A screen point (as events have them) in node.pos space, through the pan/zoom and
+    /// place the view was last drawn with.
+    float2 NodeViewScreenToCanvas(const NodeView& view, int2 screen);
+    /// A point in node.pos space on the screen, where the view last drew it: the other way
+    /// round from NodeViewScreenToCanvas.
+    float2 NodeViewCanvasToScreen(const NodeView& view, float2 canvasPos);
 
     /// Stable IDs of nodes whose {pos, lastSize} rect lies fully inside the marquee, compared
     /// in node.pos space (canvas inner-rect relative, before the content transform).

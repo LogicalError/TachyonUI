@@ -223,6 +223,9 @@ namespace tachyon
         PendingConnection       pendingConnection;   ///< internal: the wire being dragged
         tachyon::float3x2           transform;                  ///< identity = centered view (no pan/zoom)
         tachyon::int2               lastInnerSize{ 0, 0 };      ///< last frame's canvas size, for centering
+        /// Last frame's canvas padding box, in screen pixels (as events have them), for
+        /// NodeViewScreenToCanvas and NodeViewCanvasToScreen.
+        tachyon::IntRect            lastCanvasRect {};
         tachyon::ID                 revealedFocusID = tachyon::ID::Invalid();   ///< internal: the focus last scrolled into view
         /// Command mode set while the canvas has focus.
         CommandMode             commandMode = CommandMode::Default;
@@ -262,6 +265,17 @@ namespace tachyon
         /// pulled off an input and dropped there is a disconnect (onEdit), not this.
         std::function<void(PropertyEndpoint from, bool fromOutput, float2 canvasPos)> onWireDroppedOnCanvas;
         std::optional<uint32_t> wireMenuWire;          ///< the wire the open context menu is for
+        /// Builds the canvas's context menu (MenuItem and the like), each frame while it's
+        /// open; without it there's none. It opens on a right click (not a pan) on the empty
+        /// canvas, or on the Menu key or Shift+F10 with the canvas focused and no node
+        /// selected. `canvasPos` is where, in node.pos space (the canvas's centre from the keys).
+        std::function<void(float2 canvasPos)> onCanvasContextMenu;
+        /// As onCanvasContextMenu, for node `node` (an index into nodes): opened by a right
+        /// click on it, which selects it if it wasn't, or from the keys while one is selected
+        /// (the one clicked last).
+        std::function<void(int node)>         onNodeContextMenu;
+        std::optional<float2>      canvasMenuPos;      ///< internal: where the open canvas menu is for
+        std::optional<tachyon::ID> nodeMenuNode;       ///< internal: the stableID the open node menu is for
         tachyon::PointerDrag pan;                 ///< internal: a right press; once dragged, not a click
         tachyon::float3x2    panStart {};         ///< internal: the transform before it; put back by Escape
         tachyon::PointerDrag nodeDrag;            ///< internal: the press on a node; moves the selection once dragged
