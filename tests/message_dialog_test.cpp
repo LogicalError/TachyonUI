@@ -169,6 +169,39 @@ namespace
             << "the scrim";
     }
 
+    // A message of two lines and a list of items: all of it inside the dialog, which grows to
+    // hold them.
+    TEST_F(MessageDialogTest, ItsMessageAndItemsFitInIt)
+    {
+        static constexpr MessageButton kButtons[] = { { .label = "Discard", .alignLeft = true }, { .label = "Cancel" }, { .label = "Save All" } };
+        const std::string names[] = { "Desert.level", "Forest.level" };
+        const MessageDialogItem items[] = { { .name = names[0] }, { .name = names[1] } };
+        auto emit = [&] {
+            app.Frame([&] {
+                app.BeginRootWindow({ 1200, 800 });
+                (void)app.MessageDialog(dialogID, MessageDialogDesc{
+                    .icon = MessageIcon::Quit, .title = "Quit Test?",
+                    .message = "These documents have unsaved changes. Quitting without saving discards them.",
+                    .buttons = kButtons, .defaultButton = 2, .cancelButton = 1, .items = items });
+                app.EndRootWindow();
+            });
+        };
+        for (int i = 0; i < 4; ++i) emit();
+
+        const IntRect dialog = app.GetElementRect(dialogID);
+        ASSERT_GT(dialog.h, 0);
+        for (const char* text : { "These documents have unsaved changes. Quitting without saving discards them.", "Desert.level", "Forest.level", "Save All" })
+        {
+            const ID id = app.FindByText(text);
+            ASSERT_NE(id, ID::Invalid()) << text;
+            const IntRect r = app.GetElementRect(id);
+            EXPECT_GT(r.w, 0) << text;
+            EXPECT_GT(r.h, 0) << text;
+            EXPECT_GE(r.y, dialog.y) << text;
+            EXPECT_LE(r.y + r.h, dialog.y + dialog.h) << text << " is cut off";
+        }
+    }
+
     // The scrim fades in over 120 ms while asking, and out again after the dialog closes.
     TEST_F(MessageDialogTest, TheScrimFadesInAndOut)
     {

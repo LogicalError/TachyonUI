@@ -1244,28 +1244,71 @@ namespace tachyon
         return showcase.windowLayoutID2;
     }
 
-    // Quitting loses the edits on the undo history: ask first when there are any.
-    void Application::RequestExit()
+    void Application::RequestExit(ID from)
     {
-        if (!commandManager.History().CanUndo()) applicationQuit = true;
-        else                       showcase.exitRequested = true;
+        if (UnsavedDocuments().empty())
+        {
+            applicationQuit = true;
+            return;
+        }
+        showcase.exitRequested = true;
+        showcase.exitWindow    = from != ID::Invalid() ? from : FullscreenTarget();
+        if (showcase.exitWindow == showcase.windowLayoutID2 && !showcase.mainWindowOpen && !showcase.documentWindows.empty())
+            showcase.exitWindow = showcase.documentWindows.front()->windowID;
     }
 
-    void Application::AskBeforeExit()
+    void Application::AskBeforeExit(ID window)
     {
         if (!showcase.exitRequested) return;
+        // The window asking was closed meanwhile: this one asks.
+        const bool askingIsOpen = (showcase.exitWindow == showcase.windowLayoutID2 && showcase.mainWindowOpen)
+            || std::any_of(showcase.documentWindows.begin(), showcase.documentWindows.end(),
+                           [this](const auto& w) { return w->windowID == showcase.exitWindow; });
+        if (!askingIsOpen)
+            showcase.exitWindow = window;
+        if (window != showcase.exitWindow) return;
         static constexpr MessageButton kButtons[] = {
+            { .label = "Discard", .kind = MessageButtonKind::Danger, .alignLeft = true },
             { .label = "Cancel" },
-            { .label = "Quit", .kind = MessageButtonKind::Danger },
+            { .label = "Save All", .kind = MessageButtonKind::Primary },
         };
-        const size_t edits = commandManager.History().UndoCount();
-        const std::string message = std::format("There {} {} unsaved edit{}. Quitting discards {}.",
-                                                edits == 1 ? "is" : "are", edits, edits == 1 ? "" : "s", edits == 1 ? "it" : "them");
+        const std::vector<Document*> unsaved = UnsavedDocuments();
+        std::vector<std::string> names;
+        names.reserve(unsaved.size());
+        for (const Document* document : unsaved)
+            names.push_back(document->name + document->extension);
+        std::vector<MessageDialogItem> items;
+        for (const std::string& name : names)
+            items.push_back({ .name = name });
+        const std::string message = unsaved.size() == 1 ? "This document has unsaved changes. Quitting without saving discards them."
+                                                        : "These documents have unsaved changes. Quitting without saving discards them.";
         const int choice = MessageDialog(showcase.exitDialogID, MessageDialogDesc{
             .icon = MessageIcon::Quit, .title = "Quit Test?", .message = message, .buttons = kButtons,
-            .defaultButton = 0, .cancelButton = 0 });   // Cancel: quitting destroys work
-        if (choice == 1) applicationQuit = true;
+            .defaultButton = 2, .cancelButton = 1, .items = items });
+        if (choice == 2)
+            for (Document* document : unsaved)
+                SaveShowcaseDocument(*document);
+        if (choice == 0 || choice == 2) applicationQuit = true;
         if (choice >= 0) showcase.exitRequested = false;
+    }
+
+    std::vector<Document*> Application::UnsavedDocuments()
+    {
+        std::vector<Document*> unsaved;
+        auto add = [&unsaved](DocumentSet& set) {
+            for (const auto& document : set.documents)
+                if (document->dirty) unsaved.push_back(document.get());
+        };
+        add(showcase.documents);
+        for (const auto& window : showcase.documentWindows)
+            add(window->documents);
+        return unsaved;
+    }
+
+    void Application::SaveShowcaseDocument(Document& document)
+    {
+        document.dirty = false;
+        TACHYON_LOG_INFO(kLogShowcase, "Saved {}{}", document.name, document.extension);
     }
 
     ID Application::CreateShowcasePanel(DockingLayout& layout, std::string_view title)
@@ -1531,7 +1574,8 @@ namespace tachyon
         for (size_t i = 0; i < showcase.documentWindows.size(); )
         {
             DocumentWindow& window = *showcase.documentWindows[i];
-            // Left with no documents, it closes; closed, its documents go back to the main window.
+            // Left with no documents, it closes. Closed, its documents go to the main window, else
+            // to another; closing the last window is quitting, which asks about unsaved ones.
             bool open = !window.documents.documents.empty();
             if (open)
             {
@@ -1545,9 +1589,18 @@ namespace tachyon
                     window.positioned = true;
                 }
                 open = BeginWindow(window.windowID, title, theme.mainWindowStyleRef, std::move(constraints),
-                                   ElementFlags::WindowUserControlled | ElementFlags::WindowCustomTitleBar);
+                                   ElementFlags::WindowUserControlled | ElementFlags::WindowCustomTitleBar
+                                   | ElementFlags::WindowConfirmClose);
                 if (open)
                 {
+                    if (CloseRequested(window.windowID))
+                    {
+                        if (showcase.mainWindowOpen || showcase.documentWindows.size() > 1)
+                            open = false;
+                        else
+                            RequestExit(window.windowID);
+                    }
+                    AskBeforeExit(window.windowID);
                     RenderMainMenu(window.windowID, /*withSearch*/ false);
                     AskBeforeClosingDocument(window.documents);
                     Documents(window.documentsID, window.documents);
@@ -1563,11 +1616,14 @@ namespace tachyon
                 ++i;
                 continue;
             }
+            DocumentSet* target = showcase.mainWindowOpen ? &showcase.documents : nullptr;
+            for (size_t j = 0; j < showcase.documentWindows.size() && !target; ++j)
+                if (j != i) target = &showcase.documentWindows[j]->documents;
             while (!window.documents.documents.empty())
             {
-                if (showcase.mainWindowOpen)
+                if (target)
                 {
-                    showcase.documents.documents.push_back(std::move(window.documents.documents.front()));
+                    target->documents.push_back(std::move(window.documents.documents.front()));
                     window.documents.documents.erase(window.documents.documents.begin());
                 }
                 else
@@ -1592,14 +1648,17 @@ namespace tachyon
             return;
         }
         static constexpr MessageButton kButtons[] = {
+            { .label = "Discard", .kind = MessageButtonKind::Danger, .alignLeft = true },
             { .label = "Cancel" },
-            { .label = "Discard", .kind = MessageButtonKind::Danger },
+            { .label = "Save", .kind = MessageButtonKind::Primary },
         };
         const std::string title = std::format("Close {}{}?", document->name, document->extension);
         const int choice = MessageDialog(showcase.closeDocumentDialogID, MessageDialogDesc{
-            .icon = MessageIcon::Warning, .title = title, .message = "It has unsaved changes. Closing it discards them.",
-            .buttons = kButtons, .defaultButton = 0, .cancelButton = 0 });
-        if (choice == 1)
+            .icon = MessageIcon::Warning, .title = title, .message = "It has unsaved changes. Closing it without saving discards them.",
+            .buttons = kButtons, .defaultButton = 2, .cancelButton = 1 });
+        if (choice == 2)
+            SaveShowcaseDocument(*document);
+        if (choice == 0 || choice == 2)
             CloseDocument(set, int(it - documents.begin()));
         if (choice >= 0)
             showcase.closingDocument = nullptr;
@@ -1645,8 +1704,8 @@ namespace tachyon
                                 | ElementFlags::WindowConfirmClose))
                 {
                     if (CloseRequested(showcase.windowLayoutID2))
-                        RequestExit();
-                    AskBeforeExit();
+                        RequestExit(showcase.windowLayoutID2);
+                    AskBeforeExit(showcase.windowLayoutID2);
 
                     RenderMainMenu(showcase.windowLayoutID2);
 

@@ -221,7 +221,8 @@ namespace tachyon
             // Each NodeView is an independent graph with its own pan/zoom and drag state.
             NodeView nodeView;
             // The node view's edits, for Undo / Redo (the showcase's only undoable changes).
-            bool exitRequested = false;   // Exit with node edits: asking
+            bool exitRequested = false;   // Exit with unsaved documents: asking
+            ID   exitWindow    = ID::Invalid();   // the window asking
             ID   exitDialogID  = ID::Invalid();
 
             // Values bound by the node properties' renderBody lambdas.
@@ -546,8 +547,16 @@ namespace tachyon
         void RenderMainMenu(ID window, bool withSearch = true);
         /// State on the left, the active document in `documents`, frame time on the right.
         void RenderStatusBar(const DocumentSet& documents);
-        void RequestExit();
-        void AskBeforeExit();
+        /// Quits, or asks first (in `from`, else the window with the focus) while a document in
+        /// any window has unsaved changes.
+        void RequestExit(ID from = ID::Invalid());
+        /// While an exit waits, in the window asking: lists the unsaved documents and offers
+        /// Save All, Discard or Cancel.
+        void AskBeforeExit(ID window);
+        /// The documents with unsaved changes, in every window.
+        std::vector<Document*> UnsavedDocuments();
+        /// Saves a document (the showcase only marks it saved).
+        void SaveShowcaseDocument(Document& document);
 
         /// A panel the showcase knows by its title ("Viewport", "Inspector", ...), added to `layout`.
         ID   CreateShowcasePanel(DockingLayout& layout, std::string_view title);
@@ -563,7 +572,7 @@ namespace tachyon
         void MakeShowcaseDocuments();
         /// A document's panels: `main`, and `side` docked to its right.
         void FillDocument(Document& document, std::string_view main, std::string_view side);
-        /// While an unsaved document of `set` waits to close: asks whether to discard its changes.
+        /// While an unsaved document of `set` waits to close: asks whether to save or discard its changes.
         void AskBeforeClosingDocument(DocumentSet& set);
         /// A set's "+", its unsaved-changes question and its tear-off into a window of its own.
         void SetUpDocuments(DocumentSet& documents);
