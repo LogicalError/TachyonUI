@@ -1,0 +1,48 @@
+name: Attribution
+
+# Fails a pull request whose title, description or commits credit an AI tool
+# (Co-Authored-By trailers, "Generated with" lines).
+# No path filter: a required check has to run on every pull request.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    # The name a required status check refers to.
+    name: No AI attribution
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check title, description and commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # Claude Code, then Codex.
+          pattern='co-authored-by:.*(claude|anthropic)|generated (with|by) .*claude|claude\.(com|ai)/(claude-)?code|noreply@anthropic\.com'
+          pattern+='|co-authored-by:.*(codex|openai)|generated (with|by) .*codex|chatgpt\.com/codex|@openai\.com'
+
+          # One line per message line, each prefixed with where it came from.
+          {
+            printf 'title: %s\n' "$TITLE"
+            printf '%s\n' "$BODY" | sed 's/^/description: /'
+            gh api --paginate "repos/$REPO/pulls/$NUMBER/commits" \
+              --jq '.[] | .sha[0:7] as $sha | .commit.message | split("\n")[] | "commit \($sha): \(.)"'
+          } > lines.txt
+
+          if grep -Ei "$pattern" lines.txt; then
+            echo "::error::Remove the AI attribution lines above, then push again or edit the description."
+            exit 1
+          fi
+          echo "No AI attribution found."
