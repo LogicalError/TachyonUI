@@ -24,7 +24,7 @@ First public preview. The API is not stable yet.
 - Every control in the guides has a short usage example, and the API reference lists the controls by family under API by topic (fields, sliders, buttons and the rest).
 - `Dropdown`: pick one of a list of options; the list opens on the current option.
 - `AutocompleteField`: a text field that lists the suggestions matching what's typed.
-- Keyboard focus: Tab reaches every control (not disabled ones, which also ignore keys) and every control shows it has the focus; [Writing a control](docs/controls/writing-controls.md) lists what each control must do.
+- Keyboard focus: Tab reaches every control (not disabled ones, which also ignore keys) and every control shows it has the focus; [Writing a control](docs/contributing/writing-controls.md) lists what each control must do.
 - Saved windows remember their monitor: they come back on it, or at the same place on a monitor of the same size, or on the primary one inside its work area when it's gone.
 - Node view: keyboard focus moving to a node out of view pans the view to it.
 - `SetTooltip`, `BeginTooltip` and `BeginContextMenu` without a target go on the whole control just drawn, not its last part; a color field's, breadcrumb's or vector field's tooltip and context menu work over each of its parts.
