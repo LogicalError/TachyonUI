@@ -348,7 +348,7 @@ namespace tachyon
         // Commands shown on a menu but with NO shortcut key (the user can assign
         // one in the Shortcuts panel).
         showcase.cmdFullscreen = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.fullscreenIcon, tachyon::KeyCode::F11, tachyon::KeyModifier::None,
-                                                  [this]() { ToggleFullscreen(WindowMode::Fullscreen); }, "Fullscreen");
+                                                  [this]() { ToggleFullscreen(FullscreenTarget(), WindowMode::Fullscreen); }, "Fullscreen");
         showcase.cmdDocumentation = cmds.RegisterCommand(tachyon::CommandMode::Default, tachyon::IconID::Invalid, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: Documentation"); },     "Documentation");
         showcase.cmdAbout         = cmds.RegisterCommand(tachyon::CommandMode::Default, tachyon::IconID::Invalid, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: About TachyonUI"); }, "About TachyonUI");
         showcase.cmdSearchCommands = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.findIcon, tachyon::KeyCode::KeyK, tachyon::KeyModifier::Control,
@@ -1041,7 +1041,7 @@ namespace tachyon
 
     // Title bar with the main menu and the command search. Most items only log;
     // Theme and Zoom reload the theme and Exit ends the run loop.
-    void Application::RenderMainMenu(bool withSearch)
+    void Application::RenderMainMenu(ID window, bool withSearch)
     {
         BeginTitleBar(idManager.AllocateDynamicID("mainMenuBar"));
 
@@ -1125,13 +1125,14 @@ namespace tachyon
             });
 
             MenuSeparator();
-            const WindowMode mode = windowManager->GetWindowMode(showcase.windowLayoutID2);
+            // For the window this menu is in.
+            const WindowMode mode = windowManager->GetWindowMode(window);
             if (mode == WindowMode::Fullscreen || mode == WindowMode::ExclusiveFullscreen)
-                MenuItem({ showcase.fullscreenExitIcon, "Exit Fullscreen" }, "F11", [this]() { ToggleFullscreen(WindowMode::Fullscreen); });
+                MenuItem({ showcase.fullscreenExitIcon, "Exit Fullscreen" }, "F11", [this, window]() { ToggleFullscreen(window, WindowMode::Fullscreen); });
             else
             {
-                MenuItem(showcase.cmdFullscreen);
-                MenuItem("Exclusive Fullscreen", [this]() { ToggleFullscreen(WindowMode::ExclusiveFullscreen); });
+                MenuItem({ showcase.fullscreenIcon, "Fullscreen" }, "F11", [this, window]() { ToggleFullscreen(window, WindowMode::Fullscreen); });
+                MenuItem("Exclusive Fullscreen", [this, window]() { ToggleFullscreen(window, WindowMode::ExclusiveFullscreen); });
             }
         }
         EndMenu();
@@ -1161,21 +1162,31 @@ namespace tachyon
         EndTitleBar();
     }
 
-    // Undo (or redo) the node view's last edit, moving it to the other stack.
-    // Quitting loses the edits on the undo history: ask first when there are any.
-    void Application::ToggleFullscreen(WindowMode fullscreen)
+    void Application::ToggleFullscreen(ID window, WindowMode fullscreen)
     {
-        const ID window = showcase.windowLayoutID2;
         const WindowMode mode = windowManager->GetWindowMode(window);
         if (mode == WindowMode::Fullscreen || mode == WindowMode::ExclusiveFullscreen)
         {
-            windowManager->SetWindowMode(window, showcase.modeBeforeFullscreen);
+            const auto before = showcase.modeBeforeFullscreen.find(window);
+            windowManager->SetWindowMode(window, before != showcase.modeBeforeFullscreen.end() ? before->second : WindowMode::Normal);
+            if (before != showcase.modeBeforeFullscreen.end())
+                showcase.modeBeforeFullscreen.erase(before);
             return;
         }
-        showcase.modeBeforeFullscreen = mode == WindowMode::Maximized ? WindowMode::Maximized : WindowMode::Normal;
+        showcase.modeBeforeFullscreen[window] = mode == WindowMode::Maximized ? WindowMode::Maximized : WindowMode::Normal;
         windowManager->SetWindowMode(window, fullscreen);
     }
 
+    ID Application::FullscreenTarget() const
+    {
+        const ID active = windowManager->GetActiveWindow();
+        for (const auto& window : showcase.documentWindows)
+            if (window->windowID == active)
+                return active;
+        return showcase.windowLayoutID2;
+    }
+
+    // Quitting loses the edits on the undo history: ask first when there are any.
     void Application::RequestExit()
     {
         if (!commandManager.History().CanUndo()) applicationQuit = true;
@@ -1481,7 +1492,7 @@ namespace tachyon
                                    ElementFlags::WindowUserControlled | ElementFlags::WindowCustomTitleBar);
                 if (open)
                 {
-                    RenderMainMenu(/*withSearch*/ false);
+                    RenderMainMenu(window.windowID, /*withSearch*/ false);
                     AskBeforeClosingDocument(window.documents);
                     Documents(window.documentsID, window.documents);
                     RenderStatusBar(window.documents);
@@ -1581,7 +1592,7 @@ namespace tachyon
                         RequestExit();
                     AskBeforeExit();
 
-                    RenderMainMenu();
+                    RenderMainMenu(showcase.windowLayoutID2);
 
                     // ---- Documents, the first with the DockingContainer demo ----
                     {

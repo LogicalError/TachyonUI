@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace tachyon
 {
@@ -384,9 +385,9 @@ namespace tachyon
             CommandID cmdNew = {}, cmdOpen = {}, cmdSave = {}, cmdSaveAs = {}, cmdExit = {};
             CommandID cmdUndo = {}, cmdRedo = {}, cmdCut = {}, cmdCopy = {}, cmdPaste = {};
             CommandID cmdDocumentation = {}, cmdAbout = {};
-            // F11 toggles fullscreen and back to the mode the window had before.
+            // F11 toggles the focused window's fullscreen and back to the mode it had before.
             CommandID  cmdFullscreen = {};
-            WindowMode modeBeforeFullscreen = WindowMode::Normal;
+            std::unordered_map<ID, WindowMode> modeBeforeFullscreen;   // by window, while it's fullscreen
             CommandID cmdSearchCommands = {};
             CommandSearchState commandSearch;
             CommandID cmdDuplicate = {}, cmdSelectAll = {};
@@ -521,8 +522,8 @@ namespace tachyon
         void RenderProfilerTreePanel();
 
         // Main menu bar across the top of the main window (File / Edit / View / Help).
-        /// The title bar's menus; `withSearch` adds the command search (one window has it).
-        void RenderMainMenu(bool withSearch = true);
+        /// The title bar's menus of `window`; `withSearch` adds the command search (one window has it).
+        void RenderMainMenu(ID window, bool withSearch = true);
         /// State on the left, the active document in `documents`, frame time on the right.
         void RenderStatusBar(const DocumentSet& documents);
         void RequestExit();
@@ -548,8 +549,10 @@ namespace tachyon
         void SetUpDocuments(DocumentSet& documents);
         /// The windows documents were dragged out to, each with the main window's chrome.
         void RenderDocumentWindows();
-        // Into `fullscreen` (Fullscreen or ExclusiveFullscreen), or out of fullscreen when in it.
-        void ToggleFullscreen(WindowMode fullscreen);
+        /// `window` into `fullscreen` (Fullscreen or ExclusiveFullscreen), or out of fullscreen when in it.
+        void ToggleFullscreen(ID window, WindowMode fullscreen);
+        /// The window F11 is for: the focused one with the showcase's menus, else the main window.
+        ID FullscreenTarget() const;
 
         void EnableFilesPanel();
         void DisableFilesPanel();
