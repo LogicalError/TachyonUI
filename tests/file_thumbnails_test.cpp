@@ -92,8 +92,14 @@ namespace tachyon
         EXPECT_NE(FileThumbnails::Key(photo, kMonday, 48), FileThumbnails::Key("C:/Photos/dog.jpg", kMonday, 48));
         EXPECT_NE(FileThumbnails::Key(photo, kMonday, 48), FileThumbnails::Key(photo, kMonday + 1s, 48)) << "changed since";
         EXPECT_NE(FileThumbnails::Key(photo, kMonday, 48), FileThumbnails::Key(photo, kMonday, 96)) << "another size";
+#ifdef _WIN32
+        // Both are separators on Windows; elsewhere a backslash is part of a file's name.
         EXPECT_EQ(FileThumbnails::Key("C:\\Photos\\cat.jpg", kMonday, 48), FileThumbnails::Key(photo, kMonday, 48))
             << "either separator";
+#else
+        EXPECT_NE(FileThumbnails::Key("C:\\Photos\\cat.jpg", kMonday, 48), FileThumbnails::Key(photo, kMonday, 48))
+            << "a backslash is part of the name";
+#endif
     }
 
     // None at first: read on another thread, then an icon of the picture's size, read once.
