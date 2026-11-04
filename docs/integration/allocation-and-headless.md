@@ -2,7 +2,9 @@
 
 ## Allocation hooks
 
-Route the library's allocations through your own functions. Set before `Initialize`:
+- Allocation hooks are your own memory functions, which the library then uses instead of
+  its default ones.
+- Set them before `Initialize`:
 
 ```cpp
 #include <gui_core/memory/gui_allocation_hooks.h>
@@ -15,31 +17,54 @@ hooks.user       = &myHeap;
 app.SetAllocationHooks(hooks);
 ```
 
-- Covers Vulkan objects, VMA, vk-bootstrap and SDL.
-- SDL's memory functions are process-wide: SDL uses the hooks only if the GUI starts SDL
-  and SDL hasn't allocated yet.
-- Hooks must be thread-safe (drivers call them from their own threads) and outlive the
-  GUI. SDL keeps using them for a few allocations after `SDL_Quit`, so keep them alive for
-  the whole process.
+- The hooks cover:
+  - Vulkan objects
+  - VMA
+  - vk-bootstrap
+  - SDL
+- SDL's memory functions are shared by the whole process. SDL uses the hooks only if:
+  - the GUI starts SDL
+  - and SDL hasn't allocated anything yet
+- The hooks must be thread-safe, because drivers call them from their own threads.
+- They must outlive the GUI.
+  - SDL keeps using them for a few allocations after `SDL_Quit`, so keep them alive for
+    the whole process.
 
-`tachyon::TrackingAllocator` (`gui_core/memory/gui_tracking_allocator.h`): ready-made
-hooks that count live allocations and report leaks. `Hooks()` returns them.
+- `tachyon::TrackingAllocator` (`gui_core/memory/gui_tracking_allocator.h`) has
+  ready-made hooks:
+  - they count the allocations that are still live
+  - they report leaks
+  - `Hooks()` returns them
+
+```cpp
+#include <gui_core/memory/gui_tracking_allocator.h>
+
+static tachyon::TrackingAllocator tracker;   // lives as long as the process
+app.SetAllocationHooks(tracker.Hooks());
+// ...
+tracker.ReportLeaks();   // logs each allocation still live
+```
 
 ## Headless backends
 
-- `NullGraphicsContext` (`gui_core/graphics/null/gui_null_graphics_context.h`): no GPU,
-  draws nothing. The UI is still built, laid out and recorded; windows stay empty.
-- `NullWindowBackend`: no OS; input only via the `Inject*` calls.
-
-Together: no GPU and no display, e.g. for tests.
+- Headless means running without a GPU or without a display.
+- `NullGraphicsContext` (`gui_core/graphics/null/gui_null_graphics_context.h`) is a
+  graphics backend without a GPU:
+  - it draws nothing
+  - the UI is still built, laid out and recorded
+  - windows stay empty
+- `NullWindowBackend` is a window backend without an OS:
+  - input arrives only through the `Inject*` calls
+- Together they need no GPU and no display, for example in tests.
 
 ```cpp
 app.SetGraphicsBackend(std::make_unique<tachyon::NullGraphicsContext>());
 app.SetWindowBackend(std::make_unique<tachyon::NullWindowBackend>());
 ```
 
-They are also the smallest graphics backend (`tachyon::GraphicsContext`) and window
-backend to start from when writing your own.
+- They are also the smallest backends to start from when writing your own:
+  - a graphics backend derives from `tachyon::GraphicsContext`
+  - a window backend derives from `tachyon::IWindowBackend`
 
 ---
 

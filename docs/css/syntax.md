@@ -2,26 +2,56 @@
 
 ## Rules and selectors
 
+A rule is a selector followed by declarations in braces. The selector names the style the
+rule is for; each declaration sets one property.
+
 ```css
 .button { padding: 2px 8px; }            /* a class */
 .button, .toggle { cursor: pointer; }    /* a selector list shares one block */
 * { font-family: "Inter"; }              /* the base of every style */
 ```
 
-- A selector is a class name; the leading `.` is optional. Class names are case-sensitive;
-  property names and keywords aren't.
-- `*` is the base: it applies to every class defined so far and every class defined after
-  starts from it. Class rules override it, so put it first. A library style whose class no
-  file defines gets the base.
-- A class can appear in any number of rules; later declarations win. No specificity: file
-  order is the only priority, except [child position](#child-position) rules, which always
-  win.
-- No combinators: `.a .b`, `.a > .b` and the like are errors.
+- A selector is a class name: the name of one style.
+  - The leading `.` is optional.
+  - Class names are case-sensitive.
+  - Property names and keywords aren't.
+- `*` is the base style.
+  - It applies to every class defined so far.
+  - Every class defined after it starts from it.
+  - Class rules override it, so put it first.
+  - A library style whose class no file defines gets the base.
+- A class can appear in any number of rules.
+  - Later declarations win.
+  - There is no specificity, the browser rule that ranks one selector above another. File
+    order is the only priority.
+  - The exception is [child position](#child-position) rules, which always win.
+
+  For example, `.label-help` gets its padding and color from the first rule below and its
+  underline from the second (from `themes/styles.css`, shortened):
+
+  ```css
+  .label, .label-help {
+      padding: 0px 8px;
+      color: var(--text-2);
+  }
+
+  .label-help, .group-label-help, .drag-label-help, .group-drag-label-help {
+      text-underline-thickness: 1px;
+      text-underline-style: dotted;
+  }
+  ```
+
+- There are no combinators: selectors that match an element by where it sits inside
+  another.
+  - `.a .b`, `.a > .b` and the like are errors.
 
 ## Pseudo-classes and states
 
-Each style has a slot per element state. A rule writes to every slot whose state bits
-include the selector's bits:
+A control can be in several states at once, such as hovered and focused. A pseudo-class
+after the class name, such as `:hover`, makes a rule apply only in that state.
+
+Each style has a slot per element state: one set of values for each combination of states.
+A rule writes to every slot whose state bits include the selector's bits:
 
 | Selector | State |
 | --- | --- |
@@ -30,15 +60,36 @@ include the selector's bits:
 | `:active` | Being pressed |
 | `:focus` | Has keyboard focus |
 | `:selected` or `::highlight(selected)` | Selected or checked (a selected row, a toggle that's on) |
-| `::selection` | Selected text in the element; its `background-color` is the highlight. Two colons; `:selection` is an error. |
-| `:disabled` | Disabled. Exclusive: can't combine with other states. Disabled controls are also faded (see `opacity`). |
+| `::selection` | Selected text in the element |
+| `:disabled` | Disabled |
 | `:not(:hover)`, `:not(:active)`, `:not(:focus)`, `:not(:selected)` | Slots without that bit |
-| `:focus-visible` | Focus ring, shown when focus came from the keyboard. Takes only `box-shadow`. |
+| `:focus-visible` | Focus ring, shown when focus came from the keyboard |
 | `:normal` | Same as no pseudo-class |
 
-States combine: `.a:hover` also applies while hovered and pressed; `.a:focus::selection`
-applies to selected text in a focused element. Write the general rule first, specific ones
-after:
+- `::selection`:
+  - Its `background-color` is the highlight behind the selected text.
+  - It takes two colons: `:selection` is an error.
+- `:disabled`:
+  - It is exclusive: it can't combine with other states.
+  - Disabled controls are also faded (see [Opacity](properties.md#opacity)).
+  - A `:disabled` rule changes only what it declares; the rest comes from the base rule.
+
+  From `themes/styles.css`:
+
+  ```css
+  .menu-item-row:disabled { background-color: transparent; opacity: 0.45; }
+  ```
+
+- `:focus-visible`:
+  - The focus ring is an outline drawn around the control that has keyboard focus.
+  - It takes only `box-shadow` (see
+    [Box shadow and focus ring](properties.md#box-shadow-and-focus-ring)).
+
+States combine:
+
+- `.a:hover` also applies while hovered and pressed.
+- `.a:focus::selection` applies to selected text in a focused element.
+- Write the general rule first and the specific ones after:
 
 ```css
 .text-style        { background-color: var(--bg-control); border-color: var(--line-strong); }
@@ -51,15 +102,22 @@ after:
 .textbox:not(:focus)::selection { background-color: var(--selection-inactive); }
 ```
 
-- A `:disabled` rule changes only what it declares; the rest comes from the base rule.
-- Only "state" properties (see the property tables) differ per slot. A layout property such
-  as `padding` or `border-style` in a `:hover` rule changes the style for every state.
+- Only "state" properties differ per slot.
+  - The [property tables](properties.md) mark them "state".
+  - A layout property such as `padding` or `border-style` in a `:hover` rule changes the
+    style for every state.
 
 ### Changing state
 
-On a state change the box (background and border) blends from the old slot to the new one.
-Text, icons and shadows switch at once. Ease-out is `cubic-bezier(0.2, 0, 0, 1)`,
-ease-in-out is `cubic-bezier(0.4, 0, 0.2, 1)`:
+When a control changes state, its look moves from the old slot to the new one:
+
+- The box (background and border) blends from the old slot to the new one.
+- Text, icons and shadows switch at once.
+
+Easing is the curve a blend follows over its time:
+
+- Ease-out is `cubic-bezier(0.2, 0, 0, 1)`.
+- Ease-in-out is `cubic-bezier(0.4, 0, 0.2, 1)`.
 
 | Change | Time | Easing |
 | --- | --- | --- |
@@ -73,12 +131,14 @@ ease-in-out is `cubic-bezier(0.4, 0, 0.2, 1)`:
 | Disabled | at once | |
 | Invalid (`BeginInvalid`) | the border at once, the halo 150 ms | ease-out |
 
-- Colors whose hues differ by more than 20 degrees (both ends non-grey) blend in Oklab,
-  which keeps lightness and saturation; greys and shades of one hue blend in sRGB. A transparent
-  end adds only its alpha.
+- How two colors blend depends on the colors:
+  - Colors whose hues differ by more than 20 degrees (both ends non-grey) blend in Oklab,
+    which keeps lightness and saturation.
+  - Greys and shades of one hue blend in sRGB.
+  - A transparent end adds only its alpha.
 - A change that reverses mid-blend continues from what's shown, with the new timing.
-- A part blends its on/off flip only with `ElementFlags::AnimatesSelected`; other selection
-  changes are instant.
+- A part blends its on/off flip only with `ElementFlags::AnimatesSelected`.
+  - Other selection changes are instant.
 
 Popups and palette switches:
 
@@ -89,13 +149,21 @@ Popups and palette switches:
 | Either closing | 80 ms, fading out | ease-out |
 | Another palette (`RequestReloadTheme`) | 200 ms, with the old look fading out over the new one | ease-in-out |
 
-With reduced motion every change is instant. It follows the OS setting (Windows: "Animation
-effects"); `GUIApplication::SetReducedMotion` overrides it.
+With reduced motion every change is instant:
+
+- It follows the OS setting (Windows: "Animation effects").
+- `GUIApplication::SetReducedMotion` overrides it.
+
+  ```cpp
+  Button("Reduce motion", [this] { SetReducedMotion(true); });
+  Button("Follow the OS", [this] { SetReducedMotion(std::nullopt); });
+  ```
 
 ## Child position
 
 `:first-child`, `:last-child` and `:only-child` style an element by its place among its
-parent's children:
+parent's children. For example, the segments of a button group can round only the outer
+corners of the group:
 
 ```css
 .segment             { border-radius: 0; }
@@ -105,35 +173,54 @@ parent's children:
 ```
 
 - An only child takes the `:first-child` and `:last-child` rules, then `:only-child`.
-  `:first-child:last-child` equals `:only-child`.
+  - `:first-child:last-child` equals `:only-child`.
 - They apply on top of all the class's other rules and `*`, wherever those are.
-- Box properties only: backgrounds, borders (`border-*`, `-tachyon-border-dash-*`),
-  `box-shadow`, `margin`, `padding`, `gap`, `row-gap`, `column-gap`, `cursor`. Anything else
-  is an error (size and text are computed before the last child is known).
-- Combine with states (`.a:first-child:hover`), not with `:focus-visible`. A class is
-  required: `*:first-child` is an error.
+- They take box properties only:
+  - backgrounds
+  - borders (`border-*`, `-tachyon-border-dash-*`)
+  - `box-shadow`
+  - `margin`, `padding`
+  - `gap`, `row-gap`, `column-gap`
+  - `cursor`
+- Anything else is an error, because size and text are computed before the last child is
+  known.
+- They combine with states, as in `.a:first-child:hover`.
+  - Not with `:focus-visible`.
+- A class is required: `*:first-child` is an error.
 - Every child counts, including hidden ones.
 
 ## Comments
 
-`/* block */` and `// to end of line`.
+- `/* block */`
+- `// to end of line`
 
 ## \@font-face
+
+An `@font-face` rule adds a font file to a font family. A `font-family` property then picks
+the family by name.
 
 ```css
 @font-face { font-family: "Inter"; src: url("../fonts/Inter/Inter-Regular.ttf"); }
 @font-face { font-family: "Inter"; src: url("../fonts/Inter/Inter-Bold.ttf"); }
 ```
 
-- `font-family`: quoted or plain words. `src`: `url("path")` or `"path"`, optional
-  `format(...)` (ignored). One source per rule.
-- Faces with the same family name form one family; weight and style come from the files.
+- `font-family` is the family name, quoted or as plain words.
+- `src` is the file:
+  - `url("path")` or `"path"`
+  - an optional `format(...)` after it is ignored
+  - one source per rule
+- Faces with the same family name form one family.
+  - Weight and style come from the files.
 - Relative paths are relative to the palette file's folder (`themes/`), in any style file.
 - Use it with `font-family: "Inter";`.
 
 ## Custom properties
 
-Define them in `:root` blocks (any number, any file); use them with `var(--name)`:
+A custom property is a value with a name that starts with `--`. Define it once and use it
+in many rules:
+
+- Define them in `:root` blocks: any number, in any file.
+- Use them with `var(--name)`.
 
 ```css
 :root {
@@ -146,6 +233,8 @@ Define them in `:root` blocks (any number, any file); use them with `var(--name)
 }
 ```
 
+What a variable can hold, and where you can use it:
+
 | Value | Usable in |
 | --- | --- |
 | Color or gradient (any [color form](values.md#colors), or `var()` of an earlier color variable) | Color properties, gradient stops, `box-shadow` colors |
@@ -153,8 +242,20 @@ Define them in `:root` blocks (any number, any file); use them with `var(--name)
 | 2 to 4 numbers | `margin`, `padding`, `border-width`, `border-radius` (one value per slot) |
 | A box-shadow list, or `none` | `box-shadow` |
 
-Numeric variables are whole numbers 0 to 65535: fractions are cut off, negatives become 0.
-An undefined variable, or one of the wrong kind, is an error.
+- Numeric variables are whole numbers from 0 to 65535.
+  - Fractions are cut off.
+  - Negatives become 0.
+- An undefined variable is an error.
+- A variable of the wrong kind is an error.
+
+From `themes/styles.css`, where `--border` and `--radius-md` hold one number each:
+
+```css
+.text-style {
+    border-width: var(--border);
+    border-radius: var(--radius-md);
+}
+```
 
 ---
 

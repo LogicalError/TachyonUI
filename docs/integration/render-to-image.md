@@ -1,8 +1,12 @@
 # Rendering the UI into a host image
 
-`ElementFlags::WindowRenderToImage` gives a window no OS window: it lays out and draws
-into an image. Use it for engine viewports, compositing, or off-screen rendering (as the
-GPU tests do).
+- `ElementFlags::WindowRenderToImage` makes a render-to-image window:
+  - it gets no OS window
+  - it is laid out and drawn into an image instead
+- Use it for:
+  - engine viewports
+  - compositing the UI into your own scene
+  - off-screen rendering, as the GPU tests do
 
 ```cpp
 if (BeginWindow(windowID, "Panel", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(400, 300),
@@ -15,15 +19,20 @@ EndWindow();
 
 ## Copying into the host's image
 
-When the GUI runs on your device ([Using your own Vulkan device](vulkan-device.md)), each
-frame can be copied into your image:
+- When the GUI runs on your device (see [Using your own Vulkan device](vulkan-device.md)),
+  each frame of the window can be copied into an image of yours:
 
 ```cpp
 vk->SetWindowImageTarget(windowID, hostImage, VkExtent2D{ 400, 300 });
 ```
 
-Can be set before the window exists. `VK_NULL_HANDLE` stops the copies. Pixels are scaled
-to the given extent.
+- You can set the target before the window exists.
+- Passing `VK_NULL_HANDLE` stops the copies.
+- The window's pixels are scaled to the extent you give.
+
+```cpp
+vk->SetWindowImageTarget(windowID, VK_NULL_HANDLE, VkExtent2D{});   // no more copies
+```
 
 Synchronization contract, on the queue passed to `SetExternalDevice`:
 
@@ -34,12 +43,19 @@ Synchronization contract, on the queue passed to `SetExternalDevice`:
 2. Read it in work submitted after the GUI's frame (after `RecordFrame`), and leave it in
    `SHADER_READ_ONLY_OPTIMAL`.
 
-Recording draw commands into your own command buffer is not supported yet.
+```cpp
+VkImageCreateInfo imageInfo{ .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;   // the GUI copies in, you sample
+```
+
+- Recording the GUI's draw commands into your own command buffer is not supported yet.
 
 ## Reading the pixels back
 
-`ReadWindowPixels` copies the window's last frame to memory as tightly packed BGRA8. Works
-on the GUI's own device too. Waits for that frame to finish on the GPU.
+- `ReadWindowPixels` copies the window's last frame to memory.
+  - The format is BGRA8, 4 bytes per pixel, with tightly packed rows.
+  - It works on the GUI's own device too.
+  - It waits for that frame to finish on the GPU.
 
 ```cpp
 const tachyon::IntRect rect = app.windowManager->GetWindowRect(windowID);   // pixels
@@ -48,12 +64,16 @@ if (tachyon::Result<void> read = app.ReadWindowPixels(windowID, pixels); !read)
     std::fprintf(stderr, "%s\n", read.GetError().message.c_str());
 ```
 
-Errors: `ErrorCode::NotFound` for an unknown window; `ErrorCode::Unsupported` if not a
-render-to-image window, no frame rendered yet, or the span is too small.
+- It returns `ErrorCode::NotFound` for an unknown window.
+- It returns `ErrorCode::Unsupported` when:
+  - the window is not a render-to-image window
+  - no frame has been rendered yet
+  - the span is too small
 
 ## Input for render-to-image windows
 
-No OS input arrives; inject it. Positions are in the window's pixels.
+- No OS input reaches a render-to-image window. You inject it with the `Inject*` calls.
+- Positions are in the window's pixels.
 
 ```cpp
 app.InjectMouseMove(windowID, pos);
@@ -66,9 +86,14 @@ app.InjectText(windowID, "text");   // UTF-8
 app.InjectFocus(windowID, false);
 ```
 
-- Calls take an optional `KeyModifier` where it makes sense.
-- After any mouse event the window is under the pointer until `InjectMouseLeave`.
-- After any injected input it has keyboard focus until `InjectFocus(windowID, false)`.
+- The calls take an optional `KeyModifier` where it makes sense.
+
+  ```cpp
+  app.InjectMouseButton(windowID, pos, tachyon::MouseButtons::Left, true, tachyon::KeyModifier::Shift);
+  ```
+
+- After any mouse event, the window is under the pointer until `InjectMouseLeave`.
+- After any injected input, it has keyboard focus until `InjectFocus(windowID, false)`.
 
 ---
 

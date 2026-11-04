@@ -1,7 +1,8 @@
 # Your own loop
 
-`Run()` loops over three calls. From your own main loop, call them once per frame, in
-this order:
+- `Run()` is a loop over three frame calls.
+- If your program has its own main loop, call them yourself instead, once per frame and in
+  this order:
 
 ```cpp
 while (app.UpdateFrame())
@@ -18,29 +19,46 @@ while (app.UpdateFrame())
 | `Result<void> RecordFrame()` | Recovers a lost device if needed. Builds the UI (`OnGUI`, layout, input dispatch, draw recording), uploads what the build asked for (glyphs, styles, new or resized windows), records and submits every window. Errors if a lost device can't be recreated. |
 | `void PresentFrame()` | Presents OS windows; may wait for vsync. Nothing needed for render-to-image windows. |
 
-After `RecordFrame` returns, render-to-image windows are drawn and readable; your work
-before `PresentFrame` can use them (tested by `AHostLoopDrivesTheFrameCalls` in
-`tests/gpu/gpu_application_init_test.cpp`).
-
-The app quits when its last main window closes or you set `app.applicationQuit = true`;
-the next `UpdateFrame` returns false. `Run` clears `applicationQuit` on start. Call
-`Cleanup` after the loop.
+- Render-to-image windows are windows drawn into an image instead of an OS window (see
+  [Rendering the UI into a host image](render-to-image.md)).
+  - When `RecordFrame` returns, they are drawn and can be read.
+  - Your own work before `PresentFrame` can use them.
+  - Tested by `AHostLoopDrivesTheFrameCalls` in `tests/gpu/gpu_application_init_test.cpp`.
+- The app quits when:
+  - its last main window closes
+  - or you set `app.applicationQuit = true`
+- After that, the next `UpdateFrame` returns false.
+- `Run` sets `applicationQuit` back to false when it starts.
+- Call `Cleanup` after the loop.
 
 ## Errors and device loss
 
-Fallible calls return `Result<T>`: true on success, else `GetError()` gives an `Error`
-with `code` (`ErrorCode`) and `message`. Returned by `Initialize`, `Run`, `RecordFrame`,
-`ReadWindowPixels`.
+- Calls that can fail return `Result<T>`:
+  - it converts to true on success
+  - else `GetError()` gives an `Error`, with a `code` (an `ErrorCode`) and a `message`
+- `Initialize`, `Run`, `RecordFrame` and `ReadWindowPixels` return one.
 
-On device loss, `RecordFrame` (and `Run`) handles it before the next frame:
+```cpp
+if (tachyon::Result<void> result = app.RecordFrame(); !result)
+{
+    if (result.GetError().code == tachyon::ErrorCode::DeviceLost)
+        std::fprintf(stderr, "device lost: %s\n", result.GetError().message.c_str());
+}
+```
 
-- GUI-created device: a new device and window contexts are created. `CreateImage` images
-  keep their `ImageIndex` and are re-uploaded from their source pixels. The app continues.
-- Your device: `RecordFrame` returns `ErrorCode::DeviceLost`. Create a new device and a
-  new app.
+- When the device is lost, `RecordFrame`, and so `Run`, handles it before the next frame:
+  - with a device the GUI created, it creates a new device and new window contexts
+    - images made with `CreateImage` keep their `ImageIndex` and are uploaded again from
+      their source pixels
+    - the app continues
+  - with your own device, `RecordFrame` returns `ErrorCode::DeviceLost`
+    - create a new device and a new app
+- `VulkanGraphicsContext::SimulateDeviceLoss()` makes the next frame act as if the device
+  was lost, for testing:
 
-`VulkanGraphicsContext::SimulateDeviceLoss()` makes the next frame act as if the device
-was lost (for testing).
+```cpp
+vk->SimulateDeviceLoss();   // vk: the app's VulkanGraphicsContext
+```
 
 ---
 

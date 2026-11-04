@@ -1,8 +1,22 @@
 # Integration
 
-For programs that already have their own build, Vulkan device, windows or main loop.
-Read only what applies; with the defaults, `Initialize` and `Run` are enough. The frame
-model is in the [Overview](overview.md).
+These pages are for programs that already have some of their own setup: their own build,
+Vulkan device, windows or main loop. In them, the host is your program and the GUI is
+TachyonUI running inside it.
+
+- Read only the pages that apply to you.
+- With the defaults, `Initialize` and `Run` are enough. The GUI then makes its own device,
+  windows and loop:
+
+  ```cpp
+  MyApp app;
+  tachyon::Result<void> result = app.Initialize();
+  if (result)
+      result = app.Run();   // until the last window closes
+  app.Cleanup();
+  ```
+
+- How a frame works is in the [Overview](overview.md).
 
 | Page | Covers |
 | --- | --- |

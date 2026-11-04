@@ -1,7 +1,12 @@
 # Custom drawing
 
-Register the element with `RegisterElement`, then attach a render-time callback with
-`elementStorage.AddCustomDraw`:
+To draw your own shapes and text, register an element and attach a callback to it:
+
+- An element is one box in the frame's layout tree. Every control is made of elements.
+- `RegisterElement` adds an element and returns an `ElementRef`, a handle to it for this
+  frame.
+- `elementStorage.AddCustomDraw` attaches a callback that runs at render time, after
+  layout, when the element's final size and position are known.
 
 ```cpp
 ElementRef RegisterElement(Element&& element, LayoutOverride&& constraints);
@@ -19,10 +24,53 @@ ElementStorageResult AddPostLayout(const ElementRef& ref, PostLayoutCallback cal
 | `AddCustomDrawAfter` | After the whole subtree; call it once the children are closed |
 | `AddPostLayout` | After layout, before rendering. Can't draw; sees final geometry |
 
-The callback gets a `CustomDrawContext`. Default space is element-local: (0, 0) is the
-top-left of the padding box, and ancestors' pan and zoom apply.
-`SetSpace(DrawSpace::Screen)` switches to absolute layout pixels;
-`ScreenToCurrent(screenPos)` converts a cursor position to the current space.
+`AddCustomDrawAfter` draws over the element's children, for example to strike them out:
+
+```cpp
+const ElementRef ref = RegisterElement(Element{ .id = panelID }, LayoutOverride{}.FlexGrow(1));
+VERIFY(elementStorage.BeginChildren());
+Text("No longer used");
+VERIFY(elementStorage.EndChildren());   // close the children first
+VERIFY(elementStorage.AddCustomDrawAfter(ref, [this](CustomDrawContext& ctx)
+{
+    const IntRect r = ctx.ElementRect();
+    const LineStyle line{ .colorStyleIndex = theme.lineWhiteStyle, .lineWidth = styleManager.Px(1.0f) };
+    ctx.RenderLine(r.position, r.position + r.size, line);   // drawn over the text
+}));
+```
+
+`AddPostLayout` only reads the final geometry, for example to keep a size for the next
+frame:
+
+```cpp
+VERIFY(elementStorage.AddPostLayout(ref, [this](PostLayoutContext& ctx)
+{
+    canvasSize = ctx.ElementInnerRect().size;   // member: int2 canvasSize
+}));
+```
+
+The callback gets a `CustomDrawContext`:
+
+- The default space is element-local:
+  - (0, 0) is the top-left of the padding box
+  - the pan and zoom of its ancestors apply
+- `SetSpace(DrawSpace::Screen)` switches to absolute layout pixels.
+- `ScreenToCurrent(screenPos)` converts a cursor position to the current space.
+
+```cpp
+Element canvas{ .id = canvasID, .styleRef = theme.GetStyle("my-canvas") };
+canvas.eventHandler = [this](ElementEvent&& event)
+{
+    if (event.type == EventType::MouseMove)
+        pointerScreenPos = event.state.screenPos;   // member: int2 pointerScreenPos
+    return false;
+};
+const ElementRef ref = RegisterElement(std::move(canvas), LayoutOverride::FixedSize(200, 100));
+VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)
+{
+    ctx.RenderDisc(ctx.ScreenToCurrent(pointerScreenPos), styleManager.Px(4.0f), theme.lineWhiteStyle);
+}));
+```
 
 | Method | Draws or returns |
 | --- | --- |
@@ -36,9 +84,11 @@ top-left of the padding box, and ancestors' pan and zoom apply.
 | `RenderTriangle`, `RenderFilledPolygon` | Filled triangle, convex polygon. `hardEdges` (edges shared with another triangle) get no soft edge, so no seam shows. |
 | `RenderText(textId, rect)` | Text registered with `textSystem->RegisterText` |
 
-Colors are style indices, e.g. `theme.lineWhiteStyle` or one from
-`styleManager.RegisterColorStyle`. `LineStyle` has `colorStyleIndex`, `lineWidth` and dash
-settings.
+Colors are style indices:
+
+- for example `theme.lineWhiteStyle`
+- or one from `styleManager.RegisterColorStyle`
+- `LineStyle` has `colorStyleIndex`, `lineWidth` and dash settings
 
 ```cpp
 const ElementRef ref = RegisterElement(Element{ .id = canvasID, .styleRef = theme.GetStyle("my-canvas") },
@@ -51,7 +101,7 @@ VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)
 }));
 ```
 
-The callback runs after `OnGUI` returns: anything it captures must outlive the frame.
+The callback runs after `OnGUI` returns, so anything it captures must outlive the frame.
 
 ---
 

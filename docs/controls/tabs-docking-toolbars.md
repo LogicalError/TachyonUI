@@ -4,7 +4,12 @@
 
 ### BeginTabBar / Tab
 
-A bar of tabs; `*selectedIndex` is the selected tab (click or arrow keys).
+A tab bar is a row of tabs. The user clicks a tab to show its content. Only one tab is
+selected at a time.
+
+- `*selectedIndex` is the index of the selected tab.
+- The user changes it with a click or with the arrow keys.
+- The content under the bar is yours to build, from `*selectedIndex`.
 
 | Input | Effect |
 | --- | --- |
@@ -12,19 +17,46 @@ A bar of tabs; `*selectedIndex` is the selected tab (click or arrow keys).
 | `onClose(index)` set | "Close Panel" context menu (Shift+F10), Ctrl+W / Ctrl+F4 close the focused tab |
 | Alt+Left / Right | Moves the focused tab (clicking a tab focuses it) |
 
-When tabs don't fit, `TabBarLayout` decides. The user switches it per bar from the context
-menu of the strip, a tab or the "+N" button:
+```cpp
+// members: std::vector<std::string> openFiles; int selectedFile = 0
+BeginTabBar(&selectedFile,
+            [this](int from, int to) {
+                std::string moved = std::move(openFiles[size_t(from)]);
+                openFiles.erase(openFiles.begin() + from);
+                openFiles.insert(openFiles.begin() + to, std::move(moved));
+            },
+            [this](int index) { openFiles.erase(openFiles.begin() + index); });
+for (const std::string& file : openFiles)
+    Tab(file);
+EndTabBar();
+```
 
-- **One row** ("Collapse Rows", default): first tabs plus a "+N" button listing the rest.
-  The selected tab is always shown, replacing the last ones that fit, so arrows and
-  Home/End reach listed tabs too. A `Tab` in the list builds nothing and returns false. Fit
-  uses the previous frame's sizes, so after a resize the bar settles one frame later.
-- **Several rows** ("Multiple Rows"): all tabs, wrapping. Dragging a tab to another row
-  moves it there. Arrows and Alt+arrows continue across rows.
+When the tabs don't fit in the bar, its `TabBarLayout` decides what happens. The user
+switches it per bar, from the context menu of the bar, of a tab or of the "+N" button:
 
-Pass `layout` to own the choice; otherwise the bar remembers it by ID for the session. A
-docked tab group stores it on its dock node (saved with the layout). `onDragOut` and
-`dragVisualizer` work as in the reorderable group. Content under the bar is yours.
+- **One row** ("Collapse Rows", the default): the first tabs that fit, then a "+N" button
+  that lists the rest.
+  - The selected tab is always shown. It takes the place of the last tabs that fit, so
+    the arrow keys and Home/End reach the listed tabs too.
+  - A `Tab` that is in the list builds nothing and returns false.
+  - What fits is worked out from the previous frame's sizes, so after a resize the bar
+    settles one frame later.
+- **Several rows** ("Multiple Rows"): all tabs, wrapping onto more rows.
+  - Dragging a tab to another row moves it there.
+  - The arrow keys and Alt+arrows continue across rows.
+
+Where the choice is kept:
+
+- Pass `layout` to keep the choice yourself.
+- Otherwise the bar remembers it by its ID, for as long as the app runs.
+- A docked tab group (see [Docking](#docking)) stores it on its dock node, so it's saved
+  with the layout.
+
+`onDragOut` and `dragVisualizer` work as in the
+[reorderable group](lists.md#beginreorderablegroup--beginreorderableitem):
+
+- `onDragOut` gets a tab released outside the bar.
+- `dragVisualizer` runs every frame while a tab is dragged outside the bar, to draw it.
 
 `TabBarOptions`:
 
@@ -49,14 +81,41 @@ bool BeginTab(ID id, const GUIContent& content, StyleRef style, StyleRef content
 void EndTab();
 ```
 
-`BeginTab` / `EndTab`: for tabs with more than icon and text. Draws icon and text (in
-`contentStyle`, default `tab-content`), then what you add before `EndTab`. Always pair with
-`EndTab`. If `BeginTab` returns false the tab is in the "+N" list; add nothing.
+A bar that keeps its layout in a member, always on several rows, with its own close label:
 
-Forms without an ID use the call site. Classes: `tab-bar`, `tab`, `tab-content`,
-`tab-overflow` (the "+N" button; its list uses menu classes). The bar's style gets
-`flex-wrap: wrap` in several-rows layout (`StyleManager::WithFlexWrap`), `nowrap` in
-one-row.
+```cpp
+// members: ID tabsID = idManager.CreateStaticID(); TabBarLayout tabLayout = TabBarLayout::Rows
+BeginTabBar(tabsID, &selectedFile, nullptr,
+            [this](int index) { openFiles.erase(openFiles.begin() + index); },
+            nullptr, nullptr, {}, {}, &tabLayout,
+            TabBarOptions{ .closeLabel = "Close File", .layoutMenu = false });
+for (const std::string& file : openFiles)
+    Tab(file);
+EndTabBar();
+```
+
+`BeginTab` and `EndTab` are for tabs with more in them than an icon and text.
+
+- `BeginTab` draws the icon and text, in `contentStyle` (default `tab-content`).
+- Then comes what you add before `EndTab`.
+- Always pair it with `EndTab`.
+- If `BeginTab` returns false, the tab is in the "+N" list. Add nothing to it then.
+
+```cpp
+if (BeginTab(errorsTabID, "Errors", theme.tabStyleRef, theme.tabContentStyleRef))
+    Text(std::to_string(errorCount));   // members: ID errorsTabID; int errorCount
+EndTab();
+```
+
+- The forms without an ID make one from the place they're called from. See
+  [IDs](../overview/ids.md).
+- The CSS classes:
+  - `tab-bar`
+  - `tab`
+  - `tab-content`
+  - `tab-overflow` for the "+N" button. Its list uses the menu classes.
+- In the several-rows layout the bar's style gets `flex-wrap: wrap`
+  (`StyleManager::WithFlexWrap`). In the one-row layout it gets `nowrap`.
 
 ```cpp
 BeginTabBar(idManager.AllocateDynamicID("tabs"), &selectedTab, nullptr);
@@ -71,9 +130,18 @@ Text(selectedTab == 0 ? "Content of the first tab" : "Content of the second tab"
 
 ### BeginDockingContainer / EndDockingContainer
 
-Panels in a tree of splits stored in a `DockingLayout`; each leaf is a tab group. Users drag
-tabs to move, dock on another leaf, or float outside the window. Create each panel once
-with `CreatePanel`; its callback builds its content.
+Docking lets the user arrange the parts of a window, called panels, by dragging them
+around. A panel is a part of the UI with a title, such as "Scene" or "Log".
+
+- The panels sit in a tree of splits, stored in a `DockingLayout`.
+  - A split divides its space between two children, side by side or one above the other.
+  - Each node of the tree is a dock node: a split, or a leaf.
+  - Each leaf is a tab group: a tab bar with one tab per panel, showing the selected one.
+- The user drags a panel's tab to:
+  - move it within its tab group
+  - dock it on another leaf
+  - float it outside the window, in a window of its own
+- Create each panel once, with `CreatePanel`. Its callback builds the panel's content.
 
 ```cpp
 ID   CreatePanel(std::unordered_map<ID, Panel>& panels, std::string title, IconID icon,
@@ -85,18 +153,22 @@ void EndDockingContainer();
 void EmitFloatingDockWindows();
 ```
 
-- Build the tree with `MakeLeaf({ panelIDs... })` and `MakeSplit(mode, size, first,
-  second)` (`gui_dock_node.h`). `DockSplitMode`: `LeftPinned`, `RightPinned`, `TopPinned`,
-  `BottomPinned` (which child keeps `size`).
-- Call `EmitFloatingDockWindows()` after the container for floating panels.
-- `onEnable` / `onDisable` run when a panel becomes visible / hidden. `cacheSignature`
-  controls the render cache. Closing a panel destroys it.
-- Also: `FloatPanel(layout, panelID, screenPos)`, `CloseDockedPanel(layout, leaf,
-  tabIndex)`, `CloseFloatingDockWindow(index)`, `DisableAllPanels(layout)`.
-
-Classes: `dock-container`, `dock-leaf`, `dock-content`, `dock-split-horz`,
-`dock-split-vert`, `dock-sizer-horz`, `dock-sizer-vert`, `dock-window`,
-`panel-drop-visualization`.
+- Build the tree with `MakeLeaf` and `MakeSplit` (`gui_dock_node.h`).
+  - `MakeLeaf({ panelIDs... })` makes a tab group of those panels.
+  - `MakeSplit(mode, size, first, second)` makes a split of two nodes.
+  - `DockSplitMode` says which child keeps `size`: `LeftPinned`, `RightPinned`,
+    `TopPinned` or `BottomPinned`.
+- Call `EmitFloatingDockWindows()` after the container. It builds the windows of the
+  floating panels.
+- Closing a panel destroys it.
+- The CSS classes:
+  - `dock-container`
+  - `dock-leaf`
+  - `dock-content`
+  - `dock-split-horz` and `dock-split-vert`
+  - `dock-sizer-horz` and `dock-sizer-vert` for the handles between the halves of a split
+  - `dock-window` for a floating panel's window
+  - `panel-drop-visualization` for the highlight where a dragged panel will land
 
 ```cpp
 // Once:
@@ -117,16 +189,59 @@ if (BeginWindow(windowID, "Docking", theme.mainWindowStyleRef, LayoutOverride::F
 EndWindow();
 ```
 
+`onEnable` and `onDisable` run when a panel becomes visible and when it's hidden. A
+hidden panel isn't built, so it can let go of what it made:
+
+```cpp
+const ID previewPanel = CreatePanel(layout.panels, "Preview", IconID::Invalid, [this] { PreviewPanel(); }, {},
+                                    [this] { LoadPreview(); },      // shown
+                                    [this] { UnloadPreview(); });   // hidden
+```
+
+Docked panels are cached: their drawn output is kept and reused while nothing in them
+changes (see [BeginCached](windows-and-layout.md#begincached--endcached)). A panel's
+`cacheSignature` controls this:
+
+- Return a value to also rebuild the panel whenever that value changes. Use it for data
+  the cache can't see change.
+- Return `std::nullopt` to not cache the panel this frame, for a panel that changes every
+  frame.
+
+```cpp
+layout.panels[log].cacheSignature = [this] { return std::optional<uint64_t>(logLines.size()); };
+```
+
+To change the layout from code:
+
+- `FloatPanel(layout, panelID, screenPos)` moves a panel into a window of its own.
+- `CloseDockedPanel(layout, leaf, tabIndex)` closes a docked panel.
+- `CloseFloatingDockWindow(index)` closes a floating window and its panels.
+- `DisableAllPanels(layout)` hides every panel, for example before a theme reload.
+
+```cpp
+(void)FloatPanel(layout, log, int2{ styleManager.Px(200), styleManager.Px(200) });
+```
+
 ### Documents
 
-Documents (levels, prefabs, graphs...) each have their own `DockingLayout`. A document tab
-bar sits under the title bar; the active document's panels fill the window. Only the active
-document's panels are built and accept drops; the others get `onDisable`.
+Documents are the files the user edits, such as levels, prefabs or graphs. Each document
+has its own `DockingLayout`, with its own panels.
 
-Tabs show icon, name and a muted extension ("Forest" + ".level"). The active or hovered tab
-shows a close button; a `dirty` document shows a dot instead.
+- A document tab bar sits under the title bar, with one tab per open document.
+- The active document's panels fill the window below it.
+- Only the active document's panels are built and accept drops. The others get
+  `onDisable`.
 
-Tab colors come from the document's `kind`:
+Each tab shows:
+
+- the document's icon
+- its name
+- its extension, muted ("Forest" + ".level")
+- on the active or hovered tab, a close button
+- for a `dirty` document, a dot in place of the close button, meaning it has unsaved
+  changes
+
+The tab colors come from the document's `kind`:
 
 | Class | Colors |
 | --- | --- |
@@ -134,39 +249,76 @@ Tab colors come from the document's `kind`:
 | `document-name-<kind>` | Icon |
 | `document-line-<kind>` | Line under the bar (active document's color) |
 
-Themes define `level`, `material`, `layout`, `prefab`, `animation`. Other kinds fall back
-to `document-tab`, `document-name`, `document-line`.
+- The themes define the kinds `level`, `material`, `layout`, `prefab` and `animation`.
+- Other kinds fall back to `document-tab`, `document-name` and `document-line`.
 
-Behavior:
+What the user can do:
 
-- Drag to reorder. Tabs that don't fit are hidden; the "N open" list names all.
-- "+" calls `onNew`; hidden if `onNew` is unset.
-- Close button, "Close Document" in the context menu and Ctrl+W call `onClose` first, then
-  close next frame. If `onClose` returns false the document stays open; ask about unsaved
-  changes there and call `CloseDocument` yourself. Closing destroys its panels and their
-  torn-off windows.
-- Dragging a tab off the bar: dropped on another document bar (any main window), it moves
-  there at the phantom tab's spot. Dropped elsewhere, `onTearOff` gets the document
-  (already removed from its set) and screen position, to open a new main window. Without
-  `onTearOff` it goes back.
-- Document tabs drop only on document bars, panel tabs only on panel docks. A document
-  dropped on panels is torn off; a panel dropped on a document bar floats. Drops apply at
-  the start of the next frame.
+- Drag a tab to reorder.
+  - Tabs that don't fit are hidden. The "N open" list names them all.
+- Click "+" to call `onNew`.
+  - The "+" is hidden if `onNew` is unset.
+- Close a document with its close button, "Close Document" in the context menu, or
+  Ctrl+W.
+  - This calls `onClose` first. The document then closes in the next frame.
+  - If `onClose` returns false, the document stays open. Ask about unsaved changes there,
+    and call `CloseDocument` yourself.
+  - Closing a document destroys its panels and their torn-off windows.
+- Drag a tab off the bar.
+  - Dropped on another document bar, in any main window, the document moves there, at
+    the spot of the placeholder tab shown during the drag.
+  - Dropped elsewhere, `onTearOff` gets the document, already removed from its set, and
+    the screen position. Use them to open a new main window.
+  - Without `onTearOff`, the tab goes back.
+- Document tabs drop only on document bars, panel tabs only on panel docks.
+  - A document dropped on panels is torn off.
+  - A panel dropped on a document bar floats.
+  - Drops apply at the start of the next frame.
 
-Each main window is built by your app: title bar and menus, `Documents` for its
-`DocumentSet`, status bar, then `EmitFloatingDockWindows(set)` (windows for panels torn off
-from that set; they belong to that main window and follow a document that moves). Close a
-window with no documents left. A set must stay alive until the end of the frame it was
-built in.
+```cpp
+documents.onNew = [this] {
+    Document& created = CreateDocument(documents, "Untitled", ".level", "level", levelIcon);
+    created.layout.root = MakeLeaf({ CreatePanel(created.layout.panels, "Scene", IconID::Invalid, [this] { ScenePanel(); }) });
+    documents.active = int(documents.documents.size()) - 1;
+};
+documents.onClose = [this](Document& document) {
+    if (!document.dirty)
+        return true;
+    closingDocument = &document;   // member: Document* closingDocument; ask in OnGUI, then CloseDocument
+    return false;
+};
+```
 
-Saving: `PersistDocuments(key, windows)` takes a function listing main windows and their
-sets (`DocumentWindowRef`). `SaveUIState` saves each window's position, document order,
-active document, and each document's name, extension, kind and dock tree.
+Each main window is built by your app, in this order:
 
-Restoring (the library can't create your panels): after `RestoreUIState`, call
-`TakeSavedDocuments(key)`. Per window, create its documents with panels, lay each out with
-`RestoreDocumentLayout`, set `active`. For extra windows, call `RestoreWindowPlace` before
-declaring them.
+1. the title bar and its menus
+2. `Documents`, for the window's `DocumentSet`
+3. the status bar
+4. `EmitFloatingDockWindows(set)`, which builds the windows of the panels torn off from
+   that set. They belong to that main window, and follow a document that moves to
+   another one.
+
+- Close a main window when no documents are left in it.
+- A set must stay alive until the end of the frame it was built in.
+
+Saving:
+
+- `PersistDocuments(key, windows)` takes a function that lists the main windows and their
+  sets (`DocumentWindowRef`).
+- `SaveUIState` then saves:
+  - each window's position
+  - the order of its documents
+  - its active document
+  - each document's name, extension, kind and dock tree
+
+Restoring needs your app, since the library can't create your panels:
+
+- After `RestoreUIState`, call `TakeSavedDocuments(key)`.
+- For each window:
+  - create its documents with their panels
+  - lay each one out with `RestoreDocumentLayout`
+  - set `active`
+- For extra windows, call `RestoreWindowPlace` before declaring them.
 
 ```cpp
 // Initialize:
@@ -190,10 +342,22 @@ void      Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
 void      EmitFloatingDockWindows(const DocumentSet& documents);
 ```
 
-`DocumentSet` holds documents in tab order, plus `active`, `onNew`, `onClose`, `onTearOff`.
-`Active()` returns the shown document. Other classes: `documents`, `document-bar`,
-`document-row`, `document-tab-bar`, `document-extension`, `document-mark`,
-`document-close`, `document-dirty`, `document-new`, `document-list`.
+- `DocumentSet` holds:
+  - the documents, in tab order
+  - `active`, the index of the shown document
+  - `onNew`, `onClose` and `onTearOff`
+- `Active()` returns the shown document.
+- The other CSS classes:
+  - `documents`
+  - `document-bar`
+  - `document-row`
+  - `document-tab-bar`
+  - `document-extension`
+  - `document-mark`
+  - `document-close`
+  - `document-dirty`
+  - `document-new`
+  - `document-list`
 
 ```cpp
 // Once:
@@ -221,9 +385,16 @@ documents.onTearOff = [this](std::unique_ptr<Document> document, int2 at) {
 
 ### BeginToolbar / EndToolbar
 
-A wrapping row (or column). Controls with default style inside use their toolbar versions:
-`toolbar-button`, `toolbar-toggle`, `toolbar-textbox`, `toolbar-number-field`,
-`toolbar-menu-trigger`.
+A toolbar is a row of small buttons and fields for frequent actions. It wraps onto more
+rows when it runs out of room, or it can be a column.
+
+Controls with their default style use their toolbar versions inside it:
+
+- `toolbar-button`
+- `toolbar-toggle`
+- `toolbar-textbox`
+- `toolbar-number-field`
+- `toolbar-menu-trigger`
 
 ```cpp
 bool BeginToolbar(bool horizontal = true);
@@ -238,11 +409,23 @@ Toggle(snapToGrid, "Snap");
 EndToolbar();
 ```
 
+A toolbar standing as a column:
+
+```cpp
+BeginToolbar(false);
+Button(moveIcon, [this] { tool = Tool::Move; });
+Button(rotateIcon, [this] { tool = Tool::Rotate; });
+EndToolbar();
+```
+
 ### RenderToolbarDock
 
-Free function (`controls_toolbar_dock.h`): toolbars on the four sides of some content.
-Users drag items between sides or tear them off to floating windows. Your app owns the item
-lists and moves items in the callbacks.
+A free function, not a member of `GUIApplication` (`controls_toolbar_dock.h`). It places
+toolbars on the four sides of some content.
+
+- The user drags toolbars between the sides, or tears them off into floating windows.
+- Your app owns the lists of toolbars, and moves them in the callbacks. The dock never
+  changes them itself.
 
 ```cpp
 void InitializeToolbarDockState(ToolbarDockState& state, GUIApplication& app);
@@ -261,13 +444,42 @@ sides[int(ToolbarSide::Top)].push_back(ToolbarItem{ .id = idManager.CreateStatic
 RenderToolbarDock(*this, dockState, sides, callbacks, [this] { ViewportPanel(); });
 ```
 
-- `ToolbarItem`: `id`, `debugName`, `renderBody` (emits its controls; wrapped in
-  `BeginToolbar` for you).
-- `ToolbarDockCallbacks`: `onReorder`, `onCrossSideDrop`, `onTearOff`.
-- Show torn-off toolbars with `EmitFloatingToolbarWindows(floatingItems, &options)`.
-- Classes: `toolbar-side-horz`, `toolbar-side-vert`, `toolbar-item-horz`,
-  `toolbar-item-vert`, `toolbar-thumb-horz`, `toolbar-thumb-vert`,
-  `toolbar-floating-window`.
+- `ToolbarItem` is one toolbar:
+  - `id`
+  - `debugName`, a stable name. Saved UI state places the toolbars by it.
+  - `renderBody`, which emits its controls. It's wrapped in `BeginToolbar` for you.
+- `ToolbarDockCallbacks` has three callbacks:
+  - `onReorder`: a toolbar moved within its side
+  - `onCrossSideDrop`: a toolbar was dropped on another side
+  - `onTearOff`: a toolbar was released outside every side
+- Show the torn-off toolbars with `EmitFloatingToolbarWindows(floatingItems, &options)`.
+- The CSS classes:
+  - `toolbar-side-horz` and `toolbar-side-vert`
+  - `toolbar-item-horz` and `toolbar-item-vert`
+  - `toolbar-thumb-horz` and `toolbar-thumb-vert` for the handle the user drags
+  - `toolbar-floating-window`
+
+```cpp
+callbacks.onReorder = [this](ToolbarSide side, int from, int to) {
+    std::vector<ToolbarItem>& items = sides[int(side)];
+    ToolbarItem moved = std::move(items[size_t(from)]);
+    items.erase(items.begin() + from);
+    items.insert(items.begin() + to, std::move(moved));
+};
+callbacks.onCrossSideDrop = [this](ToolbarSide from, int index, ToolbarSide to) {
+    sides[int(to)].push_back(std::move(sides[int(from)][size_t(index)]));
+    sides[int(from)].erase(sides[int(from)].begin() + index);
+};
+callbacks.onTearOff = [this](ToolbarSide from, int index, int2 at) {
+    // member: std::vector<FloatingToolbarItem> floatingToolbars
+    floatingToolbars.push_back(FloatingToolbarItem{ .item = std::move(sides[int(from)][size_t(index)]),
+        .windowID = idManager.CreateStaticID(), .spawnPosition = at, .homeSide = from });
+    sides[int(from)].erase(sides[int(from)].begin() + index);
+};
+
+// Each frame, inside the main window:
+EmitFloatingToolbarWindows(floatingToolbars);
+```
 
 ---
 

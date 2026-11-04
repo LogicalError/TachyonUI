@@ -1,20 +1,36 @@
 # Showcase
 
-The editor-style app in the README screenshot, using most of the library. It is a feature
-testbed, not a tidy example; use the small examples to learn one part.
+The editor-style app in the README screenshot. It uses most of the library.
+
+- It is a test bed for features, not a tidy example.
+- To learn one part of the library, read the small examples instead.
+
 Source: [examples/showcase](https://github.com/LogicalError/TachyonUI/tree/main/examples/showcase).
 
 ## Running it
 
-Run from any folder, or double-click:
+Run it from any folder, or double-click it:
 
 ```text
 bin\Debug\showcase.exe                  rem Windows
 bin/Debug/showcase                      # Linux and macOS
 ```
 
-Its files live in `workdirectory/` (`themes/showcase.css`, icons, optional Noto fallback
-fonts), found through `SetResourceRoot(TACHYON_RESOURCE_DIR)`.
+- Unlike the small examples, it needs files on disk. They live in `workdirectory/`:
+  - `themes/showcase.css`, its own style file
+  - its icons
+  - the optional Noto fallback fonts, for other scripts, emoji and symbols
+- It finds them through its resource root, the folder TachyonUI loads files from:
+  - `SetResourceRoot` sets it, before `Initialize`
+  - `TACHYON_RESOURCE_DIR` is the folder with these files, defined by the build
+
+```cpp
+// Its own style file, icons, fallback fonts and saved state live in workdirectory/,
+// so it runs from any folder.
+application->SetResourceRoot(TACHYON_RESOURCE_DIR);
+```
+
+Command-line options:
 
 | Option | Effect |
 | --- | --- |
@@ -24,8 +40,15 @@ fonts), found through `SetResourceRoot(TACHYON_RESOURCE_DIR)`.
 | `--float <title>` | Starts that panel in its own window. Repeatable. |
 | `--files <folder>` | Folder the Files panel shows instead of the workdirectory. Read only. |
 
-Window and dock layout are saved to `workdirectory/ui_state.json` on quit and restored on
-start.
+- The window and dock layout are saved to `workdirectory/ui_state.json` on quit.
+- They are restored on the next start, with `RestoreUIState`.
+
+```cpp
+// After Run returns: write the saved UI state into the resource root.
+const std::filesystem::path stateFile = std::filesystem::path(application->GetResourceRoot()) / "ui_state.json";
+if (std::ofstream file(stateFile, std::ios::binary); file)
+    file << application->SaveUIState();
+```
 
 ## Where to look
 
@@ -45,7 +68,12 @@ start.
 | `panel_misc.cpp`, `panel_box_test.cpp` | Custom drawing, images, icon placement, box layout. |
 
 `workdirectory/themes/showcase.css` loads after `styles.css`, as in
-[Custom theme](custom-theme.md).
+[Custom theme](custom-theme.md):
+
+```cpp
+const std::string_view styleFiles[] = { "styles.css", "showcase.css" };
+SetStyleFiles(styleFiles);
+```
 
 ---
 

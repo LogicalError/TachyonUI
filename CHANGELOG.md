@@ -20,7 +20,7 @@ First public preview. The API is not stable yet.
 - A step-by-step tutorial (`docs/tutorial.md`) whose code is the `examples/tutorial` app, kept in sync by tests.
 - The guides' landing page (`docs/README.md`) is about using the library only; the steps for building the API reference locally are gone.
 - The README lists the requirements per OS; the CMake options and running the tests are on the wiki.
-- The guides are rewritten to be short and to the point; what they say about the API is unchanged.
+- The guides are rewritten for readers new to TachyonUI: terms are explained where they first appear, details are split into bullets, and each point has a short example. What they say about the API is unchanged.
 - Every control in the guides has a short usage example, and the API reference lists the controls by family under API by topic (fields, sliders, buttons and the rest).
 - `Dropdown`: pick one of a list of options; the list opens on the current option.
 - `AutocompleteField`: a text field that lists the suggestions matching what's typed.

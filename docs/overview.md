@@ -1,8 +1,15 @@
 # Overview
 
-Your app builds its whole UI in code every frame. The library keeps the state between
-frames (focus, scroll positions, open menus, window rects), lays the UI out with flexbox
-and grid, handles input and draws it.
+Your app builds its whole UI in code, every frame. The library does the rest:
+
+- It keeps the state between frames:
+  - focus
+  - scroll positions
+  - open menus
+  - window rects
+- It lays the UI out with flexbox and grid.
+- It handles input.
+- It draws the UI.
 
 Everything is in the `tachyon` namespace. Examples are written as members of a class
 derived from `GUIApplication`, like the one in the

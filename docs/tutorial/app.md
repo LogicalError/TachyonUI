@@ -2,7 +2,8 @@
 
 ## The app class
 
-Owns the panels, the window and the dock layout. At the end of `my_app.h`:
+The app class owns the panels, the window and the dock layout. The dock layout describes
+how the panels are arranged in the window. At the end of `my_app.h`:
 
 <!-- snippet: examples/tutorial/my_app.h [app] -->
 ```cpp
@@ -50,11 +51,13 @@ tachyon::Result<void> MyApp::Initialize(const InitializeOptions& options)
 }
 ```
 
-- The window and dock layout remember position, size and arrangement by ID, so they need
-  static IDs, not call-site IDs.
+- The window and the dock layout remember their position, size and arrangement by ID.
+  - So they need static IDs: IDs made once, which stay the same.
+  - Call-site IDs, made from the file and line of a call, won't do here.
 - `CreatePanel` registers a dockable panel with a title and a draw callback.
-- The dock tree gives the counter a 240 px left column and the greeting the rest. Users
-  can drag tabs to rearrange, or out of the window to float a panel.
+- The dock tree gives the counter a 240 px left column and the greeting the rest.
+- Users can drag tabs to rearrange the panels, or drag a tab out of the window to float
+  its panel.
 
 ## Every frame
 
@@ -73,8 +76,10 @@ void MyApp::OnGUI()
 }
 ```
 
-The docking container draws the visible panels through their callbacks;
-`EmitFloatingDockWindows` draws floated ones. Close the namespace with `}`.
+- The docking container draws the visible panels through their callbacks.
+- `EmitFloatingDockWindows` draws the floated ones.
+
+Close the namespace with `}`.
 
 ## main
 
@@ -98,12 +103,15 @@ int main()
 }
 ```
 
-On failure (e.g. a GPU missing required features), the `Result<void>` says why.
+On failure, the `Result<void>` says why. For example, the GPU may be missing required
+features.
 
 ## Run it
 
-Build as in [step 1](setup.md), then run `build\Debug\my_app.exe` (Windows) or
-`build/Debug/my_app` (Linux, macOS), from any folder.
+Build as in [step 1](setup.md), then run it from any folder:
+
+- `build\Debug\my_app.exe` on Windows
+- `build/Debug/my_app` on Linux and macOS
 
 ## Where next
 
