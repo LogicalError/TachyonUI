@@ -2,7 +2,8 @@
 
 ## Text
 
-Non-interactive text. Default class: `static-text`.
+Text the user can read but not click, select or edit. Its default CSS class is
+`static-text`.
 
 ```cpp
 void Text(ID id, std::string_view text, StyleRef style, LayoutOverride&& constraints = {});
@@ -13,9 +14,18 @@ Text("Hello from TachyonUI!");
 Text("Selected object " + std::to_string(selected));
 ```
 
+To change its look, pass a style made from your own CSS class:
+
+```cpp
+Text("Unsaved changes", theme.GetStyle("warning-text"));
+```
+
 ## Label
 
-A label for the next control. In a label group it takes the group's width.
+A label names the control that comes after it, such as "Name" before a text field.
+
+- Inside a [label group](windows-and-layout.md#label-groups), all labels take the
+  group's width, so the controls after them line up.
 
 ```cpp
 void Label(ID id, std::string_view text, StyleRef style, LayoutOverride&& constraints = {});
@@ -27,13 +37,24 @@ Label("Name");
 Field(name);
 ```
 
-The caption form, for tall controls like lists, puts the label at the top of the row with a
-caption below: `Label("Items", "3 items")`. Classes: `label`; caption form
-`group-label-top`, `group-label-title`, `group-label-caption`.
+The caption form is for tall controls, such as lists.
+
+- It puts the label at the top of the row.
+- A caption, a second line of smaller text, goes below the label.
+
+```cpp
+Label("Items", "3 items");
+```
+
+The CSS classes:
+
+- `label`
+- in the caption form, `group-label-top`, `group-label-title` and `group-label-caption`
 
 ## DragLabel
 
-Dragging it sideways changes the numeric field after it. Default class: `drag-label`.
+A label the user can drag sideways to change the number field after it, as an
+alternative to typing a value. Its default CSS class is `drag-label`.
 
 ```cpp
 void DragLabel(ID id, std::string_view text, StyleRef style, LayoutOverride&& constraints = {});
@@ -46,9 +67,15 @@ Field(floatValue);
 
 ## SelectableText
 
-Read-only rich text with links, mouse selection and Ctrl+C. Pass a span of `ContentRun`s
-(text or icon). A run with `isLink` and a non-zero `contentId` is a link; clicking it calls
-`onLinkActivate(contentId)`. Use a stable ID so the selection survives across frames.
+Rich text the user can read, select and copy, but not edit.
+
+- It can hold links.
+- The user selects text with the mouse and copies it with Ctrl+C.
+- You pass it a span of `ContentRun`s. Each run is a piece of text or an icon.
+- A run with `isLink` set and a non-zero `contentId` is a link. Clicking it calls
+  `onLinkActivate(contentId)`.
+- Give it a stable ID, so the selection is kept from frame to frame. See
+  [Static IDs](../overview/ids.md#static-ids).
 
 ```cpp
 void SelectableText(ID id, const std::span<ContentRun>& runs,
@@ -56,11 +83,16 @@ void SelectableText(ID id, const std::span<ContentRun>& runs,
                     StyleRef style, LayoutOverride&& constraints = {});
 ```
 
-No default style; you must pass one.
+It has no default style: you must pass one.
 
-A link's `linkStyle` sets its color, hover color (also underlined on hover) and cursor
-(pointer unless the style says otherwise). `theme.linkStyle` comes from the `.link` class
-(`color`, plus `color` and `cursor` under `:hover`):
+A link's `linkStyle` sets:
+
+- its color
+- its color under the pointer, when it's also underlined
+- the pointer's cursor over it: the hand, unless the style says otherwise
+
+`theme.linkStyle` comes from the `.link` class: its `color`, plus the `color` and `cursor`
+under `:hover`.
 
 ```cpp
 ContentRun runs[] =
@@ -75,12 +107,15 @@ SelectableText(docsTextID, runs, [this](intptr_t contentId) { if (contentId == 1
                theme.staticTextStyleRef);   // member: ID docsTextID = idManager.CreateStaticID()
 ```
 
-Pass `theme.linkStyle` again every frame so links follow a theme reload.
+Pass `theme.linkStyle` again every frame, so the links follow a theme reload.
 
 ## Image
 
-Draws an image registered with `graphicsContext->RegisterImage`, stretched to fill. Pass
-`sourceSize` (pixels) to keep the aspect ratio.
+Draws an image, stretched to fill its box.
+
+- Register the image first with `graphicsContext->RegisterImage`. It gives you an
+  `ImageIndex`.
+- Pass `sourceSize`, the image's size in pixels, to keep its aspect ratio.
 
 ```cpp
 void Image(ID id, ImageIndex image, StyleRef style, LayoutOverride&& constraints = {});
@@ -92,7 +127,8 @@ Image(preview, LayoutOverride::FixedSize(96, 96));   // member: ImageIndex previ
 Image(preview, uint2{ 64, 64 });   // a 64x64 source, aspect ratio kept
 ```
 
-Default style: `theme.imageStyleRef` (built in code; CSS can't express the texture fill).
+The default style is `theme.imageStyleRef`. It's built in code, since CSS can't express
+how the image fills the box.
 
 ---
 

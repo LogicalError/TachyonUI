@@ -2,8 +2,12 @@
 
 ## Breadcrumb
 
-Path such as Graphs > Terrain material; the last segment is current. Clicking another
-segment calls `onSelect(index)` and returns `true` that frame.
+A path such as Graphs > Terrain material.
+
+- The last segment is the current one.
+- Clicking another segment calls `onSelect(index)`, a callback you pass, with that
+  segment's index.
+- It returns `true` that frame.
 
 ```cpp
 bool Breadcrumb(ID id, std::span<const std::string> segments, std::function<void(int)> onSelect, StyleRef style,
@@ -14,11 +18,16 @@ bool Breadcrumb(ID id, std::span<const std::string> segments, std::function<void
 Breadcrumb(path, [this](int segment) { path.resize(size_t(segment) + 1); });   // member: std::vector<std::string> path
 ```
 
+```cpp
+if (Breadcrumb(path, [this](int segment) { path.resize(size_t(segment) + 1); }))
+    ReloadFolder();
+```
+
 Classes: `breadcrumb`, `breadcrumb-segment`, `breadcrumb-current`, `breadcrumb-separator`.
 
 ## Status bar
 
-Strip of short texts. To push texts to the right, give the `StatusText` before them
+A strip of short texts. To push texts to the right, give the `StatusText` before them
 `FlexGrow(1)`.
 
 ```cpp
@@ -38,9 +47,12 @@ EndStatusBar();
 
 ## CommandSearch
 
-Search field that finds and runs `commandManager` commands. While focused it lists
-commands whose description contains the typed text. Up / Down move, Enter or click runs,
-Escape leaves.
+A search field that finds and runs the commands of `commandManager`.
+
+- While focused, it lists the commands whose description contains the typed text.
+- Up / Down move through them.
+- Enter or a click runs one.
+- Escape leaves.
 
 ```cpp
 bool CommandSearch(ID id, CommandSearchState& state, StyleRef style, LayoutOverride&& constraints = {});
@@ -53,15 +65,25 @@ CommandSearch(commandSearch, LayoutOverride{}.Width(300));   // member: CommandS
 
 - `state` must outlive the frame.
 - Returns `true` when a command ran since the last call.
-- `FocusCommandSearch(state)` focuses it next frame (e.g. bind to Ctrl+K).
+- `FocusCommandSearch(state)` focuses it in the next frame, for example from a command
+  bound to Ctrl+K.
+
+```cpp
+// Once, in Initialize:
+cmdSearch = commandManager.RegisterCommand(searchIcon, KeyCode::KeyK, KeyModifier::Control,
+                                           [this] { FocusCommandSearch(commandSearch); }, "Search Commands");
+```
 
 Classes: `command-search`, `command-search-hint`, `command-search-key`,
 `command-search-list`, `command-search-current-row`.
 
 ## Settings panel
 
-Two panes: page tree, sizer, selected page's content. Renders into the current container.
-Add pages with stable IDs; each page's `render` builds its content.
+Two panes: a tree of pages and the selected page's content, with a sizer between them.
+
+- It renders into the current container.
+- Add pages with stable IDs: IDs made once with `idManager.CreateStaticID()`.
+- Each page's `render` function builds its content.
 
 ```cpp
 void RenderSettingsPanel(SettingsPanelState& state);

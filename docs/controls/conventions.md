@@ -1,18 +1,47 @@
 # Common conventions
 
-**Parameters.** Order: `(id, content or value, ..., callback, style, constraints)`. Most
-can be left out. Overloads per control:
+All controls follow the same rules for their parameters, their results and their layout.
+This page explains those rules once, so the pages for each control don't repeat them.
+
+**Parameters.** Every control takes its parameters in the same order:
+`(id, content or value, ..., callback, style, constraints)`. Most of them can be left out.
+
+- `id` is the control's `ID`: the key under which TachyonUI keeps the control's state
+  between frames, such as hover, focus or the text being edited.
+- The content or value is what the control shows or edits.
+- A callback is a function you pass in; the control calls it when the user acts on it.
+- `style` is a `StyleRef`: a handle to a CSS class of the loaded theme.
+- `constraints` is a `LayoutOverride` (below).
+
+Each control has these overloads:
 
 - With `ID id` first, when you keep the ID yourself.
+  - Make it once, outside the frame, with `idManager.CreateStaticID()`.
+
+  ```cpp
+  Button(saveID, "Save", onSave);   // member: ID saveID, made in Initialize
+  ```
+
 - Without an ID: it comes from the call site (`std::source_location`), so
-  `Button("Save", onSave)` works. See [IDs](../overview/ids.md) for when an ID must be
-  stable.
-- With `StyleRef style` (from `theme.GetStyle("my-class")`), replacing the default CSS class.
+  `Button("Save", onSave)` works.
+  - An ID made this way is called a dynamic ID.
+  - See [IDs](../overview/ids.md) for when an ID must be stable.
+- With `StyleRef style`, replacing the default CSS class.
+  - Get the `StyleRef` from `theme.GetStyle("my-class")`.
+
+  ```cpp
+  Button("Delete", onDelete, theme.GetStyle("my-danger-button"));   // a class from your CSS
+  ```
 
 Signatures on these pages show the overload with both ID and style.
 
-**Content.** Buttons, toggles, tabs, list items and menu items take a `GUIContent`: text,
-icon or both, plus an optional tooltip. A string or icon converts implicitly:
+**Content.** Buttons, toggles, tabs, list items and menu items take a `GUIContent`. It
+holds:
+
+- text, an icon, or both
+- an optional tooltip: text shown while the pointer rests on the control
+
+A string or icon converts implicitly:
 
 ```cpp
 Button("Save", onSave);
@@ -20,12 +49,25 @@ Button(saveIcon, onSave);
 Button({ saveIcon, "Save", "Write the file to disk" }, onSave);
 ```
 
-**Results.** The callback runs when the input is handled, after the frame it arrived in;
-the control returns `true` in the next frame. Controls taking a `T&` also write the new
-value. See [Return values and callbacks](../overview/values.md#return-values-and-callbacks).
+**Results.** A control reports the user's input in two ways:
+
+- The callback runs when the input is handled, after the frame it arrived in.
+- The control returns `true` in the next frame.
+- Controls taking a `T&` (a reference to your value) also write the new value.
+
+See [Return values and callbacks](../overview/values.md#return-values-and-callbacks).
+
+```cpp
+if (Button("Save", [this] { Save(); }))   // Save() has already run
+    statusText = "Saved";
+
+if (Field(name))                          // the field wrote the new text into name
+    nameChanged = true;
+```
 
 **LayoutOverride.** The last parameter, `LayoutOverride&& constraints = {}`, overrides
-size and position for this call, on top of the style. Builders chain:
+size and position for this call, on top of the style. Each builder returns the
+`LayoutOverride` again, so builders chain:
 
 ```cpp
 Button("OK", onOK, LayoutOverride{}.NoGrow().NoShrink());
@@ -47,33 +89,81 @@ BeginWindow(windowID, "Tool", LayoutOverride::FixedSize(900, 600).Centered());
 | `GridColumn(start, span)`, `GridRow(start, span)`, `ColumnTrack`, `RowTrack` | Grid placement |
 | `SetIconSide(side)`, `IconTextGap(gap)` | Icon placement |
 
-Units: plain numbers and `CssPx` are CSS pixels (scale with the UI scale); `Pixels{ n }`
-and `int2` are real pixels. Defined in `src/gui_core/layout/gui_constraints.h`.
+Units:
 
-**State scopes.** Apply to every control emitted between the pair:
+- Plain numbers and `CssPx` are CSS pixels: they scale with the UI scale.
+- `Pixels{ n }` and `int2` are real pixels.
 
-| Pair | Effect |
-| --- | --- |
-| `BeginDisabled()` / `EndDisabled()` | 40% opacity (menu items 45%), no input, menu items can't be chosen. Tooltip still shows; `SetDisabledTooltip` gives the reason. |
-| `BeginSelected()` / `EndSelected()` | Drawn as selected; menu items show a check mark. |
-| `BeginIndeterminate()` / `EndIndeterminate()` | Fields show a dash for mixed values and return `false`. |
-| `BeginInvalid()` / `EndInvalid()` | Error border and halo (`--error`, `--invalid-halo`) in any state; halo grows in over 150 ms. Fields also get an error icon; `SetErrorTooltip` gives the reason. |
+```cpp
+Button("OK", onOK, LayoutOverride{}.Width(80));             // 80 CSS pixels
+Button("OK", onOK, LayoutOverride{}.Width(Pixels{ 80 }));   // 80 real pixels
+```
 
-**Scope objects.** Take the Begin's arguments and call End on destruction: `Window`,
-`GhostWindow`, `CursorGhostWindow`, `Menu`, `MenuBar`, `ContextMenu`, `Tooltip`, `Cached`,
-`Horizontal`, `Vertical`, `HorizontalWrap`, `VerticalWrap`, `Area`, `LabelGroup`,
-`ButtonGroup`, `ToggleGroup`, `Table`, `Row`, `ListView`, `GridView`, `TabBar`, `Toolbar`,
-`StatusBar`, `TitleBar`, `ReorderableGroup`, `ReorderableItem`, `Disabled`, `Selected`,
-`Indeterminate`, `Invalid`, `DockingContainer`. See [Scopes](../overview/begin-end.md#scopes).
+They are defined in `src/gui_core/layout/gui_constraints.h`.
+
+**State scopes.** Each pair applies to every control emitted between Begin and End:
+
+- `BeginDisabled()` / `EndDisabled()`:
+  - drawn at 40% opacity, menu items at 45%
+  - no input
+  - menu items can't be chosen
+  - the tooltip still shows
+  - `SetDisabledTooltip` gives the reason
+- `BeginSelected()` / `EndSelected()`:
+  - drawn as selected
+  - menu items show a check mark
+- `BeginIndeterminate()` / `EndIndeterminate()`:
+  - fields show a dash for mixed values, such as a value that differs between the
+    selected objects
+  - they return `false`
+- `BeginInvalid()` / `EndInvalid()`:
+  - an error border and halo in any state, in the colors `--error` and `--invalid-halo`
+  - the halo grows in over 150 ms
+  - fields also get an error icon
+  - `SetErrorTooltip` gives the reason
+
+```cpp
+BeginDisabled();
+Button("Export", [this] { Export(); });
+SetDisabledTooltip("Export the scene", "Open a scene first");
+EndDisabled();
+
+BeginInvalid();
+Field(fileName);
+SetErrorTooltip("A file name can't contain '/'");
+EndInvalid();
+```
+
+**Scope objects.** A scope object is a local variable that calls a Begin function when
+it's made and the matching End when it goes out of scope. It takes the Begin's arguments.
+There are scope objects for `Window`, `GhostWindow`, `CursorGhostWindow`, `Menu`,
+`MenuBar`, `ContextMenu`, `Tooltip`, `Cached`, `Horizontal`, `Vertical`,
+`HorizontalWrap`, `VerticalWrap`, `Area`, `LabelGroup`, `ButtonGroup`, `ToggleGroup`,
+`Table`, `Row`, `ListView`, `GridView`, `TabBar`, `Toolbar`, `StatusBar`, `TitleBar`,
+`ReorderableGroup`, `ReorderableItem`, `Disabled`, `Selected`, `Indeterminate`, `Invalid`
+and `DockingContainer`. See [Scopes](../overview/begin-end.md#scopes).
 
 ```cpp
 if (auto menu = Menu("File"))
     MenuItem("Open", [this] { Open(); });
 ```
 
+```cpp
+{
+    auto disabled = Disabled();
+    Button("Export", [this] { Export(); });
+}   // EndDisabled runs here
+```
+
 **Begin / End.** `BeginWindow`, `BeginMenu`, `BeginContextMenu`, `BeginTooltip` and
-`BeginCached` return whether to build the content; call End either way. Other Begin
+`BeginCached` return whether to build the content. Call End either way. Other Begin
 functions always return `true`. See [Begin and End](../overview/begin-end.md).
+
+```cpp
+if (BeginMenu("File"))
+    MenuItem("Open", [this] { Open(); });
+EndMenu();   // also when BeginMenu returned false
+```
 
 ---
 

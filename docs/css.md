@@ -1,7 +1,19 @@
 # CSS and theming
 
-Themes are CSS files: a subset of CSS plus `-tachyon-*` properties. Each class becomes a
-`tachyon::Style`.
+A theme decides how every control looks: its colors, borders, spacing and fonts. In
+TachyonUI a theme is a set of CSS files:
+
+- They use a subset of the CSS that web browsers read.
+- They add properties of their own, whose names start with `-tachyon-`.
+- Each class in them becomes a `tachyon::Style`, the object a control is drawn with.
+
+A class is a named rule, such as `.link` below. A control asks for its style by that name.
+From `themes/styles.css`:
+
+```css
+.link       { color: var(--text-link); cursor: pointer; }
+.link:hover { color: var(--text-link-hover); }
+```
 
 | Page | Covers |
 | --- | --- |

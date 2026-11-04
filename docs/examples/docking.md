@@ -1,13 +1,22 @@
 # Docking
 
-Four panels in a dock layout. Drag a tab to move its panel, drop it on another leaf to
-dock it, or drag it outside the window to float it in its own OS window.
+Four panels in a dock layout. A panel is a piece of UI with a title, shown as a tab. A
+dock layout arranges the panels in the window, and the user can rearrange them:
+
+- drag a tab to move its panel
+- drop it on another group of tabs to dock it there
+- drag it outside the window to float it in an OS window of its own
+
 Full source: [examples/docking/docking.cpp](https://github.com/LogicalError/TachyonUI/blob/main/examples/docking/docking.cpp).
 
 ## Panels
 
-Create each panel once, in `Initialize`, with a title and a content callback. The
-callback runs only while the panel is visible.
+- Create each panel once, in `Initialize`, with:
+  - a title, shown on its tab
+  - an icon, or `IconID::Invalid` for none
+  - a callback that builds its content
+- The callback runs only while the panel is visible.
+- `CreatePanel` returns the panel's ID, which the dock tree below refers to.
 
 ```cpp
 // Panels are created once; each draws its content in its callback.
@@ -18,12 +27,16 @@ const tachyon::ID log     = CreatePanel(layout.panels, "Log",     noIcon, [this]
 const tachyon::ID help    = CreatePanel(layout.panels, "Help",    noIcon, [this] { Text("Drag the tabs around."); });
 ```
 
-`layout` is a `tachyon::DockingLayout` member; it owns the panels and the dock tree.
+- `layout` is a `tachyon::DockingLayout` member of the app.
+- It owns the panels and the dock tree.
 
 ## The dock tree
 
-Splits and leaves; a leaf holds tabs. A pinned split keeps one side at a fixed size in
-CSS px and gives the rest to the other.
+- The dock tree says where each panel goes. It is made of splits and leaves:
+  - a split divides its space between two children, side by side or one above the other
+  - a leaf holds one or more panels, shown as tabs
+- A pinned split keeps one side at a fixed size, in CSS px, and gives the rest to the
+  other side. `LeftPinned, 220` keeps the left side 220 px wide.
 
 ```cpp
 // Left column of 220 px, the rest split over a 150 px bottom row.
@@ -37,8 +50,10 @@ layout.root = tachyon::MakeSplit(DockSplitMode::LeftPinned, 220,
 
 ## Building it each frame
 
-The docking container builds the visible panels. `EmitFloatingDockWindows` then builds
-the panels dragged out into their own windows.
+- The docking container, `BeginDockingContainer`, builds the panels that are visible in
+  the window.
+- `EmitFloatingDockWindows` then builds the panels the user dragged out into their own
+  windows.
 
 ```cpp
 void OnGUI() override
@@ -56,7 +71,7 @@ void OnGUI() override
 
 ## Panel content
 
-A panel callback is ordinary UI code:
+A panel callback is ordinary UI code, the same as in `OnGUI`:
 
 ```cpp
 void DetailsPanel()
@@ -69,10 +84,25 @@ void DetailsPanel()
 }
 ```
 
-To keep the arrangement across restarts, call `PersistDocking("dock", layout)` once and
-save the text `SaveUIState` returns (see
-[Errors and saved state](../overview/errors-and-state.md)). Full docking reference:
-[Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md).
+## Keeping the arrangement
+
+- To keep the user's arrangement across restarts:
+  - call `PersistDocking("dock", layout)` once, after the panels and the dock tree exist
+  - when the app quits, save the text `SaveUIState` returns, for example to a file
+  - see [Errors and saved state](../overview/errors-and-state.md)
+
+```cpp
+// In Initialize, after layout.root is set
+PersistDocking("dock", layout);
+```
+
+```cpp
+// After Run returns, before Cleanup
+if (std::ofstream file("ui_state.json", std::ios::binary); file)
+    file << app.SaveUIState();
+```
+
+- Full docking reference: [Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md).
 
 ---
 

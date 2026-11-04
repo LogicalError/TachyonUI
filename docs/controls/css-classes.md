@@ -1,7 +1,17 @@
 # Default CSS classes
 
-Class each control uses when you pass no style. Classes for parts (a switch's knob, a
-table's header) are on the control's page.
+A control's look comes from a CSS class of the loaded theme. Each control takes an
+optional `StyleRef`, a handle to a class that you get from `theme.GetStyle`. When you pass
+no style, the control uses the class in the table below.
+
+```cpp
+Button("Save", onSave);                                         // class "button"
+Button("Delete", onDelete, theme.GetStyle("my-danger-button"));  // your own class instead
+```
+
+- This table lists the class of each control's outer element.
+- The classes of its parts, such as a switch's knob or a table's header, are on the
+  control's page.
 
 | Control | Class |
 | --- | --- |
@@ -34,7 +44,7 @@ table's header) are on the control's page.
 | `MenuSeparator`, `MenuHeader` | `menu-separator`, `menu-header` |
 | `BeginMenuBar`, `BeginTitleBar` | `menu-bar`, `title-bar` |
 | `BeginContextMenu` | `menu` |
-| `SetTooltip`, `BeginTooltip` | Window `tooltip-frame`, box `tooltip`, text `tooltip-text`, shortcut `tooltip-shortcut`. Property help: `tooltip-rich` (`tooltip-title`, `tooltip-description`, `tooltip-footer`), its label `label-help` (`group-label-help`, `drag-label-help`, `group-drag-label-help`). Truncated text shown whole: `tooltip-expand` (`tooltip-expand-text`). Rejected value: `tooltip-error` (`tooltip-error-text`). Short lines (disabled reason, node pin): `tooltip-lines`, muted line `tooltip-note`, pin's first line `tooltip-pin-row` (`tooltip-pin-type`, `tooltip-pin-value`). |
+| `SetTooltip`, `BeginTooltip` | `tooltip-frame`, `tooltip`, `tooltip-text`, and more; see [Tooltip classes](#tooltip-classes) |
 | `MessageDialog` | `message-box` |
 | `Toasts` | `toast-stack`, `toast`, `toast-circle-<severity>` |
 | `Banner` | `banner-<severity>`, `banner-message-<severity>` |
@@ -56,8 +66,32 @@ table's header) are on the control's page.
 | `RenderNodeView` | `node-view` |
 | Links in rich text (`theme.linkStyle`) | `link` (`color`, `:hover` `color`, `cursor`) |
 
-Defined in `workdirectory/themes/styles.css`; colors from the palette in `dark.css` or
-`light.css`. See [CSS and theming](../css.md).
+## Tooltip classes
+
+- A tooltip:
+  - the window: `tooltip-frame`
+  - the box: `tooltip`
+  - the text: `tooltip-text`
+  - the shortcut: `tooltip-shortcut`
+- Property help:
+  - the tooltip: `tooltip-rich`, with `tooltip-title`, `tooltip-description` and
+    `tooltip-footer`
+  - its label: `label-help`
+  - its label in a label group: `group-label-help`
+  - its drag label: `drag-label-help`
+  - its drag label in a label group: `group-drag-label-help`
+- Truncated text shown whole: `tooltip-expand`, with `tooltip-expand-text`.
+- A rejected value: `tooltip-error`, with `tooltip-error-text`.
+- Short lines, such as a disabled reason or a node pin:
+  - the tooltip: `tooltip-lines`
+  - a muted line: `tooltip-note`
+  - a pin's first line: `tooltip-pin-row`, with `tooltip-pin-type` and `tooltip-pin-value`
+
+## Where the classes are defined
+
+- The classes are defined in `workdirectory/themes/styles.css`.
+- Their colors come from the palette in `dark.css` or `light.css`.
+- See [CSS and theming](../css.md).
 
 ---
 

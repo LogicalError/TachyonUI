@@ -1,7 +1,18 @@
 # TachyonUI documentation
 
-An immediate-mode C++20 GUI library for tools. You build the UI in `OnGUI()` every frame;
-the library keeps the state, lays it out and draws it on the GPU.
+TachyonUI is an immediate-mode C++20 GUI library for tools:
+
+- You build the UI in `OnGUI()`, a function of your app that runs every frame.
+- The library keeps the state between frames, lays the UI out and draws it on the GPU.
+
+```cpp
+void OnGUI() override
+{
+    if (BeginWindow(windowID, "Hello", LayoutOverride{}.Size(360, 160)))
+        Button("Quit", [this] { applicationQuit = true; });
+    EndWindow();
+}
+```
 
 New? Start with the [Tutorial](tutorial.md).
 
@@ -14,7 +25,8 @@ New? Start with the [Tutorial](tutorial.md).
 | [Integration](integration.md) | Build setup, your own Vulkan device, window, input and loop |
 | [Examples](examples.md) | The example programs |
 
-[API reference](https://logicalerror.github.io/TachyonUI/): every class and function, also grouped by topic.
+[API reference](https://logicalerror.github.io/TachyonUI/): every class and function, also
+grouped by topic.
 
 <!--!
 \htmlonly <div class="page-tree"> \endhtmlonly

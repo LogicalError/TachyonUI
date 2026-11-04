@@ -1,14 +1,22 @@
 # Tutorial: your first app
 
-From an empty folder to an app with two docked panels: buttons that change a count, and
-fields that change a greeting.
+From an empty folder to an app with two docked panels. A panel is an area with a title tab
+that users can drag to rearrange. The app has:
 
-Needs a C++20 compiler, CMake 3.22+, the [Vulkan SDK](https://vulkan.lunarg.com/) and
-[Git LFS](https://git-lfs.com/); exact versions are in the
-[README](https://github.com/LogicalError/TachyonUI#readme).
+- a panel with buttons that change a count
+- a panel with fields that change a greeting
 
-Finished program: [`examples/tutorial`](https://github.com/LogicalError/TachyonUI/tree/main/examples/tutorial)
-(built with the other examples).
+You need:
+
+- a C++20 compiler
+- CMake 3.22+
+- the [Vulkan SDK](https://vulkan.lunarg.com/)
+- [Git LFS](https://git-lfs.com/)
+
+The exact versions are in the [README](https://github.com/LogicalError/TachyonUI#readme).
+
+Finished program: [`examples/tutorial`](https://github.com/LogicalError/TachyonUI/tree/main/examples/tutorial),
+built with the other examples.
 
 | Step | |
 | --- | --- |

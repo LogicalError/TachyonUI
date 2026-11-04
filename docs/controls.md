@@ -1,6 +1,27 @@
 # Controls
 
-`tachyon::GUIApplication` members, called in `OnGUI()`, with `using namespace tachyon;`.
+Every control is a member function of `tachyon::GUIApplication`. Your application is a
+subclass of it and builds its whole UI again each frame, in `OnGUI()`. The examples on
+these pages are written as if inside that `OnGUI()`, with `using namespace tachyon;`.
+
+```cpp
+class MyApp : public tachyon::GUIApplication
+{
+public:
+    void OnGUI() override
+    {
+        using namespace tachyon;
+        if (BeginWindow(windowID, "Tool"))
+            Button("Save", [this] { Save(); });   // a control, called from OnGUI
+        EndWindow();
+    }
+
+    // ...
+};
+```
+
+Read [Common conventions](controls/conventions.md) first: it explains the parameters and
+results all controls share.
 
 | Page | Covers |
 | --- | --- |

@@ -2,9 +2,10 @@
 
 ## Return values and callbacks
 
-A control reports a change both ways; use either:
+A control reports a change in two ways; use either:
 
-- The **callback** runs in the input step of the frame that received the input.
+- The **callback** is a function you pass to the control. It runs in the input step of
+  the frame that received the input.
 - The **return value** is true in the next frame's `OnGUI`.
 
 ```cpp
@@ -16,8 +17,10 @@ if (Button("Reset", nullptr))
     ResetSettings();
 ```
 
-Value editors take the value by reference, write to it directly and return whether it
-changed:
+Value editors take the value by reference:
+
+- They write to it directly.
+- They return whether it changed.
 
 ```cpp
 Field(name);                    // std::string
@@ -31,8 +34,12 @@ Overloads per control: [Controls](../controls.md).
 
 ## GUIContent
 
-A control shows a `GUIContent`: text, an icon or both, plus an optional tooltip. Strings
-and icons convert to it:
+A control shows a `GUIContent`:
+
+- text, an icon, or both
+- an optional tooltip
+
+Strings and icons convert to it:
 
 ```cpp
 Button("Save", onSave);
@@ -41,7 +48,13 @@ Button({ saveIcon, "Save", "Write the file to disk" }, onSave);
 Button({ "Save", "Write the file to disk" }, onSave);   // text and tooltip
 ```
 
-Its strings are `std::string_view`; they only need to live for the duration of the call.
+Its strings are `std::string_view`, so they only need to live for the duration of the
+call. A local string is fine:
+
+```cpp
+const std::string title = "Save " + fileName;
+Button(title, onSave);
+```
 
 
 ## Units
@@ -56,9 +69,18 @@ tachyon::LayoutOverride{}.Width(tachyon::Pixels{ measured })  // already pixels,
 
 - A plain `int` converts to `CssPx`; `Pixels` must be written explicitly.
 - `int2` and `IntRect` are always pixels.
-- UI scale is the main window's display scale times the zoom from `SetUIScale(scale)`
-  (1 follows the OS).
-- `styleManager.Px(n)` converts CSS px to pixels, e.g. for custom drawing.
+- The UI scale is the main window's display scale times the zoom:
+  - set the zoom with `SetUIScale(scale)`
+  - a zoom of 1 follows the OS
+
+  ```cpp
+  SetUIScale(1.25f);
+  ```
+- `styleManager.Px(n)` converts CSS px to pixels, for example for custom drawing:
+
+  ```cpp
+  const int margin = styleManager.Px(8);   // 8 CSS px, in pixels
+  ```
 
 ---
 

@@ -23,11 +23,15 @@ ui.Field(excited, excited ? "Yes" : "No");
 ui.EndLabelGroup();
 ```
 
-- `Field` picks the editor from the type: text for `std::string`, number for `int`,
-  toggle for `bool`. Each edits the value in place.
+- `Field` picks the editor from the type:
+  - text for `std::string`
+  - number for `int`
+  - toggle for `bool`
+- Each field edits the value in place.
 - `NumericFieldConfig` limits `times` to 1..5.
-- The label group lines each `Label` up with the next control, in a resizable label
-  column. Clicking a label focuses its field.
+- The label group lines each `Label` up with the next control:
+  - the labels go in a label column, which the user can resize
+  - clicking a label focuses its field
 - The toggle's text is recomputed every frame, so it follows the value.
 
 Below the fields, the greeting:
@@ -39,8 +43,8 @@ for (int i = 0; i < times; ++i)
     ui.Text(text);
 ```
 
-The greeting updates on the next frame after typing. The `Text` calls in the loop share
-a call site but each gets its own ID.
+- The greeting updates on the next frame after typing.
+- The `Text` calls in the loop share a call site, but each gets its own ID.
 
 Close `GreetingPanel::Draw` with `}`.
 
