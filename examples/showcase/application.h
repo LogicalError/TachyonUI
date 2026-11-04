@@ -4,6 +4,7 @@
 #include <gui_controls/controls_toolbar_dock.h>
 
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -12,6 +13,11 @@ namespace tachyon
 {
     enum class CommandMode : uint32_t;
     struct FileEntry;
+    // Each panel's own data (panel_*.cpp): two panels of a kind don't share it.
+    struct FilesPanel;
+    struct HierarchyPanel;
+    struct InspectorPanel;
+    struct LogPanel;
 
     // Case-insensitive substring search for the panels' search boxes. Lowercase
     // the query once when it changes, then match each item against it.
@@ -405,7 +411,6 @@ namespace tachyon
 
             // GridView demo
             int gridViewSelected = -1;
-            MultiSelectState gridViewMultiSelect;
 
             // TabBar demo
             int tabBarSelected = 0;
@@ -506,14 +511,14 @@ namespace tachyon
         // Dock-panel body renderers (one per panel_*.cpp), called each frame
         // while the panel is the active tab.
         void RenderReorderablePanel();
-        void RenderHierarchyPanel();
+        void RenderHierarchyPanel(HierarchyPanel& panel);
         void RenderNodeViewPanel();
 
         void RenderBoxTestPanel();
-        void RenderInspectorPanel();
+        void RenderInspectorPanel(InspectorPanel& panel);
         void RenderMiscPanel();
         void RenderTablePanel();
-        void RenderLogPanel();
+        void RenderLogPanel(LogPanel& panel);
         void RenderTreeTablePanel();
         void RenderSplitScrollPanel();
         void RenderViewportPanel();
@@ -554,23 +559,29 @@ namespace tachyon
         /// The window F11 is for: the focused one with the showcase's menus, else the main window.
         ID FullscreenTarget() const;
 
-        void EnableFilesPanel();
-        void DisableFilesPanel();
-        void RenderFilesPanel();
-        void MoveFileInto(uintptr_t payload, const std::string& folder);
-        void ApplyFileRenames();
-        void AddDroppedFiles(const std::vector<std::string>& paths, const std::string& folder);
-        IconID FileIcon(std::string_view name, bool isFolder, bool open = false);
-        IconID FileIcon(const FileEntry& file, bool open = false);
+        /// The panels with data of their own, each made with its own (and added to `panels`).
+        ID CreateFilesPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateHierarchyPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateInspectorPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateLogPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+
+        void EnableFilesPanel(FilesPanel& panel);
+        void DisableFilesPanel(FilesPanel& panel);
+        void RenderFilesPanel(FilesPanel& panel);
+        void MoveFileInto(FilesPanel& panel, uintptr_t payload, const std::string& folder);
+        void ApplyFileRenames(FilesPanel& panel);
+        void AddDroppedFiles(FilesPanel& panel, const std::vector<std::string>& paths, const std::string& folder);
+        IconID FileIcon(const FilesPanel& panel, std::string_view name, bool isFolder, bool open = false);
+        IconID FileIcon(const FilesPanel& panel, const FileEntry& file, bool open = false);
 
         // Build/tear down panel data; wired into CreatePanel's onEnable/onDisable.
-        void EnableHierarchyPanel();
-        void DisableHierarchyPanel();
-        void EnableInspectorPanel();
-        void DisableInspectorPanel();
-        void EnableLogPanel();
-        void DisableLogPanel();
+        void EnableHierarchyPanel(HierarchyPanel& panel);
+        void EnableInspectorPanel(InspectorPanel& panel);
+        void DisableInspectorPanel(InspectorPanel& panel);
+        void EnableLogPanel(LogPanel& panel);
     private:
+        // The Files panels made, to let go of their icons before the text system goes.
+        std::vector<std::weak_ptr<FilesPanel>> m_filesPanels;
         std::vector<std::string> m_startPanels;
         std::vector<std::string> m_floatPanels;   // --float: start in their own windows
         std::filesystem::path    m_filesRoot;     // --files

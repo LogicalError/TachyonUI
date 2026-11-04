@@ -16,15 +16,16 @@ static constexpr tachyon::Diagnostics::LogCategory kLogShowcase = tachyon::Diagn
 
 namespace tachyon
 {
-    namespace
+    // An Inspector panel's data: built by EnableInspectorPanel, torn down by DisableInspectorPanel.
+    struct InspectorPanel
     {
-        enum InspectorSection { Controls, Numbers, ColorAndVectors, Lists, Menus, SectionCount };
-        const char* const kSectionTitles[SectionCount] = { "Controls", "Numbers", "Color & vectors", "Lists", "Menus" };
+        enum Section { Controls, Numbers, ColorAndVectors, Lists, Menus, SectionCount };
+        static constexpr const char* kSectionTitles[SectionCount] = { "Controls", "Numbers", "Color & vectors", "Lists", "Menus" };
 
         struct InspectorRow
         {
             const char*           label;   // search key, shown by the row itself
-            InspectorSection      section;
+            Section               section;
             std::function<void()> emit;    // emits the whole row (label + field + extras)
         };
         std::vector<InspectorRow> inspectorRows;
@@ -32,19 +33,25 @@ namespace tachyon
         std::string               inspectorSearch;
         bool                      inspectorFilterDirty = true;
         bool                      inspectorSectionOpen[SectionCount] = { true, true, true, true, true };
-        ID                        inspectorLabelGroupID = ID::Invalid();
+    };
+
+    ID Application::CreateInspectorPanel(std::unordered_map<ID, Panel>& panels, std::string title)
+    {
+        auto panel = std::make_shared<InspectorPanel>();
+        return CreatePanel(panels, std::move(title), showcase.panelInspectorIcon, [this, panel] { RenderInspectorPanel(*panel); }, {},
+                           [this, panel] { EnableInspectorPanel(*panel); }, [this, panel] { DisableInspectorPanel(*panel); });
     }
 
-    void Application::EnableInspectorPanel()
+    void Application::EnableInspectorPanel(InspectorPanel& p)
     {
-        inspectorRows.clear();
-        InspectorSection section = Controls;
-        auto add = [&section](const char* label, std::function<void()> emit) {
-            inspectorRows.push_back({ label, section, std::move(emit) });
+        p.inspectorRows.clear();
+        InspectorPanel::Section section = InspectorPanel::Controls;
+        auto add = [&p, &section](const char* label, std::function<void()> emit) {
+            p.inspectorRows.push_back({ label, section, std::move(emit) });
         };
 
         // ---- Controls -------------------------------------------------------
-        section = Controls;
+        section = InspectorPanel::Controls;
         add("Button", [this]() {
             Label("Button");
             BeginHorizontal(idManager.AllocateDynamicID("buttonRow"), inspectorPairHalfStyleRef, LayoutOverride{}.FlexGrow(1));
@@ -133,7 +140,7 @@ namespace tachyon
         });
 
         // ---- Numbers --------------------------------------------------------
-        section = Numbers;
+        section = InspectorPanel::Numbers;
         // One per row: drag the label to scrub the value, or type into the field.
         add("Float",  [this]() { DragLabel("Float"); TypedField(showcase.floatValue); });
         add("Double", [this]() { DragLabel("Double"); TypedField(showcase.doubleValue); });
@@ -171,7 +178,7 @@ namespace tachyon
         });
 
         // ---- Color & vectors ------------------------------------------------
-        section = ColorAndVectors;
+        section = InspectorPanel::ColorAndVectors;
         add("Color",    [this]() { DragLabel("Color");    ColorField(showcase.demoColor);       });
         add("Gradient", [this]() { DragLabel("Gradient"); GradientField(showcase.demoGradient); });
         add("Int2", [this]() { DragLabel("Int2"); Field(showcase.int2Value); });
@@ -179,7 +186,7 @@ namespace tachyon
         add("Int4", [this]() { DragLabel("Int4"); Field(showcase.int4Value); });
 
         // ---- Lists ----------------------------------------------------------
-        section = Lists;
+        section = InspectorPanel::Lists;
         add("String list", [this]() {
             Label("String list", std::to_string(showcase.stringList.size()) + " items");
             Field(showcase.reorderStringListID, showcase.stringList, tachyon::LayoutOverride{}.FlexGrow(1));
@@ -195,7 +202,7 @@ namespace tachyon
 
         // ---- Menus ----------------------------------------------------------
         // The triggers size to their text, no grow or shrink.
-        section = Menus;
+        section = InspectorPanel::Menus;
         add("Small menu", [this]() {
             Label("Small menu");
             if (BeginMenu(showcase.smallMenuID, "Open",
@@ -265,18 +272,16 @@ namespace tachyon
             Dropdown(showcase.fontIndex, options);
         });
 
-        if (inspectorLabelGroupID == ID::Invalid())
-            inspectorLabelGroupID = idManager.CreateStaticID();
-        inspectorFilterDirty = true;
+        p.inspectorFilterDirty = true;
     }
 
-    void Application::DisableInspectorPanel()
+    void Application::DisableInspectorPanel(InspectorPanel& p)
     {
-        inspectorRows.clear();
-        inspectorVisible.clear();
+        p.inspectorRows.clear();
+        p.inspectorVisible.clear();
     }
 
-    void Application::RenderInspectorPanel()
+    void Application::RenderInspectorPanel(InspectorPanel& p)
     {
         // ---- Banners: what the user should know about the object -------------
         if (showcase.inspectorUnsaved)
@@ -323,34 +328,35 @@ namespace tachyon
         // Search box: filters the rows by label.
         BeginHorizontal(idManager.AllocateDynamicID("inspectorSearchRow"),
                         inspectorSearchRowStyleRef, tachyon::LayoutOverride::Auto().NoShrink());
-        if (SearchField(inspectorSearch, showcase.findIcon, TextEditBehavior::ContinuousUpdate,
+        if (SearchField(p.inspectorSearch, showcase.findIcon, TextEditBehavior::ContinuousUpdate,
                         tachyon::LayoutOverride{}.FlexGrow(1)))
-            inspectorFilterDirty = true;
+            p.inspectorFilterDirty = true;
         EndHorizontal();
 
         // Refilter on demand: match row labels only when the query changed.
-        if (inspectorFilterDirty)
+        if (p.inspectorFilterDirty)
         {
-            const std::string q = SearchToLower(inspectorSearch);
-            inspectorVisible.clear();
-            for (int i = 0; i < int(inspectorRows.size()); ++i)
-                if (SearchMatches(inspectorRows[i].label, q))
-                    inspectorVisible.push_back(i);
-            inspectorFilterDirty = false;
+            const std::string q = SearchToLower(p.inspectorSearch);
+            p.inspectorVisible.clear();
+            for (int i = 0; i < int(p.inspectorRows.size()); ++i)
+                if (SearchMatches(p.inspectorRows[i].label, q))
+                    p.inspectorVisible.push_back(i);
+            p.inspectorFilterDirty = false;
         }
 
         // ---- Sections: a header that folds it, then its rows ------------------
         bool firstSection = true;
-        for (int s = 0; s < SectionCount; ++s)
+        const ID labelGroupID = idManager.AllocateDynamicID("inspectorLabelGroup");   // one for all the sections
+        for (int s = 0; s < InspectorPanel::SectionCount; ++s)
         {
-            const auto rowInSection = [s](int i) { return inspectorRows[size_t(i)].section == s; };
-            if (std::none_of(inspectorVisible.begin(), inspectorVisible.end(), rowInSection))
+            const auto rowInSection = [&p, s](int i) { return p.inspectorRows[size_t(i)].section == s; };
+            if (std::none_of(p.inspectorVisible.begin(), p.inspectorVisible.end(), rowInSection))
                 continue;
 
-            const bool open = inspectorSectionOpen[s];
+            const bool open = p.inspectorSectionOpen[s];
             Button(idManager.AllocateDynamicID("inspectorSection"),
-                   { open ? showcase.chevronDownIcon : showcase.chevronRightIcon, kSectionTitles[s] },
-                   [s]() { inspectorSectionOpen[s] = !inspectorSectionOpen[s]; },
+                   { open ? showcase.chevronDownIcon : showcase.chevronRightIcon, InspectorPanel::kSectionTitles[s] },
+                   [&p, s]() { p.inspectorSectionOpen[s] = !p.inspectorSectionOpen[s]; },
                    firstSection ? inspectorSectionFirstStyleRef : inspectorSectionStyleRef,
                    LayoutOverride{}.NoGrow().NoShrink());
             firstSection = false;
@@ -359,10 +365,10 @@ namespace tachyon
 
             BeginVertical(idManager.AllocateDynamicID("inspectorSectionBody"), inspectorSectionBodyStyleRef,
                           LayoutOverride::Auto().NoShrink());
-            BeginLabelGroup(inspectorLabelGroupID, /*defaultWidth=*/116, /*minWidth=*/40, /*maxWidth=*/300);
-            for (int i : inspectorVisible)
+            BeginLabelGroup(labelGroupID, /*defaultWidth=*/116, /*minWidth=*/40, /*maxWidth=*/300);
+            for (int i : p.inspectorVisible)
                 if (rowInSection(i))
-                    inspectorRows[size_t(i)].emit();
+                    p.inspectorRows[size_t(i)].emit();
             EndLabelGroup();
             EndVertical();
         }

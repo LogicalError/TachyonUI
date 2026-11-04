@@ -20,9 +20,29 @@ namespace tachyon
 {
     namespace
     {
-        enum class LogLevel { Info, Warning, Error };
-
         constexpr Diagnostics::LogCategory kLogShowcase = Diagnostics::MakeLogCategory("showcase");
+
+        // Timestamps show the time since start-up (static init is close enough).
+        const int64_t logEpochNanos = SteadyClockNowNanos();
+
+        // Source path from the repository's src/ folder on, so the detail pane shows
+        // a short, recognisable file:line.
+        std::string_view ShortSourcePath(std::string_view file)
+        {
+            for (std::string_view marker : { "src/", "src\\" })
+            {
+                const size_t at = file.rfind(marker);
+                if (at != std::string_view::npos)
+                    return file.substr(at);
+            }
+            return file;
+        }
+    }
+
+    // A Log panel's data: made the first time it shows, kept while it's hidden.
+    struct LogPanel
+    {
+        enum class LogLevel { Info, Warning, Error };
 
         struct ConsoleLogEntry
         {
@@ -32,14 +52,13 @@ namespace tachyon
             std::string details;  // full text shown in the detail pane (empty -> use message)
         };
 
-        // Panel data - built by EnableLogPanel, torn down by DisableLogPanel.
-        // logEntries mirrors the log records pulled so far (Clear empties only
-        // the panel); logLastSequence is the newest record already pulled.
-        std::vector<ConsoleLogEntry>            logEntries;
-        uint64_t                                logLastSequence = 0;
+        // logEntries mirrors the log records pulled so far (Clear empties only the
+        // panel); logLastSequence is the newest record already pulled.
+        std::vector<ConsoleLogEntry>             logEntries;
+        uint64_t                                 logLastSequence = 0;
         std::vector<tachyon::VirtualTableColumn> logColumns;
-        tachyon::TableState              logTableState;
-        std::string                             logSearch;
+        tachyon::TableState                      logTableState;
+        std::string                              logSearch;
 
         // One entry per visible row, rebuilt only when the filter changes:
         //   logVisible[r] - logEntries index of the row's first matching entry.
@@ -52,12 +71,11 @@ namespace tachyon
         // Detail pane: the selected entry's text as rich-text runs with file:line
         // links. Runs point into the entry's stored text, valid until it is cleared.
         struct DetailLink { intptr_t id; std::string file; int line; };
-        int                          logDetailSel    = -1;  // entry index the runs were built for
-        tachyon::LinkStyle           logDetailLinkStyle;    // the theme's link style the runs were built with
-        int                          logDetailHeight = 132; // pane height (CSS px); driven by the sizer
+        int                              logDetailSel    = -1;  // entry index the runs were built for
+        tachyon::LinkStyle               logDetailLinkStyle;    // the theme's link style the runs were built with
+        int                              logDetailHeight = 132; // pane height (CSS px); driven by the sizer
         std::vector<tachyon::ContentRun> logDetailRuns;
-        std::vector<DetailLink>      logDetailLinks;
-        tachyon::ID                      logDetailTextID = tachyon::ID::Invalid(); // stable id for the selectable detail text
+        std::vector<DetailLink>          logDetailLinks;
 
         // Level-filter toggles and per-level totals over the whole log
         // (recomputed only when the log changes).
@@ -73,27 +91,11 @@ namespace tachyon
                 logCountText[i] = std::to_string(counts[i]);
         }
 
-        // Timestamps show the time since start-up (static init is close enough).
-        const int64_t logEpochNanos = SteadyClockNowNanos();
-
-        LogLevel ToLogLevel(Diagnostics::LogSeverity severity)
+        static LogLevel ToLogLevel(Diagnostics::LogSeverity severity)
         {
             if (severity >= Diagnostics::LogSeverity::Error)   return LogLevel::Error;
             if (severity == Diagnostics::LogSeverity::Warning) return LogLevel::Warning;
             return LogLevel::Info;
-        }
-
-        // Source path from the repository's src/ folder on, so the detail pane shows
-        // a short, recognisable file:line.
-        std::string_view ShortSourcePath(std::string_view file)
-        {
-            for (std::string_view marker : { "src/", "src\\" })
-            {
-                const size_t at = file.rfind(marker);
-                if (at != std::string_view::npos)
-                    return file.substr(at);
-            }
-            return file;
         }
 
         void AppendLogRecord(const Diagnostics::LogRecord& record)
@@ -130,7 +132,7 @@ namespace tachyon
 
         // logEntries index the table's single selection points at (-1 if none).
         // The row id encodes the visible-row index, which maps through logVisible.
-        int SelectedLogEntry()
+        int SelectedLogEntry() const
         {
             if (logTableState.selectedRowID.GetMode() != tachyon::IDMode::SubRange) return -1;
             const int visIdx = int(logTableState.selectedRowID.value.subRangeParts.index);
@@ -188,45 +190,49 @@ namespace tachyon
                 logDetailRuns.push_back({ .type = tachyon::ContentRun::Text,
                                           .text = std::string_view(d + segStart, text.size() - segStart) });
         }
+    };
+
+    ID Application::CreateLogPanel(std::unordered_map<ID, Panel>& panels, std::string title)
+    {
+        auto panel = std::make_shared<LogPanel>();
+        return CreatePanel(panels, std::move(title), showcase.panelLogIcon, [this, panel] { RenderLogPanel(*panel); }, {},
+                           [this, panel] { EnableLogPanel(*panel); });
     }
 
-    void Application::EnableLogPanel()
+    void Application::EnableLogPanel(LogPanel& p)
     {
-        // Static id so the detail text's focus and selection survive across frames.
-        if (logDetailTextID == tachyon::ID::Invalid())
-            logDetailTextID = idManager.CreateStaticID();
-
-        logEntries.clear();
-        logLastSequence = 0;
-        PullNewLogRecords();
-        RecountLogLevels();
         // Follow the newest entry until the user scrolls up; resetting the follow
         // state re-runs the initial scroll-to-bottom on reopen.
-        logTableState.followTail          = true;
-        logTableState.RestartFollowTail();
-        logTableState.selectedRowID       = tachyon::ID::Invalid();
-        logDetailSel                      = -1;
-        logFilterDirty = true;
+        p.logTableState.followTail          = true;
+        p.logTableState.RestartFollowTail();
+        if (!p.logColumns.empty())
+            return;   // made already: its entries, filters and selection stay; RenderLogPanel catches up
+
+        p.PullNewLogRecords();
+        p.RecountLogLevels();
+        p.logTableState.selectedRowID       = tachyon::ID::Invalid();
+        p.logDetailSel                      = -1;
+        p.logFilterDirty = true;
 
         // Columns read logEntries through logVisible, so they stay valid across
-        // refilters; the lambdas only capture `this`.
-        logColumns.clear();
-        logColumns.resize(3);
+        // refilters; they're the panel's own, so they keep a reference to it.
+        p.logColumns.clear();
+        p.logColumns.resize(3);
         // Timestamp - fixed-width, first column.
-        logColumns[0].column = { .initialWidth = 112, .minWidth = 112, .maxWidth = 112,
+        p.logColumns[0].column = { .initialWidth = 112, .minWidth = 112, .maxWidth = 112,
                                  .sizing = ColumnSizing::Fixed };
-        logColumns[0].generateCell = [this](int rowIdx) {
-            if (rowIdx < 0 || rowIdx >= int(logVisible.size())) return;
-            Cell(logEntries[logVisible[rowIdx]].timestamp.c_str());
+        p.logColumns[0].generateCell = [this, &p](int rowIdx) {
+            if (rowIdx < 0 || rowIdx >= int(p.logVisible.size())) return;
+            Cell(p.logEntries[p.logVisible[rowIdx]].timestamp.c_str());
         };
         // Level icon - fixed-width landmark, after the timestamp.
-        logColumns[1].column = { .initialWidth = 32, .minWidth = 32, .maxWidth = 32,
+        p.logColumns[1].column = { .initialWidth = 32, .minWidth = 32, .maxWidth = 32,
                                  .sizing = ColumnSizing::Fixed };
-        logColumns[1].generateCell = [this](int rowIdx) {
-            if (rowIdx < 0 || rowIdx >= int(logVisible.size())) return;
-            const LogLevel level = logEntries[logVisible[rowIdx]].level;
-            const IconID   icon  = (level == LogLevel::Error)   ? showcase.errorIcon
-                                 : (level == LogLevel::Warning) ? showcase.warningIcon
+        p.logColumns[1].generateCell = [this, &p](int rowIdx) {
+            if (rowIdx < 0 || rowIdx >= int(p.logVisible.size())) return;
+            const LogPanel::LogLevel level = p.logEntries[p.logVisible[rowIdx]].level;
+            const IconID   icon  = (level == LogPanel::LogLevel::Error)   ? showcase.errorIcon
+                                 : (level == LogPanel::LogLevel::Warning) ? showcase.warningIcon
                                  :                                showcase.infoIcon;
             Cell([this, icon]() {
                 const tachyon::ID iconID = idManager.AllocateDynamicID();
@@ -244,13 +250,13 @@ namespace tachyon
         };
         // Message - stretches to fill the remaining width, single line. A
         // collapsed row (repeat > 1) trails a count bubble pushed to the right.
-        logColumns[2].column = { .initialWidth = 240, .minWidth = 120,
+        p.logColumns[2].column = { .initialWidth = 240, .minWidth = 120,
                                  .sizing = ColumnSizing::Stretch };
-        logColumns[2].generateCell = [this](int rowIdx) {
-            if (rowIdx < 0 || rowIdx >= int(logVisible.size())) return;
+        p.logColumns[2].generateCell = [this, &p](int rowIdx) {
+            if (rowIdx < 0 || rowIdx >= int(p.logVisible.size())) return;
             // Copy into the cell lambda - Cell may defer it for record/replay.
-            Cell([this, msg = logEntries[logVisible[rowIdx]].message,
-                        count = logRepeat[rowIdx]]() {
+            Cell([this, msg = p.logEntries[p.logVisible[rowIdx]].message,
+                        count = p.logRepeat[rowIdx]]() {
                 // Message text fills the cell so the bubble lands at the right edge.
                 {
                     const tachyon::ID id = idManager.AllocateDynamicID();
@@ -282,23 +288,12 @@ namespace tachyon
         };
     }
 
-    void Application::DisableLogPanel()
+    void Application::RenderLogPanel(LogPanel& p)
     {
-        logEntries.clear();
-        logColumns.clear();
-        logVisible.clear();
-        logRepeat.clear();
-        logDetailRuns.clear();
-        logDetailLinks.clear();
-        logDetailSel = -1;
-    }
-
-    void Application::RenderLogPanel()
-    {
-        if (PullNewLogRecords())
+        if (p.PullNewLogRecords())
         {
-            RecountLogLevels();
-            logFilterDirty = true;
+            p.RecountLogLevels();
+            p.logFilterDirty = true;
         }
 
         // Top row: clear button | search box | level toggles | collapse toggle.
@@ -306,23 +301,23 @@ namespace tachyon
                         theme.searchRowStyleRef, tachyon::LayoutOverride::Auto().NoShrink());
         {
             Button(idManager.AllocateDynamicID("logClear"), "Clear",
-                []() {
-                    logEntries.clear();
-                    RecountLogLevels();
-                    logFilterDirty = true;
+                [&p]() {
+                    p.logEntries.clear();
+                    p.RecountLogLevels();
+                    p.logFilterDirty = true;
                     // Drop the detail too - its runs reference the entries we
                     // just cleared, so leaving them would render freed memory.
-                    logDetailRuns.clear();
-                    logDetailLinks.clear();
-                    logDetailSel   = -1;
+                    p.logDetailRuns.clear();
+                    p.logDetailLinks.clear();
+                    p.logDetailSel   = -1;
                 },
                 tachyon::LayoutOverride{}.NoGrow().NoShrink());
             SetTooltip("Clear the log");
 
-            if (SearchField(logSearch, showcase.findIcon,
+            if (SearchField(p.logSearch, showcase.findIcon,
                             TextEditBehavior::ContinuousUpdate,
                             tachyon::LayoutOverride{}.FlexGrow(1)))
-                            logFilterDirty = true;
+                            p.logFilterDirty = true;
 
             // Level toggles: a colored dot and the level's count, pressed while the
             // level shows. onToggle fires during end-of-frame input dispatch, so the
@@ -334,12 +329,12 @@ namespace tachyon
                 const char*  levelTip[3] = { "Show or hide info messages",
                                              "Show or hide warnings",
                                              "Show or hide errors" };
-                const int levelCount = int(sizeof(logShowLevel) / sizeof(logShowLevel[0])) - 1;
+                const int levelCount = int(sizeof(p.logShowLevel) / sizeof(p.logShowLevel[0])) - 1;
                 for (int lvl = levelCount; lvl >= 0; --lvl) // error, warning, info - most severe first
                 {
                     Toggle(idManager.AllocateDynamicID("logLevelToggle"),
-                        logShowLevel[lvl], { showcase.dotIcon, logCountText[lvl] },
-                        [lvl](bool on) { logShowLevel[lvl] = on; logFilterDirty = true; },
+                        p.logShowLevel[lvl], { showcase.dotIcon, p.logCountText[lvl] },
+                        [&p, lvl](bool on) { p.logShowLevel[lvl] = on; p.logFilterDirty = true; },
                         logLevelPillStyleRefs[lvl],
                         tachyon::LayoutOverride{}.NoGrow().NoShrink());
                     SetTooltip(levelTip[lvl]);
@@ -349,8 +344,8 @@ namespace tachyon
 
             // Collapse-duplicates toggle: fold identical lines into one + count.
             Toggle(idManager.AllocateDynamicID("logCollapse"),
-                   logCollapse, showcase.iconCollapseAllIcon,
-                   [](bool on) { logCollapse = on; logFilterDirty = true; },
+                   p.logCollapse, showcase.iconCollapseAllIcon,
+                   [&p](bool on) { p.logCollapse = on; p.logFilterDirty = true; },
                    iconToggleStyleRef,
                    tachyon::LayoutOverride{}.NoGrow().NoShrink());
             SetTooltip("Collapse duplicate lines");
@@ -359,51 +354,51 @@ namespace tachyon
 
         // Refilter on demand. With collapse on, entries sharing level + message
         // fold into the first such row, which carries the total count.
-        if (logFilterDirty)
+        if (p.logFilterDirty)
         {
-            const std::string q = SearchToLower(logSearch);
-            logVisible.clear();
-            logRepeat.clear();
+            const std::string q = SearchToLower(p.logSearch);
+            p.logVisible.clear();
+            p.logRepeat.clear();
             std::unordered_map<std::string, int> group; // level+message key -> logVisible index
-            for (int i = 0; i < int(logEntries.size()); ++i)
+            for (int i = 0; i < int(p.logEntries.size()); ++i)
             {
-                if (!logShowLevel[int(logEntries[i].level)]
-                    || !SearchMatches(logEntries[i].message, q))
+                if (!p.logShowLevel[int(p.logEntries[i].level)]
+                    || !SearchMatches(p.logEntries[i].message, q))
                     continue;
-                if (logCollapse)
+                if (p.logCollapse)
                 {
-                    std::string key(1, char('0' + int(logEntries[i].level)));
-                    key += logEntries[i].message;
+                    std::string key(1, char('0' + int(p.logEntries[i].level)));
+                    key += p.logEntries[i].message;
                     auto it = group.find(key);
                     if (it != group.end())
                     {
-                        logRepeat[it->second]++;
+                        p.logRepeat[it->second]++;
                         continue;
                     }
-                    group.emplace(std::move(key), int(logVisible.size()));
+                    group.emplace(std::move(key), int(p.logVisible.size()));
                 }
-                logVisible.push_back(i);
-                logRepeat.push_back(1);
+                p.logVisible.push_back(i);
+                p.logRepeat.push_back(1);
             }
-            logFilterDirty = false;
+            p.logFilterDirty = false;
         }
 
-        std::span<VirtualTableColumn> columnSpan(logColumns.data(), logColumns.size());
+        std::span<VirtualTableColumn> columnSpan(p.logColumns.data(), p.logColumns.size());
 
         // flex-fill-row (flex-basis:0) bounds the table to the panel height so
         // its body scrolls instead of overflowing.
         BeginHorizontal(idManager.AllocateDynamicID("consoleFill"),
                         theme.flexFillRowStyleRef,
                         LayoutOverride::Auto().FlexGrow(1));
-        logTableState.rowStyle         = theme.listRowStyleRef;
-        logTableState.cellStyle        = logCellStyleRef;
-        if (!logColumns.empty())
-            logColumns[0].column.cellStyle = logCellTimeStyleRef; // styles change on a theme reload
-        logTableState.showHeaders      = false;
-        logTableState.columnSeparators = false;
+        p.logTableState.rowStyle         = theme.listRowStyleRef;
+        p.logTableState.cellStyle        = logCellStyleRef;
+        if (!p.logColumns.empty())
+            p.logColumns[0].column.cellStyle = logCellTimeStyleRef; // styles change on a theme reload
+        p.logTableState.showHeaders      = false;
+        p.logTableState.columnSeparators = false;
         VirtualTable(idManager.AllocateDynamicID("consoleLog"),
-                     logTableState,
-                     columnSpan, int(logVisible.size()), 0, logTableStyleRef,
+                     p.logTableState,
+                     columnSpan, int(p.logVisible.size()), 0, logTableStyleRef,
                      LayoutOverride{}.FlexGrow(1));
         EndHorizontal();
 
@@ -415,7 +410,7 @@ namespace tachyon
             sizer.styleRef = theme.dockSizerVertStyleRef;
             sizer.state    = guiStateManager.GetCurrentState(sizerID);
             sizer.eventHandler = tachyon::MakeVerticalSizerHandler(
-                guiStateManager, elementStorage, logDetailHeight, 48, 480, nullptr, nullptr, /*invert*/ true, styleManager.GetUIScale());
+                guiStateManager, elementStorage, p.logDetailHeight, 48, 480, nullptr, nullptr, /*invert*/ true, styleManager.GetUIScale());
             auto sRes = elementStorage.Add(std::move(sizer), tachyon::LayoutOverride::FixedHeight(4));
             VERIFY(sRes.status);
             VERIFY(windowRegistry.Add(sRes.ref));
@@ -425,22 +420,23 @@ namespace tachyon
         // file:line links. Height is driven by the sizer above.
         BeginVertical(idManager.AllocateDynamicID("logDetailPane"),
                       logDetailPaneStyleRef,
-                      tachyon::LayoutOverride::Auto().FixedHeight(CssPx(logDetailHeight)).NoGrow().NoShrink());
+                      tachyon::LayoutOverride::Auto().FixedHeight(CssPx(p.logDetailHeight)).NoGrow().NoShrink());
         {
-            const int sel = SelectedLogEntry();
-            if (sel != logDetailSel || logDetailLinkStyle != theme.linkStyle) RebuildLogDetail(sel, theme.linkStyle);
+            const int sel = p.SelectedLogEntry();
+            if (sel != p.logDetailSel || p.logDetailLinkStyle != theme.linkStyle) p.RebuildLogDetail(sel, theme.linkStyle);
 
             // No selection (or the entry has no text) -> leave the pane empty.
-            if (!logDetailRuns.empty())
+            if (!p.logDetailRuns.empty())
             {
                 // Selectable + copyable read-only rich text, keeping the styled, clickable
                 // file:line links. Clicking a link prints "Open file:line" (a stand-in for a
                 // real editor jump). Uses a stable id so selection/focus survive across frames.
-                SelectableText(logDetailTextID,
-                    std::span<tachyon::ContentRun>(logDetailRuns.data(), logDetailRuns.size()),
-                    [](intptr_t contentId)
+                // A name of its own, so its focus and selection last from frame to frame.
+                SelectableText(idManager.AllocateDynamicID("logDetailText"),
+                    std::span<tachyon::ContentRun>(p.logDetailRuns.data(), p.logDetailRuns.size()),
+                    [&p](intptr_t contentId)
                     {
-                        for (const auto& lk : logDetailLinks)
+                        for (const auto& lk : p.logDetailLinks)
                             if (lk.id == contentId) { TACHYON_LOG_INFO(kLogShowcase, "open {}:{}", lk.file, lk.line); break; }
                     },
                     logDetailTextStyleRef, tachyon::LayoutOverride::Auto().FlexGrow(1));
