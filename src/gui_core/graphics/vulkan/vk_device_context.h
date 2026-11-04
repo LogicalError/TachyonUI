@@ -15,6 +15,7 @@
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
+#include <algorithm>
 #include <array>
 #include <mutex>
 #include <optional>
@@ -64,6 +65,47 @@ namespace tachyon::vulkan
 
             deletors.clear();
         }
+    };
+
+    /// Timeline semaphores the GUI's frame submissions wait on (VulkanGraphicsContext::AddFrameWait).
+    /// Every submission waits on all of them; the next frame drops those that were submitted.
+    struct FrameWaits
+    {
+        /// Waits for `semaphore` to reach `value` before `stageMask`. Another wait on the same
+        /// semaphore merges with it: the higher value, both stages. A null semaphore is ignored.
+        void Add(VkSemaphore semaphore, uint64_t value, VkPipelineStageFlags2 stageMask)
+        {
+            if (semaphore == VK_NULL_HANDLE)
+                return;
+            for (size_t i = 0; i < waits.size(); ++i)
+                if (waits[i].semaphore == semaphore)
+                {
+                    waits[i].value      = std::max(waits[i].value, value);
+                    waits[i].stageMask |= stageMask;
+                    // Submitted already: it's waited on again, by the next frame too.
+                    if (i < submitted)
+                        std::swap(waits[i], waits[--submitted]);
+                    return;
+                }
+            waits.push_back({ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = semaphore,
+                              .value = value, .stageMask = stageMask });
+        }
+        /// What a submission waits on now.
+        std::span<const VkSemaphoreSubmitInfo> Waits() const { return waits; }
+        /// A submission waited on all of them.
+        void Submitted() { submitted = waits.size(); }
+        /// A new frame: those submitted go, those added since stay.
+        void NextFrame()
+        {
+            waits.erase(waits.begin(), waits.begin() + std::ptrdiff_t(submitted));
+            submitted = 0;
+        }
+        /// All of them go (the device they were made on is going).
+        void Clear() { waits.clear(); submitted = 0; }
+
+    private:
+        std::vector<VkSemaphoreSubmitInfo> waits;
+        size_t submitted = 0;   ///< the first this many were submitted
     };
 
     /// Frame deletion queue slots: FRAME_OVERLAP + 1, so the slot pushed to is never the one
@@ -215,6 +257,9 @@ namespace tachyon::vulkan
         void DestroyVisualBoxStylesAtEnd(tachyon::Buffer* buffer, tachyon::DeviceScope scope,
                                          const std::source_location& loc =
                                          std::source_location::current());
+
+        /// Library internal: the timeline semaphores the frame's submissions wait on.
+        FrameWaits frameWaits;
 
         /// Library internal: the current frame's deletion queue, or for DeviceScope::Application
         /// the one flushed at Destroy.

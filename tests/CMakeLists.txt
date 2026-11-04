@@ -111,6 +111,7 @@ list(APPEND GUI_CORE_TEST_FILES
   pointer_drag_test.cpp
   link_cursor_test.cpp
   upload_worker_test.cpp
+  frame_waits_test.cpp
   table_scrollbar_test.cpp
   controls_table_frozen_test.cpp
   controls_table_cells_test.cpp

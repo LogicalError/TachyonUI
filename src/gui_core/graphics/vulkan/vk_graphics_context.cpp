@@ -360,6 +360,7 @@ tachyon::Result<void> VulkanGraphicsContext::RecreateDevice(tachyon::IWindowBack
     // Everything made on the lost device goes; the image objects, their indices and the
     // renderer stay. Destroying is allowed on a lost device.
     deviceContext.WaitIdle();
+    deviceContext.frameWaits.Clear();
     static_cast<tachyon::PrimitiveRenderer*>(guiRenderer)->ReleaseAllTargets();
     if (colorStylesMesh != nullptr)
     {
@@ -569,6 +570,7 @@ void VulkanGraphicsContext::BeginFrame()
     // Runs after all windows' BeginWindowFrame fence-waits for the current
     // frame, so the slot being flushed (FRAME_OVERLAP frames old) is safe.
     deviceContext.AdvanceFrameAndFlushDeletions();
+    deviceContext.frameWaits.NextFrame();
     guiRenderer->Reset();
 }
 
@@ -877,6 +879,7 @@ tachyon::vulkan::VulkanDeviceContext::DeviceRequirements tachyon::vulkan::Vulkan
     requirements.features12.shaderSampledImageArrayNonUniformIndexing = true;
     requirements.features12.shaderInt8 = true;
     requirements.features12.shaderFloat16 = true;
+    requirements.features12.timelineSemaphore = true;   // AddFrameWait
 
     requirements.features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
     requirements.features11.storageBuffer16BitAccess = true;
@@ -925,6 +928,7 @@ bool tachyon::vulkan::VulkanDeviceContext::CheckPhysicalDeviceSupport(VkPhysical
     TACHYON_REQUIRE_FEATURE(features12, shaderSampledImageArrayNonUniformIndexing);
     TACHYON_REQUIRE_FEATURE(features12, shaderInt8);
     TACHYON_REQUIRE_FEATURE(features12, shaderFloat16);
+    TACHYON_REQUIRE_FEATURE(features12, timelineSemaphore);
     TACHYON_REQUIRE_FEATURE(features11, storageBuffer16BitAccess);
 #undef TACHYON_REQUIRE_FEATURE
     if (required.features.shaderInt16 && !have.features.shaderInt16) missing("features.shaderInt16");
@@ -1045,6 +1049,7 @@ void tachyon::vulkan::VulkanDeviceContext::Destroy()
     WaitForUploads();
     WaitIdle();
     WaitForFence(device, immFence);
+    frameWaits.Clear();
     for (auto& q : frameDeletionQueues) q.flush();
     GetDeletionQueue(tachyon::DeviceScope::Application).flush();
     for (const PendingUpload& upload : m_pendingUploads) // never recorded: no frame ran

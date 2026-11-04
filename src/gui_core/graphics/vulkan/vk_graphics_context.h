@@ -133,6 +133,17 @@ namespace tachyon::vulkan
         /// frame and must leave it in SHADER_READ_ONLY_OPTIMAL.
         void SetWindowImageTarget(tachyon::ID window, VkImage image, VkExtent2D extent);
 
+        /// The GUI's next frame waits for the timeline semaphore `semaphore` (made on the
+        /// GUI's device) to reach `value` before `stageMask`: every window's submission of
+        /// that frame does. For work the host submits to another queue (async compute) that
+        /// the GUI shows, without a hop through the GUI's queue. Waits on the same semaphore
+        /// merge: the higher value, both stages. Call it while the UI is built (OnGUI) or
+        /// before the frame; the frame after that one doesn't wait on it again.
+        void AddFrameWait(VkSemaphore semaphore, uint64_t value, VkPipelineStageFlags2 stageMask)
+        {
+            deviceContext.frameWaits.Add(semaphore, value, stageMask);
+        }
+
         /// Library internal: a window's live-resize redraw starts (GUIRenderer::StartResizing).
         bool StartResizing(tachyon::ID id) { return guiRenderer->StartResizing(id); }
         /// Library internal: the live-resize redraw ends.

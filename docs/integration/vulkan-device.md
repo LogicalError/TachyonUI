@@ -119,6 +119,21 @@ After a resize, no in-flight GUI frame may still sample the old view; `vkDeviceW
 is simplest. Reference: `Host::Render` in `examples/host_device/host_device.cpp`;
 checked under synchronization validation by `tests/gpu/gpu_external_device_test.cpp`.
 
+### Images from another queue
+
+For an image written on another queue (async compute), have the GUI's frame wait for it
+instead of going through the GUI's queue:
+
+```cpp
+vk->AddFrameWait(computeDone, computeValue, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);   // in OnGUI
+```
+
+- `computeDone` is a timeline semaphore on the GUI's device; every window's submission of
+  the next frame waits until it reaches `computeValue`, before the given stages.
+- Two waits on one semaphore merge: the higher value, both stages. The frame after doesn't
+  wait on it again.
+- The image's layout and queue family ownership are still yours to settle, as above.
+
 ---
 
 [Previous: Adding the library to a build](build.md) | [Integration](../integration.md) | [Next: Your own window and input](window-and-input.md)
