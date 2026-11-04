@@ -85,9 +85,13 @@ namespace tachyon
     struct PendingConnection
     {
         bool             active        = false;  ///< a wire drag is in progress
-        PropertyEndpoint source        = {};     ///< the output the wire starts from
+        /// The socket the wire starts from: an output, or an unwired input when fromInput.
+        PropertyEndpoint source        = {};
+        bool             fromInput     = false;  ///< dragged from an input, towards an output
         tachyon::int2        currentScreen = {};   ///< most recent mouse screen pos
-        PropertyEndpoint target        = {};   ///< this frame: the input it is over and may connect to
+        /// This frame: the socket it is over and may connect to (an input, or an output when
+        /// fromInput).
+        PropertyEndpoint target        = {};
         std::optional<PropertyEndpoint> detachedInput; ///< the input the wire was pulled off, if any
     };
 
@@ -237,6 +241,11 @@ namespace tachyon
         std::optional<uint32_t> hoveredWire;
         /// Called once per finished user edit (a whole drag is one), after it is applied.
         std::function<void(const NodeViewEdit&)> onEdit;
+        /// A new wire was released over the empty canvas (not on a node), e.g. to offer the
+        /// nodes it could connect to. `from` is the socket it was dragged from: an output when
+        /// `fromOutput`, else an unwired input. `canvasPos` is where, in node.pos space. A wire
+        /// pulled off an input and dropped there is a disconnect (onEdit), not this.
+        std::function<void(PropertyEndpoint from, bool fromOutput, float2 canvasPos)> onWireDroppedOnCanvas;
         std::optional<uint32_t> wireMenuWire;          ///< the wire the open context menu is for
         tachyon::PointerDrag pan;                 ///< internal: a right press; once dragged, not a click
         tachyon::float3x2    panStart {};         ///< internal: the transform before it; put back by Escape

@@ -334,6 +334,42 @@ namespace tachyon
         }
     }
 
+    // A wire dragged from an input over an output that may feed it has the route of the
+    // connection it will make; elsewhere it comes from the cursor as from an output there,
+    // running into the input from the left.
+    TEST(NodeViewWireRouteTest, AWireDraggedFromAnInputRoutesLikeAConnection)
+    {
+        const IntRect src{ 0,  0,   180, 80 };
+        const IntRect tgt{ 40, 200, 180, 80 };
+        const int2 outPt{ src.Max(0) - 6, 40 };
+        const int2 inPt { tgt.Min(0) + 6, 240 };
+        WireLane lane;
+        lane.offset = -1;
+        lane.count  = 2;
+        WireRouteOverrides withLane;
+        withLane.lane = lane;
+
+        const auto over      = BuildPendingWireRouteToInput(inPt, tgt, { 10, 10 }, outPt, src, kGrid, kOrigin, lane).points;
+        const auto connected = BuildWireRoute(outPt, inPt, src, tgt, kGrid, kOrigin, withLane).points;
+        ASSERT_EQ(over.size(), connected.size());
+        for (size_t i = 0; i < over.size(); ++i)
+        {
+            EXPECT_EQ(over[i].x, connected[i].x) << i;
+            EXPECT_EQ(over[i].y, connected[i].y) << i;
+        }
+
+        for (const int2 cursor : { int2{ -300, 40 }, int2{ 600, 400 }, int2{ 0, 240 } })
+        {
+            const auto route = BuildPendingWireRouteToInput(inPt, tgt, cursor, std::nullopt, {}, kGrid, kOrigin, lane).points;
+            ExpectEndpoints(route, cursor, inPt);
+            ExpectOrthogonal(route);
+            const auto expected = BuildWireRoute(cursor, inPt, IntRect{ cursor.x, cursor.y, 1, 1 }, tgt, kGrid, kOrigin).points;
+            ASSERT_EQ(route.size(), expected.size());
+            for (size_t i = 0; i < route.size(); ++i)
+                EXPECT_EQ(route[i].x, expected[i].x) << i;
+        }
+    }
+
     // Sockets in line with each other: one straight run, no bends that go straight on
     // (a rounded corner there would cut a gap into the line).
     TEST(NodeViewWireRouteTest, SocketsInLineGiveOneStraightRun)

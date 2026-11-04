@@ -15,8 +15,10 @@ namespace tachyon
 
     namespace
     {
-        // Drag payload type for socket-to-socket connections (must be unique).
-        constexpr uint32_t kSocketPayload = 0x534f434b; // "SOCK"
+        // Drag payload types for socket-to-socket connections (must be unique): a wire dragged
+        // from an output (its value the output), and one dragged from an input (the input).
+        constexpr uint32_t kSocketPayload      = 0x534f434b; // "SOCK"
+        constexpr uint32_t kInputSocketPayload = 0x534f4349; // "SOCI"
 
         constexpr uintptr_t EncodeEndpoint(PropertyEndpoint e)
         {
@@ -249,6 +251,27 @@ namespace tachyon
                                      - int2{ innerSize.x / 2, innerSize.y / 2 });
                         return true;
                     }
+                    // A new wire over the empty canvas, when the app takes it there
+                    // (onWireDroppedOnCanvas). Over a node that refuses it, the event comes
+                    // up here too: that isn't empty canvas.
+                    case tachyon::EventType::DragEnter:
+                    case tachyon::EventType::DragOver:
+                    case tachyon::EventType::Drop:
+                    {
+                        const bool fromInput = event.state.dragPayloadType == kInputSocketPayload;
+                        if (event.state.dragPayloadType != kSocketPayload && !fromInput) return false;
+                        if (!view.onWireDroppedOnCanvas || view.pendingConnection.detachedInput) return false;
+                        // Through the transform the canvas was drawn with (centred for lastInnerSize).
+                        const float2 at = NodeViewScreenToCanvas(view.transform, IntRect{ .position = event.rect->innerRect.position, .size = view.lastInnerSize },
+                                                                 event.state.screenPos);
+                        if (NodeAtCanvasPos(view, at) >= 0) return false;
+                        if (event.type == tachyon::EventType::Drop)
+                        {
+                            view.pendingConnection = {};
+                            view.onWireDroppedOnCanvas(DecodeEndpoint(event.state.dragPayloadValue), !fromInput, at);
+                        }
+                        return true;
+                    }
                     case tachyon::EventType::KeyDown:
                     {
                         // Escape during a marquee or a pan puts the selection or the view back.
@@ -452,6 +475,21 @@ namespace tachyon
                                 CancelConnection(view);
                                 return true;
                             }
+                            // A wire dragged from an input connects here when it may.
+                            case EventType::DragEnter:
+                            case EventType::DragOver:
+                            {
+                                if (event.state.dragPayloadType != kInputSocketPayload) return false;
+                                return ConnectionAllowed(view, self, DecodeEndpoint(event.state.dragPayloadValue));
+                            }
+                            case EventType::Drop:
+                            {
+                                if (event.state.dragPayloadType != kInputSocketPayload) return false;
+                                const PropertyEndpoint in = DecodeEndpoint(event.state.dragPayloadValue);
+                                if (!ConnectionAllowed(view, self, in)) return false;
+                                FinishConnection(view, self, in);
+                                return true;
+                            }
                             default: break;
                         }
                         return false;
@@ -462,14 +500,15 @@ namespace tachyon
                         {
                             case EventType::MouseDown:
                             {
-                                // Detach: a wired input re-drags the wire from its source output
-                                // (rewire elsewhere, or disconnect in empty space). The detach
-                                // happens on the first real move, so a plain click is harmless.
+                                // A wired input re-drags its wire from the source output (rewire
+                                // elsewhere, or disconnect in empty space); an unwired one starts a
+                                // new wire towards an output. Either starts on the first real move,
+                                // so a plain click is harmless.
                                 if (!event.state.LeftPressed()) return false;
                                 auto& prop = view.nodes[self.nodeIdx].properties[self.propIdx];
-                                if (!(prop.input.has_value() && prop.input->valid())) return false;
+                                const bool wired = prop.input.has_value() && prop.input->valid();
                                 guiStateManager.Drag().Begin(
-                                    sockID, kSocketPayload, EncodeEndpoint(*prop.input),
+                                    sockID, wired ? kSocketPayload : kInputSocketPayload, EncodeEndpoint(wired ? *prop.input : self),
                                     event.state.screenPos, std::any(), DragVisualizer{});
                                 return true;
                             }
@@ -478,9 +517,10 @@ namespace tachyon
                                 if ((event.state.buttons & MouseButtons::Left) == MouseButtons::None) break;
                                 guiStateManager.Drag().UpdateFromInput(event.state);
                                 if (guiStateManager.Drag().GetDraggedID() != sockID) return false;
-                                // First post-threshold move: detach this input from its
-                                // source and hand the loose end to the dragged wire, which
-                                // starts at the source output and follows the cursor.
+                                // First post-threshold move: a wired input is detached from its
+                                // source and the loose end handed to the dragged wire, which
+                                // starts at the source output and follows the cursor. An unwired
+                                // one's wire starts here.
                                 if (!view.pendingConnection.active)
                                 {
                                     auto& prop = view.nodes[self.nodeIdx].properties[self.propIdx];
@@ -489,6 +529,11 @@ namespace tachyon
                                         view.pendingConnection.source        = *prop.input;
                                         view.pendingConnection.detachedInput = self;
                                         prop.input = PropertyEndpoint{};
+                                    }
+                                    else
+                                    {
+                                        view.pendingConnection.source    = self;
+                                        view.pendingConnection.fromInput = true;
                                     }
                                     view.pendingConnection.active = true;
                                 }
@@ -529,16 +574,20 @@ namespace tachyon
             VERIFY(windowRegistry.Add(res.ref));
 
             // Highlight rules:
-            //  - OUTPUT: on hover.
-            //  - INPUT, mid-drag: while the drag hovers it and the connection is allowed
-            //    (IsDropTargetFor is live; GetDropTargetID is only set on release).
+            //  - OUTPUT: on hover, and while a wire dragged from an input hovers it and may
+            //    connect (IsDropTargetFor is live; GetDropTargetID is only set on release).
+            //  - INPUT, mid-drag: while the drag hovers it and the connection is allowed.
             //  - INPUT, at rest: on hover when it has a connection to drag out.
             const tachyon::color4f dotColor = view.nodes[n].properties[propIdx].socketColor;
             const bool hovered = (guiStateManager.GetCurrentState(sockID) & ElementState::Hover) != ElementState::None;
             bool highlight;
             if (isOutput)
             {
-                highlight = hovered;
+                const bool dropTarget = guiStateManager.Drag().IsDropTargetFor(sockID, kInputSocketPayload) &&
+                                        ConnectionAllowed(view, self, view.pendingConnection.source);
+                if (dropTarget)
+                    view.pendingConnection.target = self;
+                highlight = hovered || dropTarget;
             }
             else
             {
@@ -811,21 +860,22 @@ namespace tachyon
                             CommitNodeViewEdit(view, edit);
                             return true;
                         }
-                        // A wire dropped on the node connects to its first input that takes it.
+                        // A wire dropped on the node connects to its first input that takes it,
+                        // or one dragged from an input to its first output that may feed it.
                         case EventType::DragEnter:
                         case EventType::DragOver:
                         case EventType::Drop:
                         {
-                            if (event.state.dragPayloadType != kSocketPayload) return false;
-                            const PropertyEndpoint src = DecodeEndpoint(event.state.dragPayloadValue);
-                            const PropertyEndpoint in  = FirstInputAccepting(view, src, n);
-                            if (!in.valid()) return false;
+                            const bool fromInput = event.state.dragPayloadType == kInputSocketPayload;
+                            if (event.state.dragPayloadType != kSocketPayload && !fromInput) return false;
+                            const PropertyEndpoint dragged = DecodeEndpoint(event.state.dragPayloadValue);
+                            const PropertyEndpoint here    = fromInput ? FirstOutputAccepting(view, dragged, n)
+                                                                       : FirstInputAccepting(view, dragged, n);
+                            if (!here.valid()) return false;
                             if (event.type == EventType::Drop)
-                            {
-                                FinishConnection(view, src, in);
-                            }
+                                FinishConnection(view, fromInput ? here : dragged, fromInput ? dragged : here);
                             else
-                                view.pendingConnection.target = in;
+                                view.pendingConnection.target = here;
                             return true;
                         }
                         case EventType::MouseMove:
@@ -1140,9 +1190,13 @@ namespace tachyon
 
                 // Wires between the same two nodes get their lanes spread apart, counting a
                 // dragged wire over an input as connected.
-                const bool pendingOverInput = view.pendingConnection.active && view.pendingConnection.target.valid();
-                const auto laneOffsets = pendingOverInput
-                    ? ComputeWireLaneOffsets(view, view.pendingConnection.source, view.pendingConnection.target)
+                // The dragged wire as the connection it would make: its output and its input.
+                const PendingConnection& pending = view.pendingConnection;
+                const PropertyEndpoint pendingOut = pending.fromInput ? pending.target : pending.source;
+                const PropertyEndpoint pendingIn  = pending.fromInput ? pending.source : pending.target;
+                const bool pendingConnects = pending.active && pending.target.valid();
+                const auto laneOffsets = pendingConnects
+                    ? ComputeWireLaneOffsets(view, pendingOut, pendingIn)
                     : ComputeWireLaneOffsets(view);
 
                 // Routed first, then hit-tested, then drawn, so the hovered wire draws highlighted.
@@ -1184,7 +1238,7 @@ namespace tachyon
                             if (ov.entryX) *ov.entryX += gridOrigin.x;
                             if (ov.laneY)  *ov.laneY  += gridOrigin.y;
                         }
-                        const bool replaced = pendingOverInput && view.pendingConnection.target == PropertyEndpoint{ n, p };
+                        const bool replaced = pendingConnects && pendingIn == PropertyEndpoint{ n, p };
                         if (auto it = laneOffsets.find(wireKey); it != laneOffsets.end() && !replaced)
                             ov.lane = it->second;
 
@@ -1233,46 +1287,54 @@ namespace tachyon
                     ctx.RenderPolyline(drawn[w].points, /*closed=*/false, wireStyle, 0.5f * float(theme.nodeGridSize));
                 }
 
-                // The wire being dragged: dashed, routed like the connection it would make.
-                if (view.pendingConnection.active)
+                // The wire being dragged: dashed, routed like the connection it would make. It
+                // runs from the socket it was dragged from (an output, or an input) to the
+                // cursor, or to the socket it's over.
+                if (pending.active)
                 {
-                    const PropertyEndpoint src = view.pendingConnection.source;
-                    const PropertyEndpoint tgt = view.pendingConnection.target;
+                    const PropertyEndpoint src = pending.source;
+                    const PropertyEndpoint tgt = pending.target;
+                    const int srcSide = pending.fromInput ? 0 : 1;   // socketRefs: propIdx * 2 + isOutput
                     if (src.nodeIdx >= 0 && src.nodeIdx < (int)socketRefs.size())
                     {
                         const auto& srcRefs = socketRefs[src.nodeIdx];
-                        const int srcOutIdx = src.propIdx * 2 + 1;
-                        if (srcOutIdx >= 0 && srcOutIdx < (int)srcRefs.size() && srcRefs[srcOutIdx].IsValid())
+                        const int srcSockIdx = src.propIdx * 2 + srcSide;
+                        if (srcSockIdx >= 0 && srcSockIdx < (int)srcRefs.size() && srcRefs[srcSockIdx].IsValid())
                         {
                             const int32_t grid = theme.nodeGridSize;
                             // currentScreen is a screen-space input; ScreenToCurrent brings it
                             // into CANVAS_LAY, snapped to the grid like a socket.
-                            tachyon::int2 cursorLay = ctx.ScreenToCurrent(view.pendingConnection.currentScreen);
+                            tachyon::int2 cursorLay = ctx.ScreenToCurrent(pending.currentScreen);
                             if (grid > 0)
                                 cursorLay = { GridLineNearest(cursorLay.x, gridOrigin.x, grid),
                                               GridLineNearest(cursorLay.y, gridOrigin.y, grid) };
 
-                            std::optional<tachyon::int2> inPt;
+                            std::optional<tachyon::int2> tgtPt;
                             tachyon::IntRect tgtRect {};
                             if (tgt.valid() && tgt.nodeIdx < (int)socketRefs.size())
                             {
                                 const auto& tgtRefs = socketRefs[tgt.nodeIdx];
-                                const int tgtInIdx = tgt.propIdx * 2 + 0;
-                                if (tgtInIdx >= 0 && tgtInIdx < (int)tgtRefs.size() && tgtRefs[tgtInIdx].IsValid())
+                                const int tgtSockIdx = tgt.propIdx * 2 + (1 - srcSide);
+                                if (tgtSockIdx >= 0 && tgtSockIdx < (int)tgtRefs.size() && tgtRefs[tgtSockIdx].IsValid())
                                 {
-                                    inPt    = socketCenter(tgtRefs[tgtInIdx]);
+                                    tgtPt   = socketCenter(tgtRefs[tgtSockIdx]);
                                     tgtRect = nodeRect(tgt.nodeIdx);
                                 }
                             }
                             WireLane lane;
-                            if (inPt)
-                                if (auto it = laneOffsets.find(WireKey(tgt.nodeIdx, tgt.propIdx)); it != laneOffsets.end())
+                            if (tgtPt)
+                                if (auto it = laneOffsets.find(WireKey(pendingIn.nodeIdx, pendingIn.propIdx)); it != laneOffsets.end())
                                     lane = it->second;
-                            const auto route = BuildPendingWireRoute(socketCenter(srcRefs[srcOutIdx]), nodeRect(src.nodeIdx),
-                                                                     cursorLay, inPt, tgtRect, grid, gridOrigin, lane);
+                            const auto route = pending.fromInput
+                                ? BuildPendingWireRouteToInput(socketCenter(srcRefs[srcSockIdx]), nodeRect(src.nodeIdx),
+                                                               cursorLay, tgtPt, tgtRect, grid, gridOrigin, lane)
+                                : BuildPendingWireRoute(socketCenter(srcRefs[srcSockIdx]), nodeRect(src.nodeIdx),
+                                                        cursorLay, tgtPt, tgtRect, grid, gridOrigin, lane);
 
+                            // The output's colour, as a wire has; the input's until there is one.
+                            const PropertyEndpoint colorFrom = pendingOut.valid() ? pendingOut : src;
                             const tachyon::color4f srcColor =
-                                view.nodes[src.nodeIdx].properties[src.propIdx].socketColor;
+                                view.nodes[colorFrom.nodeIdx].properties[colorFrom.propIdx].socketColor;
                             tachyon::VisualColorStyleIndex wireColorIdx = theme.lineYellowStyle;
                             if (auto cit = view.wireColorStyles.find(PackColor(srcColor)); cit != view.wireColorStyles.end())
                                 wireColorIdx = cit->second;

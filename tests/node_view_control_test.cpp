@@ -248,6 +248,221 @@ namespace tachyon
             EXPECT_EQ(view.nodes[1].properties[0].input->nodeIdx, 0);
         }
 
+        // ---- Wires dropped on the empty canvas, and wires dragged from an input ----
+
+        // The nodes' sizes, which a drop on the canvas is checked against, as the app's frames
+        // leave them (the harness runs no post-layout callbacks here).
+        class NodeViewWireDropTest : public NodeViewControlTest
+        {
+        protected:
+            void Settle()
+            {
+                NodeViewControlTest::Settle();
+                for (NodeModel& node : view.nodes)
+                    node.lastSize = app.GetElementRect(node.stableID).size;
+            }
+        };
+
+        struct CanvasDrop { PropertyEndpoint from; bool fromOutput; float2 at; };
+
+        // A new wire from an output, released over the empty canvas: the app hears where.
+        TEST_F(NodeViewWireDropTest, ANewWireFromAnOutputDroppedOnTheCanvasIsReported)
+        {
+            Settle();
+            std::vector<CanvasDrop> drops;
+            int edits = 0;
+            bool stillDragging = true;
+            view.onWireDroppedOnCanvas = [&](PropertyEndpoint from, bool fromOutput, float2 at) {
+                drops.push_back({ from, fromOutput, at });
+                stillDragging = view.pendingConnection.active;
+            };
+            view.onEdit = [&](const NodeViewEdit&) { edits++; };
+            const tachyon::int2 to = CanvasPoint();
+            Drag(SocketOf(nodeA), to);
+            Settle();
+            ASSERT_EQ(drops.size(), 1u);
+            EXPECT_EQ(drops[0].from, (PropertyEndpoint{ 0, 0 }));
+            EXPECT_TRUE(drops[0].fromOutput);
+            // Through the transform the canvas was drawn with: centred for view.lastInnerSize.
+            const float2 expected = NodeViewScreenToCanvas(view.transform, IntRect{ .position = CanvasInner().position, .size = view.lastInnerSize }, to);
+            EXPECT_FLOAT_EQ(drops[0].at.x, expected.x);
+            EXPECT_FLOAT_EQ(drops[0].at.y, expected.y);
+            EXPECT_EQ(NodeAtCanvasPos(view, drops[0].at), -1);
+            EXPECT_FALSE(stillDragging) << "the wire is done with when the app hears of it";
+            EXPECT_EQ(edits, 0) << "nothing changed";
+            EXPECT_FALSE(view.pendingConnection.active);
+        }
+
+        // An unwired input starts a new wire too; released on the canvas, the app hears it
+        // came from that input.
+        TEST_F(NodeViewWireDropTest, ANewWireFromAnInputDroppedOnTheCanvasIsReported)
+        {
+            Settle();
+            std::vector<CanvasDrop> drops;
+            view.onWireDroppedOnCanvas = [&](PropertyEndpoint from, bool fromOutput, float2 at) { drops.push_back({ from, fromOutput, at }); };
+            Drag(SocketOf(nodeB), CanvasPoint());
+            Settle();
+            ASSERT_EQ(drops.size(), 1u);
+            EXPECT_EQ(drops[0].from, (PropertyEndpoint{ 1, 0 }));
+            EXPECT_FALSE(drops[0].fromOutput);
+            EXPECT_FALSE(view.nodes[1].properties[0].input->valid());
+        }
+
+        // Dragged from an input onto an output, a wire connects them, reported as one edit;
+        // while it's over the output, that's where it would connect.
+        TEST_F(NodeViewWireDropTest, DraggingFromAnInputToAnOutputConnects)
+        {
+            Settle();
+            std::vector<NodeViewEdit> edits;
+            view.onEdit = [&](const NodeViewEdit& e) { edits.push_back(e); };
+            const tachyon::int2 in = SocketOf(nodeB), out = SocketOf(nodeA);
+            app.InjectMouseMove(in);
+            app.InjectMouseDown(in);
+            Frame();
+            app.InjectMouseMove({ (in.x + out.x) / 2, (in.y + out.y) / 2 }, MouseButtons::Left);
+            Frame();
+            EXPECT_TRUE(view.pendingConnection.active);
+            EXPECT_TRUE(view.pendingConnection.fromInput);
+            EXPECT_EQ(view.pendingConnection.source, (PropertyEndpoint{ 1, 0 }));
+            app.InjectMouseMove(out, MouseButtons::Left);
+            Frame();
+            Frame();
+            EXPECT_EQ(view.pendingConnection.target, (PropertyEndpoint{ 0, 0 })) << "over the output";
+            app.InjectMouseUp(out);
+            Frame();
+            Settle();
+            EXPECT_EQ(*view.nodes[1].properties[0].input, (PropertyEndpoint{ 0, 0 }));
+            ASSERT_EQ(edits.size(), 1u);
+            ASSERT_EQ(edits[0].rewires.size(), 1u);
+            EXPECT_EQ(edits[0].rewires[0].input, (PropertyEndpoint{ 1, 0 }));
+            EXPECT_EQ(edits[0].rewires[0].to, (PropertyEndpoint{ 0, 0 }));
+            EXPECT_FALSE(view.pendingConnection.active);
+        }
+
+        // Dropped on a node's body, a wire from an input connects to the node's output.
+        TEST_F(NodeViewWireDropTest, AWireFromAnInputDroppedOnANodeConnectsToItsOutput)
+        {
+            Settle();
+            int drops = 0;
+            view.onWireDroppedOnCanvas = [&](PropertyEndpoint, bool, float2) { drops++; };
+            Drag(SocketOf(nodeB), HeaderOf(nodeA));
+            Settle();
+            EXPECT_EQ(*view.nodes[1].properties[0].input, (PropertyEndpoint{ 0, 0 }));
+            EXPECT_EQ(drops, 0) << "a node isn't the empty canvas";
+        }
+
+        // An output a wire from an input may not reach takes nothing, and neither does its
+        // node; that isn't the empty canvas either.
+        TEST_F(NodeViewWireDropTest, AWireDroppedWhereItMayNotConnectIsNotOnTheCanvas)
+        {
+            Settle();
+            int drops = 0;
+            view.onWireDroppedOnCanvas = [&](PropertyEndpoint, bool, float2) { drops++; };
+            view.canConnect = [](const NodeView&, PropertyEndpoint, PropertyEndpoint) { return false; };
+            Drag(SocketOf(nodeB), SocketOf(nodeA));
+            Settle();
+            Drag(SocketOf(nodeA), HeaderOf(nodeB));
+            Settle();
+            EXPECT_FALSE(view.nodes[1].properties[0].input->valid());
+            EXPECT_EQ(drops, 0);
+        }
+
+        // A wire pulled off an input and dropped on the canvas is a disconnect, not a new wire.
+        TEST_F(NodeViewWireDropTest, AWirePulledOffAnInputOntoTheCanvasDisconnects)
+        {
+            view.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
+            Settle();
+            int drops = 0, edits = 0;
+            view.onWireDroppedOnCanvas = [&](PropertyEndpoint, bool, float2) { drops++; };
+            view.onEdit = [&](const NodeViewEdit&) { edits++; };
+            Drag(SocketOf(nodeB), CanvasPoint());
+            Settle();
+            EXPECT_FALSE(view.nodes[1].properties[0].input->valid());
+            EXPECT_EQ(drops, 0);
+            EXPECT_EQ(edits, 1);
+        }
+
+        // While a wire from an input is over an output it may not reach, the output doesn't
+        // take it and it isn't where the wire would connect.
+        TEST_F(NodeViewWireDropTest, AnOutputThatMayNotTakeAWireRefusesIt)
+        {
+            Settle();
+            view.canConnect = [](const NodeView&, PropertyEndpoint, PropertyEndpoint) { return false; };
+            const tachyon::int2 in = SocketOf(nodeB), out = SocketOf(nodeA);
+            app.InjectMouseMove(in);
+            app.InjectMouseDown(in);
+            Frame();
+            app.InjectMouseMove({ (in.x + out.x) / 2, (in.y + out.y) / 2 }, MouseButtons::Left);
+            Frame();
+            app.InjectMouseMove(out, MouseButtons::Left);
+            Frame();
+            Frame();
+            EXPECT_TRUE(view.pendingConnection.active);
+            EXPECT_FALSE(view.pendingConnection.target.valid());
+            EXPECT_EQ(app.guiStateManager.Drag().GetValidatedTargetID(), tachyon::ID::Invalid()) << "nothing takes it there";
+            app.InjectMouseUp(out);
+            Frame();
+        }
+
+        // A wire pulled off one input and let go over another moves there: one edit.
+        TEST_F(NodeViewWireDropTest, AWirePulledOffAnInputMovesToAnother)
+        {
+            NodeModel c{};
+            c.stableID = app.idManager.CreateStaticID();
+            c.title    = "C";
+            c.pos      = { 520, 80 };
+            c.properties.push_back(NodeProperty{ .input = PropertyEndpoint{} });
+            view.nodes.push_back(std::move(c));
+            view.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
+            Settle();
+            std::vector<NodeViewEdit> edits;
+            view.onEdit = [&](const NodeViewEdit& e) { edits.push_back(e); };
+            Drag(SocketOf(nodeB), SocketOf(view.nodes[2].stableID));
+            Settle();
+            EXPECT_FALSE(view.nodes[1].properties[0].input->valid());
+            EXPECT_EQ(*view.nodes[2].properties[0].input, (PropertyEndpoint{ 0, 0 }));
+            ASSERT_EQ(edits.size(), 1u);
+            EXPECT_EQ(edits[0].rewires.size(), 2u) << "the detach and the connect";
+        }
+
+        // A drag of something else (a file, a tab) let go on the canvas isn't a wire.
+        TEST_F(NodeViewWireDropTest, ADragOfSomethingElseOnTheCanvasIsNotAWire)
+        {
+            Settle();
+            int drops = 0;
+            view.onWireDroppedOnCanvas = [&](PropertyEndpoint, bool, float2) { drops++; };
+            const tachyon::int2 at = CanvasPoint(), to{ at.x + 40, at.y };
+            app.InjectMouseMove(at);
+            Frame();
+            auto& drag = app.guiStateManager.Drag();
+            drag.Begin(nodeA, 0x46494c45 /* "FILE" */, 7, at);
+            InputState moved{};
+            moved.screenPos = to;
+            moved.buttons   = MouseButtons::Left;
+            drag.UpdateFromInput(moved);
+            ASSERT_TRUE(drag.IsDragging());
+            app.InjectMouseMove(to, MouseButtons::Left);
+            Frame();
+            app.InjectMouseUp(to);
+            Frame();
+            Frame();
+            EXPECT_FALSE(drag.IsDragging());
+            EXPECT_EQ(drops, 0);
+        }
+
+        // Without the callback, a new wire released on the canvas just goes.
+        TEST_F(NodeViewWireDropTest, WithoutTheCallbackANewWireOnTheCanvasGoes)
+        {
+            Settle();
+            int edits = 0;
+            view.onEdit = [&](const NodeViewEdit&) { edits++; };
+            Drag(SocketOf(nodeB), CanvasPoint());
+            Settle();
+            EXPECT_FALSE(view.pendingConnection.active);
+            EXPECT_FALSE(view.nodes[1].properties[0].input->valid());
+            EXPECT_EQ(edits, 0);
+        }
+
         TEST_F(NodeViewControlTest, NodesLayOutAtTheirPositions)
         {
             Settle();

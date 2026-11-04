@@ -573,6 +573,32 @@ namespace tachyon
                 commandManager.History().EndMerge();
             };
 
+            // A new wire dropped on the empty canvas: a Reroute node there, of the wire's kind,
+            // wired to where the wire came from. An app would offer the nodes it could take.
+            showcase.nodeView.onWireDroppedOnCanvas = [this](PropertyEndpoint from, bool fromOutput, float2 at)
+            {
+                NodeView& view  = showcase.nodeView;
+                const int grid  = std::max(1, theme.nodeGridSize);
+                // Its one row's socket on the drop point: below the header, and for an output
+                // on its right edge (a node is six grid cells wide at least).
+                const int2 socketAt{ fromOutput ? 0 : 6 * grid, 3 * grid };
+                NodeModel reroute;
+                reroute.stableID = idManager.CreateStaticID();
+                reroute.title    = "Reroute";
+                reroute.pos      = { GridLineNearest(int32_t(at.x) - socketAt.x, 0, grid),
+                                     GridLineNearest(int32_t(at.y) - socketAt.y, 0, grid) };
+                reroute.properties.push_back(NodeProperty
+                {
+                    .input       = PropertyEndpoint{},
+                    .output      = true,
+                    .renderBody  = [this]() { NodeText("Value"); },
+                    .socketColor = view.nodes[size_t(from.nodeIdx)].properties[size_t(from.propIdx)].socketColor
+                });
+                view.nodes.push_back(std::move(reroute));
+                const PropertyEndpoint added{ int(view.nodes.size()) - 1, 0 };
+                CommitNodeViewEdit(view, fromOutput ? ConnectEdit(view, from, added) : ConnectEdit(view, added, from));
+            };
+
             // One initial connection: Source.Name (0,0) output -> Mix.Strength (1,0) input
             showcase.nodeView.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
         }
