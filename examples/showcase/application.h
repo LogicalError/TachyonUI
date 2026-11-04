@@ -528,6 +528,8 @@ namespace tachyon
         
         void EnableProfilerTreePanel();
         void RenderProfilerTreePanel();
+        /// The profiler panel's static IDs go back (at Cleanup).
+        void ReleaseProfilerTreeIDs();
 
         // Main menu bar across the top of the main window (File / Edit / View / Help).
         /// Which of kThemePaths the theme is (however it was picked: the menu, the settings,

@@ -89,9 +89,25 @@ namespace tachyon
 
     void Application::Cleanup()
     {
+        // Every static ID the showcase made goes back (the Hierarchy panels' with them).
         idManager.ReleaseStaticID(showcase.windowLayoutID1);
         idManager.ReleaseStaticID(showcase.windowLayoutID2);
+        idManager.ReleaseStaticID(showcase.exitDialogID);
         idManager.ReleaseStaticID(showcase.dragGhostWindowID);
+        idManager.ReleaseStaticID(showcase.documentsID);
+        idManager.ReleaseStaticID(showcase.closeDocumentDialogID);
+        for (const auto& window : showcase.documentWindows)
+        {
+            idManager.ReleaseStaticID(window->windowID);
+            idManager.ReleaseStaticID(window->documentsID);
+        }
+        for (const auto& page : showcase.settings.pages)
+            idManager.ReleaseStaticID(page.id);
+        for (const auto& row : showcase.treeTableRows)
+            idManager.ReleaseStaticID(row.id);
+        for (const auto& node : showcase.nodeView.nodes)
+            idManager.ReleaseStaticID(node.stableID);
+        ReleaseProfilerTreeIDs();
 
         idManager.ReleaseStaticID(showcase.smallMenuID);
         idManager.ReleaseStaticID(showcase.cameraMenuID);
@@ -109,6 +125,12 @@ namespace tachyon
             for (auto& tb : toolbars.sides[i])
                 if (tb.id != ID::Invalid())
                     idManager.ReleaseStaticID(tb.id);
+        }
+        for (const FloatingToolbarItem& floating : toolbars.floatingItems)
+        {
+            idManager.ReleaseStaticID(floating.windowID);
+            if (floating.item.id != ID::Invalid())
+                idManager.ReleaseStaticID(floating.item.id);
         }
         ReleaseToolbarDockState(toolbars.dockState, *this);
         // Their thumbnails and icons go before the text system.

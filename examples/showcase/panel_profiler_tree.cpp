@@ -145,14 +145,34 @@ namespace tachyon
 
     void Application::EnableProfilerTreePanel()
     {
-        profilerTableID = idManager.CreateStaticID();
-		flameRootID = idManager.CreateStaticID();
-        flameSizerID = idManager.CreateStaticID();
-        frameGraphID = idManager.CreateStaticID();
-        for (int i = 0; i < kFrameRefCount; ++i)
-            frameGraphLabelIDs[i] = idManager.CreateStaticID();
+        // Made the first time it shows; ReleaseProfilerTreeIDs gives them back.
+        if (profilerTableID == tachyon::ID::Invalid())
+        {
+            profilerTableID = idManager.CreateStaticID();
+            flameRootID     = idManager.CreateStaticID();
+            flameSizerID    = idManager.CreateStaticID();
+            frameGraphID    = idManager.CreateStaticID();
+            for (int i = 0; i < kFrameRefCount; ++i)
+                frameGraphLabelIDs[i] = idManager.CreateStaticID();
+        }
         flameStylesInit      = false;
         frameGraphStylesInit = false;
+    }
+
+    void Application::ReleaseProfilerTreeIDs()
+    {
+        if (profilerTableID == tachyon::ID::Invalid())
+            return;
+        for (tachyon::ID* id : { &profilerTableID, &flameRootID, &flameSizerID, &frameGraphID })
+        {
+            idManager.ReleaseStaticID(*id);
+            *id = tachyon::ID::Invalid();
+        }
+        for (tachyon::ID& id : frameGraphLabelIDs)
+        {
+            idManager.ReleaseStaticID(id);
+            id = tachyon::ID::Invalid();
+        }
     }
 
     // Paused: the panel keeps showing the frame it was paused on.
