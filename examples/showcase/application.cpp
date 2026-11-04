@@ -594,10 +594,27 @@ namespace tachyon
                     .renderBody  = [this]() { NodeText("Value"); },
                     .socketColor = view.nodes[size_t(from.nodeIdx)].properties[size_t(from.propIdx)].socketColor
                 });
-                view.nodes.push_back(std::move(reroute));
-                const PropertyEndpoint added{ int(view.nodes.size()) - 1, 0 };
-                CommitNodeViewEdit(view, fromOutput ? ConnectEdit(view, from, added) : ConnectEdit(view, added, from));
+                // Added and wired in one step, so one undo takes both back.
+                NodeViewEdit edit = AddNodeEdit(view, std::move(reroute));
+                const PropertyEndpoint added{ edit.nodes[0].index, 0 };
+                if (fromOutput)
+                    edit.rewires.push_back({ .input = added, .from = {}, .to = from });
+                else
+                    edit.rewires.push_back({ .input = from, .from = {}, .to = added });
+                CommitNodeViewEdit(view, edit);
             };
+
+            // Delete removes the selected nodes, their wires with them, as one edit. Their IDs
+            // stay taken while the edit can be undone (Cleanup releases the ones still shown).
+            commandManager.RegisterCommand(nodeViewMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None, [this]()
+            {
+                NodeView& view = showcase.nodeView;
+                std::vector<int> selected;
+                for (int n = 0; n < int(view.nodes.size()); ++n)
+                    if (view.selectedNodeIDs.contains(view.nodes[size_t(n)].stableID))
+                        selected.push_back(n);
+                CommitNodeViewEdit(view, RemoveNodesEdit(view, selected));
+            }, "Delete Nodes");
 
             // One initial connection: Source.Name (0,0) output -> Mix.Strength (1,0) input
             showcase.nodeView.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
