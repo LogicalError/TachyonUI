@@ -225,7 +225,7 @@ Keyboard:
 | --- | --- |
 | `icon` | `MessageIcon::Warning`, `Quit`, `Question`, `Info` or `Error` |
 | `title` | The question |
-| `message` | |
+| `message` | One or two sentences on what happens; a long one wraps beside the icon |
 | `buttons` | Span of `MessageButton`: `label`, `kind` (`Secondary`, `Primary`, `Danger`), `alignLeft` |
 | `defaultButton` | |
 | `cancelButton` | -1 means the default button |

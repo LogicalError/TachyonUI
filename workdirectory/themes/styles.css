@@ -4827,6 +4827,7 @@
     background-color: transparent;
     border-color: transparent;
     color: var(--text-1);
+    font-size: var(--font-size);
     text-wrap: nowrap;
     vertical-align: middle;
     -tachyon-vertical-text-align: middle;

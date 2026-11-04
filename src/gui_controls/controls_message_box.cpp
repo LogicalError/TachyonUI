@@ -127,7 +127,8 @@ namespace tachyon
             RegisterElement(Element{ .id = idManager.AllocateDynamicID("message_box_icon"), .iconID = theme.*kind.icon,
                                      .styleRef = theme.*kind.style, .flags = ElementFlags::NoInput }, LayoutOverride{});
 
-            BeginVertical(idManager.AllocateDynamicID("message_box_text"), theme.messageBoxTextStyleRef, LayoutOverride{}.FlexGrow(1));
+            // Shrinks to the room beside the icon, so a long message wraps there.
+            BeginVertical(idManager.AllocateDynamicID("message_box_text"), theme.messageBoxTextStyleRef, LayoutOverride{}.FlexGrow(1).FlexShrink(1));
             Text(idManager.AllocateDynamicID("message_box_title"), desc.title, theme.messageBoxTitleStyleRef);
             Text(idManager.AllocateDynamicID("message_box_message"), desc.message, theme.messageBoxMessageStyleRef);
 
