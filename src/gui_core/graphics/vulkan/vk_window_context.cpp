@@ -463,10 +463,14 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
             TACHYON_VK_CHECK(vkEndCommandBuffer(state.commandBuffer));
             VkCommandBufferSubmitInfo abortCmd = tachyon::vulkan::command_buffer_submit_info(state.commandBuffer);
             VkSubmitInfo2 abortSubmit = tachyon::vulkan::submit_info(&abortCmd, nullptr, nullptr);
+            const std::span<const VkSemaphoreSubmitInfo> hostWaits = deviceContext->frameWaits.Waits();
+            abortSubmit.waitSemaphoreInfoCount = uint32_t(hostWaits.size());
+            abortSubmit.pWaitSemaphoreInfos    = hostWaits.data();
             {
                 auto queueLock = deviceContext->LockQueue();
                 TACHYON_VK_CHECK(vkQueueSubmit2(deviceContext->graphicsQueue, 1, &abortSubmit, currentFrame.renderFence));
             }
+            deviceContext->frameWaits.Submitted();
             frameNumber++;
             return;   // nothing to present
         }
@@ -506,10 +510,11 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
     
     TACHYON_VK_CHECK(vkEndCommandBuffer(state.commandBuffer));
 
-    // Wait on the acquire semaphore, signal the image's present semaphore.
+    // Wait on the acquire semaphore and the host's (AddFrameWait), signal the image's present
+    // semaphore.
     VkCommandBufferSubmitInfo cmdinfo = tachyon::vulkan::command_buffer_submit_info(state.commandBuffer);
 
-    VkSemaphoreSubmitInfo waitInfo{};
+    std::vector<VkSemaphoreSubmitInfo> waits(deviceContext->frameWaits.Waits().begin(), deviceContext->frameWaits.Waits().end());
     VkSemaphoreSubmitInfo signalInfo{};
     VkSubmitInfo2 submit;
     if (swapchain.swapchain != VK_NULL_HANDLE)
@@ -518,20 +523,23 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
         // first use this frame is the TRANSFER-stage transition/blit above, not a
         // color attachment, so waiting at COLOR_ATTACHMENT_OUTPUT lets the
         // transition race the acquire (sync-validation WRITE_AFTER_READ).
-        waitInfo = tachyon::vulkan::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, currentFrame.swapchainSemaphore);
+        waits.push_back(tachyon::vulkan::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, currentFrame.swapchainSemaphore));
         signalInfo = tachyon::vulkan::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
                                                    swapchain.presentSemaphores[swapchain.swapchainImageIndex]);
-        submit = tachyon::vulkan::submit_info(&cmdinfo, &signalInfo, &waitInfo);
+        submit = tachyon::vulkan::submit_info(&cmdinfo, &signalInfo, nullptr);
     }
     else
     {
         submit = tachyon::vulkan::submit_info(&cmdinfo, nullptr, nullptr);
     }
+    submit.waitSemaphoreInfoCount = uint32_t(waits.size());
+    submit.pWaitSemaphoreInfos    = waits.data();
 
     {
         auto queueLock = deviceContext->LockQueue();
         TACHYON_VK_CHECK(vkQueueSubmit2(deviceContext->graphicsQueue, 1, &submit, currentFrame.renderFence));
     }
+    deviceContext->frameWaits.Submitted();
 
 
     presentPending = swapchain.swapchain != VK_NULL_HANDLE;

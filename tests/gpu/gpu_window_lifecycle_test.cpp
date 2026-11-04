@@ -552,6 +552,101 @@ TEST_F(GpuTest, AcquireTimeoutSkipsTheFrameInsteadOfAborting)
         vkDestroyFence(device, fence, nullptr);
 }
 
+// A frame waits for the host's timeline semaphore (AddFrameWait): its submission doesn't
+// finish until the host signals it, and the frame after it doesn't wait on it again. For a
+// window drawn into an image, one presented, and one whose frame gets no swapchain image.
+namespace
+{
+    VkSemaphore TimelineSemaphore(VkDevice device)
+    {
+        VkSemaphoreTypeCreateInfo type{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+                                        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE, .initialValue = 0 };
+        VkSemaphoreCreateInfo info{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .pNext = &type };
+        VkSemaphore semaphore = VK_NULL_HANDLE;
+        return vkCreateSemaphore(device, &info, nullptr, &semaphore) == VK_SUCCESS ? semaphore : VK_NULL_HANDLE;
+    }
+}
+
+class GpuFrameWaitTest : public GpuTest
+{
+protected:
+void ExpectTheFrameWaitsForTheHost(tachyon::vulkan::VulkanWindowContext* ctx, tachyon::int2 size)
+{
+    const VkDevice device = vk->deviceContext.device;
+    const VkSemaphore semaphore = TimelineSemaphore(device);
+    ASSERT_NE(semaphore, VK_NULL_HANDLE);
+
+    vk->BeginFrame();
+    vk->AddFrameWait(semaphore, 1, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+    vk->PrepareFrame(styleManager, gradientManager, 0.0f);
+    ctx->RecordWindowFrame(vk, tachyon::IntRect{ 0, 0, size.x, size.y });
+    const VkFence fence = ctx->GetLastFrame().renderFence;
+    EXPECT_EQ(vkWaitForFences(device, 1, &fence, VK_TRUE, 200'000'000), VK_TIMEOUT) << "it waits for the host";
+
+    const VkSemaphoreSignalInfo signal{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, .semaphore = semaphore, .value = 1 };
+    ASSERT_EQ(vkSignalSemaphore(device, &signal), VK_SUCCESS);
+    EXPECT_EQ(vkWaitForFences(device, 1, &fence, VK_TRUE, 5'000'000'000), VK_SUCCESS) << "and runs once it signals";
+    ctx->PresentWindowFrame();
+
+    vk->BeginFrame();
+    EXPECT_TRUE(vk->deviceContext.frameWaits.Waits().empty()) << "the next frame doesn't wait on it again";
+
+    vk->deviceContext.WaitIdle();
+    vkDestroySemaphore(device, semaphore, nullptr);
+}
+};
+
+TEST_F(GpuFrameWaitTest, AFrameDrawnIntoAnImageWaitsForTheHostsSemaphore)
+{
+    auto* ctx = CreateImageWindowContext({ 160, 120 });
+    ASSERT_NE(ctx, nullptr);
+    sink.Clear();
+    ExpectTheFrameWaitsForTheHost(ctx, { 160, 120 });
+    EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+}
+
+TEST_F(GpuFrameWaitTest, APresentedFrameWaitsForTheHostsSemaphore)
+{
+    auto* ctx = CreateHiddenWindowContext({ 320, 240 }, tachyon::WindowFlags::None);
+    if (ctx == nullptr)
+        GTEST_SKIP() << "no window/swapchain available in this environment";
+    RenderOneFrameWithDot(ctx, { 320, 240 });
+    sink.Clear();
+    ExpectTheFrameWaitsForTheHost(ctx, { 320, 240 });
+    EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+}
+
+TEST_F(GpuFrameWaitTest, AFrameWithoutASwapchainImageWaitsForTheHostsSemaphore)
+{
+    auto* ctx = CreateHiddenWindowContext({ 320, 240 }, tachyon::WindowFlags::None);
+    if (ctx == nullptr)
+        GTEST_SKIP() << "no window/swapchain available in this environment";
+    RenderOneFrameWithDot(ctx, { 320, 240 });
+
+    // Every image held, so the frame's acquire times out.
+    const VkDevice device = vk->deviceContext.device;
+    std::vector<VkFence> fences;
+    for (size_t i = 0; i < ctx->swapchain.swapchainImages.size(); ++i)
+    {
+        VkFenceCreateInfo info{ .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+        VkFence fence = VK_NULL_HANDLE;
+        ASSERT_EQ(vkCreateFence(device, &info, nullptr, &fence), VK_SUCCESS);
+        uint32_t image = 0;
+        const VkResult r = vkAcquireNextImageKHR(device, ctx->swapchain.swapchain, 0, VK_NULL_HANDLE, fence, &image);
+        if (r != VK_SUCCESS && r != VK_SUBOPTIMAL_KHR) { vkDestroyFence(device, fence, nullptr); break; }
+        vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+        fences.push_back(fence);
+    }
+    ASSERT_FALSE(fences.empty());
+    sink.Clear();
+
+    ExpectTheFrameWaitsForTheHost(ctx, { 320, 240 });
+    EXPECT_FALSE(ctx->presentPending) << "test setup: no image to present";
+    EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+    for (VkFence fence : fences)
+        vkDestroyFence(device, fence, nullptr);
+}
+
 // A host that started SDL itself keeps it running after the GUI's window
 // backend goes away; the backend only shuts down an SDL it started.
 TEST(SDLWindowBackendOwnership, LeavesAHostStartedSDLRunning)
