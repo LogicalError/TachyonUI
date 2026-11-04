@@ -117,6 +117,20 @@ namespace tachyon
     NodeViewEdit ConnectEdit(const NodeView& view, PropertyEndpoint output, PropertyEndpoint input);
     /// An edit that removes the wire into `input`, with its lane overrides.
     NodeViewEdit DisconnectEdit(const NodeView& view, PropertyEndpoint input);
+    /// An edit that adds `node` at `index` (-1, or past the end: last), drawn in front of the
+    /// others. The nodes from `index` on move up one, and the wires, lanes and z-order with
+    /// them. Its own inputs name nodes as they're numbered once it's in. To wire it to
+    /// another node in the same step, add that Rewire to the edit (the node is added first):
+    ///
+    ///     NodeViewEdit edit = AddNodeEdit(view, std::move(node));
+    ///     edit.rewires.push_back({ .input = { added, 0 }, .from = {}, .to = output });
+    NodeViewEdit AddNodeEdit(const NodeView& view, NodeModel node, int index = -1);
+    /// An edit that removes the nodes at `indices` (in any order; ones out of range and
+    /// repeats are skipped), with every wire into or out of them and those wires' lanes. The
+    /// nodes after each move down, and the wires, lanes and z-order with them; undone, all of
+    /// it comes back. A removed node's stableID is the host's to keep while the edit can be
+    /// undone.
+    NodeViewEdit RemoveNodesEdit(const NodeView& view, std::span<const int> indices);
 
     /// Default lane offsets (grid steps) for wires between the same two nodes, so their
     /// lanes don't coincide: k wires, in input order, get (k-1)/2 counting down by one

@@ -160,14 +160,29 @@ namespace tachyon
         struct Collapse { int node = -1; bool from = false, to = false; };
         /// A wire's (by WireKey) lane overrides changed; default means no overrides.
         struct Lanes    { uint32_t wireKey = 0; WireRouteOverrides from, to; };
+        /// A node added at `index` (or, when !added, taken from there), with the wires from
+        /// its outputs into other nodes' inputs and the lane overrides of every wire into or
+        /// out of it. The nodes after it move up or down one, and every endpoint, WireKey and
+        /// z-order entry with them. Endpoints and keys are as they are while it's there.
+        struct Node
+        {
+            int        index = -1;
+            bool       added = true;
+            NodeModel  node;
+            /// Another node's input and the property of this node whose output feeds it.
+            std::vector<std::pair<PropertyEndpoint, int>>          fed;
+            std::vector<std::pair<uint32_t, WireRouteOverrides>> lanes;   ///< WireKey -> overrides
+        };
 
         std::vector<Move>     moves;
         std::vector<Rewire>   rewires;
         std::vector<Collapse> collapses;
         std::vector<Lanes>    lanes;
+        /// Applied before the others (so a rewire may name an added node) and undone after.
+        std::vector<Node>     nodes;
 
         /// True when nothing changed.
-        bool empty() const { return moves.empty() && rewires.empty() && collapses.empty() && lanes.empty(); }
+        bool empty() const { return moves.empty() && rewires.empty() && collapses.empty() && lanes.empty() && nodes.empty(); }
     };
 
     /// A wire as drawn this frame, for hit-testing; points in node.pos space.

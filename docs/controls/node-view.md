@@ -76,6 +76,30 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
   };
   ```
 
+- Nodes and wires refer to nodes by their index in `view.nodes`. To add or remove nodes
+  without breaking the wires after them, make it an edit:
+  - `AddNodeEdit(view, node, index)` adds one, last when `index` is -1.
+  - `RemoveNodesEdit(view, indices)` removes some, with every wire into or out of them.
+  - The nodes after them move up or down, and their wires, lanes and z-order with them.
+  - Commit it with `CommitNodeViewEdit`, which reports it to `onEdit`, so undo puts it
+    back. Keep a removed node's `stableID` while the edit can be undone.
+
+  ```cpp
+  std::vector<int> selected;
+  for (int n = 0; n < int(view.nodes.size()); ++n)
+      if (view.selectedNodeIDs.contains(view.nodes[n].stableID))
+          selected.push_back(n);
+  CommitNodeViewEdit(view, RemoveNodesEdit(view, selected));
+  ```
+
+  To wire a new node in the same step, add the rewire to its edit:
+
+  ```cpp
+  NodeViewEdit edit = AddNodeEdit(view, std::move(node));
+  edit.rewires.push_back({ .input = { edit.nodes[0].index, 0 }, .from = {}, .to = output });
+  CommitNodeViewEdit(view, edit);
+  ```
+
 - `onWireDroppedOnCanvas(from, fromOutput, canvasPos)`: a new wire was let go over the empty
   canvas, for example to offer the nodes it could connect to.
   - `from` is the socket it was dragged from: an output when `fromOutput`, else an input.

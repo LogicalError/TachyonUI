@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 namespace tachyon
 {
@@ -229,6 +230,119 @@ namespace tachyon
             auto& props = view.nodes[e.nodeIdx].properties;
             return (e.propIdx >= 0 && e.propIdx < (int)props.size()) ? &props[e.propIdx] : nullptr;
         }
+
+        // Node indices from `at` on move by `by` (+1: a node goes in at `at`; -1: the one at
+        // `at` is gone), in every wire endpoint, WireKey and z-order entry.
+        void ShiftNodeIndices(NodeView& view, int at, int by)
+        {
+            auto shifted = [at, by](int n) { return n >= at ? n + by : n; };
+            for (NodeModel& node : view.nodes)
+                for (NodeProperty& prop : node.properties)
+                    if (prop.input && prop.input->valid())
+                        prop.input->nodeIdx = shifted(prop.input->nodeIdx);
+            std::unordered_map<uint32_t, WireRouteOverrides> overrides;
+            for (const auto& [key, lanes] : view.wireOverrides)
+            {
+                const PropertyEndpoint input = WireInput(key);
+                overrides[WireKey(shifted(input.nodeIdx), input.propIdx)] = lanes;
+            }
+            view.wireOverrides = std::move(overrides);
+            for (int& n : view.ordering)
+                n = shifted(n);
+            // What hovered or was grabbed last frame named wires by the old indices.
+            view.hoveredWire.reset();
+            view.wireMenuWire.reset();
+            view.wireHandleCache.clear();
+        }
+
+        void InsertNode(NodeView& view, const NodeViewEdit::Node& change)
+        {
+            const int at = std::clamp(change.index, 0, (int)view.nodes.size());
+            ShiftNodeIndices(view, at, +1);
+            view.nodes.insert(view.nodes.begin() + at, change.node);
+            view.ordering.push_back(at);   // in front
+            for (const auto& [input, outputProp] : change.fed)
+                if (NodeProperty* prop = PropertyAt(view, input); prop && prop->input)
+                    prop->input = PropertyEndpoint{ at, outputProp };
+            for (const auto& [key, lanes] : change.lanes)
+                view.wireOverrides[key] = lanes;
+        }
+
+        void EraseNode(NodeView& view, const NodeViewEdit::Node& change)
+        {
+            const int at = change.index;
+            if (at < 0 || at >= (int)view.nodes.size())
+                return;
+            // Its wires go with it: the ones into other nodes, and every one's lanes.
+            for (NodeModel& node : view.nodes)
+                for (NodeProperty& prop : node.properties)
+                    if (prop.input && prop.input->valid() && prop.input->nodeIdx == at)
+                        prop.input = PropertyEndpoint{};
+            std::erase_if(view.wireOverrides, [&](const auto& entry) {
+                const PropertyEndpoint input = WireInput(entry.first);
+                return input.nodeIdx == at
+                    || std::any_of(change.fed.begin(), change.fed.end(), [&](const auto& f) { return f.first == input; });
+            });
+            const ID id = view.nodes[size_t(at)].stableID;
+            view.selectedNodeIDs.erase(id);
+            if (view.lastClickedNodeID == id)
+                view.lastClickedNodeID = ID::Invalid();
+            view.nodes.erase(view.nodes.begin() + at);
+            std::erase(view.ordering, at);
+            ShiftNodeIndices(view, at + 1, -1);
+        }
+
+        // The removal of the node at `at` as an edit: the node, the wires it feeds, and the
+        // lanes of every wire into or out of it.
+        NodeViewEdit::Node RemovalOf(const NodeView& view, int at)
+        {
+            NodeViewEdit::Node change{ .index = at, .added = false, .node = view.nodes[size_t(at)] };
+            for (int n = 0; n < (int)view.nodes.size(); ++n)
+                for (int p = 0; p < (int)view.nodes[size_t(n)].properties.size(); ++p)
+                {
+                    const auto& input = view.nodes[size_t(n)].properties[size_t(p)].input;
+                    if (n != at && input && input->valid() && input->nodeIdx == at)
+                        change.fed.push_back({ PropertyEndpoint{ n, p }, input->propIdx });
+                }
+            for (const auto& [key, lanes] : view.wireOverrides)
+            {
+                const PropertyEndpoint input = WireInput(key);
+                if (input.nodeIdx == at
+                    || std::any_of(change.fed.begin(), change.fed.end(), [&](const auto& f) { return f.first == input; }))
+                    change.lanes.push_back({ key, lanes });
+            }
+            return change;
+        }
+    }
+
+    NodeViewEdit AddNodeEdit(const NodeView& view, NodeModel node, int index)
+    {
+        NodeViewEdit edit;
+        const int count = (int)view.nodes.size();
+        edit.nodes.push_back({ .index = (index < 0 || index > count) ? count : index, .added = true, .node = std::move(node) });
+        return edit;
+    }
+
+    NodeViewEdit RemoveNodesEdit(const NodeView& view, std::span<const int> indices)
+    {
+        // Last first, so each one's index is still its own when it goes; on a copy of the
+        // graph, so each is recorded as it is then (its wires to the ones before it gone).
+        std::vector<int> order;
+        for (const int n : indices)
+            if (n >= 0 && n < (int)view.nodes.size()) order.push_back(n);
+        std::sort(order.begin(), order.end(), std::greater<int>());
+        order.erase(std::unique(order.begin(), order.end()), order.end());
+
+        NodeViewEdit edit;
+        NodeView graph;
+        graph.nodes         = view.nodes;
+        graph.wireOverrides = view.wireOverrides;
+        for (const int n : order)
+        {
+            edit.nodes.push_back(RemovalOf(graph, n));
+            EraseNode(graph, edit.nodes.back());
+        }
+        return edit;
     }
 
     void ApplyNodeViewEdit(NodeView& view, const NodeViewEdit& edit, bool undo)
@@ -239,6 +353,18 @@ namespace tachyon
             if (undo) for (auto it = changes.rbegin(); it != changes.rend(); ++it) apply(*it, it->from);
             else      for (const auto& change : changes)                         apply(change, change.to);
         };
+        // Nodes first: the other changes may name a node added here.
+        auto nodes = [&](bool backwards)
+        {
+            auto apply = [&](const NodeViewEdit::Node& change) {
+                if (change.added != backwards) InsertNode(view, change);
+                else                           EraseNode(view, change);
+            };
+            if (backwards) for (auto it = edit.nodes.rbegin(); it != edit.nodes.rend(); ++it) apply(*it);
+            else           for (const auto& change : edit.nodes)                           apply(change);
+        };
+        if (!undo)
+            nodes(false);
         const int nodeCount = (int)view.nodes.size();
         each(edit.moves, [&](const NodeViewEdit::Move& m, int2 pos)
         {
@@ -258,6 +384,8 @@ namespace tachyon
             if (lanes == WireRouteOverrides{}) view.wireOverrides.erase(l.wireKey);
             else                               view.wireOverrides[l.wireKey] = lanes;
         });
+        if (undo)
+            nodes(true);
     }
 
     void CommitNodeViewEdit(NodeView& view, const NodeViewEdit& edit)
