@@ -53,12 +53,12 @@ namespace tachyon
 
         BeginLabelGroup(140);
 
-        // Theme picker: the dropdown returns true on the frame a different palette is picked.
+        // Theme picker: the dropdown returns true on the frame a different palette is picked. It
+        // shows the theme loaded, however it was picked; none for a palette of another file.
         Label("Theme");
-        static constexpr std::string_view themeNames[] = { "Dark", "Light" };
-        static const char* const themePaths[] = { "themes/dark.css", "themes/light.css" };
-        if (Dropdown(idManager.AllocateDynamicID("settingsThemeMenu"), showcase.settingsThemeIndex, themeNames))
-            RequestReloadTheme(themePaths[showcase.settingsThemeIndex], showcase.settingsFontScalePct / 100.0f);
+        int themeIndex = CurrentThemeIndex();
+        if (Dropdown(idManager.AllocateDynamicID("settingsThemeMenu"), themeIndex, kThemeNames))
+            RequestReloadTheme(kThemePaths[themeIndex], showcase.settingsFontScalePct / 100.0f);
 
         // Font size (percent), snapped to steps of 10 in [100, 300] before
         // SliderField so knob and textbox show the quantized value. SliderField's
