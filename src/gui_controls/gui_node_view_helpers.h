@@ -136,6 +136,12 @@ namespace tachyon
     WireRoute BuildPendingWireRoute(int2 outPt, IntRect srcRect, int2 cursor,
                                     std::optional<int2> inPt, IntRect tgtRect,
                                     int32_t grid, int2 gridOrigin, WireLane lane = {});
+    /// A wire being dragged from an input: routed as the connection it would make when it is
+    /// over an output that accepts it (`outPt` on `srcRect`), else from `cursor` as if an
+    /// output sat there. Points run output to input, as BuildWireRoute's.
+    WireRoute BuildPendingWireRouteToInput(int2 inPt, IntRect tgtRect, int2 cursor,
+                                           std::optional<int2> outPt, IntRect srcRect,
+                                           int32_t grid, int2 gridOrigin, WireLane lane = {});
 
     /// Whether a wire from output `out` to input `in` is allowed: never a same-node loop,
     /// otherwise the view's canConnect delegate decides (none: allowed). Endpoints are
@@ -145,6 +151,14 @@ namespace tachyon
     /// The first input of node `nodeIdx`, top to bottom, that a wire from `output` may
     /// connect to; invalid when there is none.
     PropertyEndpoint FirstInputAccepting(const NodeView& view, PropertyEndpoint output, int nodeIdx);
+    /// The first output of node `nodeIdx`, top to bottom, that may feed `input`; invalid
+    /// when there is none.
+    PropertyEndpoint FirstOutputAccepting(const NodeView& view, PropertyEndpoint input, int nodeIdx);
+
+    /// The node whose {pos, lastSize} rect holds `canvasPos` (node.pos space), the frontmost
+    /// in view.ordering when several do; -1 when none does. Only nodes in view.ordering
+    /// count, as the view keeps it after each frame.
+    int NodeAtCanvasPos(const NodeView& view, float2 canvasPos);
 
     /// Wires `output` into `input` without reporting to view.onEdit. An input has one source,
     /// so its previous wire is replaced; the output keeps its others.
@@ -152,6 +166,11 @@ namespace tachyon
 
     /// Moves `n` to the front (last) of a z-order list, keeping the others' order.
     void BringNodeToFront(std::vector<int>& ordering, int n);
+
+    /// A screen point in node.pos space, for a canvas whose padding box is
+    /// `canvasInnerRectScreen` (screen pixels) and whose pan/zoom is `viewTransform`
+    /// (view.transform).
+    float2 NodeViewScreenToCanvas(const float3x2& viewTransform, IntRect canvasInnerRectScreen, int2 screen);
 
     /// Stable IDs of nodes whose {pos, lastSize} rect lies fully inside the marquee, compared
     /// in node.pos space (canvas inner-rect relative, before the content transform).

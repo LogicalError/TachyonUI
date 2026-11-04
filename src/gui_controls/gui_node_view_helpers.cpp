@@ -325,6 +325,46 @@ namespace tachyon
         return BuildWireRoute(outPt, cursor, srcRect, IntRect{ cursor.x, cursor.y, 1, 1 }, grid, gridOrigin);
     }
 
+    WireRoute BuildPendingWireRouteToInput(int2 inPt, IntRect tgtRect, int2 cursor,
+                                           std::optional<int2> outPt, IntRect srcRect,
+                                           int32_t grid, int2 gridOrigin, WireLane lane)
+    {
+        if (outPt)
+        {
+            WireRouteOverrides overrides;
+            overrides.lane = lane;
+            return BuildWireRoute(*outPt, inPt, srcRect, tgtRect, grid, gridOrigin, overrides);
+        }
+        return BuildWireRoute(cursor, inPt, IntRect{ cursor.x, cursor.y, 1, 1 }, tgtRect, grid, gridOrigin);
+    }
+
+    PropertyEndpoint FirstOutputAccepting(const NodeView& view, PropertyEndpoint input, int nodeIdx)
+    {
+        if (nodeIdx < 0 || nodeIdx >= (int)view.nodes.size())
+            return {};
+        const auto& properties = view.nodes[nodeIdx].properties;
+        for (int p = 0; p < (int)properties.size(); ++p)
+        {
+            const PropertyEndpoint out{ nodeIdx, p };
+            if (properties[p].output && ConnectionAllowed(view, out, input))
+                return out;
+        }
+        return {};
+    }
+
+    int NodeAtCanvasPos(const NodeView& view, float2 canvasPos)
+    {
+        auto holds = [&](int n) {
+            const NodeModel& node = view.nodes[size_t(n)];
+            return canvasPos.x >= float(node.pos.x) && canvasPos.x < float(node.pos.x + node.lastSize.x)
+                && canvasPos.y >= float(node.pos.y) && canvasPos.y < float(node.pos.y + node.lastSize.y);
+        };
+        for (auto it = view.ordering.rbegin(); it != view.ordering.rend(); ++it)
+            if (*it >= 0 && *it < (int)view.nodes.size() && holds(*it))
+                return *it;
+        return -1;
+    }
+
     WireRoute BuildWireRoute(int2 outPt, int2 inPt,
                              IntRect srcRect, IntRect tgtRect,
                              int32_t grid, int2 gridOrigin,
@@ -458,6 +498,16 @@ namespace tachyon
         return route;
     }
 
+    float2 NodeViewScreenToCanvas(const float3x2& viewTransform, IntRect canvasInnerRectScreen, int2 screen)
+    {
+        // The canvas's contentTransform is T(innerSize/2) * viewTransform, so
+        //   CANVAS_LAY = inverse(viewTransform)(SCREEN - innerRect.position - innerSize/2)
+        const int2 canvasCenter = canvasInnerRectScreen.position
+                                + int2{ canvasInnerRectScreen.w / 2, canvasInnerRectScreen.h / 2 };
+        return viewTransform.Inverse().TransformPoint(
+            float2{ (float)(screen.x - canvasCenter.x), (float)(screen.y - canvasCenter.y) });
+    }
+
     std::unordered_set<ID> ComputeNodesInMarquee(
         std::span<const NodeModel> nodes,
         IntRect                    canvasInnerRectScreen,
@@ -467,17 +517,8 @@ namespace tachyon
     {
         std::unordered_set<ID> hits;
 
-        // SCREEN -> CANVAS_LAY via the inverse of the canvas's contentTransform,
-        // which is T(innerSize/2) * viewTransform. So:
-        //   CANVAS_LAY = inverse(viewTransform)(SCREEN - innerRect.position - innerSize/2)
-        const int2 canvasCenter = canvasInnerRectScreen.position
-                                + int2{ canvasInnerRectScreen.w / 2,
-                                        canvasInnerRectScreen.h / 2 };
-        const float3x2 viewInv = viewTransform.Inverse();
         auto screenToCanvasLay = [&](int2 screenPt) -> int2 {
-            const float2 v = viewInv.TransformPoint(
-                float2{ (float)(screenPt.x - canvasCenter.x),
-                        (float)(screenPt.y - canvasCenter.y) });
+            const float2 v = NodeViewScreenToCanvas(viewTransform, canvasInnerRectScreen, screenPt);
             return int2{ (int)v.x, (int)v.y };
         };
 

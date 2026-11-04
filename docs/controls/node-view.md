@@ -76,6 +76,20 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
   };
   ```
 
+- `onWireDroppedOnCanvas(from, fromOutput, canvasPos)`: a new wire was let go over the empty
+  canvas, for example to offer the nodes it could connect to.
+  - `from` is the socket it was dragged from: an output when `fromOutput`, else an input.
+  - `canvasPos` is where, in the same space as `NodeModel::pos`.
+  - A wire pulled off an input and let go there is a disconnect, reported to `onEdit`
+    instead.
+
+  ```cpp
+  view.onWireDroppedOnCanvas = [this](PropertyEndpoint from, bool fromOutput, float2 at)
+  {
+      OpenNodePicker(from, fromOutput, at);   // your app's list of nodes to add there
+  };
+  ```
+
 - `onBreadcrumb(index)`: breadcrumb clicks.
 
   ```cpp
@@ -110,6 +124,15 @@ Button("Frame all", [this] { FrameAllNodes(view); });
 | Enter | Collapse or expand selected nodes |
 
 Wires are made and removed with the mouse only.
+
+**Wires.**
+
+- Drag from an output to an input to wire them. Either way round works: drag from an
+  input with no wire to an output.
+- Let go over a node, and the wire goes to the node's first socket that takes it.
+- Drag from a wired input to take its wire off: let go over another input to move it, or
+  over the empty canvas to remove it.
+- A middle click on a wire removes it; a right click offers to.
 
 **Dragging.**
 
