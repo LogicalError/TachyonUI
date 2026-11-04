@@ -75,10 +75,15 @@ namespace tachyon
             std::function<void()> callback;
             std::function<void()> onEnd;
             ///@}
+            /// The shortcut it was registered with (the first key, for a chord).
+            KeyCode               defaultKey       = KeyCode::None;
+            KeyModifier           defaultModifiers = KeyModifier::None;
 
             bool IsChord()     const { return chord2Key != KeyCode::None; }
             bool HasShortcut() const { return key != KeyCode::None; }
             bool IsHeld()      const { return static_cast<bool>(onEnd); }
+            /// True when its shortcut isn't the one it was registered with.
+            bool IsRebound()   const { return key != defaultKey || modifiers != defaultModifiers; }
         };
 
         /// The app's undo history (text fields push their edits to it).
@@ -147,6 +152,8 @@ namespace tachyon
                 FormatShortcut(key, modifiers),
                 std::move(callback)
             });
+            m_commands.back().defaultKey       = key;
+            m_commands.back().defaultModifiers = modifiers;
             if (uint32_t(mode) < m_byMode.size())
                 m_byMode[uint32_t(mode)].push_back(id);
             return id;
@@ -273,6 +280,8 @@ namespace tachyon
                 FormatChordShortcut(key1, mods1, key2, mods2),
                 std::move(callback)
             });
+            m_commands.back().defaultKey       = key1;
+            m_commands.back().defaultModifiers = mods1;
             if (uint32_t(mode) < m_byMode.size())
                 m_byMode[uint32_t(mode)].push_back(id);
             return id;
@@ -320,6 +329,33 @@ namespace tachyon
         void      CancelRebind()            { m_rebinding = {}; }
         bool      IsRebinding() const       { return m_rebinding.IsValid(); }
         CommandID RebindTarget() const      { return m_rebinding; }
+
+        /// Gives `id` the shortcut (key, modifiers), as a rebind does: another command in its
+        /// mode that had it is left without one. KeyCode::None leaves it without one. For a
+        /// chord, sets its first key.
+        void SetShortcut(CommandID id, KeyCode key, KeyModifier modifiers)
+        {
+            if (!GetCommand(id)) return;
+            Command& s = At(id);
+
+            // Most recent wins: another command in this mode owning (key, mods) becomes unbound.
+            if (key != KeyCode::None)
+            {
+                const CommandID existing = FindCommand(s.mode, key, modifiers);
+                if (existing && existing != id)
+                {
+                    Command& other      = At(existing);
+                    other.key           = KeyCode::None;
+                    other.modifiers     = KeyModifier::None;
+                    other.displayString = FormatShortcut(KeyCode::None, KeyModifier::None);
+                }
+            }
+
+            s.key           = key;
+            s.modifiers     = key != KeyCode::None ? modifiers : KeyModifier::None;
+            s.displayString = s.IsChord() ? FormatChordShortcut(s.key, s.modifiers, s.chord2Key, s.chord2Mods)
+                                          : FormatShortcut(s.key, s.modifiers);
+        }
 
         /// True while a chord prefix was pressed and awaits its second key.
         bool IsChordPending() const { return m_pendingChord.key != KeyCode::None; }
@@ -425,29 +461,6 @@ namespace tachyon
         Command&       At(CommandID id)       { return m_commands[id.value - 1]; }
         const Command& At(CommandID id) const { return m_commands[id.value - 1]; }
 
-        void RebindCommand(CommandID id, KeyCode key, KeyModifier modifiers)
-        {
-            if (!GetCommand(id)) return;
-            Command& s = At(id);
-
-            // Most recent wins: another command in this mode owning (key, mods) becomes unbound.
-            if (key != KeyCode::None)
-            {
-                const CommandID existing = FindCommand(s.mode, key, modifiers);
-                if (existing && existing != id)
-                {
-                    Command& other      = At(existing);
-                    other.key           = KeyCode::None;
-                    other.modifiers     = KeyModifier::None;
-                    other.displayString = FormatShortcut(KeyCode::None, KeyModifier::None);
-                }
-            }
-
-            s.key           = key;
-            s.modifiers     = modifiers;
-            s.displayString = FormatShortcut(key, modifiers);
-        }
-
     public:
         /// Runs a keydown InputState through rebind / chord / shortcut dispatch; true when it
         /// handled the key.
@@ -462,7 +475,7 @@ namespace tachyon
             {
                 if (IsModifierKey(state.lastKey)) return false;
                 if (state.lastKey != KeyCode::Escape)
-                    RebindCommand(m_rebinding, state.lastKey, state.modifiers);
+                    SetShortcut(m_rebinding, state.lastKey, state.modifiers);
                 m_rebinding = {};
                 return true;
             }

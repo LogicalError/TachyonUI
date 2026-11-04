@@ -115,6 +115,7 @@ namespace tachyon
     {
         Upsert(m_persistDocuments, std::move(key), std::move(windows));
     }
+    void GUIApplication::PersistShortcuts(std::string key, CommandManager& commands)     { Upsert(m_persistShortcuts, std::move(key), &commands); }
 
     std::vector<SavedDocumentWindow> GUIApplication::TakeSavedDocuments(std::string_view key)
     {
@@ -249,6 +250,38 @@ namespace tachyon
             toolbars.Set(key, std::move(bySide));
         }
         doc.Set("toolbars", std::move(toolbars));
+
+        // Only the shortcuts the user changed, so the rest follow the app's own.
+        JsonValue shortcuts = JsonValue::MakeObject();
+        for (const auto& [key, commands] : m_persistShortcuts)
+        {
+            JsonValue list = JsonValue::MakeArray();
+            for (const CommandManager::Command& command : commands->GetCommands())
+            {
+                if (!command.IsRebound())
+                    continue;
+                JsonValue c = JsonValue::MakeObject();
+                c.Set("mode", std::string(commands->GetModeName(command.mode)));
+                c.Set("command", command.description);
+                // Which of the commands of this name in its mode, when it isn't the first.
+                int nth = 0;
+                for (const CommandID id : commands->GetCommandsForMode(command.mode))
+                {
+                    const CommandManager::Command* other = commands->GetCommand(id);
+                    if (other == &command)
+                        break;
+                    if (other->description == command.description)
+                        ++nth;
+                }
+                if (nth > 0)
+                    c.Set("nth", nth);
+                c.Set("key", int(command.key));
+                c.Set("modifiers", int(command.modifiers));
+                list.Push(std::move(c));
+            }
+            shortcuts.Set(key, std::move(list));
+        }
+        doc.Set("shortcuts", std::move(shortcuts));
 
         JsonValue values = JsonValue::MakeObject();
         for (const auto& [key, target] : m_persistValues)
@@ -403,6 +436,46 @@ namespace tachyon
                 if (!placed[i]) rebuilt[poolSide[i]].push_back(std::move(pool[i]));
             for (int s = 0; s < kToolbarSideCount; ++s)
                 sides[size_t(s)] = std::move(rebuilt[s]);
+        }
+
+        // Shortcuts: each command by its mode's name and its description (and which of that
+        // name, when a mode has more); ones not found are skipped.
+        for (const auto& [key, commands] : m_persistShortcuts)
+        {
+            const JsonValue* saved = section("shortcuts", key);
+            if (!saved)
+                continue;
+            for (const JsonValue& c : saved->Items())
+            {
+                auto number = [&c](const char* name, double max) -> std::optional<uint32_t> {
+                    const JsonValue* v = c.Find(name);
+                    if (!v || !v->IsNumber() || !(v->AsNumber() >= 0 && v->AsNumber() <= max))
+                        return std::nullopt;
+                    return uint32_t(v->AsNumber());
+                };
+                const std::optional<uint32_t> keyCode   = number("key", 0xFFFF);
+                const std::optional<uint32_t> modifiers = number("modifiers", 0xFF);
+                if (!keyCode || !modifiers)
+                    continue;
+                const std::optional<uint32_t> nth = c.Find("nth") ? number("nth", 0xFFFF) : std::optional<uint32_t>(0);
+                if (!nth)
+                    continue;
+                const std::string mode = StringOf(c, "mode");
+                const std::string name = StringOf(c, "command");
+                for (uint32_t m = 0; m < commands->GetModeCount(); ++m)
+                {
+                    if (commands->GetModeName(CommandMode(m)) != mode)
+                        continue;
+                    uint32_t seen = 0;
+                    for (const CommandID id : commands->GetCommandsForMode(CommandMode(m)))
+                        if (commands->GetCommand(id)->description == name && seen++ == *nth)
+                        {
+                            commands->SetShortcut(id, KeyCode(*keyCode), KeyModifier(*modifiers));
+                            break;
+                        }
+                    break;
+                }
+            }
         }
 
         // App values, by their own type; a value of another type is skipped.

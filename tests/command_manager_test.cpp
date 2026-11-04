@@ -232,6 +232,63 @@ TEST(CommandManager, RebindToConflictingBindingUnbindsOldOwner)
     EXPECT_EQ(m.GetCommand(undo)->modifiers, KeyModifier::Control);
 }
 
+TEST(CommandManager, SetShortcutTakesTheKeyFromItsOwnerInItsModeOnly)
+{
+    CommandManager m;
+    const CommandMode sculpt = m.RegisterMode("Sculpt");
+    CommandID save  = m.RegisterCommand(KeyCode::KeyS, KeyModifier::Control, []() {}, "Save");
+    CommandID undo  = m.RegisterCommand(KeyCode::KeyZ, KeyModifier::Control, []() {}, "Undo");
+    CommandID brush = m.RegisterCommand(sculpt, KeyCode::KeyS, KeyModifier::Control, []() {}, "Brush");
+
+    m.SetShortcut(undo, KeyCode::KeyS, KeyModifier::Control);
+    EXPECT_EQ(m.GetCommand(undo)->key, KeyCode::KeyS);
+    EXPECT_EQ(m.GetCommand(undo)->displayString, "Ctrl+S");
+    EXPECT_EQ(m.GetCommand(save)->key, KeyCode::None);
+    EXPECT_EQ(m.GetCommand(save)->displayString, "(unbound)");
+    EXPECT_EQ(m.GetCommand(brush)->key, KeyCode::KeyS) << "another mode keeps its own";
+
+    // None leaves it without one, modifiers and all.
+    m.SetShortcut(undo, KeyCode::None, KeyModifier::Control);
+    EXPECT_FALSE(m.GetCommand(undo)->HasShortcut());
+    EXPECT_EQ(m.GetCommand(undo)->modifiers, KeyModifier::None);
+    EXPECT_EQ(m.GetCommand(undo)->displayString, "(unbound)");
+
+    m.SetShortcut(CommandID{ 99 }, KeyCode::KeyQ, KeyModifier::None);   // not a command: nothing
+    EXPECT_FALSE(m.FindCommand(CommandMode::Default, KeyCode::KeyQ, KeyModifier::None));
+}
+
+TEST(CommandManager, ACommandIsReboundWhileItsShortcutIsNotItsOwn)
+{
+    CommandManager m;
+    CommandID save   = m.RegisterCommand(KeyCode::KeyS, KeyModifier::Control, []() {}, "Save");
+    CommandID other  = m.RegisterCommand(KeyCode::KeyO, KeyModifier::Control, []() {}, "Open");
+    CommandID noKey  = m.RegisterCommand(IconID::Invalid, []() {}, "About");
+    EXPECT_FALSE(m.GetCommand(save)->IsRebound());
+    EXPECT_FALSE(m.GetCommand(noKey)->IsRebound());
+
+    m.SetShortcut(save, KeyCode::KeyS, KeyModifier::Control | KeyModifier::Shift);
+    EXPECT_TRUE(m.GetCommand(save)->IsRebound()) << "another modifier";
+    m.SetShortcut(save, KeyCode::KeyW, KeyModifier::Control);
+    EXPECT_TRUE(m.GetCommand(save)->IsRebound()) << "another key";
+    m.SetShortcut(save, KeyCode::KeyS, KeyModifier::Control);
+    EXPECT_FALSE(m.GetCommand(save)->IsRebound()) << "its own again";
+
+    m.SetShortcut(noKey, KeyCode::KeyO, KeyModifier::Control);
+    EXPECT_TRUE(m.GetCommand(noKey)->IsRebound());
+    EXPECT_TRUE(m.GetCommand(other)->IsRebound()) << "left without one";
+}
+
+TEST(CommandManager, SetShortcutOnAChordKeepsItsSecondKey)
+{
+    CommandManager m;
+    CommandID chord = m.RegisterChord(CommandMode::Default, KeyCode::KeyK, KeyModifier::Control,
+                                      KeyCode::KeyS, KeyModifier::Control, []() {}, "Save All");
+    EXPECT_FALSE(m.GetCommand(chord)->IsRebound());
+    m.SetShortcut(chord, KeyCode::KeyJ, KeyModifier::Control);
+    EXPECT_EQ(m.GetCommand(chord)->displayString, "Ctrl+J Ctrl+S");
+    EXPECT_TRUE(m.GetCommand(chord)->IsRebound());
+}
+
 TEST(CommandManager, UnboundCommandNeverDispatches)
 {
     CommandManager m;
