@@ -78,6 +78,11 @@ namespace tachyon
         tachyon::int2                  startPos     = {};   ///< internal: pos at drag start
         tachyon::int2                  lastSize     = {};   ///< outer-rect size from last frame's layout
         bool                       collapsed    = false;   ///< rows hidden, header only (double-click toggles)
+        /// A reroute: a dot that a wire passes through, a waypoint, instead of a box. Its
+        /// first row's input (one wire in) and output (any number out) meet in the dot; no
+        /// header or other rows show. `pos` is the top-left of its two-grid-cell square, so
+        /// the dot sits on a grid point. See RerouteWireEdit.
+        bool                       reroute      = false;
         std::vector<NodeProperty>  properties;              ///< the rows, top to bottom
     };
 
@@ -265,6 +270,7 @@ namespace tachyon
         /// pulled off an input and dropped there is a disconnect (onEdit), not this.
         std::function<void(PropertyEndpoint from, bool fromOutput, float2 canvasPos)> onWireDroppedOnCanvas;
         std::optional<uint32_t> wireMenuWire;          ///< the wire the open context menu is for
+        float2                  wireMenuPos {};        ///< internal: where on the canvas it was opened
         /// Builds the canvas's context menu (MenuItem and the like), each frame while it's
         /// open; without it there's none. It opens on a right click (not a pan) on the empty
         /// canvas, or on the Menu key or Shift+F10 with the canvas focused and no node

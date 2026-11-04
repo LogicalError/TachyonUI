@@ -345,6 +345,34 @@ namespace tachyon
         return edit;
     }
 
+    NodeViewEdit RerouteWireEdit(const NodeView& view, uint32_t wireKey, ID stableID, int2 pos)
+    {
+        const PropertyEndpoint input = WireInput(wireKey);
+        if (input.nodeIdx >= (int)view.nodes.size() || input.propIdx >= (int)view.nodes[size_t(input.nodeIdx)].properties.size())
+            return {};
+        const auto& wired = view.nodes[size_t(input.nodeIdx)].properties[size_t(input.propIdx)].input;
+        if (!wired || !wired->valid() || wired->nodeIdx >= (int)view.nodes.size()
+            || wired->propIdx >= (int)view.nodes[size_t(wired->nodeIdx)].properties.size())
+            return {};
+        const PropertyEndpoint source = *wired;
+
+        NodeModel reroute;
+        reroute.stableID = stableID;
+        reroute.title    = "Reroute";
+        reroute.pos      = pos;
+        reroute.reroute  = true;
+        reroute.properties.push_back(NodeProperty{
+            .input       = source,
+            .output      = true,
+            .socketColor = view.nodes[size_t(source.nodeIdx)].properties[size_t(source.propIdx)].socketColor });
+        // Added first, so the rewire may name it.
+        NodeViewEdit edit = AddNodeEdit(view, std::move(reroute));
+        edit.rewires.push_back({ input, source, PropertyEndpoint{ edit.nodes[0].index, 0 } });
+        if (const auto it = view.wireOverrides.find(wireKey); it != view.wireOverrides.end())
+            edit.lanes.push_back({ wireKey, it->second, WireRouteOverrides{} });
+        return edit;
+    }
+
     void ApplyNodeViewEdit(NodeView& view, const NodeViewEdit& edit, bool undo)
     {
         // Undo walks the changes backwards, so one that builds on another is undone first.

@@ -628,6 +628,105 @@ namespace tachyon
             EXPECT_EQ(canvasMenus.size(), canvasBefore) << "F10 alone isn't the menu key";
         }
 
+        // ---- Reroutes ----
+
+        // A reroute between A and B: A -> R -> B.
+        class NodeViewRerouteTest : public NodeViewWireDropTest
+        {
+        protected:
+            tachyon::ID reroute{};
+            void SetUp() override
+            {
+                NodeViewWireDropTest::SetUp();
+                reroute = app.idManager.CreateStaticID();
+                NodeModel r{};
+                r.stableID = reroute;
+                r.reroute  = true;
+                r.pos      = { 360, 192 };
+                r.properties.push_back(NodeProperty{ .input = PropertyEndpoint{ 0, 0 }, .output = true });
+                view.nodes.push_back(std::move(r));
+                view.nodes[1].properties[0].input = PropertyEndpoint{ 2, 0 };
+            }
+            // The reroute's two sockets: its input (left edge) and output (right edge).
+            std::vector<tachyon::IntRect> RerouteSockets() const
+            {
+                const auto square = app.GetElementRect(reroute);
+                std::vector<tachyon::IntRect> out;
+                for (const auto& r : RectsWithStyle(app.theme.nodeSocketStyleRef))
+                    if (r.y >= square.y && r.y < square.y + square.h && r.x >= square.x - r.w && r.x < square.x + square.w)
+                        out.push_back(r);
+                std::sort(out.begin(), out.end(), [](const auto& a, const auto& b) { return a.x < b.x; });
+                return out;
+            }
+        };
+
+        // A dot on a square two grid cells wide: no header, no rows, a socket on each edge.
+        TEST_F(NodeViewRerouteTest, ARerouteIsADotWithASocketOnEachEdge)
+        {
+            Settle();
+            const int pitch = 2 * app.theme.nodeGridSize;
+            const auto square = app.GetElementRect(reroute);
+            EXPECT_EQ(square.w, pitch);
+            EXPECT_EQ(square.h, pitch);
+            const auto sockets = RerouteSockets();
+            ASSERT_EQ(sockets.size(), 2u);
+            EXPECT_EQ(sockets[0].x + sockets[0].w / 2, square.x) << "the input on the left edge";
+            EXPECT_EQ(sockets[1].x + sockets[1].w / 2, square.x + pitch) << "the output on the right";
+            EXPECT_EQ(sockets[0].y + sockets[0].h / 2, square.y + pitch / 2);
+            EXPECT_EQ(RectsWithStyle(app.theme.nodeHeaderStyleRef).size(), 2u) << "a header for A and B, none for the reroute";
+            EXPECT_EQ(RectsWithStyle(app.theme.nodeRowStyleRef).size(), 2u) << "and no rows";
+        }
+
+        // Dragging its middle moves it, one edit; double-clicking doesn't collapse it.
+        TEST_F(NodeViewRerouteTest, ARerouteMovesAndDoesNotCollapse)
+        {
+            Settle();
+            int edits = 0;
+            view.onEdit = [&](const NodeViewEdit&) { edits++; };
+            const auto square = app.GetElementRect(reroute);
+            const tachyon::int2 start = view.nodes[2].pos;   // on the grid
+            const tachyon::int2 middle{ square.x + square.w / 2, square.y + square.h / 2 };
+            Drag(middle, { middle.x + 4 * app.theme.nodeGridSize, middle.y + 2 * app.theme.nodeGridSize });
+            Settle();
+            EXPECT_EQ(view.nodes[2].pos, (tachyon::int2{ start.x + 4 * app.theme.nodeGridSize, start.y + 2 * app.theme.nodeGridSize }));
+            EXPECT_EQ(edits, 1);
+
+            const auto moved = app.GetElementRect(reroute);
+            const tachyon::int2 at{ moved.x + moved.w / 2, moved.y + moved.h / 2 };
+            app.ClickAt(at);
+            Frame();
+            app.ClickAt(at);
+            Frame();
+            EXPECT_FALSE(view.nodes[2].collapsed);
+            EXPECT_EQ(edits, 1);
+        }
+
+        // A wire drags out of its right edge into another input, and its left edge takes one.
+        TEST_F(NodeViewRerouteTest, WiresDragOutOfAndIntoARerouteAtItsEdges)
+        {
+            NodeModel c{};
+            c.stableID = app.idManager.CreateStaticID();
+            c.pos      = { 520, 520 };
+            c.properties.push_back(NodeProperty{ .input = PropertyEndpoint{} });
+            view.nodes.push_back(std::move(c));
+            Settle();
+            const auto sockets = RerouteSockets();
+            ASSERT_EQ(sockets.size(), 2u);
+            const tachyon::int2 out{ sockets[1].x + sockets[1].w / 2, sockets[1].y + sockets[1].h / 2 };
+            Drag(out, SocketOf(view.nodes[3].stableID));
+            Settle();
+            EXPECT_EQ(*view.nodes[3].properties[0].input, (PropertyEndpoint{ 2, 0 })) << "one output feeds many";
+            EXPECT_EQ(*view.nodes[1].properties[0].input, (PropertyEndpoint{ 2, 0 }));
+
+            view.nodes[2].properties[0].input = PropertyEndpoint{};
+            Settle();
+            const auto again = RerouteSockets();
+            const tachyon::int2 in{ again[0].x + again[0].w / 2, again[0].y + again[0].h / 2 };
+            Drag(SocketOf(nodeA), in);
+            Settle();
+            EXPECT_EQ(*view.nodes[2].properties[0].input, (PropertyEndpoint{ 0, 0 }));
+        }
+
         // After a frame the view knows where its canvas is, for the conversions.
         TEST_F(NodeViewControlTest, TheViewNotesWhereItsCanvasIs)
         {

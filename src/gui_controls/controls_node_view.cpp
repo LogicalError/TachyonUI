@@ -240,13 +240,14 @@ namespace tachyon
                         // A node passes its right presses here, for the pan.
                         if (view.pan.Release(event) == PointerDrag::Ended::Click)
                         {
+                            const float2 at = NodeViewScreenToCanvas(view.transform,
+                                IntRect{ .position = event.rect->innerRect.position, .size = view.lastInnerSize }, event.state.screenPos);
                             if (view.hoveredWire)
                             {
                                 openMenu(wireMenuID, event.state.screenPos, view.hoveredWire, std::nullopt, std::nullopt);
+                                view.wireMenuPos = at;
                                 return true;
                             }
-                            const float2 at = NodeViewScreenToCanvas(view.transform,
-                                IntRect{ .position = event.rect->innerRect.position, .size = view.lastInnerSize }, event.state.screenPos);
                             if (const int n = NodeAtCanvasPos(view, at); n >= 0)
                             {
                                 if (!view.onNodeContextMenu)
@@ -485,8 +486,9 @@ namespace tachyon
                     drivenOutputs.insert(WireKey(cprop.input->nodeIdx, cprop.input->propIdx));
 
         // -------- Helper: emit one socket Element (circle + drag/drop handler) --------
+        // `pinOnlyWhenLit`: the pin shows only while hovered or a drop target (a reroute's edges).
         auto emitSocket = [&](int n, int propIdx, bool isOutput, bool readonly,
-                              LayoutOverride&& layout) -> ElementRef
+                              LayoutOverride&& layout, bool pinOnlyWhenLit = false) -> ElementRef
         {
             ID sockID = idManager.AllocateDynamicID("node-sock");
 
@@ -663,24 +665,27 @@ namespace tachyon
             const auto& socketProp = view.nodes[n].properties[propIdx];
             const bool  connected  = isOutput ? drivenOutputs.contains(WireKey(n, propIdx))
                                               : socketProp.input.has_value() && socketProp.input->valid();
-            VERIFY(elementStorage.AddCustomDraw(res.ref,
-                [dotColor, highlight, connected, kSocketSize, nodeColor = theme.GetColor("--bg-raised"),
-                 inset = styleManager.Px(2.0f), ring = styleManager.Px(2.0f), halo = styleManager.Px(6.0f),
-                 grow = styleManager.Px(1.0f)](tachyon::CustomDrawContext& ctx)
-                {
-                    const auto inner = ctx.ElementInnerRect();
-                    // Socket centre. Rows are two grid cells tall and the socket is
-                    // centred in the row, so this lands on the mid-row grid line.
-                    const tachyon::float2 center{ inner.w * 0.5f, inner.h * 0.5f };
-                    const float pin = (highlight ? grow : 0.0f) + (float)kSocketSize - inset;
-                    if (highlight)   // soft white halo behind the pin
-                        ctx.RenderDot(center, pin + halo, tachyon::color4f{ 1.0f, 1.0f, 1.0f, 0.5f });
-                    else
-                        ctx.RenderDot(center, pin + 2.0f * ring, nodeColor);
-                    ctx.RenderDot(center, pin, dotColor);
-                    if (!connected)
-                        ctx.RenderDot(center, pin - 2.0f * ring, nodeColor);
-                }));
+            if (!pinOnlyWhenLit || highlight)
+            {
+                VERIFY(elementStorage.AddCustomDraw(res.ref,
+                    [dotColor, highlight, connected, kSocketSize, nodeColor = theme.GetColor("--bg-raised"),
+                     inset = styleManager.Px(2.0f), ring = styleManager.Px(2.0f), halo = styleManager.Px(6.0f),
+                     grow = styleManager.Px(1.0f)](tachyon::CustomDrawContext& ctx)
+                    {
+                        const auto inner = ctx.ElementInnerRect();
+                        // Socket centre. Rows are two grid cells tall and the socket is
+                        // centred in the row, so this lands on the mid-row grid line.
+                        const tachyon::float2 center{ inner.w * 0.5f, inner.h * 0.5f };
+                        const float pin = (highlight ? grow : 0.0f) + (float)kSocketSize - inset;
+                        if (highlight)   // soft white halo behind the pin
+                            ctx.RenderDot(center, pin + halo, tachyon::color4f{ 1.0f, 1.0f, 1.0f, 0.5f });
+                        else
+                            ctx.RenderDot(center, pin + 2.0f * ring, nodeColor);
+                        ctx.RenderDot(center, pin, dotColor);
+                        if (!connected)
+                            ctx.RenderDot(center, pin - 2.0f * ring, nodeColor);
+                    }));
+            }
 
             ShowPinTooltip(view, sockID, self, isOutput);
             return res.ref;
@@ -842,6 +847,8 @@ namespace tachyon
             int32_t nodeWidth = minNodeWidth;
             if (grid > 0 && node.lastSize.x > 0)
                 nodeWidth = std::max(minNodeWidth, ((node.lastSize.x + grid - 1) / grid) * grid);
+            // A reroute is a square one row pitch (two grid cells) wide, its dot in the middle.
+            const int32_t reroutePitch = grid > 0 ? 2 * grid : styleManager.Px(24);
 
             // Outer .node element: click-drag moves the node, double-click toggles collapse.
             // Uses the node's stable ID; a dynamic ID would change with z-order reshuffles.
@@ -859,7 +866,7 @@ namespace tachyon
                         {
                             if (!event.state.LeftPressed()) return false;
 
-                            if (view.nodeDoubleClick.IsDoubleClick(outerID))
+                            if (view.nodeDoubleClick.IsDoubleClick(outerID) && !view.nodes[n].reroute)
                             {
                                 NodeViewEdit edit;
                                 edit.collapses.push_back({ n, view.nodes[n].collapsed, !view.nodes[n].collapsed });
@@ -965,13 +972,14 @@ namespace tachyon
                     }
                     return false;
                 },
-                .styleRef = theme.nodeStyleRef,
+                .styleRef = node.reroute ? theme.nodeRerouteStyleRef : theme.nodeStyleRef,
                 .flags    = ElementFlags::PropagatesDescendantState,
                 .state    = outerState
             };
             // MinWidth (not Fixed): shrink-wraps content, floored at the grid-snapped width.
-            auto outerRes = elementStorage.Add(std::move(outer),
-                LayoutOverride{}.MinWidth(Pixels{ nodeWidth }).Absolute(node.pos.x, node.pos.y));
+            auto outerRes = elementStorage.Add(std::move(outer), node.reroute
+                ? LayoutOverride{}.FixedSize(Pixels{ reroutePitch }, Pixels{ reroutePitch }).Absolute(node.pos.x, node.pos.y)
+                : LayoutOverride{}.MinWidth(Pixels{ nodeWidth }).Absolute(node.pos.x, node.pos.y));
             VERIFY(outerRes.status);
             VERIFY(windowRegistry.Add(outerRes.ref));
             nodeRefs[n] = outerRes.ref;
@@ -987,6 +995,41 @@ namespace tachyon
             // Scope this node's dynamic IDs under its stable ID (BeginChildren doesn't push
             // an ID parent), so they don't change when z-order reshuffles the nodes.
             [[maybe_unused]] bool pushed = idManager.PushParent(node.stableID);
+
+            // A reroute: its first row's sockets on the square's left and right edges (a pin
+            // shows there while hovered, to drag a wire in or out), and the dot between, in
+            // the color of the wire through it; the rest of the square moves it.
+            if (node.reroute)
+            {
+                const int16_t y = static_cast<int16_t>(reroutePitch / 2 - kSocketSize / 2);
+                if (!node.properties.empty() && node.properties[0].input.has_value())
+                    socketRefs[n][0] = emitSocket(n, 0, /*isOutput=*/false, /*readonly=*/false,
+                        LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize }).Absolute(-kSocketSize / 2, y), /*pinOnlyWhenLit=*/true);
+                if (!node.properties.empty() && node.properties[0].output)
+                    socketRefs[n][1] = emitSocket(n, 0, /*isOutput=*/true, /*readonly=*/false,
+                        LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize }).Absolute(reroutePitch - kSocketSize / 2, y), /*pinOnlyWhenLit=*/true);
+                const NodeProperty* row = node.properties.empty() ? nullptr : &node.properties[0];
+                const PropertyEndpoint source = row && row->input ? *row->input : PropertyEndpoint{};
+                const tachyon::color4f wireColor = source.valid() && source.nodeIdx < nodeCount
+                    && source.propIdx < (int)view.nodes[size_t(source.nodeIdx)].properties.size()
+                    ? view.nodes[size_t(source.nodeIdx)].properties[size_t(source.propIdx)].socketColor
+                    : row ? row->socketColor : tachyon::color4f{ 0.9f, 0.9f, 0.9f, 1.0f };
+                const bool selected = view.selectedNodeIDs.count(outerID) > 0;
+                const bool hovered  = (outerState & ElementState::Hover) != ElementState::None;
+                VERIFY(elementStorage.AddCustomDraw(outerRes.ref,
+                    [wireColor, selected, hovered, ringColor = theme.GetColor("--accent"), backColor = theme.GetColor("--bg-raised"),
+                     dot = float(kSocketSize) - styleManager.Px(2.0f), ring = styleManager.Px(2.0f)](tachyon::CustomDrawContext& ctx)
+                    {
+                        const auto inner = ctx.ElementInnerRect();
+                        const tachyon::float2 center{ inner.w * 0.5f, inner.h * 0.5f };
+                        const float size = dot + (hovered ? ring : 0.0f);
+                        ctx.RenderDot(center, size + 2.0f * ring, selected ? ringColor : backColor);
+                        ctx.RenderDot(center, size, wireColor);
+                    }));
+                [[maybe_unused]] bool poppedReroute = idManager.PopParent();
+                VERIFY(elementStorage.EndChildren());
+                continue;
+            }
 
             // ---- Header: [category square] title ... category ----
             // Static title bar: NoInput throughout so clicks reach the node.
@@ -1237,9 +1280,16 @@ namespace tachyon
 
                 // Node body rect, in the same CANVAS_LAY space as socketCenter,
                 // so the router can keep wires clear of the source/target bodies.
+                // A reroute is a point to the router: its dot's centre.
                 auto nodeRect = [&](int idx) -> tachyon::IntRect
                 {
-                    return ctx.GetElementRect(nodeRefs[idx]);
+                    const tachyon::IntRect rect = ctx.GetElementRect(nodeRefs[idx]);
+                    return view.nodes[size_t(idx)].reroute ? tachyon::IntRect{ rect.Center().x, rect.Center().y, 1, 1 } : rect;
+                };
+                // Where a wire meets node `idx`'s socket `ref`: on a reroute, the dot's centre.
+                auto socketPoint = [&](int idx, const ElementRef& ref) -> tachyon::int2
+                {
+                    return view.nodes[size_t(idx)].reroute ? ctx.GetElementRect(nodeRefs[idx]).Center() : socketCenter(ref);
                 };
 
                 // Draggable interior segments collected this frame (node.pos
@@ -1301,8 +1351,8 @@ namespace tachyon
                         if (auto it = laneOffsets.find(wireKey); it != laneOffsets.end() && !replaced)
                             ov.lane = it->second;
 
-                        const auto route = BuildWireRoute(socketCenter(srcRefs[srcOutIdx]),
-                                                          socketCenter(tgtRefs[tgtInIdx]),
+                        const auto route = BuildWireRoute(socketPoint(src.nodeIdx, srcRefs[srcOutIdx]),
+                                                          socketPoint(n, tgtRefs[tgtInIdx]),
                                                           nodeRect(src.nodeIdx), nodeRect(n),
                                                           theme.nodeGridSize, gridOrigin, ov);
                         // Wire takes its source socket's colour (style cached above).
@@ -1376,7 +1426,7 @@ namespace tachyon
                                 const int tgtSockIdx = tgt.propIdx * 2 + (1 - srcSide);
                                 if (tgtSockIdx >= 0 && tgtSockIdx < (int)tgtRefs.size() && tgtRefs[tgtSockIdx].IsValid())
                                 {
-                                    tgtPt   = socketCenter(tgtRefs[tgtSockIdx]);
+                                    tgtPt   = socketPoint(tgt.nodeIdx, tgtRefs[tgtSockIdx]);
                                     tgtRect = nodeRect(tgt.nodeIdx);
                                 }
                             }
@@ -1385,9 +1435,9 @@ namespace tachyon
                                 if (auto it = laneOffsets.find(WireKey(pendingIn.nodeIdx, pendingIn.propIdx)); it != laneOffsets.end())
                                     lane = it->second;
                             const auto route = pending.fromInput
-                                ? BuildPendingWireRouteToInput(socketCenter(srcRefs[srcSockIdx]), nodeRect(src.nodeIdx),
+                                ? BuildPendingWireRouteToInput(socketPoint(src.nodeIdx, srcRefs[srcSockIdx]), nodeRect(src.nodeIdx),
                                                                cursorLay, tgtPt, tgtRect, grid, gridOrigin, lane)
-                                : BuildPendingWireRoute(socketCenter(srcRefs[srcSockIdx]), nodeRect(src.nodeIdx),
+                                : BuildPendingWireRoute(socketPoint(src.nodeIdx, srcRefs[srcSockIdx]), nodeRect(src.nodeIdx),
                                                         cursorLay, tgtPt, tgtRect, grid, gridOrigin, lane);
 
                             // The output's colour, as a wire has; the input's until there is one.
@@ -1443,6 +1493,14 @@ namespace tachyon
             {
                 const PropertyEndpoint input = WireInput(*view.wireMenuWire);
                 MenuItem("Delete connection", [&view, input] { CommitNodeViewEdit(view, DisconnectEdit(view, input)); });
+                // A reroute where it was clicked, its dot on the grid point nearest. Its ID is
+                // the app's to release, as for its own nodes.
+                MenuItem("Add reroute", [this, &view, wire = *view.wireMenuWire] {
+                    const int32_t grid = std::max(1, theme.nodeGridSize);
+                    const int2 pos{ GridLineNearest(int32_t(std::lround(view.wireMenuPos.x)) - grid, 0, grid),
+                                    GridLineNearest(int32_t(std::lround(view.wireMenuPos.y)) - grid, 0, grid) };
+                    CommitNodeViewEdit(view, RerouteWireEdit(view, wire, idManager.CreateStaticID(), pos));
+                });
             }
             else
                 view.wireMenuWire.reset();

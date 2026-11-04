@@ -131,6 +131,12 @@ namespace tachyon
     /// it comes back. A removed node's stableID is the host's to keep while the edit can be
     /// undone.
     NodeViewEdit RemoveNodesEdit(const NodeView& view, std::span<const int> indices);
+    /// An edit that puts a reroute (NodeModel::reroute) on the wire `wireKey` (the WireKey of
+    /// its input): the wire then runs from its output into the new reroute, and on from it
+    /// into the input. The reroute takes `stableID`, which the host keeps as for its other
+    /// nodes, and `pos` (its square's top-left; a multiple of the grid puts the dot on a grid
+    /// point). The wire's lane overrides go. Empty when there's no such wire.
+    NodeViewEdit RerouteWireEdit(const NodeView& view, uint32_t wireKey, ID stableID, int2 pos);
 
     /// Default lane offsets (grid steps) for wires between the same two nodes, so their
     /// lanes don't coincide: k wires, in input order, get (k-1)/2 counting down by one
