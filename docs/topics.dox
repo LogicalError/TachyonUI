@@ -69,8 +69,7 @@ Calls (members of tachyon::GUIApplication): @ref tachyon::GUIApplication::Field 
 @ref tachyon::GUIApplication::SearchField "SearchField",
 @ref tachyon::GUIApplication::AutocompleteField "AutocompleteField",
 @ref tachyon::GUIApplication::TypedField "TypedField",
-@ref tachyon::GUIApplication::Dropdown "Dropdown",
-@ref tachyon::GUIApplication::BeginFieldBox "BeginFieldBox".
+@ref tachyon::GUIApplication::Dropdown "Dropdown".
 Numeric limits and formatting per type: tachyon::NumericFieldConfig.
 Guide: @ref md_docs_2controls_2fields "Fields".
 

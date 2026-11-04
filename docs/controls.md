@@ -21,7 +21,6 @@
 | [Other controls](controls/other-controls.md) | Breadcrumb, status bar, command search, settings panel |
 | [Custom drawing](controls/custom-drawing.md) | Drawing shapes and text inside an element |
 | [Default CSS classes](controls/css-classes.md) | Each control's class when you pass no style |
-| [Writing a control](controls/writing-controls.md) | Required and optional parts of a new control |
 
 <!--!
 \htmlonly <div class="page-tree"> \endhtmlonly
@@ -42,6 +41,5 @@
 \subpage md_docs_2controls_2other-controls
 \subpage md_docs_2controls_2custom-drawing
 \subpage md_docs_2controls_2css-classes
-\subpage md_docs_2controls_2writing-controls
 \htmlonly </div> \endhtmlonly
 -->

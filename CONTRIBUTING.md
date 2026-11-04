@@ -18,6 +18,7 @@ Follow [Requirements](README.md#requirements) and [Quick start](README.md#quick-
 * `src/gui_controls`: `GUIApplication`, the controls, docking, menus, tooltips and transitions.
 * `examples`: small programs that each show one thing; `tests`: the unit and GPU tests.
 * `docs`: the guides; [docs/README.md](docs/README.md) is the place to start.
+* `docs/contributing`: notes for working on the library itself, such as [Writing a control](docs/contributing/writing-controls.md).
 
 ## Pull requests
 
@@ -26,7 +27,7 @@ Follow [Requirements](README.md#requirements) and [Quick start](README.md#quick-
 * Say in the pull request what it changes and why, and how you tested it, on which platform and GPU.
 * For a bug fix, link the issue it fixes, and add a test that fails without the fix.
 * Add a line under **Unreleased** in [CHANGELOG.md](CHANGELOG.md) for anything a user of the library would notice.
-* A new control follows [Writing a control](docs/controls/writing-controls.md). It also needs its own page under
+* A new control follows [Writing a control](docs/contributing/writing-controls.md). It also needs its own page under
   [Controls](docs/controls.md) (signature, return value, keys, CSS classes), headless tests for its mouse and keyboard
   use, its return value and any popup, an entry in `KeyboardFocusTest`, and a row in the showcase.
 * The submodules in `third_party` are pinned on purpose. Update one only with a build and both test runs, and

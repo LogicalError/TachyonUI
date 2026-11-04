@@ -1,7 +1,7 @@
 # Writing a control
 
-What every control must do, and what to decide for optional features. Applies to library
-controls and your own. Builds on [Common conventions](conventions.md).
+What every control in the library must do, and what to decide for optional features.
+Builds on [Common conventions](../controls/conventions.md).
 
 ## Must have
 
@@ -9,7 +9,7 @@ controls and your own. Builds on [Common conventions](conventions.md).
 
 - [ ] Overloads with an `ID` and with the call site as ID (`std::source_location`), each
       with and without a `StyleRef`. The ID + style overload does the work. See
-      [Common conventions](conventions.md).
+      [Common conventions](../controls/conventions.md).
 - [ ] Parts (icon, caption, surrounding box) get IDs under the control's with
       `idManager.PushParent(id)`, so they don't depend on what was drawn before.
 - [ ] Register with `RegisterControl`, not `RegisterElement` (marks it a control, adds it to
@@ -94,7 +94,7 @@ For a control that opens a popup (list, picker, menu):
 **Theming and layout**
 
 - [ ] Each part has its own CSS class, registered in `GUITheme` and listed in
-      [Default CSS classes](css-classes.md), using palette variables, not literal colors. A
+      [Default CSS classes](../controls/css-classes.md), using palette variables, not literal colors. A
       different toolbar look gets a toolbar variant (`theme.controls->`).
 - [ ] Sizes in CSS pixels (`styleManager.Px` for computed ones), so the UI scale applies.
 - [ ] Last parameter is `LayoutOverride&& constraints = {}`, applied to the outer element.

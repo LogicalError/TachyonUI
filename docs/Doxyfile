@@ -9,7 +9,7 @@ OUTPUT_DIRECTORY       = $(DOXYGEN_OUTPUT)
 INPUT                  = src/gui_core src/gui_controls docs
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.md *.dox
-EXCLUDE                = docs/design docs/doxygen
+EXCLUDE                = docs/design docs/doxygen docs/contributing
 EXCLUDE_PATTERNS       = *_internal.h */internal/*
 # Helpers the public headers need but callers never use
 EXCLUDE_SYMBOLS        = tachyon::detail tachyon::detail::*
