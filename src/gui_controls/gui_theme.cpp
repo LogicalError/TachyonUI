@@ -518,6 +518,7 @@ namespace tachyon
         nodeViewStyleRef                  = registerCSS("node-view");
         viewBackgroundStyleRef            = registerCSS("view-background");
         nodeStyleRef                      = registerCSS("node");
+        nodeRerouteStyleRef               = registerCSS("node-reroute");
         nodeHeaderStyleRef                = registerCSS("node-header");
         nodeCategoryStyleRef              = registerCSS("node-category");
         nodeTitleStyleRef                 = registerCSS("node-title");

@@ -25,6 +25,20 @@ void NodeText(std::string_view text);
 - `category` and `categoryColor`, both optional
 - `pos`: the position, in pixels
 - `properties`: the rows
+- `reroute`: a dot that a wire passes through, a waypoint, instead of a box.
+  - Its first row's input (one wire in) and output (any number out) meet in the dot.
+  - It moves, selects and deletes like any node. Drag a wire into or out of it at its
+    left or right edge, where a pin shows while hovered.
+  - Right-click a wire and choose "Add reroute" to put one on it. In code,
+    `RerouteWireEdit(view, wireKey, stableID, pos)` makes that edit.
+
+  ```cpp
+  NodeModel waypoint;
+  waypoint.stableID = idManager.CreateStaticID();
+  waypoint.reroute  = true;
+  waypoint.pos      = { 240, 96 };   // its square's top-left; the dot is one grid cell in
+  waypoint.properties.push_back(NodeProperty{ .input = PropertyEndpoint{}, .output = true });
+  ```
 
 **`NodeProperty`** describes one row:
 
@@ -184,7 +198,7 @@ Wires are made and removed with the mouse only.
 - Let go over a node, and the wire goes to the node's first socket that takes it.
 - Drag from a wired input to take its wire off: let go over another input to move it, or
   over the empty canvas to remove it.
-- A middle click on a wire removes it; a right click offers to.
+- A middle click on a wire removes it; a right click offers to, or to add a reroute on it.
 
 **Dragging.**
 
@@ -197,7 +211,7 @@ Wires are made and removed with the mouse only.
   - panning with the right button
   - dragging in the minimap
 
-Classes: `node-view`, `node`, `node-header`, `node-title`, `node-category`, `node-row`,
+Classes: `node-view`, `node`, `node-reroute`, `node-header`, `node-title`, `node-category`, `node-row`,
 `node-socket`, `node-view-overlay`, `node-view-minimap`.
 
 ```cpp

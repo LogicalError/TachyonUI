@@ -573,15 +573,13 @@ namespace tachyon
                 commandManager.History().EndMerge();
             };
 
-            // A new wire dropped on the empty canvas: a Reroute node there, of the wire's kind,
-            // wired to where the wire came from. An app would offer the nodes it could take.
-            // A new wire dropped on the empty canvas: a Reroute node there, of the wire's kind,
-            // wired to where the wire came from. An app would offer the nodes it could take.
+            // A new wire dropped on the empty canvas: a reroute there, of the wire's kind, wired
+            // to where the wire came from. An app would offer the nodes it could take.
             showcase.nodeView.onWireDroppedOnCanvas = [this](PropertyEndpoint from, bool fromOutput, float2 at)
             {
                 NodeView& view = showcase.nodeView;
                 // Added and wired in one step, so one undo takes both back.
-                NodeViewEdit edit = AddNodeEdit(view, RerouteNode(at, !fromOutput,
+                NodeViewEdit edit = AddNodeEdit(view, RerouteNode(at,
                     view.nodes[size_t(from.nodeIdx)].properties[size_t(from.propIdx)].socketColor));
                 const PropertyEndpoint added{ edit.nodes[0].index, 0 };
                 if (fromOutput)
@@ -596,7 +594,7 @@ namespace tachyon
             showcase.nodeView.onCanvasContextMenu = [this](float2 at)
             {
                 MenuItem("Add Reroute here", [this, at] {
-                    CommitNodeViewEdit(showcase.nodeView, AddNodeEdit(showcase.nodeView, RerouteNode(at, false, { 0.20f, 0.75f, 0.72f, 1.0f })));
+                    CommitNodeViewEdit(showcase.nodeView, AddNodeEdit(showcase.nodeView, RerouteNode(at, { 0.20f, 0.75f, 0.72f, 1.0f })));
                 });
                 MenuItem("Frame all", [this] { FrameAllNodes(showcase.nodeView); });
             };
@@ -619,8 +617,12 @@ namespace tachyon
             commandManager.RegisterCommand(nodeViewMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None,
                                            [this]() { DeleteSelectedNodes(); }, "Delete Nodes");
 
-            // One initial connection: Source.Name (0,0) output -> Mix.Strength (1,0) input
+            // One initial connection: Source.Name (0,0) output -> Mix.Strength (1,0) input,
+            // through a reroute between them.
             showcase.nodeView.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
+            const NodeViewEdit reroute = RerouteWireEdit(showcase.nodeView, WireKey(1, 0), idManager.CreateStaticID(),
+                                                         { styleManager.Px(-120), styleManager.Px(-180) });
+            ApplyNodeViewEdit(showcase.nodeView, reroute);
         }
 
         return true;

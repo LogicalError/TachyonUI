@@ -1690,6 +1690,18 @@
 /* overflow:visible so the dot - and especially its larger hover halo - is not
    scissored to the socket's own 12px box (an element's custom-draw is clipped
    to its border box when its own overflow isn't visible). */
+/* A reroute node: a transparent square two grid cells wide; the dot on it is drawn in
+   code, in its wire's color, ringed in --accent while selected. */
+.node-reroute {
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--accent);
+    padding: 0px;
+    margin: 0px;
+    overflow: visible;
+}
+
 .node-socket {
     width: 12px;
     height: 12px;

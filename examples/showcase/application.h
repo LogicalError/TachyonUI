@@ -524,9 +524,9 @@ namespace tachyon
         void RenderReorderablePanel();
         void RenderHierarchyPanel(HierarchyPanel& panel);
         void RenderNodeViewPanel();
-        /// A Reroute node (one row, an input and an output in `color`) with that row's input
-        /// socket on `at` (node.pos space), or its output socket when `outputAt`.
-        NodeModel RerouteNode(float2 at, bool outputAt, color4f color);
+        /// A reroute (NodeModel::reroute) in `color`, unwired, its dot on the grid point
+        /// nearest `at` (node.pos space).
+        NodeModel RerouteNode(float2 at, color4f color);
         /// Removes the node view's selected nodes, their wires with them, as one edit.
         void DeleteSelectedNodes();
 

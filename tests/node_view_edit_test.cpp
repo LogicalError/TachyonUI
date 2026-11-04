@@ -275,6 +275,52 @@ namespace
         EXPECT_EQ(Wires(view), Wires(MakeGraph()));
     }
 
+    // A reroute on a wire: the wire runs into it and on out of it; undone, as it was.
+    TEST(NodeViewEdit, ARerouteOnAWire)
+    {
+        NodeView view = MakeGraph();
+        const NodeView before = view;
+        view.nodes[1].properties[1].socketColor = { 0.2f, 0.4f, 0.6f, 1.0f };
+        const NodeViewEdit edit = RerouteWireEdit(view, WireKey(2, 0), ID{ 42 }, { 240, 96 });
+        ASSERT_EQ(edit.nodes.size(), 1u);
+        ApplyNodeViewEdit(view, edit);
+
+        ASSERT_EQ(view.nodes.size(), 5u);
+        const NodeModel& reroute = view.nodes[4];
+        EXPECT_TRUE(reroute.reroute);
+        EXPECT_EQ(reroute.stableID, ID{ 42 });
+        EXPECT_EQ(reroute.pos, (int2{ 240, 96 }));
+        ASSERT_EQ(reroute.properties.size(), 1u);
+        EXPECT_EQ(*reroute.properties[0].input, (PropertyEndpoint{ 1, 1 })) << "from the wire's output";
+        EXPECT_TRUE(reroute.properties[0].output);
+        EXPECT_EQ(reroute.properties[0].socketColor.b, 0.6f) << "in its color";
+        EXPECT_EQ(*view.nodes[2].properties[0].input, (PropertyEndpoint{ 4, 0 })) << "on to the input";
+        EXPECT_EQ(view.wireOverrides.count(WireKey(2, 0)), 0u) << "its lanes go";
+        EXPECT_EQ(view.wireOverrides.size(), before.wireOverrides.size() - 1);
+
+        ApplyNodeViewEdit(view, edit, true);
+        EXPECT_EQ(view.nodes.size(), 4u);
+        EXPECT_EQ(Wires(view), Wires(before));
+        EXPECT_EQ(view.wireOverrides, before.wireOverrides);
+
+        // A wire without lanes: no lane change.
+        EXPECT_TRUE(RerouteWireEdit(view, WireKey(2, 1), ID{ 43 }, {}).lanes.empty());
+    }
+
+    TEST(NodeViewEdit, NoRerouteWhereThereIsNoWire)
+    {
+        NodeView view = MakeGraph();
+        view.nodes[3].properties[0].input = PropertyEndpoint{};
+        EXPECT_TRUE(RerouteWireEdit(view, WireKey(3, 0), ID{ 1 }, {}).empty()) << "an unwired input";
+        EXPECT_TRUE(RerouteWireEdit(view, WireKey(0, 0), ID{ 1 }, {}).empty()) << "not an input";
+        EXPECT_TRUE(RerouteWireEdit(view, WireKey(9, 0), ID{ 1 }, {}).empty()) << "no such node";
+        EXPECT_TRUE(RerouteWireEdit(view, WireKey(2, 7), ID{ 1 }, {}).empty()) << "no such row";
+        view.nodes[2].properties[0].input = PropertyEndpoint{ 9, 0 };
+        EXPECT_TRUE(RerouteWireEdit(view, WireKey(2, 0), ID{ 1 }, {}).empty()) << "a source that isn't there";
+        view.nodes[2].properties[0].input = PropertyEndpoint{ 1, 5 };
+        EXPECT_TRUE(RerouteWireEdit(view, WireKey(2, 0), ID{ 1 }, {}).empty()) << "a source row that isn't there";
+    }
+
     TEST(NodeViewEdit, RemovingNothingIsNoEdit)
     {
         const NodeView view = MakeGraph();

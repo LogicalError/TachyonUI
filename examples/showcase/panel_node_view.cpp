@@ -18,24 +18,16 @@ namespace tachyon
         RenderNodeView(showcase.nodeView);
     }
 
-    NodeModel Application::RerouteNode(float2 at, bool outputAt, color4f color)
+    NodeModel Application::RerouteNode(float2 at, color4f color)
     {
+        // Its dot on the grid point nearest `at`: the square's top-left one grid cell up and left.
         const int grid = std::max(1, theme.nodeGridSize);
-        // Its one row's socket on `at`: below the header, on the left edge for the input or
-        // the right one for the output (a node is six grid cells wide at least).
-        const int2 socketAt{ outputAt ? 6 * grid : 0, 3 * grid };
         NodeModel reroute;
         reroute.stableID = idManager.CreateStaticID();
         reroute.title    = "Reroute";
-        reroute.pos      = { GridLineNearest(int32_t(at.x) - socketAt.x, 0, grid),
-                             GridLineNearest(int32_t(at.y) - socketAt.y, 0, grid) };
-        reroute.properties.push_back(NodeProperty
-        {
-            .input       = PropertyEndpoint{},
-            .output      = true,
-            .renderBody  = [this]() { NodeText("Value"); },
-            .socketColor = color
-        });
+        reroute.reroute  = true;
+        reroute.pos      = { GridLineNearest(int32_t(at.x) - grid, 0, grid), GridLineNearest(int32_t(at.y) - grid, 0, grid) };
+        reroute.properties.push_back(NodeProperty{ .input = PropertyEndpoint{}, .output = true, .socketColor = color });
         return reroute;
     }
 
