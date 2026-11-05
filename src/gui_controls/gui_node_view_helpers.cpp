@@ -373,6 +373,24 @@ namespace tachyon
         return edit;
     }
 
+    NodeViewEdit RemoveRerouteEdit(const NodeView& view, int node)
+    {
+        if (node < 0 || node >= (int)view.nodes.size() || !view.nodes[size_t(node)].reroute)
+            return {};
+        const int only[] = { node };
+        NodeViewEdit edit = RemoveNodesEdit(view, only);
+        // The rewires apply after the removal, so they name nodes as numbered without it; the
+        // inputs it fed are unwired by then.
+        const auto& row = view.nodes[size_t(node)].properties;
+        const PropertyEndpoint source = !row.empty() && row[0].input ? *row[0].input : PropertyEndpoint{};
+        if (!source.valid())
+            return edit;
+        auto without = [node](PropertyEndpoint e) { if (e.nodeIdx > node) --e.nodeIdx; return e; };
+        for (const auto& [input, outputProp] : edit.nodes[0].fed)
+            edit.rewires.push_back({ without(input), PropertyEndpoint{}, without(source) });
+        return edit;
+    }
+
     void ApplyNodeViewEdit(NodeView& view, const NodeViewEdit& edit, bool undo)
     {
         // Undo walks the changes backwards, so one that builds on another is undone first.

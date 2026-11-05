@@ -278,7 +278,7 @@ namespace tachyon
         std::function<void(float2 canvasPos)> onCanvasContextMenu;
         /// As onCanvasContextMenu, for node `node` (an index into nodes): opened by a right
         /// click on it, which selects it if it wasn't, or from the keys while one is selected
-        /// (the one clicked last).
+        /// (the one clicked last). Not for a reroute, whose menu is the view's own.
         std::function<void(int node)>         onNodeContextMenu;
         std::optional<float2>      canvasMenuPos;      ///< internal: where the open canvas menu is for
         std::optional<tachyon::ID> nodeMenuNode;       ///< internal: the stableID the open node menu is for

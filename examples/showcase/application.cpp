@@ -600,16 +600,21 @@ namespace tachyon
             };
             showcase.nodeView.onNodeContextMenu = [this](int node)
             {
-                const bool collapsed = showcase.nodeView.nodes[size_t(node)].collapsed;
-                MenuItem(collapsed ? "Expand" : "Collapse", [this] {
+                // For the selection, which the node is in: collapse (or expand) it like this
+                // node, reroutes aside, or delete it, saying how much that is.
+                const bool collapse = !showcase.nodeView.nodes[size_t(node)].collapsed;
+                MenuItem(collapse ? "Collapse" : "Expand", [this, collapse] {
                     NodeView& view = showcase.nodeView;
                     NodeViewEdit edit;
                     for (int n = 0; n < int(view.nodes.size()); ++n)
-                        if (view.selectedNodeIDs.contains(view.nodes[size_t(n)].stableID))
-                            edit.collapses.push_back({ n, view.nodes[size_t(n)].collapsed, !view.nodes[size_t(n)].collapsed });
+                        if (const NodeModel& other = view.nodes[size_t(n)];
+                            view.selectedNodeIDs.contains(other.stableID) && !other.reroute && other.collapsed != collapse)
+                            edit.collapses.push_back({ n, other.collapsed, collapse });
                     CommitNodeViewEdit(view, edit);
                 });
-                MenuItem({ showcase.deleteIcon, "Delete" }, "Delete", [this] { DeleteSelectedNodes(); });
+                const size_t count = showcase.nodeView.selectedNodeIDs.size();
+                const std::string deleteLabel = count > 1 ? std::format("Delete {} nodes", count) : std::string("Delete node");
+                MenuItem({ showcase.deleteIcon, deleteLabel }, "Delete", [this] { DeleteSelectedNodes(); });
             };
 
             // Delete removes the selected nodes, their wires with them, as one edit. Their IDs
