@@ -28,9 +28,13 @@ void NodeText(std::string_view text);
 - `reroute`: a dot that a wire passes through, a waypoint, instead of a box.
   - Its first row's input (one wire in) and output (any number out) meet in the dot.
   - It moves, selects and deletes like any node. Drag a wire into or out of it at its
-    left or right edge, where a pin shows while hovered.
-  - Right-click a wire and choose "Add reroute" to put one on it. In code,
+    left or right edge, where its pins show while it's hovered or selected.
+  - Right-click a wire and choose "Add reroute here" to put one on it there. In code,
     `RerouteWireEdit(view, wireKey, stableID, pos)` makes that edit.
+  - Right-click a reroute and choose "Remove reroute" to take it out, its wire running on
+    as it did through it. That's its whole menu: `onNodeContextMenu` is for your nodes. In
+    code, `RemoveRerouteEdit(view, node)`.
+  - It doesn't collapse.
 
   ```cpp
   NodeModel waypoint;

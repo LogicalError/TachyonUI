@@ -727,6 +727,119 @@ namespace tachyon
             EXPECT_EQ(*view.nodes[2].properties[0].input, (PropertyEndpoint{ 0, 0 }));
         }
 
+        // A right click on a reroute opens its menu, even with a wire hovered last that reaches
+        // into it (a lane handle); and without the app's node menu, as it has one of its own.
+        TEST_F(NodeViewRerouteTest, ARightClickOnARerouteOpensItsMenuNotAWires)
+        {
+            Settle();
+            const auto square = app.GetElementRect(reroute);
+            const tachyon::int2 middle{ square.x + square.w / 2, square.y + square.h / 2 };
+            app.InjectMouseMove(middle);
+            Frame();
+            view.hoveredWire = WireKey(2, 0);
+            app.ClickAt(middle, MouseButtons::Right);
+            Frame();
+            Frame();
+            EXPECT_FALSE(view.wireMenuWire) << "not the wire's";
+            ASSERT_TRUE(view.nodeMenuNode);
+            EXPECT_EQ(*view.nodeMenuNode, reroute);
+            EXPECT_TRUE(app.menuManager.IsOpen());
+            EXPECT_TRUE(view.selectedNodeIDs.contains(reroute));
+        }
+
+        // From the keys too, with it selected. The app's node menu is for its nodes, not this.
+        TEST_F(NodeViewRerouteTest, TheMenuKeyOpensARerouteMenu)
+        {
+            Settle();
+            app.ClickAt(CanvasPoint());   // focuses the canvas
+            Frame();
+            view.selectedNodeIDs   = { reroute };
+            view.lastClickedNodeID = reroute;
+            app.InjectKey(KeyCode::Application);
+            Frame();
+            Frame();
+            ASSERT_TRUE(view.nodeMenuNode) << "though the app has no node menu";
+            EXPECT_EQ(*view.nodeMenuNode, reroute);
+            EXPECT_NE(app.FindByText("Remove reroute"), tachyon::ID::Invalid());
+
+            int appItems = 0;
+            view.onNodeContextMenu = [&](int) { ++appItems; app.MenuItem("Rename", [] {}); };
+            Frame();
+            Frame();
+            EXPECT_EQ(appItems, 0) << "not the app's items";
+            EXPECT_NE(app.FindByText("Remove reroute"), tachyon::ID::Invalid());
+            EXPECT_EQ(app.FindByText("Rename"), tachyon::ID::Invalid());
+        }
+
+        // Enter collapses the selected nodes, but not a reroute: a dot has nothing to hide.
+        TEST_F(NodeViewRerouteTest, EnterDoesNotCollapseAReroute)
+        {
+            Settle();
+            app.ClickAt(CanvasPoint());   // focuses the canvas
+            Frame();
+            view.selectedNodeIDs = { reroute, nodeA };
+            std::vector<NodeViewEdit> edits;
+            view.onEdit = [&](const NodeViewEdit& e) { edits.push_back(e); };
+            app.InjectKey(KeyCode::Return);
+            Frame();
+            EXPECT_TRUE(view.nodes[0].collapsed) << "A";
+            EXPECT_FALSE(view.nodes[2].collapsed) << "the reroute";
+            ASSERT_EQ(edits.size(), 1u);
+            EXPECT_EQ(edits[0].collapses.size(), 1u);
+        }
+
+        // Its "Remove reroute" takes it out; A feeds B again.
+        TEST_F(NodeViewRerouteTest, RemoveRerouteFromItsMenu)
+        {
+            Settle();
+            const auto square = app.GetElementRect(reroute);
+            const tachyon::int2 middle{ square.x + square.w / 2, square.y + square.h / 2 };
+            app.InjectMouseMove(middle);
+            Frame();
+            app.ClickAt(middle, MouseButtons::Right);
+            Frame();
+            Frame();
+            ASSERT_NE(app.FindByText("Remove reroute"), tachyon::ID::Invalid()) << "its own item, though the app has no node menu";
+            app.InjectKey(KeyCode::Down);   // to the first item
+            Frame();
+            app.InjectKey(KeyCode::Return);
+            Frame();
+            Frame();
+            ASSERT_EQ(view.nodes.size(), 2u);
+            EXPECT_EQ(*view.nodes[1].properties[0].input, (PropertyEndpoint{ 0, 0 }));
+        }
+
+        // Its pins show while it's hovered or selected, else only the dot.
+        TEST_F(NodeViewRerouteTest, ARerouteShowsItsPinsWhileHoveredOrSelected)
+        {
+            auto pinsDrawn = [&] {
+                const auto square = app.GetElementRect(reroute);
+                int drawn = 0;
+                for (uint32_t d = 0; d < app.elementStorage.NumberOfDepthLevels(); d++)
+                    for (uint32_t i = 0; i < app.elementStorage.DepthSizeOf(d); i++)
+                    {
+                        const tachyon::ElementRef ref{ d, i };
+                        if (!app.elementStorage.IsValidRef(ref) || app.elementStorage.GetElementUnsafe(ref).styleRef != app.theme.nodeSocketStyleRef)
+                            continue;
+                        const auto& r = app.elementStorage.GetElementRectPtr(ref)->rect;
+                        if (r.y >= square.y && r.y < square.y + square.h && r.x >= square.x - r.w && r.x < square.x + square.w
+                            && app.elementStorage.GetCustomDraw(ref))
+                            ++drawn;
+                    }
+                return drawn;
+            };
+            Settle();
+            EXPECT_EQ(pinsDrawn(), 0) << "neither hovered nor selected";
+            view.selectedNodeIDs = { reroute };
+            Settle();
+            EXPECT_EQ(pinsDrawn(), 2) << "selected";
+            view.selectedNodeIDs.clear();
+            const auto square = app.GetElementRect(reroute);
+            app.InjectMouseMove({ square.x + square.w / 2, square.y + square.h / 2 });
+            Settle();
+            EXPECT_EQ(pinsDrawn(), 2) << "hovered";
+        }
+
         // After a frame the view knows where its canvas is, for the conversions.
         TEST_F(NodeViewControlTest, TheViewNotesWhereItsCanvasIs)
         {

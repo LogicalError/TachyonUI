@@ -139,6 +139,60 @@ namespace tachyon
             OpenContextMenu(menuID, screen);
         };
 
+        // The open context menus, before anything else: what one of their items does (add
+        // or remove nodes, rewire) is done before this frame's nodes and wires are built.
+        // The menu a right click on a wire opened.
+        if (view.wireMenuWire)
+        {
+            if (BeginContextMenu(wireMenuID))
+            {
+                const PropertyEndpoint input = WireInput(*view.wireMenuWire);
+                MenuItem("Delete wire", [&view, input] { CommitNodeViewEdit(view, DisconnectEdit(view, input)); });
+                // A reroute where it was clicked, its dot on the grid point nearest. Its ID is
+                // the app's to release, as for its own nodes.
+                MenuItem("Add reroute here", [this, &view, wire = *view.wireMenuWire] {
+                    const int32_t grid = std::max(1, theme.nodeGridSize);
+                    const int2 pos{ GridLineNearest(int32_t(std::lround(view.wireMenuPos.x)) - grid, 0, grid),
+                                    GridLineNearest(int32_t(std::lround(view.wireMenuPos.y)) - grid, 0, grid) };
+                    CommitNodeViewEdit(view, RerouteWireEdit(view, wire, idManager.CreateStaticID(), pos));
+                });
+            }
+            else
+                view.wireMenuWire.reset();
+            EndContextMenu();
+        }
+        // The app's menus for the canvas and for a node, built by it while open.
+        if (view.canvasMenuPos)
+        {
+            if (BeginContextMenu(canvasMenuID))
+            {
+                if (view.onCanvasContextMenu)
+                    view.onCanvasContextMenu(*view.canvasMenuPos);
+            }
+            else
+                view.canvasMenuPos.reset();
+            EndContextMenu();
+        }
+        if (view.nodeMenuNode)
+        {
+            // By its stableID: an edit may have moved it to another index meanwhile, or removed it.
+            const auto it = std::find_if(view.nodes.begin(), view.nodes.end(),
+                                         [&](const NodeModel& node) { return node.stableID == *view.nodeMenuNode; });
+            const bool there = it != view.nodes.end();
+            const bool open  = there && BeginContextMenu(nodeMenuID);
+            const int  node  = there ? int(it - view.nodes.begin()) : -1;
+            // A reroute's menu is its own: take it out, its wire running on as it did through
+            // it. The app's node menu is for its nodes.
+            if (open && it->reroute)
+                MenuItem("Remove reroute", [&view, node] { CommitNodeViewEdit(view, RemoveRerouteEdit(view, node)); });
+            else if (open && view.onNodeContextMenu)
+                view.onNodeContextMenu(node);
+            if (there)
+                EndContextMenu();
+            if (!open)
+                view.nodeMenuNode.reset();
+        }
+
         // Edit-mode wiring: while this canvas has focus, set the command
         // manager to the view's mode; restore Default when focus leaves.
         if (guiStateManager.Interaction().GetFocusedID() == canvasID)
@@ -240,17 +294,21 @@ namespace tachyon
                         // A node passes its right presses here, for the pan.
                         if (view.pan.Release(event) == PointerDrag::Ended::Click)
                         {
+                            // A node under the pointer, a reroute too, comes before a wire: the
+                            // wire hovered last can reach into it (a lane handle at a reroute).
                             const float2 at = NodeViewScreenToCanvas(view.transform,
                                 IntRect{ .position = event.rect->innerRect.position, .size = view.lastInnerSize }, event.state.screenPos);
-                            if (view.hoveredWire)
+                            const int n = NodeAtCanvasPos(view, at);
+                            if (n < 0 && view.hoveredWire)
                             {
                                 openMenu(wireMenuID, event.state.screenPos, view.hoveredWire, std::nullopt, std::nullopt);
                                 view.wireMenuPos = at;
                                 return true;
                             }
-                            if (const int n = NodeAtCanvasPos(view, at); n >= 0)
+                            if (n >= 0)
                             {
-                                if (!view.onNodeContextMenu)
+                                // A reroute has a menu of its own (Remove reroute).
+                                if (!view.onNodeContextMenu && !view.nodes[size_t(n)].reroute)
                                     return false;
                                 const ID id = view.nodes[size_t(n)].stableID;
                                 if (!view.selectedNodeIDs.contains(id))
@@ -341,7 +399,7 @@ namespace tachyon
                                 if (view.selectedNodeIDs.contains(view.nodes[size_t(i)].stableID)
                                     && (selected < 0 || view.nodes[size_t(i)].stableID == view.lastClickedNodeID))
                                     selected = i;
-                            if (selected >= 0 && view.onNodeContextMenu)
+                            if (selected >= 0 && (view.onNodeContextMenu || view.nodes[size_t(selected)].reroute))
                             {
                                 const NodeModel& node = view.nodes[size_t(selected)];
                                 const float2 below = NodeViewCanvasToScreen(view, float2{ float(node.pos.x), float(node.pos.y + node.lastSize.y) });
@@ -410,7 +468,7 @@ namespace tachyon
                             {
                                 NodeViewEdit edit;
                                 for (int i = 0; i < (int)view.nodes.size(); ++i)
-                                    if (view.selectedNodeIDs.count(view.nodes[i].stableID))
+                                    if (view.selectedNodeIDs.count(view.nodes[i].stableID) && !view.nodes[i].reroute)   // a dot doesn't collapse
                                         edit.collapses.push_back({ i, view.nodes[i].collapsed, !view.nodes[i].collapsed });
                                 if (edit.collapses.empty())
                                     return false;
@@ -486,9 +544,10 @@ namespace tachyon
                     drivenOutputs.insert(WireKey(cprop.input->nodeIdx, cprop.input->propIdx));
 
         // -------- Helper: emit one socket Element (circle + drag/drop handler) --------
-        // `pinOnlyWhenLit`: the pin shows only while hovered or a drop target (a reroute's edges).
+        // `pinShown` false: the pin shows only while it's hovered or a drop target (a reroute's
+        // edges, while the reroute isn't hovered or selected).
         auto emitSocket = [&](int n, int propIdx, bool isOutput, bool readonly,
-                              LayoutOverride&& layout, bool pinOnlyWhenLit = false) -> ElementRef
+                              LayoutOverride&& layout, bool pinShown = true) -> ElementRef
         {
             ID sockID = idManager.AllocateDynamicID("node-sock");
 
@@ -665,7 +724,7 @@ namespace tachyon
             const auto& socketProp = view.nodes[n].properties[propIdx];
             const bool  connected  = isOutput ? drivenOutputs.contains(WireKey(n, propIdx))
                                               : socketProp.input.has_value() && socketProp.input->valid();
-            if (!pinOnlyWhenLit || highlight)
+            if (pinShown || highlight)
             {
                 VERIFY(elementStorage.AddCustomDraw(res.ref,
                     [dotColor, highlight, connected, kSocketSize, nodeColor = theme.GetColor("--bg-raised"),
@@ -996,26 +1055,27 @@ namespace tachyon
             // an ID parent), so they don't change when z-order reshuffles the nodes.
             [[maybe_unused]] bool pushed = idManager.PushParent(node.stableID);
 
-            // A reroute: its first row's sockets on the square's left and right edges (a pin
-            // shows there while hovered, to drag a wire in or out), and the dot between, in
-            // the color of the wire through it; the rest of the square moves it.
+            // A reroute: its first row's sockets on the square's left and right edges, their
+            // pins showing while the reroute is hovered or selected (drag a wire in or out
+            // there), and the dot between, in the color of the wire through it; the rest of
+            // the square moves it.
             if (node.reroute)
             {
+                const bool selected = view.selectedNodeIDs.count(outerID) > 0;
+                const bool hovered  = (outerState & ElementState::Hover) != ElementState::None;
                 const int16_t y = static_cast<int16_t>(reroutePitch / 2 - kSocketSize / 2);
                 if (!node.properties.empty() && node.properties[0].input.has_value())
                     socketRefs[n][0] = emitSocket(n, 0, /*isOutput=*/false, /*readonly=*/false,
-                        LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize }).Absolute(-kSocketSize / 2, y), /*pinOnlyWhenLit=*/true);
+                        LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize }).Absolute(-kSocketSize / 2, y), /*pinShown=*/hovered || selected);
                 if (!node.properties.empty() && node.properties[0].output)
                     socketRefs[n][1] = emitSocket(n, 0, /*isOutput=*/true, /*readonly=*/false,
-                        LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize }).Absolute(reroutePitch - kSocketSize / 2, y), /*pinOnlyWhenLit=*/true);
+                        LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize }).Absolute(reroutePitch - kSocketSize / 2, y), /*pinShown=*/hovered || selected);
                 const NodeProperty* row = node.properties.empty() ? nullptr : &node.properties[0];
                 const PropertyEndpoint source = row && row->input ? *row->input : PropertyEndpoint{};
                 const tachyon::color4f wireColor = source.valid() && source.nodeIdx < nodeCount
                     && source.propIdx < (int)view.nodes[size_t(source.nodeIdx)].properties.size()
                     ? view.nodes[size_t(source.nodeIdx)].properties[size_t(source.propIdx)].socketColor
                     : row ? row->socketColor : tachyon::color4f{ 0.9f, 0.9f, 0.9f, 1.0f };
-                const bool selected = view.selectedNodeIDs.count(outerID) > 0;
-                const bool hovered  = (outerState & ElementState::Hover) != ElementState::None;
                 VERIFY(elementStorage.AddCustomDraw(outerRes.ref,
                     [wireColor, selected, hovered, ringColor = theme.GetColor("--accent"), backColor = theme.GetColor("--bg-raised"),
                      dot = float(kSocketSize) - styleManager.Px(2.0f), ring = styleManager.Px(2.0f)](tachyon::CustomDrawContext& ctx)
@@ -1312,7 +1372,9 @@ namespace tachyon
                 std::vector<DrawnWire> drawn;
                 std::vector<tachyon::VisualColorStyleIndex> drawnColors;
 
-                const int nodeCount = (int)view.nodes.size();
+                // The nodes laid out this frame; the app may change view.nodes before this
+                // draw runs (later in its frame), so only these are drawn and looked up.
+                const int nodeCount = (int)std::min({ view.nodes.size(), socketRefs.size(), nodeRefs.size() });
                 for (int n = 0; n < nodeCount; ++n)
                 {
                     const auto& node = view.nodes[n];
@@ -1323,7 +1385,7 @@ namespace tachyon
                         if (!prop.input.has_value() || !prop.input->valid()) continue;
 
                         const PropertyEndpoint src = *prop.input;
-                        if (src.nodeIdx < 0 || src.nodeIdx >= (int)socketRefs.size()) continue;
+                        if (src.nodeIdx < 0 || src.nodeIdx >= nodeCount) continue;
                         const auto& srcRefs = socketRefs[src.nodeIdx];
                         const int srcOutIdx = src.propIdx * 2 + 1;
                         if (srcOutIdx < 0 || srcOutIdx >= (int)srcRefs.size()) continue;
@@ -1404,7 +1466,7 @@ namespace tachyon
                     const PropertyEndpoint src = pending.source;
                     const PropertyEndpoint tgt = pending.target;
                     const int srcSide = pending.fromInput ? 0 : 1;   // socketRefs: propIdx * 2 + isOutput
-                    if (src.nodeIdx >= 0 && src.nodeIdx < (int)socketRefs.size())
+                    if (src.nodeIdx >= 0 && src.nodeIdx < nodeCount)
                     {
                         const auto& srcRefs = socketRefs[src.nodeIdx];
                         const int srcSockIdx = src.propIdx * 2 + srcSide;
@@ -1420,7 +1482,7 @@ namespace tachyon
 
                             std::optional<tachyon::int2> tgtPt;
                             tachyon::IntRect tgtRect {};
-                            if (tgt.valid() && tgt.nodeIdx < (int)socketRefs.size())
+                            if (tgt.valid() && tgt.nodeIdx < nodeCount)
                             {
                                 const auto& tgtRefs = socketRefs[tgt.nodeIdx];
                                 const int tgtSockIdx = tgt.propIdx * 2 + (1 - srcSide);
@@ -1441,7 +1503,7 @@ namespace tachyon
                                                         cursorLay, tgtPt, tgtRect, grid, gridOrigin, lane);
 
                             // The output's colour, as a wire has; the input's until there is one.
-                            const PropertyEndpoint colorFrom = pendingOut.valid() ? pendingOut : src;
+                            const PropertyEndpoint colorFrom = pendingOut.valid() && pendingOut.nodeIdx < nodeCount ? pendingOut : src;
                             const tachyon::color4f srcColor =
                                 view.nodes[colorFrom.nodeIdx].properties[colorFrom.propIdx].socketColor;
                             tachyon::VisualColorStyleIndex wireColorIdx = theme.lineYellowStyle;
@@ -1486,52 +1548,6 @@ namespace tachyon
 
         EmitNodeViewOverlays(view, canvasID);
 
-        // The context menu a right click on a wire opened.
-        if (view.wireMenuWire)
-        {
-            if (BeginContextMenu(wireMenuID))
-            {
-                const PropertyEndpoint input = WireInput(*view.wireMenuWire);
-                MenuItem("Delete connection", [&view, input] { CommitNodeViewEdit(view, DisconnectEdit(view, input)); });
-                // A reroute where it was clicked, its dot on the grid point nearest. Its ID is
-                // the app's to release, as for its own nodes.
-                MenuItem("Add reroute", [this, &view, wire = *view.wireMenuWire] {
-                    const int32_t grid = std::max(1, theme.nodeGridSize);
-                    const int2 pos{ GridLineNearest(int32_t(std::lround(view.wireMenuPos.x)) - grid, 0, grid),
-                                    GridLineNearest(int32_t(std::lround(view.wireMenuPos.y)) - grid, 0, grid) };
-                    CommitNodeViewEdit(view, RerouteWireEdit(view, wire, idManager.CreateStaticID(), pos));
-                });
-            }
-            else
-                view.wireMenuWire.reset();
-            EndContextMenu();
-        }
-        // The app's menus for the canvas and for a node, built by it while open.
-        if (view.canvasMenuPos)
-        {
-            if (BeginContextMenu(canvasMenuID))
-            {
-                if (view.onCanvasContextMenu)
-                    view.onCanvasContextMenu(*view.canvasMenuPos);
-            }
-            else
-                view.canvasMenuPos.reset();
-            EndContextMenu();
-        }
-        if (view.nodeMenuNode)
-        {
-            // By its stableID: an edit may have moved it to another index meanwhile, or removed it.
-            const auto it = std::find_if(view.nodes.begin(), view.nodes.end(),
-                                         [&](const NodeModel& node) { return node.stableID == *view.nodeMenuNode; });
-            const bool there = it != view.nodes.end();
-            const bool open  = there && BeginContextMenu(nodeMenuID);
-            if (open && view.onNodeContextMenu)
-                view.onNodeContextMenu(int(it - view.nodes.begin()));
-            if (there)
-                EndContextMenu();
-            if (!open)
-                view.nodeMenuNode.reset();
-        }
     }
 
     void GUIApplication::EmitNodeViewOverlays(NodeView& view, ID canvasID)

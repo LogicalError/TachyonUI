@@ -117,6 +117,7 @@ list(APPEND GUI_CORE_TEST_FILES
   controls_table_cells_test.cpp
   controls_table_virtual_test.cpp
   node_view_control_test.cpp
+  node_view_stress_test.cpp
   node_view_hit_test.cpp
   node_view_marquee_test.cpp
   node_view_wire_route_test.cpp
@@ -196,6 +197,7 @@ if(TACHYON_SDL)
     gpu/gpu_tooltip_test.cpp
     gpu/gpu_cut_text_test.cpp
     gpu/gpu_message_dialog_test.cpp
+    gpu/gpu_node_view_test.cpp
     gpu/gpu_invalid_field_test.cpp
     gpu/gpu_theme_crossfade_test.cpp
     gpu/gpu_sdl_host_event_loop_test.cpp

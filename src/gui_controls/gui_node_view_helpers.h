@@ -137,6 +137,10 @@ namespace tachyon
     /// nodes, and `pos` (its square's top-left; a multiple of the grid puts the dot on a grid
     /// point). The wire's lane overrides go. Empty when there's no such wire.
     NodeViewEdit RerouteWireEdit(const NodeView& view, uint32_t wireKey, ID stableID, int2 pos);
+    /// An edit that takes the reroute at `node` out, with its wire running on as it did
+    /// through it: every input it fed then takes from the output that fed it (or nothing,
+    /// when nothing did). The lanes of its wires go. Empty when `node` isn't a reroute.
+    NodeViewEdit RemoveRerouteEdit(const NodeView& view, int node);
 
     /// Default lane offsets (grid steps) for wires between the same two nodes, so their
     /// lanes don't coincide: k wires, in input order, get (k-1)/2 counting down by one

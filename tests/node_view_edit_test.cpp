@@ -321,6 +321,66 @@ namespace
         EXPECT_TRUE(RerouteWireEdit(view, WireKey(2, 0), ID{ 1 }, {}).empty()) << "a source row that isn't there";
     }
 
+    // A reroute taken out: what it fed takes from what fed it, the nodes after it move down;
+    // undone, the reroute and its wires are back.
+    TEST(NodeViewEdit, RemovingARerouteKeepsItsWireRunning)
+    {
+        // 0 Src: out. 1 R (reroute): in from Src, out. 2 A: in from R. 3 B: in from R.
+        NodeView view;
+        view.nodes.resize(4);
+        view.nodes[0].properties.resize(1);
+        view.nodes[0].properties[0].output = true;
+        view.nodes[1].reroute = true;
+        view.nodes[1].properties.push_back(NodeProperty{ .input = PropertyEndpoint{ 0, 0 }, .output = true });
+        view.nodes[2].properties.push_back(NodeProperty{ .input = PropertyEndpoint{ 1, 0 } });
+        view.nodes[3].properties.push_back(NodeProperty{ .input = PropertyEndpoint{ 1, 0 } });
+        view.wireOverrides[WireKey(2, 0)].laneX = 80;
+        view.ordering = { 0, 1, 2, 3 };
+        const NodeView before = view;
+
+        const NodeViewEdit edit = RemoveRerouteEdit(view, 1);
+        ApplyNodeViewEdit(view, edit);
+        ASSERT_EQ(view.nodes.size(), 3u);
+        EXPECT_EQ(Wires(view), (std::vector<PropertyEndpoint>{ { 0, 0 }, { 0, 0 } })) << "A and B take from Src";
+        EXPECT_TRUE(view.wireOverrides.empty()) << "its wires' lanes go";
+
+        ApplyNodeViewEdit(view, edit, true);
+        ASSERT_EQ(view.nodes.size(), 4u);
+        EXPECT_TRUE(view.nodes[1].reroute);
+        EXPECT_EQ(Wires(view), Wires(before));
+        EXPECT_EQ(view.wireOverrides, before.wireOverrides);
+
+        // Fed from a node after it: that one moves down too.
+        NodeView later = before;
+        later.nodes[1].properties[0].input = PropertyEndpoint{ 3, 1 };
+        later.nodes[3].properties.push_back(NodeProperty{ .output = true });
+        later.nodes[3].properties[0].input = PropertyEndpoint{};
+        ApplyNodeViewEdit(later, RemoveRerouteEdit(later, 1));
+        EXPECT_EQ(Wires(later), (std::vector<PropertyEndpoint>{ { 2, 1 }, {} })) << "A takes from B, now node 2";
+    }
+
+    TEST(NodeViewEdit, RemovingARerouteThatNothingFeeds)
+    {
+        NodeView view;
+        view.nodes.resize(2);
+        view.nodes[0].reroute = true;
+        view.nodes[0].properties.push_back(NodeProperty{ .input = PropertyEndpoint{}, .output = true });
+        view.nodes[1].properties.push_back(NodeProperty{ .input = PropertyEndpoint{ 0, 0 } });
+        const NodeViewEdit edit = RemoveRerouteEdit(view, 0);
+        EXPECT_TRUE(edit.rewires.empty());
+        ApplyNodeViewEdit(view, edit);
+        ASSERT_EQ(view.nodes.size(), 1u);
+        EXPECT_FALSE(view.nodes[0].properties[0].input->valid()) << "what it fed is unwired";
+
+        NodeView none;
+        none.nodes.resize(1);
+        EXPECT_TRUE(RemoveRerouteEdit(none, 0).empty()) << "not a reroute";
+        EXPECT_TRUE(RemoveRerouteEdit(none, 1).empty());
+        EXPECT_TRUE(RemoveRerouteEdit(none, -1).empty());
+        none.nodes[0].reroute = true;
+        EXPECT_FALSE(RemoveRerouteEdit(none, 0).empty()) << "a reroute without rows still goes";
+    }
+
     TEST(NodeViewEdit, RemovingNothingIsNoEdit)
     {
         const NodeView view = MakeGraph();
