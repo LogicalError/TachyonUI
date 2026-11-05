@@ -308,8 +308,14 @@ namespace tachyon::vulkan
         /// graphicsQueue's family.
         uint32_t        graphicsQueueFamily;
 
-        /// Library internal: the layout of a one-image descriptor set.
+        /// Library internal: the layout of the descriptor set the shaders sample images from.
         VkDescriptorSetLayout singleImageDescriptorLayout;
+
+        /// Image slots asked for (VulkanGraphicsContext::SetImageSlotCount); set before Initialize.
+        uint32_t         requestedImageSlots = 4096;
+        /// The image slots there are: the ones asked for, or fewer when the device holds
+        /// fewer sampled images per shader stage. Set by Initialize.
+        uint32_t         imageSlots          = 0;
 
         /// For Sampler::LinearRepeat.
         VkSampler defaultSamplerLinear;

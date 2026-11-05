@@ -43,7 +43,13 @@ TEST_F(GpuTest, TextureDescriptorWriteBeyondSixteenIsValidationClean)
     };
     alloc.init(dc.device, 4, ratios, dc.AllocationCallbacks());
 
-    VkDescriptorSet set = alloc.allocate(dc.device, dc.singleImageDescriptorLayout);
+    // Made with the slots written, as each frame's set is.
+    VkDescriptorSetVariableDescriptorCountAllocateInfo slots{
+        .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+        .descriptorSetCount = 1,
+        .pDescriptorCounts  = &kCount,
+    };
+    VkDescriptorSet set = alloc.allocate(dc.device, dc.singleImageDescriptorLayout, &slots);
 
     // Mirror the per-frame write in VulkanGraphicsContext::RenderWindowFrame:
     // update_set fills in dstSet for each pushed write.

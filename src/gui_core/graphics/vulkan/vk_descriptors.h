@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <algorithm>
 #include <deque>
 #include <span>
 
@@ -53,10 +54,14 @@ namespace tachyon::vulkan
     struct DescriptorAllocatorGrowable 
     {
     public:
-        struct PoolSizeRatio 
+        struct PoolSizeRatio
         {
             VkDescriptorType type;
             float ratio;
+            uint32_t minimum = 0;   ///< a pool has at least this many, so one big set fits
+
+            /// How many of `type` a pool for `setCount` sets has.
+            uint32_t CountFor(uint32_t setCount) const { return std::max(uint32_t(ratio * float(setCount)), minimum); }
         };
 
         void init(VkDevice device, uint32_t initialSets, ::std::span<PoolSizeRatio> poolRatios, const VkAllocationCallbacks* callbacks);

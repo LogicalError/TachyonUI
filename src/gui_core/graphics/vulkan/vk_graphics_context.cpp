@@ -169,16 +169,25 @@ bool tachyon::vulkan::VulkanGraphicsContext::RenderWindowFrame(VkCommandBuffer c
         VkRect2D scissor = { .offset = {0, 0}, .extent { uint32_t(viewport.width), uint32_t(viewport.height) } };
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-        VkDescriptorSet descriptorImageSet = currentFrame.frameDescriptors.allocate(deviceContext.device, deviceContext.singleImageDescriptorLayout);
+        // As many slots as the image set has handed out (one at least), not the whole array.
+        const uint32_t slotsInUse = std::clamp(uint32_t(vulkanImageSet->textures.size()), 1u, deviceContext.imageSlots);
+        VkDescriptorSetVariableDescriptorCountAllocateInfo slotCount
+        {
+            .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+            .descriptorSetCount = 1,
+            .pDescriptorCounts  = &slotsInUse,
+        };
+        VkDescriptorSet descriptorImageSet = currentFrame.frameDescriptors.allocate(deviceContext.device, deviceContext.singleImageDescriptorLayout, &slotCount);
         {
             // One write per run of filled slots; empty slots stay unwritten (PARTIALLY_BOUND).
             DescriptorWriter writer;
             const auto& textures = vulkanImageSet->textures;
-            for (uint32_t first = 0; first < textures.size(); )
+            const uint32_t count = std::min(uint32_t(textures.size()), slotsInUse);
+            for (uint32_t first = 0; first < count; )
             {
                 if (textures[first].imageView == VK_NULL_HANDLE) { ++first; continue; }
                 uint32_t end = first + 1;
-                while (end < textures.size() && textures[end].imageView != VK_NULL_HANDLE) ++end;
+                while (end < count && textures[end].imageView != VK_NULL_HANDLE) ++end;
                 writer.writes.push_back(VkWriteDescriptorSet
                     {
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -336,6 +345,7 @@ tachyon::Result<void> VulkanGraphicsContext::Initialize(tachyon::IWindowBackend*
 
     if (vulkanImageSet == nullptr)   // RecreateDevice keeps the indices the app holds
         vulkanImageSet = new tachyon::vulkan::VulkanImageSet();
+    vulkanImageSet->capacity = deviceContext.imageSlots;
 
     if (bootstrapSurface != VK_NULL_HANDLE)
     {
@@ -496,9 +506,9 @@ tachyon::ImageIndex VulkanImageSet::Allocate(const VkDescriptorImageInfo& descri
         owners[uint32_t(index) - 1]   = nullptr;
         return index;
     }
-    if (textures.size() >= kCapacity)
+    if (textures.size() >= capacity)
     {
-        TACHYON_LOG_ERROR(kLogVulkan, "texture set is full ({} images)", kCapacity);
+        TACHYON_LOG_ERROR(kLogVulkan, "texture set is full ({} images)", capacity);
         return tachyon::ImageIndex::Invalid;
     }
     textures.push_back(descriptor);
@@ -976,14 +986,28 @@ bool tachyon::vulkan::VulkanDeviceContext::InitializeSharedResources()
         .push_function([=, this]() { vkDestroyFence(device, immFence, AllocationCallbacks()); });
 
     {
+        // As many image slots as asked for, up to what the device can sample in one stage
+        // (combined image samplers count as both samplers and sampled images).
+        VkPhysicalDeviceProperties properties{};
+        vkGetPhysicalDeviceProperties(chosenGPU, &properties);
+        const VkPhysicalDeviceLimits& limits = properties.limits;
+        const uint32_t deviceSlots = std::min({ limits.maxPerStageDescriptorSamplers, limits.maxPerStageDescriptorSampledImages,
+                                                limits.maxDescriptorSetSamplers, limits.maxDescriptorSetSampledImages,
+                                                limits.maxPerStageResources });
+        imageSlots = std::max(1u, std::min(requestedImageSlots, deviceSlots));
+        if (imageSlots < requestedImageSlots)
+            TACHYON_LOG_WARNING(kLogVulkan, "{} image slots asked for; the device holds {}", requestedImageSlots, imageSlots);
+
         DescriptorLayoutBuilder builder;
         builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        builder.bindings[0].descriptorCount = VulkanImageSet::kCapacity; // bindless texture array
+        builder.bindings[0].descriptorCount = imageSlots; // bindless texture array
 
         // PARTIALLY_BOUND: each frame only textures.size() slots are written and
-        // only those are indexed by the shader; the rest stay undefined. Relies
-        // on the descriptor-indexing features enabled at device creation.
-        VkDescriptorBindingFlags bindingFlags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+        // only those are indexed by the shader; the rest stay undefined.
+        // VARIABLE_DESCRIPTOR_COUNT: each frame's set is made with only the slots in use.
+        // Relies on the descriptor-indexing features enabled at device creation.
+        VkDescriptorBindingFlags bindingFlags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT
+                                              | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
         VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo
         {
             .sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,

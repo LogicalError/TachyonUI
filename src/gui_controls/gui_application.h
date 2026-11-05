@@ -152,6 +152,10 @@ namespace tachyon
         /// The optional fallback fonts (Noto: other scripts, emoji, symbols), relative to
         /// the resource root, e.g. "fonts/Noto-otf". Empty: only the built-in fonts.
         std::string_view fallbackFonts {};
+        /// How many images can be registered at once, fonts, icons and gradients included.
+        /// 0: the backend's default (Vulkan: 4096). The device may hold fewer;
+        /// graphicsContext->GetImageSlotCount() says how many there are.
+        uint32_t imageSlots = 0;
     };
 
     /// The application: owns the windows, the systems and the frame loop. Subclass it, build

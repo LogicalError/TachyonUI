@@ -74,6 +74,12 @@ namespace tachyon
 
         /// Host memory functions for the graphics API's allocations. Call before Initialize.
         virtual void SetAllocationHooks(const AllocationHooks& hooks) = 0;
+        /// How many images can be registered at once (fonts, icons, gradients and the app's
+        /// own share them). Call before Initialize; the backend may hold fewer when the device
+        /// does (GetImageSlotCount says). The default does nothing.
+        virtual void SetImageSlotCount(uint32_t) {}
+        /// How many images can be registered at once; 0 when the backend doesn't say.
+        virtual uint32_t GetImageSlotCount() const { return 0; }
         /// Brings the device up; GUIApplication::Initialize calls it once, before any window
         /// context. It may make windows with the backend (Vulkan: a hidden one, to pick a GPU that
         /// can present to it).

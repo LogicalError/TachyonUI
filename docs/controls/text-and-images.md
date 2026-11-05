@@ -116,6 +116,19 @@ Draws an image, stretched to fill its box.
 - Register the image first with `graphicsContext->RegisterImage`. It gives you an
   `ImageIndex`.
 - Pass `sourceSize`, the image's size in pixels, to keep its aspect ratio.
+- `graphicsContext->UnregisterImage` frees its slot for another image.
+- Registered images share their slots with the fonts, icons and gradients: 4096 by
+  default.
+  - For more (or fewer), set `InitializeOptions::imageSlots` before `Initialize`.
+  - A device that can't sample that many in one shader stage gives fewer, and a warning
+    is logged. `graphicsContext->GetImageSlotCount()` says how many there are.
+  - `RegisterImage` returns `ImageIndex::Invalid` once they're all taken.
+
+  ```cpp
+  tachyon::GUIApplication::InitializeOptions options;
+  options.imageSlots = 16384;   // thumbnails for a big library
+  app.Initialize(options);
+  ```
 
 ```cpp
 void Image(ID id, ImageIndex image, StyleRef style, LayoutOverride&& constraints = {});
