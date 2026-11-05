@@ -759,8 +759,11 @@ namespace tachyon
         int32_t socketInsetR = kSocketSize / 2;
         // .node bottom chrome; the last row gives it back so the bottom lands on the grid.
         int32_t nodeBottomChromeV = 0;
+        // .node left chrome: where its rows start, which a stand-in's sockets are placed from.
+        int32_t nodeLeftChrome = 0;
         if (const tachyon::LayoutStyle* nodeLS = styleManager.GetLayoutStyle(theme.nodeStyleRef.layoutStyleIndex))
         {
+            nodeLeftChrome    = nodeLS->borderWidths.left + nodeLS->padding.left;
             nodeTopChromeV    = nodeLS->borderWidths.top + nodeLS->padding.top;
             nodeBottomChromeV = nodeLS->borderWidths.bottom + nodeLS->padding.bottom;
             socketInsetL  += nodeLS->borderWidths.left  + nodeLS->padding.left;
@@ -891,6 +894,39 @@ namespace tachyon
             [[maybe_unused]] bool poppedHandles = idManager.PopParent();
         }
 
+        // ---- Virtual layout ----
+        // A node far out of view stands in as its box (its last size) and its sockets: no
+        // header, rows or renderBody. In view means in the canvas's area grown by half of
+        // it each way, in node.pos space. Two tab targets of one ranged ID per stand-in keep
+        // its place in the tab order: Tab lands on the first, Shift+Tab on the second, and
+        // the node is then laid out and the focus moved onto its first or last control.
+        const bool virtualize = view.virtualizeLayout && view.lastInnerSize.x > 0 && view.lastInnerSize.y > 0;
+        tachyon::float2 inViewMin{}, inViewMax{};
+        if (virtualize)
+        {
+            const tachyon::float3x2 toCanvas = view.transform.Inverse();
+            const float w = float(view.lastInnerSize.x), h = float(view.lastInnerSize.y);
+            inViewMin = inViewMax = toCanvas.TransformPoint(tachyon::float2{ -w, -h });
+            for (const tachyon::float2 corner : { tachyon::float2{ w, -h }, tachyon::float2{ -w, h }, tachyon::float2{ w, h } })
+            {
+                const tachyon::float2 c = toCanvas.TransformPoint(corner);
+                inViewMin = { std::min(inViewMin.x, c.x), std::min(inViewMin.y, c.y) };
+                inViewMax = { std::max(inViewMax.x, c.x), std::max(inViewMax.y, c.y) };
+            }
+        }
+        const ID standInRange = nodeCount > 0 ? idManager.AllocateRangedID(uint32_t(nodeCount) * 2, "node-stand-in") : ID::Invalid();
+        int  enteredNode = -1;      // the node a stand-in's tab target took the focus into
+        bool enteredFromAfter = false;
+        if (standInRange != ID::Invalid())
+        {
+            const ID focused = guiStateManager.Interaction().GetFocusedID();
+            for (int n = 0; n < nodeCount && enteredNode < 0; ++n)
+                if (focused == idManager.GetSubID(standInRange, uint32_t(2 * n)))
+                    enteredNode = n;
+                else if (focused == idManager.GetSubID(standInRange, uint32_t(2 * n + 1)))
+                    enteredNode = n, enteredFromAfter = true;
+        }
+
         // ---- Render each node (back to front) ----
         for (int orderIdx = 0; orderIdx < nodeCount; ++orderIdx)
         {
@@ -912,6 +948,13 @@ namespace tachyon
             // Outer .node element: click-drag moves the node, double-click toggles collapse.
             // Uses the node's stable ID; a dynamic ID would change with z-order reshuffles.
             const ID outerID = node.stableID;
+            // Laid out whole: in view, holding the focus, tabbed into, or never laid out (its
+            // size unknown); a reroute or a collapsed node is no more than its stand-in.
+            const bool standIn = virtualize && !node.reroute && !node.collapsed
+                && node.lastSize.x > 0 && node.lastSize.y > 0
+                && n != enteredNode && outerID != view.focusedNodeID
+                && (float(node.pos.x + node.lastSize.x) < inViewMin.x || float(node.pos.x) > inViewMax.x
+                    || float(node.pos.y + node.lastSize.y) < inViewMin.y || float(node.pos.y) > inViewMax.y);
             ElementState outerState = guiStateManager.GetCurrentState(outerID);
             if (view.selectedNodeIDs.count(outerID)) outerState |= ElementState::Selected;
             Element outer
@@ -1038,6 +1081,7 @@ namespace tachyon
             // MinWidth (not Fixed): shrink-wraps content, floored at the grid-snapped width.
             auto outerRes = elementStorage.Add(std::move(outer), node.reroute
                 ? LayoutOverride{}.FixedSize(Pixels{ reroutePitch }, Pixels{ reroutePitch }).Absolute(node.pos.x, node.pos.y)
+                : standIn ? LayoutOverride{}.FixedSize(Pixels{ node.lastSize.x }, Pixels{ node.lastSize.y }).Absolute(node.pos.x, node.pos.y)
                 : LayoutOverride{}.MinWidth(Pixels{ nodeWidth }).Absolute(node.pos.x, node.pos.y));
             VERIFY(outerRes.status);
             VERIFY(windowRegistry.Add(outerRes.ref));
@@ -1054,6 +1098,36 @@ namespace tachyon
             // Scope this node's dynamic IDs under its stable ID (BeginChildren doesn't push
             // an ID parent), so they don't change when z-order reshuffles the nodes.
             [[maybe_unused]] bool pushed = idManager.PushParent(node.stableID);
+
+            // A stand-in: its sockets where its rows would put them (the first and last pitch
+            // of each), and its two tab targets.
+            if (standIn)
+            {
+                const int32_t pitch = 2 * grid;
+                int32_t rowTop = pitch;   // below the header slot
+                for (int p = 0; p < (int)node.properties.size(); ++p)
+                {
+                    const NodeProperty& prop = node.properties[size_t(p)];
+                    const int32_t span = prop.rowSpan > 0 ? prop.rowSpan : 1;
+                    if (prop.input.has_value())
+                        socketRefs[n][p * 2 + 0] = emitSocket(n, p, /*isOutput=*/false, /*readonly=*/false,
+                            LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize })
+                                           .Absolute(-socketInsetL + nodeLeftChrome, rowTop + pitch / 2 - kSocketSize / 2));
+                    if (prop.output)
+                        socketRefs[n][p * 2 + 1] = emitSocket(n, p, /*isOutput=*/true, /*readonly=*/false,
+                            LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize })
+                                           .Absolute(nodeWidth - socketInsetR + nodeLeftChrome, rowTop + pitch * span - pitch / 2 - kSocketSize / 2));
+                    rowTop += pitch * span;
+                }
+                tabChainManager.RegisterTabTarget(idManager.GetSubID(standInRange, uint32_t(2 * n)));
+                tabChainManager.RegisterTabTarget(idManager.GetSubID(standInRange, uint32_t(2 * n + 1)));
+                [[maybe_unused]] bool poppedStandIn = idManager.PopParent();
+                VERIFY(elementStorage.EndChildren());
+                continue;
+            }
+            // Tabbed into: note its controls, to move the focus onto the first (or last).
+            if (n == enteredNode)
+                tabChainManager.BeginSpan();
 
             // A reroute: its first row's sockets on the square's left and right edges, their
             // pins showing while the reroute is hovered or selected (drag a wire in or out
@@ -1252,6 +1326,13 @@ namespace tachyon
                 }
             }
 
+            if (n == enteredNode)
+            {
+                tabChainManager.EndSpan();
+                const ID onto = enteredFromAfter ? tabChainManager.SpanLast() : tabChainManager.SpanFirst();
+                guiStateManager.Interaction().SetFocusID(onto != ID::Invalid() ? onto : outerID);
+            }
+
             [[maybe_unused]] bool popped = idManager.PopParent();
             VERIFY(elementStorage.EndChildren()); // close outer .node
         }
@@ -1261,10 +1342,15 @@ namespace tachyon
         {
             const auto& interaction = guiStateManager.Interaction();
             const ID focusedID = interaction.GetFocusedID();
+            // The node holding the focus is laid out whole next frame, a stand-in never.
+            const std::vector<ID> around = focusedID != ID::Invalid() ? CollectPropagatedAncestors(elementStorage, focusedID) : std::vector<ID>{};
+            view.focusedNodeID = ID::Invalid();
+            for (int n = 0; n < nodeCount; ++n)
+                if (std::find(around.begin(), around.end(), view.nodes[n].stableID) != around.end())
+                    view.focusedNodeID = view.nodes[n].stableID;
             if (focusedID != view.revealedFocusID && interaction.IsFocusVisible())
             {
                 view.revealedFocusID = focusedID;
-                const std::vector<ID> around = CollectPropagatedAncestors(elementStorage, focusedID);
                 for (int n = 0; n < nodeCount; ++n)
                     if (std::find(around.begin(), around.end(), view.nodes[n].stableID) != around.end())
                     {

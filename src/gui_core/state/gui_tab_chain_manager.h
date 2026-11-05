@@ -31,6 +31,11 @@ namespace tachyon
         ID m_firstTabTarget = ID::Invalid();
         ID m_lastTabTarget = ID::Invalid();
         ID m_defaultFocusID = ID::Invalid();
+
+        /// BeginSpan..EndSpan: the first and last targets registered in between.
+        bool m_spanOpen = false;
+        ID   m_spanFirst = ID::Invalid();
+        ID   m_spanLast = ID::Invalid();
         
     public:
         void BeginFrame(const GUIStateManager& guiStateManager);
@@ -76,9 +81,29 @@ namespace tachyon
             {
                 m_prevTabTarget = m_lastTabTarget;
             }
-            
+
             m_lastTabTarget = elementID;
+
+            if (m_spanOpen)
+            {
+                if (m_spanFirst == ID::Invalid())
+                    m_spanFirst = elementID;
+                m_spanLast = elementID;
+            }
         }
+
+        /// Notes the first and last targets the active window registers until EndSpan, e.g.
+        /// the controls of one part of a view, to move the focus onto them.
+        void BeginSpan()
+        {
+            m_spanOpen  = true;
+            m_spanFirst = ID::Invalid();
+            m_spanLast  = ID::Invalid();
+        }
+        void EndSpan() { m_spanOpen = false; }
+        /// The first and last targets of the last span; Invalid when it had none.
+        ID SpanFirst() const { return m_spanFirst; }
+        ID SpanLast() const { return m_spanLast; }
         
         /// Ends the window begun by BeginWindow; its chain wraps around.
         void EndWindow()
