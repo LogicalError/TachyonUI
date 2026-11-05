@@ -42,7 +42,11 @@ namespace tachyon
         void BringToFront(OSWindowHandle window) override;
         OSWindowHandle GetWindowUnderMouse() override;
         OSWindowHandle GetActiveWindow() override;
-        uint32_t GetFocusChangeCount() const override { return m_os.GetFocusChangeCount() + m_focusChanges; }
+        /// SetFocus's changes and the OS's. While an image window has the focus, the OS
+        /// focus moving between the OS windows opened from image windows (their menus)
+        /// and none of the app's is left out: the host says where the focus is, and the
+        /// OS giving or taking a menu's window the focus would close the menu.
+        uint32_t GetFocusChangeCount() const override;
         void PollEvents(std::function<void(OSWindowHandle, IWindowContext*)> cleanup) override;
         int2 GetScreenMousePos() override;
         std::optional<color4b> ReadScreenPixel(int2 screenPos) override { return m_os.ReadScreenPixel(screenPos); }
@@ -71,6 +75,7 @@ namespace tachyon
     private:
         struct ImageWindow;
         ImageWindow* Find(OSWindowHandle window) const;
+        bool IsOpenedFromImageWindow(OSWindowHandle window) const;
 
         IWindowBackend& m_os;
         struct State;

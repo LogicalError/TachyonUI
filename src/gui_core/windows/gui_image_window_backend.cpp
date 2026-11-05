@@ -21,6 +21,11 @@ namespace tachyon
         int2                                      pointerPos{};
         MouseButtons                              pointerButtons = MouseButtons::None;
         ImageWindow*                              focusWindow   = nullptr;
+        std::vector<OSWindowHandle>               openedFromImage;   // OS windows with an image window as parent
+        // The OS focus changes counted so far, of those seen, and the OS's active window then.
+        uint32_t                                  osFocusCounted = 0;
+        uint32_t                                  osFocusSeen    = 0;
+        OSWindowHandle                            osActiveSeen   = nullptr;
     };
 
     ImageWindowBackend::ImageWindowBackend(IWindowBackend& osBackend)
@@ -55,6 +60,27 @@ namespace tachyon
         m_state->focusWindow = focus;
     }
 
+    bool ImageWindowBackend::IsOpenedFromImageWindow(OSWindowHandle window) const
+    {
+        const auto& opened = m_state->openedFromImage;
+        return window != nullptr && std::find(opened.begin(), opened.end(), window) != opened.end();
+    }
+
+    uint32_t ImageWindowBackend::GetFocusChangeCount() const
+    {
+        State& s = *m_state;
+        if (const uint32_t os = m_os.GetFocusChangeCount(); os != s.osFocusSeen)
+        {
+            const OSWindowHandle active = m_os.GetActiveWindow();
+            auto menuOrNone = [this](OSWindowHandle w) { return w == nullptr || IsOpenedFromImageWindow(w); };
+            if (s.focusWindow == nullptr || !menuOrNone(s.osActiveSeen) || !menuOrNone(active))
+                s.osFocusCounted += os - s.osFocusSeen;
+            s.osFocusSeen  = os;
+            s.osActiveSeen = active;
+        }
+        return s.osFocusCounted + m_focusChanges;
+    }
+
 
     OSWindowHandle ImageWindowBackend::CreateWindow(std::string_view title, int2 size, WindowFlags windowFlags, OSWindowHandle parentOSHandle)
     {
@@ -64,7 +90,14 @@ namespace tachyon
     OSWindowHandle ImageWindowBackend::CreateWindow(std::string_view title, IntRect rect, WindowFlags windowFlags, OSWindowHandle parentOSHandle)
     {
         if ((windowFlags & WindowFlags::RenderToImage) == WindowFlags::None)
-            return m_os.CreateWindow(title, rect, windowFlags, IsImageWindow(parentOSHandle) ? nullptr : parentOSHandle);
+        {
+            if (!IsImageWindow(parentOSHandle))
+                return m_os.CreateWindow(title, rect, windowFlags, parentOSHandle);
+            const OSWindowHandle handle = m_os.CreateWindow(title, rect, windowFlags, nullptr);
+            if (handle != nullptr)
+                m_state->openedFromImage.push_back(handle);
+            return handle;
+        }
         auto window = std::make_unique<ImageWindow>();
         window->rect = rect;
         const auto handle = reinterpret_cast<OSWindowHandle>(window.get());
@@ -76,7 +109,12 @@ namespace tachyon
     {
         ImageWindow* w = Find(window);
         if (w == nullptr)
+        {
+            std::erase(m_state->openedFromImage, window);
+            if (m_state->osActiveSeen == window)
+                m_state->osActiveSeen = nullptr;
             return m_os.DestroyWindow(window);
+        }
         if (m_state->pointerWindow == w)
             m_state->pointerWindow = nullptr;
         if (m_state->focusWindow == w)
