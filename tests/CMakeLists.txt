@@ -74,6 +74,7 @@ list(APPEND GUI_CORE_TEST_FILES
   layout_grid_test.cpp
   layout_text_wrapping_test.cpp
   os_window_manager_test.cpp
+  image_window_backend_test.cpp
   label_handler_test.cpp
   numeric_field_format_test.cpp
   reorderable_focus_test.cpp
