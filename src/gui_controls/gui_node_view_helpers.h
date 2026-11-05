@@ -90,6 +90,17 @@ namespace tachyon
                              int32_t grid, int2 gridOrigin,
                              const WireRouteOverrides& overrides = {});
 
+    /// A curved wire from `outPt` to `inPt`, leaving the output to the right and entering the
+    /// input from the left. Its control points are half the horizontal distance out (at
+    /// least `reach`), so a wire running backwards loops round. The route's points are the
+    /// four a curved line is drawn from (WireCurvePoint), and it has no handles.
+    WireRoute BuildCurvedWireRoute(int2 outPt, int2 inPt, int32_t reach);
+
+    /// The point at `t` (0 to 1) along the curve the renderer draws for a line with points
+    /// p0, p1, p2, p3: two quadratic Beziers, p0-p1-m and m-p2-p3, where m is halfway
+    /// between p1 and p2.
+    float2 WireCurvePoint(int2 p0, int2 p1, int2 p2, int2 p3, float t);
+
     /// Stable key for a wire, identified by its target (input) endpoint - each input carries
     /// at most one incoming wire. Keys the per-wire lane overrides and drag handles.
     constexpr uint32_t WireKey(int targetNode, int targetProp)

@@ -607,6 +607,10 @@ namespace tachyon
                     CommitNodeViewEdit(showcase.nodeView, AddNodeEdit(showcase.nodeView, RerouteNode(at, { 0.20f, 0.75f, 0.72f, 1.0f })));
                 });
                 MenuItem("Frame all", [this] { FrameAllNodes(showcase.nodeView); });
+                const bool curved = showcase.nodeView.wireShape == NodeWireShape::Curved;
+                MenuItem(curved ? "Use grid wires" : "Use curved wires", [this, curved] {
+                    showcase.nodeView.wireShape = curved ? NodeWireShape::Orthogonal : NodeWireShape::Curved;
+                });
             };
             showcase.nodeView.onNodeContextMenu = [this](int node)
             {
