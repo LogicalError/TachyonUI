@@ -20,9 +20,10 @@ namespace tachyon
 
     /// The node view's zoom (1 = 100%).
     float NodeViewZoom(const NodeView& view);
-    /// Zooms by `factor` around `pivot` (pixels from the canvas centre), within 10%..100%.
+    /// Zooms by `factor` around `pivot` (pixels from the canvas centre), within the view's
+    /// minZoom..maxZoom.
     void  ZoomNodeView(NodeView& view, float factor, int2 pivot = {});
-    /// Centres the view on canvas point `center` at `zoom` (clamped to 10%..100%).
+    /// Centres the view on canvas point `center` at `zoom` (clamped to minZoom..maxZoom).
     void  SetNodeViewCenter(NodeView& view, float2 center, float zoom);
     /// Centres and zooms the view on all nodes (Home, the Fit button).
     void  FrameAllNodes(NodeView& view);

@@ -22,14 +22,63 @@ namespace
         EXPECT_NEAR(after.y, before.y, 1e-3f);
     }
 
-    TEST(NodeViewZoom, StaysBetweenTenAndAHundredPercent)
+    // Past 100% up to 400%, and down to 10%, by default.
+    TEST(NodeViewZoom, StaysBetweenTenAndFourHundredPercent)
     {
         NodeView view;
         ZoomNodeView(view, 1.25f);
-        EXPECT_NEAR(NodeViewZoom(view), 1.0f, 1e-4f);
+        EXPECT_NEAR(NodeViewZoom(view), 1.25f, 1e-4f) << "past 100%";
+        for (int i = 0; i < 40; ++i)
+            ZoomNodeView(view, 2.0f);
+        EXPECT_NEAR(NodeViewZoom(view), 4.0f, 1e-4f);
         for (int i = 0; i < 40; ++i)
             ZoomNodeView(view, 0.5f);
         EXPECT_NEAR(NodeViewZoom(view), 0.1f, 1e-4f);
+    }
+
+    // An app's own range; one set wrong (none, or upside down) is put right.
+    TEST(NodeViewZoom, TheViewsOwnRange)
+    {
+        NodeView view;
+        view.minZoom = 0.5f;
+        view.maxZoom = 2.0f;
+        for (int i = 0; i < 10; ++i) ZoomNodeView(view, 2.0f);
+        EXPECT_NEAR(NodeViewZoom(view), 2.0f, 1e-4f);
+        for (int i = 0; i < 10; ++i) ZoomNodeView(view, 0.5f);
+        EXPECT_NEAR(NodeViewZoom(view), 0.5f, 1e-4f);
+        SetNodeViewCenter(view, {}, 8.0f);
+        EXPECT_NEAR(NodeViewZoom(view), 2.0f, 1e-4f);
+        SetNodeViewCenter(view, {}, 0.01f);
+        EXPECT_NEAR(NodeViewZoom(view), 0.5f, 1e-4f);
+
+        view.maxZoom = 0.25f;   // below the minimum: the minimum
+        SetNodeViewCenter(view, {}, 3.0f);
+        EXPECT_NEAR(NodeViewZoom(view), 0.5f, 1e-4f);
+        view.minZoom = 0.0f;    // none: 10%
+        view.maxZoom = 1.0f;
+        SetNodeViewCenter(view, {}, 0.01f);
+        EXPECT_NEAR(NodeViewZoom(view), 0.1f, 1e-4f);
+        view.minZoom = -1.0f;
+        SetNodeViewCenter(view, {}, 0.01f);
+        EXPECT_NEAR(NodeViewZoom(view), 0.1f, 1e-4f);
+    }
+
+    // Fit doesn't magnify: a small graph shows at 100%; a large one fits.
+    TEST(NodeViewZoom, FitStopsAtAHundredPercent)
+    {
+        NodeView view;
+        view.lastInnerSize = { 1000, 800 };
+        view.nodes.resize(1);
+        view.nodes[0].lastSize = { 100, 50 };
+        FrameAllNodes(view);
+        EXPECT_NEAR(NodeViewZoom(view), 1.0f, 1e-4f);
+
+        view.nodes[0].lastSize = { 2000, 400 };   // wider than the view
+        FrameAllNodes(view);
+        EXPECT_NEAR(NodeViewZoom(view), 1000.0f / 2000.0f * 0.9f, 1e-4f);
+        view.nodes[0].lastSize = { 400, 1600 };   // taller
+        FrameAllNodes(view);
+        EXPECT_NEAR(NodeViewZoom(view), 800.0f / 1600.0f * 0.9f, 1e-4f);
     }
 
     TEST(NodeViewZoom, SetCenterShowsThatPointInTheMiddle)

@@ -183,6 +183,15 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
   view.showMinimap = false;
   ```
 
+- `minZoom`, `maxZoom`: how far the wheel, the keys and the zoom controls go, 10% to 400%
+  by default (1 is 100%).
+  - Text is drawn at the zoom's size, so it stays sharp above 100%.
+  - Fit (and Home) shows a small graph at 100% at most, rather than magnifying it.
+
+  ```cpp
+  view.maxZoom = 2.0f;   // up to 200%
+  ```
+
 **Focus.**
 
 - Tab reaches the controls in every node, visible or not.
