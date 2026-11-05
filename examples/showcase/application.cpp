@@ -589,6 +589,16 @@ namespace tachyon
                 CommitNodeViewEdit(view, edit);
             };
 
+            // The selection changing, as a properties panel would follow it.
+            showcase.nodeView.onSelectionChanged = [this]
+            {
+                std::string titles;
+                for (const NodeModel& node : showcase.nodeView.nodes)
+                    if (showcase.nodeView.selectedNodeIDs.contains(node.stableID))
+                        titles += (titles.empty() ? "" : ", ") + node.title;
+                TACHYON_LOG_INFO(kLogShowcase, "Node selection: {}", titles.empty() ? std::string("none") : titles);
+            };
+
             // Right-click menus: the canvas's adds a node where it was clicked; a node's
             // collapses or removes the selection (the node is in it).
             showcase.nodeView.onCanvasContextMenu = [this](float2 at)

@@ -875,6 +875,73 @@ namespace tachyon
             EXPECT_FALSE(view.nodeMenuNode);
         }
 
+        // ---- The selection changing ----
+
+        // A click that selects a node is reported once, with the generation up one; the same
+        // click again changes nothing and isn't.
+        TEST_F(NodeViewControlTest, ASelectionChangeIsReportedOnce)
+        {
+            Settle();
+            std::vector<std::unordered_set<tachyon::ID>> reported;
+            view.onSelectionChanged = [&] { reported.push_back(view.selectedNodeIDs); };
+            const uint32_t before = view.selectionGeneration;
+
+            app.ClickAt(HeaderOf(nodeB));
+            Frame();
+            Frame();
+            ASSERT_EQ(reported.size(), 1u);
+            EXPECT_EQ(reported[0], std::unordered_set<tachyon::ID>{ nodeB });
+            EXPECT_EQ(view.selectionGeneration, before + 1);
+
+            app.AdvanceTime(1000);   // not a double-click
+            app.ClickAt(HeaderOf(nodeB));
+            Frame();
+            Frame();
+            EXPECT_EQ(reported.size(), 1u) << "selected already";
+            EXPECT_EQ(view.selectionGeneration, before + 1);
+
+            app.AdvanceTime(1000);
+            app.ClickAt(HeaderOf(nodeA));
+            Frame();
+            Frame();
+            ASSERT_EQ(reported.size(), 2u);
+            EXPECT_EQ(reported[1], std::unordered_set<tachyon::ID>{ nodeA }) << "another node instead";
+            EXPECT_EQ(view.selectionGeneration, before + 2);
+
+            app.AdvanceTime(1000);
+            app.ClickAt(CanvasPoint());
+            Frame();
+            Frame();
+            ASSERT_EQ(reported.size(), 3u);
+            EXPECT_TRUE(reported[2].empty()) << "a click on the canvas clears it";
+        }
+
+        // However it changes: a removed node, or the app setting it, is reported too.
+        TEST_F(NodeViewControlTest, ASelectionChangedByARemovalOrTheAppIsReported)
+        {
+            Settle();
+            int reported = 0;
+            view.onSelectionChanged = [&] { ++reported; };
+            view.selectedNodeIDs = { nodeA, nodeB };
+            Frame();
+            EXPECT_EQ(reported, 1) << "the app set it";
+            Frame();
+            EXPECT_EQ(reported, 1) << "nothing changed since";
+
+            const int first[] = { 0 };
+            ApplyNodeViewEdit(view, RemoveNodesEdit(view, first));
+            Frame();
+            EXPECT_EQ(reported, 2) << "a selected node went";
+            EXPECT_EQ(view.selectedNodeIDs, std::unordered_set<tachyon::ID>{ nodeB });
+
+            // Without the callback, the generation still counts.
+            view.onSelectionChanged = {};
+            const uint32_t before = view.selectionGeneration;
+            view.selectedNodeIDs.clear();
+            Frame();
+            EXPECT_EQ(view.selectionGeneration, before + 1);
+        }
+
         TEST_F(NodeViewControlTest, NodesLayOutAtTheirPositions)
         {
             Settle();

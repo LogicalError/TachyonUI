@@ -118,6 +118,16 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
   CommitNodeViewEdit(view, edit);
   ```
 
+- `selectedNodeIDs`: the selected nodes, by `stableID`. When it changes, however it
+  changes (clicks, the marquee, keys, a removed node, your own code), the view calls
+  `onSelectionChanged` once and adds one to `selectionGeneration`, at the end of the
+  `RenderNodeView` that finds it changed. Use either; the counter suits code that already
+  looks each frame.
+
+  ```cpp
+  view.onSelectionChanged = [this] { inspector.Show(view.selectedNodeIDs); };
+  ```
+
 - `onWireDroppedOnCanvas(from, fromOutput, canvasPos)`: a new wire was let go over the empty
   canvas, for example to offer the nodes it could connect to.
   - `from` is the socket it was dragged from: an output when `fromOutput`, else an input.

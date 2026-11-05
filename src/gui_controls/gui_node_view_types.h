@@ -239,6 +239,14 @@ namespace tachyon
 
         /// Selected node stableIDs.
         std::unordered_set<tachyon::ID>     selectedNodeIDs;
+        /// Called when the selection changed, once per RenderNodeView that finds it changed:
+        /// by the user (clicks, the marquee, keys), a removed node, or the app itself. Read
+        /// selectedNodeIDs for what it is now.
+        std::function<void()>               onSelectionChanged;
+        /// Goes up by one each time onSelectionChanged would be called, for an app that
+        /// would rather compare it than be called.
+        uint32_t                            selectionGeneration = 0;
+        std::unordered_set<tachyon::ID>     reportedSelection;   ///< internal: the selection last reported
         /// StableID of the last clicked node.
         tachyon::ID                         lastClickedNodeID = tachyon::ID::Invalid();
 

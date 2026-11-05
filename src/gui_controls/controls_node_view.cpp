@@ -1548,6 +1548,15 @@ namespace tachyon
 
         EmitNodeViewOverlays(view, canvasID);
 
+        // The selection, however it changed since the view last looked (a click, the marquee,
+        // a key, a removed node, the app): once, with the frame's other changes made.
+        if (view.selectedNodeIDs != view.reportedSelection)
+        {
+            view.reportedSelection = view.selectedNodeIDs;
+            ++view.selectionGeneration;
+            if (view.onSelectionChanged)
+                view.onSelectionChanged();
+        }
     }
 
     void GUIApplication::EmitNodeViewOverlays(NodeView& view, ID canvasID)
