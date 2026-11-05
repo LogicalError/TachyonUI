@@ -199,28 +199,68 @@ namespace tachyon
         return offsets;
     }
 
+    WireRoute BuildCurvedWireRoute(int2 outPt, int2 inPt, int32_t reach)
+    {
+        const int32_t out = std::max(std::abs(inPt.x - outPt.x) / 2, reach);
+        WireRoute route;
+        route.points = { outPt, { outPt.x + out, outPt.y }, { inPt.x - out, inPt.y }, inPt };
+        route.curved = true;
+        return route;
+    }
+
+    float2 WireCurvePoint(int2 p0, int2 p1, int2 p2, int2 p3, float t)
+    {
+        const float2 m{ 0.5f * float(p1.x + p2.x), 0.5f * float(p1.y + p2.y) };
+        auto quadratic = [](float2 a, float2 b, float2 c, float u) {
+            const float s = 1.0f - u;
+            return float2{ s * s * a.x + 2.0f * s * u * b.x + u * u * c.x,
+                           s * s * a.y + 2.0f * s * u * b.y + u * u * c.y };
+        };
+        if (t < 0.5f)
+            return quadratic({ float(p0.x), float(p0.y) }, { float(p1.x), float(p1.y) }, m, 2.0f * t);
+        return quadratic(m, { float(p2.x), float(p2.y) }, { float(p3.x), float(p3.y) }, 2.0f * t - 1.0f);
+    }
+
     std::optional<uint32_t> WireAt(std::span<const DrawnWire> wires, int2 p, float tolerance)
     {
         std::optional<uint32_t> best;
         float bestDistance = tolerance;
-        for (const DrawnWire& wire : wires)
-            for (size_t i = 0; i + 1 < wire.points.size(); ++i)
+        const float2 q{ float(p.x), float(p.y) };
+        auto test = [&](float2 a, float2 b, uint32_t wireKey)
+        {
+            // Distance from q to the segment.
+            const float dx = b.x - a.x, dy = b.y - a.y;
+            const float lengthSq = dx * dx + dy * dy;
+            float t = lengthSq > 0.0f ? ((q.x - a.x) * dx + (q.y - a.y) * dy) / lengthSq : 0.0f;
+            t = std::clamp(t, 0.0f, 1.0f);
+            const float ex = q.x - (a.x + t * dx), ey = q.y - (a.y + t * dy);
+            const float distance = std::sqrt(ex * ex + ey * ey);
+            if (distance <= bestDistance)
             {
-                // Distance from p to the segment.
-                const float ax = float(wire.points[i].x),     ay = float(wire.points[i].y);
-                const float bx = float(wire.points[i + 1].x), by = float(wire.points[i + 1].y);
-                const float dx = bx - ax, dy = by - ay;
-                const float lengthSq = dx * dx + dy * dy;
-                float t = lengthSq > 0.0f ? ((float(p.x) - ax) * dx + (float(p.y) - ay) * dy) / lengthSq : 0.0f;
-                t = std::clamp(t, 0.0f, 1.0f);
-                const float ex = float(p.x) - (ax + t * dx), ey = float(p.y) - (ay + t * dy);
-                const float distance = std::sqrt(ex * ex + ey * ey);
-                if (distance <= bestDistance)
-                {
-                    bestDistance = distance;
-                    best = wire.wireKey;
-                }
+                bestDistance = distance;
+                best = wireKey;
             }
+        };
+        for (const DrawnWire& wire : wires)
+        {
+            if (wire.curved && wire.points.size() == 4)
+            {
+                // Short straight steps along the curve, close enough at any length a wire has.
+                constexpr int kSteps = 32;
+                const auto& c = wire.points;
+                float2 a = WireCurvePoint(c[0], c[1], c[2], c[3], 0.0f);
+                for (int i = 1; i <= kSteps; ++i)
+                {
+                    const float2 b = WireCurvePoint(c[0], c[1], c[2], c[3], float(i) / float(kSteps));
+                    test(a, b, wire.wireKey);
+                    a = b;
+                }
+                continue;
+            }
+            for (size_t i = 0; i + 1 < wire.points.size(); ++i)
+                test({ float(wire.points[i].x), float(wire.points[i].y) },
+                     { float(wire.points[i + 1].x), float(wire.points[i + 1].y) }, wire.wireKey);
+        }
         return best;
     }
 

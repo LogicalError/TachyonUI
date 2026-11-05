@@ -203,6 +203,17 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
   view.snapToGrid = false;   // free placement
   ```
 
+- `wireShape`: how the wires are drawn.
+  - `NodeWireShape::Orthogonal`, the default: along the grid, round the nodes, their
+    lanes dragged by hand.
+  - `NodeWireShape::Curved`: one smooth curve each, leaving the output and entering the
+    input level. A wire to a node behind its source loops round. There are no lanes to drag.
+  - Hovering, clicking and the wire menu work the same on both.
+
+  ```cpp
+  view.wireShape = NodeWireShape::Curved;
+  ```
+
 **Focus.**
 
 - Tab reaches the controls in every node, visible or not.

@@ -104,4 +104,126 @@ namespace
         EXPECT_EQ(app.view.nodes.size(), 3u);
         app.Cleanup();
     }
+
+    // One wire, from a node up and left to one down and right, drawn in a given shape; the
+    // pixels it covers are those that change when it's taken off.
+    class WireShapeApp : public GUIApplicationInternals
+    {
+    public:
+        ID windowID = ID::Invalid();
+        NodeView view;
+        size_t handles = 0;   // lane handles the draw found, with the wire on
+
+        void OnGUI() override
+        {
+            if (BeginWindow(windowID, "Nodes", theme.mainWindowStyleRef, LayoutOverride{}.Size(900, 600),
+                            ElementFlags::WindowRenderToImage))
+                RenderNodeView(view);
+            EndWindow();
+        }
+
+        bool Frames(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                if (!UpdateFrame() || !RecordFrame()) return false;
+                PresentFrame();
+            }
+            return true;
+        }
+
+        std::vector<uint8_t> Pixels()
+        {
+            const IntRect rect = windowManager->GetWindowRect(windowID);
+            std::vector<uint8_t> pixels(size_t(std::max(rect.w, 0)) * size_t(std::max(rect.h, 0)) * 4);
+            if (pixels.empty() || !ReadWindowPixels(windowID, pixels)) pixels.clear();
+            return pixels;
+        }
+
+        // Where, a quarter of the way along the wire, it crosses: the middle row of the
+        // changed pixels in that column, or -1.
+        int QuarterRow(NodeWireShape shape)
+        {
+            if (!Initialize())
+                return -2;
+            windowID = idManager.CreateStaticID();
+            NodeModel a, b;
+            a.stableID = idManager.CreateStaticID();
+            a.pos      = { -300, -200 };
+            a.properties.push_back(NodeProperty{ .output = true });
+            b.stableID = idManager.CreateStaticID();
+            b.pos      = { 100, 200 };
+            b.properties.push_back(NodeProperty{ .input = PropertyEndpoint{ 0, 0 } });
+            view.nodes = { std::move(a), std::move(b) };
+            view.showMinimap = view.showZoomControls = false;
+            view.wireShape = shape;
+            if (!Frames(6)) return -1;
+            handles = view.wireHandleCache.size();
+            const std::vector<uint8_t> with = Pixels();
+            view.nodes[1].properties[0].input = PropertyEndpoint{};
+            if (!Frames(4)) return -1;
+            const std::vector<uint8_t> without = Pixels();
+            const IntRect rect = windowManager->GetWindowRect(windowID);
+            if (with.empty() || with.size() != without.size()) return -1;
+
+            auto changed = [&](int x, int y) {
+                const size_t i = (size_t(y) * size_t(rect.w) + size_t(x)) * 4;
+                return std::abs(int(with[i]) - int(without[i])) + std::abs(int(with[i + 1]) - int(without[i + 1]))
+                     + std::abs(int(with[i + 2]) - int(without[i + 2])) > 60;
+            };
+            int minX = rect.w, maxX = -1;
+            for (int y = 0; y < rect.h; ++y)
+                for (int x = 0; x < rect.w; ++x)
+                    if (changed(x, y)) { minX = std::min(minX, x); maxX = std::max(maxX, x); }
+            if (maxX < minX) return -1;
+            const int column = minX + (maxX - minX) / 4;
+            int top = -1, bottom = -1;
+            for (int y = 0; y < rect.h; ++y)
+                if (changed(column, y)) { if (top < 0) top = y; bottom = y; }
+            if (top < 0) return -1;
+
+            // Wired again, with the mouse there: the view finds the wire under it.
+            view.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
+            if (!Frames(2)) return -1;
+            InjectMouseMove(windowID, { column, (top + bottom) / 2 });
+            if (!Frames(3)) return -1;
+            hovered = view.hoveredWire;
+            return (top + bottom) / 2;
+        }
+
+        std::optional<uint32_t> hovered;   // the wire under the mouse, a quarter of the way along it
+    };
+
+    // A grid wire leaves the output level, so a quarter of the way along it's still on the
+    // output's row; a curve has already turned down towards the input by then. Only the grid
+    // wire has lanes to drag.
+    TEST(GpuNodeView, ACurvedWireTurnsWhereAGridWireRunsLevel)
+    {
+        int grid = 0, curve = 0;
+        size_t gridHandles = 0, curveHandles = 0;
+        std::optional<uint32_t> gridHovered, curveHovered;
+        {
+            WireShapeApp app;
+            grid = app.QuarterRow(NodeWireShape::Orthogonal);
+            gridHandles = app.handles;
+            gridHovered = app.hovered;
+            app.Cleanup();
+        }
+        if (grid == -2)
+            GTEST_SKIP() << "no Vulkan device available";
+        {
+            WireShapeApp app;
+            curve = app.QuarterRow(NodeWireShape::Curved);
+            curveHandles = app.handles;
+            curveHovered = app.hovered;
+            app.Cleanup();
+        }
+        ASSERT_GE(grid, 0);
+        ASSERT_GE(curve, 0);
+        EXPECT_GT(curve, grid + 8) << "the curve is below the output's row there";
+        EXPECT_GT(gridHandles, 0u);
+        EXPECT_EQ(curveHandles, 0u);
+        EXPECT_EQ(gridHovered, WireKey(1, 0));
+        EXPECT_EQ(curveHovered, WireKey(1, 0)) << "hovered along the curve it's drawn as";
+    }
 }

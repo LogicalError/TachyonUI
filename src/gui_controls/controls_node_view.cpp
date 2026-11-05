@@ -1438,6 +1438,17 @@ namespace tachyon
                     return view.nodes[size_t(idx)].reroute ? ctx.GetElementRect(nodeRefs[idx]).Center() : socketCenter(ref);
                 };
 
+                // Curved wires: their control points at least two rows out from the sockets.
+                const bool curved = view.wireShape == NodeWireShape::Curved;
+                const int32_t curveReach = theme.nodeGridSize > 0 ? 4 * theme.nodeGridSize : styleManager.Px(48);
+                auto drawWire = [&](const std::vector<tachyon::int2>& points, bool isCurve, const tachyon::LineStyle& style)
+                {
+                    if (isCurve && points.size() == 4)
+                        ctx.RenderLine(points[0], points[1], points[2], points[3], style);
+                    else
+                        ctx.RenderPolyline(points, /*closed=*/false, style, 0.5f * float(theme.nodeGridSize));
+                };
+
                 // Draggable interior segments collected this frame (node.pos
                 // space) for next frame's grab elements. Replaces the cache at
                 // the end of this pass.
@@ -1499,17 +1510,19 @@ namespace tachyon
                         if (auto it = laneOffsets.find(wireKey); it != laneOffsets.end() && !replaced)
                             ov.lane = it->second;
 
-                        const auto route = BuildWireRoute(socketPoint(src.nodeIdx, srcRefs[srcOutIdx]),
-                                                          socketPoint(n, tgtRefs[tgtInIdx]),
-                                                          nodeRect(src.nodeIdx), nodeRect(n),
-                                                          theme.nodeGridSize, gridOrigin, ov);
+                        const auto route = curved
+                            ? BuildCurvedWireRoute(socketPoint(src.nodeIdx, srcRefs[srcOutIdx]), socketPoint(n, tgtRefs[tgtInIdx]), curveReach)
+                            : BuildWireRoute(socketPoint(src.nodeIdx, srcRefs[srcOutIdx]),
+                                             socketPoint(n, tgtRefs[tgtInIdx]),
+                                             nodeRect(src.nodeIdx), nodeRect(n),
+                                             theme.nodeGridSize, gridOrigin, ov);
                         // Wire takes its source socket's colour (style cached above).
                         const tachyon::color4f srcColor =
                             view.nodes[src.nodeIdx].properties[src.propIdx].socketColor;
                         tachyon::VisualColorStyleIndex wireColorIdx = theme.lineYellowStyle;
                         if (auto cit = view.wireColorStyles.find(PackColor(srcColor)); cit != view.wireColorStyles.end())
                             wireColorIdx = cit->second;
-                        drawn.push_back(DrawnWire{ .wireKey = wireKey, .points = route.points });
+                        drawn.push_back(DrawnWire{ .wireKey = wireKey, .points = route.points, .curved = route.curved });
                         drawnColors.push_back(wireColorIdx);
 
                         // Cache draggable segments in node.pos space (subtract
@@ -1541,7 +1554,7 @@ namespace tachyon
                     const bool hovered = view.hoveredWire == drawn[w].wireKey;
                     const tachyon::LineStyle wireStyle{ .colorStyleIndex = drawnColors[w],
                                                            .lineWidth = styleManager.Px(hovered ? 4.f : 2.f) };
-                    ctx.RenderPolyline(drawn[w].points, /*closed=*/false, wireStyle, 0.5f * float(theme.nodeGridSize));
+                    drawWire(drawn[w].points, drawn[w].curved, wireStyle);
                 }
 
                 // The wire being dragged: dashed, routed like the connection it would make. It
@@ -1560,9 +1573,10 @@ namespace tachyon
                         {
                             const int32_t grid = theme.nodeGridSize;
                             // currentScreen is a screen-space input; ScreenToCurrent brings it
-                            // into CANVAS_LAY, snapped to the grid like a socket.
+                            // into CANVAS_LAY, snapped to the grid like a socket (a curve
+                            // follows the cursor).
                             tachyon::int2 cursorLay = ctx.ScreenToCurrent(pending.currentScreen);
-                            if (grid > 0)
+                            if (grid > 0 && !curved)
                                 cursorLay = { GridLineNearest(cursorLay.x, gridOrigin.x, grid),
                                               GridLineNearest(cursorLay.y, gridOrigin.y, grid) };
 
@@ -1582,7 +1596,11 @@ namespace tachyon
                             if (tgtPt)
                                 if (auto it = laneOffsets.find(WireKey(pendingIn.nodeIdx, pendingIn.propIdx)); it != laneOffsets.end())
                                     lane = it->second;
-                            const auto route = pending.fromInput
+                            const tachyon::int2 here = socketPoint(src.nodeIdx, srcRefs[srcSockIdx]);
+                            const tachyon::int2 there = tgtPt.value_or(cursorLay);
+                            const auto route = curved
+                                ? BuildCurvedWireRoute(pending.fromInput ? there : here, pending.fromInput ? here : there, curveReach)
+                                : pending.fromInput
                                 ? BuildPendingWireRouteToInput(socketPoint(src.nodeIdx, srcRefs[srcSockIdx]), nodeRect(src.nodeIdx),
                                                                cursorLay, tgtPt, tgtRect, grid, gridOrigin, lane)
                                 : BuildPendingWireRoute(socketPoint(src.nodeIdx, srcRefs[srcSockIdx]), nodeRect(src.nodeIdx),
@@ -1597,7 +1615,7 @@ namespace tachyon
                                 wireColorIdx = cit->second;
                             const tachyon::LineStyle wireStyle{ .colorStyleIndex = wireColorIdx, .lineWidth = styleManager.Px(2.f),
                                                                    .dashSize = styleManager.Px(4.f) };
-                            ctx.RenderPolyline(route.points, /*closed=*/false, wireStyle, 0.5f * float(grid));
+                            drawWire(route.points, route.curved, wireStyle);
                         }
                     }
                 }

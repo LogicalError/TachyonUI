@@ -141,6 +141,16 @@ namespace tachyon
     {
         std::vector<tachyon::int2>         points;   ///< the polyline, output to input
         std::vector<WireSegmentHandle> handles;
+        /// The points are a curved line's four instead: output, two control points, input
+        /// (see WireCurvePoint).
+        bool                           curved = false;
+    };
+
+    /// How a node view draws its wires (NodeView::wireShape).
+    enum class NodeWireShape : uint8_t
+    {
+        Orthogonal,   ///< along the grid, round the nodes, with lanes that drag
+        Curved,       ///< one smooth curve from output to input
     };
 
     /// Last frame's draggable segment (node.pos space), for laying out its grab element.
@@ -195,6 +205,7 @@ namespace tachyon
     {
         uint32_t                      wireKey = 0;
         std::vector<tachyon::int2> points;
+        bool                          curved  = false;   ///< as WireRoute::curved
     };
 
     /// Segment drag via mouse capture rather than DnD, so the resize cursor sticks.
@@ -232,6 +243,10 @@ namespace tachyon
         /// Keeps node positions on the grid: dragged nodes land on it, and positions set
         /// in code are moved onto it. Off: nodes go where they're dropped or put.
         bool                            snapToGrid       = true;
+        /// Orthogonal: wires run along the grid, round the nodes, their lanes dragged by
+        /// hand. Curved: each wire is one curve, leaving the output and entering the input
+        /// level, with no lanes to drag.
+        NodeWireShape                   wireShape        = NodeWireShape::Orthogonal;
 
         /// Last frame's minimap mapping (canvas = origin + minimap pixels / scale), for clicks.
         float                           minimapScale  = 0.0f;
