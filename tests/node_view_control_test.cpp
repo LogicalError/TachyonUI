@@ -234,6 +234,87 @@ namespace tachyon
             EXPECT_EQ(edits, 1);
         }
 
+        // A position off the grid moves onto it while snapping, and stays put without.
+        TEST_F(NodeViewControlTest, PositionsSnapToTheGridOnlyWhileSnapping)
+        {
+            const int32_t grid = app.theme.nodeGridSize;
+            ASSERT_GT(grid, 1);
+            view.snapToGrid = false;
+            view.nodes[1].pos = { 10 * grid + 1, 6 * grid + 1 };
+            Settle();
+            EXPECT_EQ(view.nodes[1].pos, (tachyon::int2{ 10 * grid + 1, 6 * grid + 1 }));
+            EXPECT_EQ(app.GetElementRect(nodeB).x - app.GetElementRect(nodeA).x, 10 * grid + 1 - view.nodes[0].pos.x) << "laid out there";
+
+            view.snapToGrid = true;
+            Settle();
+            EXPECT_EQ(view.nodes[1].pos, (tachyon::int2{ 10 * grid, 6 * grid }));
+        }
+
+        // Without snapping, a drag moves the node by exactly as far as the pointer went.
+        TEST_F(NodeViewControlTest, DraggingWithoutSnappingLandsWhereDropped)
+        {
+            view.snapToGrid = false;
+            Settle();
+            std::vector<NodeViewEdit> edits;
+            view.onEdit = [&](const NodeViewEdit& edit) { edits.push_back(edit); };
+            const int32_t grid = app.theme.nodeGridSize;
+            const tachyon::int2 before = view.nodes[1].pos;
+            const tachyon::int2 by{ 5 * grid + 3, 3 * grid + 7 };
+            const tachyon::int2 from = HeaderOf(nodeB);
+            Drag(from, { from.x + by.x, from.y + by.y });
+            Settle();
+            EXPECT_EQ(view.nodes[1].pos, (tachyon::int2{ before.x + by.x, before.y + by.y }));
+            ASSERT_EQ(edits.size(), 1u);
+            ASSERT_EQ(edits[0].moves.size(), 1u);
+            EXPECT_EQ(edits[0].moves[0].to, view.nodes[1].pos);
+        }
+
+        // "Add reroute here" puts the dot on the nearest grid point while snapping, and right
+        // where the wire was clicked without.
+        TEST_F(NodeViewControlTest, AddRerouteHereSnapsOnlyWhileSnapping)
+        {
+            const int32_t grid = app.theme.nodeGridSize;
+            for (const bool snap : { true, false })
+            {
+                SCOPED_TRACE(snap ? "snapping" : "not snapping");
+                view.snapToGrid = snap;
+                view.nodes.resize(2);
+                view.ordering.clear();
+                view.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
+                Settle();
+                const tachyon::int2 at = CanvasPoint() + tachyon::int2{ 3, 5 };
+                app.InjectMouseMove(at);
+                Frame();
+                view.hoveredWire = WireKey(1, 0);
+                app.ClickAt(at, MouseButtons::Right);
+                Frame();
+                Frame();
+                ASSERT_TRUE(view.wireMenuWire);
+                ASSERT_NE(app.FindByText("Add reroute here"), tachyon::ID::Invalid());
+                const tachyon::int2 clicked{ int32_t(std::lround(view.wireMenuPos.x)), int32_t(std::lround(view.wireMenuPos.y)) };
+                std::vector<NodeViewEdit> edits;
+                view.onEdit = [&](const NodeViewEdit& edit) { edits.push_back(edit); };
+                app.InjectKey(KeyCode::Down);   // past "Delete wire", the first
+                Frame();
+                app.InjectKey(KeyCode::Return);
+                Settle();
+                view.onEdit = {};
+                ASSERT_EQ(view.nodes.size(), 3u);
+                ASSERT_TRUE(view.nodes[2].reroute);
+                ASSERT_EQ(edits.size(), 1u);
+                ASSERT_EQ(edits[0].nodes.size(), 1u);
+                const tachyon::int2 pos = edits[0].nodes[0].node.pos;   // as undo and redo have it
+                EXPECT_EQ(view.nodes[2].pos, pos);
+                if (snap)
+                {
+                    EXPECT_EQ(pos.x % grid, 0);
+                    EXPECT_EQ(pos.y % grid, 0);
+                }
+                else
+                    EXPECT_EQ(pos, (tachyon::int2{ clicked.x - grid, clicked.y - grid })) << "its dot where it was clicked";
+            }
+        }
+
         // Dragging from an output socket onto an input socket wires them.
         TEST_F(NodeViewControlTest, DraggingFromAnOutputToAnInputConnects)
         {

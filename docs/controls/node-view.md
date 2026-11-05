@@ -192,6 +192,17 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
   view.maxZoom = 2.0f;   // up to 200%
   ```
 
+- `snapToGrid`: on by default, which keeps every node's position on the grid.
+  - A dragged node lands on the grid, and a position set in code is moved onto it.
+  - Off, nodes stay where they're dropped or put, and "Add reroute here" puts the dot
+    right where the wire was clicked.
+  - Either way, the arrow keys move nodes one grid step, a node's width is whole grid
+    cells, and wires run along the grid between the sockets.
+
+  ```cpp
+  view.snapToGrid = false;   // free placement
+  ```
+
 **Focus.**
 
 - Tab reaches the controls in every node, visible or not.
