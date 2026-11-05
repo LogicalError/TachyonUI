@@ -196,6 +196,8 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
 
 - Tab reaches the controls in every node, visible or not.
 - Focusing a partly hidden node pans just enough to show it. The zoom stays the same.
+- A node far out of view isn't laid out (see Large graphs below); Tab into it lays it out
+  and pans to it, the focus on its first control (its last, with Shift+Tab).
 - From code: `ScrollNodeIntoView` and `FrameAllNodes` in `gui_node_view_helpers.h`.
 
 ```cpp
@@ -222,6 +224,21 @@ Wires are made and removed with the mouse only.
 - Drag from a wired input to take its wire off: let go over another input to move it, or
   over the empty canvas to remove it.
 - A middle click on a wire removes it; a right click offers to, or to add a reroute on it.
+
+**Large graphs.**
+
+- Only the nodes in or near the view are laid out, and only theirs call `renderBody`. Near
+  means within half the view's size of it.
+- A node further away stands in as its box at its last size, with its sockets, so its
+  wires, the minimap and selection still have it.
+- A node is laid out whole when it has the focus, has never been laid out yet, or comes
+  near the view.
+- `virtualizeLayout = false` lays out every node every frame, for a `renderBody` that has
+  to run.
+
+  ```cpp
+  view.virtualizeLayout = false;   // every node, every frame
+  ```
 
 **Dragging.**
 

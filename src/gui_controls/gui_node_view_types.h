@@ -224,6 +224,11 @@ namespace tachyon
         /// is drawn at the zoom's size, so it stays sharp above 100%.
         float                           minZoom          = 0.1f;
         float                           maxZoom          = 4.0f;
+        /// Lays out (and calls renderBody for) only the nodes in or near view: one far out
+        /// of view stands in as its box, at its last size, with its sockets, so wires,
+        /// the minimap and selection still have it. Tab still reaches its controls: it's
+        /// laid out as the focus moves into it. Off: every node, every frame.
+        bool                            virtualizeLayout = true;
 
         /// Last frame's minimap mapping (canvas = origin + minimap pixels / scale), for clicks.
         float                           minimapScale  = 0.0f;
@@ -236,6 +241,7 @@ namespace tachyon
         /// NodeViewScreenToCanvas and NodeViewCanvasToScreen.
         tachyon::IntRect            lastCanvasRect {};
         tachyon::ID                 revealedFocusID = tachyon::ID::Invalid();   ///< internal: the focus last scrolled into view
+        tachyon::ID                 focusedNodeID   = tachyon::ID::Invalid();   ///< internal: the node holding the focus last frame
         /// Command mode set while the canvas has focus.
         CommandMode             commandMode = CommandMode::Default;
         /// Z-order, last == front (a clicked node moves there).

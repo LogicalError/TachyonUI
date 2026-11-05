@@ -942,6 +942,203 @@ namespace tachyon
             EXPECT_EQ(view.selectionGeneration, before + 1);
         }
 
+        // ---- Virtual layout: nodes far out of view stand in as their box ----
+
+        // A and B near the middle, each with a field; F far off to the right, with two.
+        class NodeViewVirtualTest : public NodeViewControlTest
+        {
+        protected:
+            tachyon::ID far{};
+            int farBodies = 0;   // F's renderBody calls
+            float a = 1.0f, b = 2.0f, f1 = 3.0f, f2 = 4.0f;
+            void SetUp() override
+            {
+                NodeViewControlTest::SetUp();
+                app.runPostLayoutCallbacks = true;   // the canvas's size and the nodes', as in the app
+                view.nodes[0].properties[0].renderBody = [this] { app.Field(a); };
+                view.nodes[1].properties[0].renderBody = [this] { app.Field(b); };
+                far = app.idManager.CreateStaticID();
+                NodeModel node{};
+                node.stableID = far;
+                node.title    = "F";
+                node.pos      = { 40000, 0 };
+                node.properties.push_back(NodeProperty{ .input = PropertyEndpoint{ 0, 0 }, .renderBody = [this] { ++farBodies; app.Field(f1); } });
+                node.properties.push_back(NodeProperty{ .output = true, .renderBody = [this] { ++farBodies; app.Field(f2); }, .rowSpan = 2 });
+                view.nodes.push_back(std::move(node));
+            }
+            tachyon::ID FocusedID() const { return app.guiStateManager.Interaction().GetFocusedID(); }
+            // The socket rects inside `node`'s rect, relative to it, left to right then top down.
+            std::vector<tachyon::IntRect> SocketsOf(tachyon::ID node) const
+            {
+                const auto n = app.GetElementRect(node);
+                std::vector<tachyon::IntRect> out;
+                for (auto r : RectsWithStyle(app.theme.nodeSocketStyleRef))
+                    if (r.y >= n.y && r.y < n.y + n.h && r.x >= n.x - r.w && r.x < n.x + n.w + r.w)
+                        out.push_back({ r.x - n.x, r.y - n.y, r.w, r.h });
+                std::sort(out.begin(), out.end(), [](const auto& p, const auto& q) { return p.x != q.x ? p.x < q.x : p.y < q.y; });
+                return out;
+            }
+        };
+
+        // F stands in: its box at its last size, its sockets where a whole layout puts them,
+        // and no renderBody.
+        TEST_F(NodeViewVirtualTest, ANodeFarOutOfViewStandsIn)
+        {
+            view.virtualizeLayout = false;
+            Settle();
+            Settle();
+            const tachyon::IntRect whole = app.GetElementRect(far);
+            const auto wholeSockets = SocketsOf(far);
+            ASSERT_EQ(wholeSockets.size(), 2u);
+            ASSERT_GT(farBodies, 0);
+
+            view.virtualizeLayout = true;
+            Settle();
+            farBodies = 0;
+            Settle();
+            EXPECT_EQ(farBodies, 0) << "no renderBody for it";
+            EXPECT_EQ(app.GetElementRect(far).size, whole.size) << "its last size";
+            EXPECT_EQ(SocketsOf(far), wholeSockets) << "its sockets where they'd be";
+            EXPECT_EQ(view.nodes[2].lastSize, whole.size);
+            EXPECT_FALSE(app.HasElement(app.FindByText("F"))) << "no header";
+        }
+
+        // Tab from the last control in view goes into F: laid out, the focus on its first
+        // field, the view panned to it. Shift+Tab into it lands on its last field.
+        TEST_F(NodeViewVirtualTest, TabReachesANodeOutOfView)
+        {
+            Settle();   // laid out whole once, to learn its size
+            farBodies = 0;
+            Settle();
+            ASSERT_EQ(farBodies, 0) << "F stands in";
+            app.guiStateManager.Interaction().SetFocusID(app.FindByText("2"));   // B's field
+            Frame();
+            const tachyon::ID bField = FocusedID();
+            ASSERT_NE(bField, tachyon::ID::Invalid());
+
+            app.InjectKey(KeyCode::Tab);
+            for (int i = 0; i < 4; ++i) Frame();
+            EXPECT_GT(farBodies, 0) << "laid out";
+            const tachyon::ID first = FocusedID();
+            EXPECT_EQ(view.focusedNodeID, far) << "the focus is in F";
+            EXPECT_EQ(app.TextOf(first), "3") << "on its first field";
+            const tachyon::float2 seen = view.transform.TransformPoint(tachyon::float2{ 40000.0f, 0.0f });
+            EXPECT_LT(std::abs(seen.x), float(view.lastInnerSize.x)) << "panned to it";
+
+            // Back to B, then the other way round into F: its last field.
+            app.InjectKey(KeyCode::Tab, KeyAction::KeyDown, KeyModifier::Shift);
+            for (int i = 0; i < 4; ++i) Frame();
+            EXPECT_EQ(FocusedID(), bField);
+            view.transform = tachyon::float3x2::Scale(1.0f);   // F out of view again
+            for (int i = 0; i < 3; ++i) Frame();
+            farBodies = 0;
+            Frame();
+            ASSERT_EQ(farBodies, 0) << "a stand-in again";
+            app.guiStateManager.Interaction().SetFocusID(app.FindByText("\xE2\x88\x92"));   // the zoom controls' minus, right after F
+            Frame();
+            app.InjectKey(KeyCode::Tab, KeyAction::KeyDown, KeyModifier::Shift);
+            for (int i = 0; i < 4; ++i) Frame();
+            EXPECT_EQ(app.TextOf(FocusedID()), "4") << "on its last field";
+        }
+
+        // A large graph: 900 nodes on a wide grid, a few of them in view. Only those near it
+        // call renderBody each frame; all of them, with the virtual layout off.
+        TEST_F(NodeViewVirtualTest, ALargeGraphLaysOutOnlyWhatsNearTheView)
+        {
+            int bodies = 0;
+            view.nodes.clear();
+            for (int y = 0; y < 30; ++y)
+                for (int x = 0; x < 30; ++x)
+                {
+                    NodeModel node{};
+                    node.stableID = app.idManager.CreateStaticID();
+                    node.pos      = { (x - 15) * 600, (y - 15) * 400 };
+                    node.properties.push_back(NodeProperty{ .output = true, .renderBody = [&bodies] { ++bodies; } });
+                    view.nodes.push_back(std::move(node));
+                }
+            Settle();   // each laid out once, to learn its size
+            bodies = 0;
+            Frame();
+            EXPECT_GT(bodies, 0);
+            EXPECT_LT(bodies, 60) << "only those in or near view, of 900";
+
+            view.virtualizeLayout = false;
+            bodies = 0;
+            Frame();
+            EXPECT_EQ(bodies, 900);
+        }
+
+        // A node out of the view but within half its size of it is laid out whole.
+        TEST_F(NodeViewVirtualTest, ANodeNearTheViewIsLaidOut)
+        {
+            Settle();
+            ASSERT_GT(view.lastInnerSize.x, 0);
+            view.nodes[2].pos = { view.lastInnerSize.x * 3 / 4, 0 };   // past the right edge, within half
+            Settle();
+            const tachyon::float2 seen = view.transform.TransformPoint(tachyon::float2{ float(view.nodes[2].pos.x), 0.0f });
+            ASSERT_GT(seen.x, float(view.lastInnerSize.x) / 2) << "out of the view";
+            farBodies = 0;
+            Frame();
+            EXPECT_GT(farBodies, 0);
+        }
+
+        // A node added far out of view is laid out once, so it has a size to stand in with.
+        TEST_F(NodeViewVirtualTest, ANewNodeFarAwayIsLaidOutOnce)
+        {
+            Settle();
+            NodeModel node{};
+            node.stableID = app.idManager.CreateStaticID();
+            node.title    = "G";
+            node.pos      = { 0, 40000 };
+            node.properties.push_back(NodeProperty{ .output = true, .renderBody = [this] { app.Field(f1); } });
+            view.nodes.push_back(std::move(node));
+            Settle();
+            EXPECT_GT(view.nodes[3].lastSize.x, 0);
+            EXPECT_GT(view.nodes[3].lastSize.y, 0);
+        }
+
+        // Collapsed nodes and reroutes are laid out as they are wherever they are: their
+        // headers and sockets as with the virtual layout off.
+        TEST_F(NodeViewVirtualTest, CollapsedNodesAndReroutesNeverStandIn)
+        {
+            view.nodes[2].collapsed = true;
+            NodeModel dot{};
+            dot.stableID = app.idManager.CreateStaticID();
+            dot.reroute  = true;
+            dot.pos      = { 0, 40000 };
+            dot.properties.push_back(NodeProperty{ .input = PropertyEndpoint{}, .output = true });
+            view.nodes.push_back(std::move(dot));
+            const tachyon::ID dotID = view.nodes[3].stableID;
+
+            view.virtualizeLayout = false;
+            Settle();
+            Settle();
+            const auto farSockets = SocketsOf(far);
+            const auto dotSockets = SocketsOf(dotID);
+            ASSERT_EQ(dotSockets.size(), 2u);
+
+            view.virtualizeLayout = true;
+            Settle();
+            Settle();
+            EXPECT_TRUE(app.HasElement(app.FindByText("F"))) << "its header";
+            EXPECT_EQ(SocketsOf(far), farSockets);
+            EXPECT_EQ(SocketsOf(dotID), dotSockets);
+        }
+
+        // A node holding the focus stays laid out whole when the view leaves it.
+        TEST_F(NodeViewVirtualTest, TheFocusedNodeStaysWhole)
+        {
+            view.virtualizeLayout = false;
+            Settle();
+            app.guiStateManager.Interaction().SetFocusID(app.FindByText("3"));   // F's field
+            Settle();
+            view.virtualizeLayout = true;
+            farBodies = 0;
+            Settle();
+            EXPECT_GT(farBodies, 0);
+            EXPECT_EQ(app.TextOf(FocusedID()), "3");
+        }
+
         TEST_F(NodeViewControlTest, NodesLayOutAtTheirPositions)
         {
             Settle();
