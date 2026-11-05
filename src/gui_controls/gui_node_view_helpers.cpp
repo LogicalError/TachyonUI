@@ -11,8 +11,9 @@ namespace tachyon
 {
     namespace
     {
-        constexpr float kMinZoom = 0.1f;
-        constexpr float kMaxZoom = 1.0f;
+        // The view's zoom range, put right if the app set it wrong (none, or upside down).
+        float MinZoom(const NodeView& view) { return view.minZoom > 0.0f ? view.minZoom : 0.1f; }
+        float MaxZoom(const NodeView& view) { return std::max(view.maxZoom, MinZoom(view)); }
     }
 
     float NodeViewZoom(const NodeView& view)
@@ -29,15 +30,15 @@ namespace tachyon
         const float target  = current * factor;
         if (current == 0.0f)
             return;
-        if (target < kMinZoom || target > kMaxZoom)
-            view.transform = view.transform * float3x2::Scale(std::clamp(target, kMinZoom, kMaxZoom) / current);
+        if (target < MinZoom(view) || target > MaxZoom(view))
+            view.transform = view.transform * float3x2::Scale(std::clamp(target, MinZoom(view), MaxZoom(view)) / current);
         else
             view.transform = float3x2::Translate(pivot) * float3x2::Scale(factor) * float3x2::Translate(-pivot) * view.transform;
     }
 
     void SetNodeViewCenter(NodeView& view, float2 center, float zoom)
     {
-        view.transform = float3x2::Scale(std::clamp(zoom, kMinZoom, kMaxZoom))
+        view.transform = float3x2::Scale(std::clamp(zoom, MinZoom(view), MaxZoom(view)))
                        * float3x2::Translate(float2{ -center.x, -center.y });
     }
 
@@ -57,8 +58,9 @@ namespace tachyon
         const int bw = std::max(1, bmax.x - bmin.x);
         const int bh = std::max(1, bmax.y - bmin.y);
         const int2 vp = view.lastInnerSize;
+        // Fitting never magnifies past 100%: a small graph shows at its own size.
         const float zoom = (vp.x > 0 && vp.y > 0)
-                         ? std::min((float)vp.x / (float)bw, (float)vp.y / (float)bh) * 0.9f
+                         ? std::min({ (float)vp.x / (float)bw * 0.9f, (float)vp.y / (float)bh * 0.9f, 1.0f })
                          : 1.0f;
         SetNodeViewCenter(view, float2{ (float)((bmin.x + bmax.x) / 2), (float)((bmin.y + bmax.y) / 2) }, zoom);
     }

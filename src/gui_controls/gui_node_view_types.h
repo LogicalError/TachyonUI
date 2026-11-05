@@ -220,6 +220,10 @@ namespace tachyon
         std::function<void(int)>        onBreadcrumb;   ///< called with the clicked segment index
         bool                            showZoomControls = true;   ///< zoom overlay, bottom-left
         bool                            showMinimap      = true;   ///< minimap overlay, bottom-right
+        /// The zoom range (1 = 100%) the wheel, the keys and the zoom controls stay in. Text
+        /// is drawn at the zoom's size, so it stays sharp above 100%.
+        float                           minZoom          = 0.1f;
+        float                           maxZoom          = 4.0f;
 
         /// Last frame's minimap mapping (canvas = origin + minimap pixels / scale), for clicks.
         float                           minimapScale  = 0.0f;
