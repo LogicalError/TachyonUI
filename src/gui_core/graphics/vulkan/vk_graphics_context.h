@@ -58,6 +58,13 @@ namespace tachyon::vulkan
         /// the ones built into the library, for working on the shaders.
         void SetShaderDirectory(std::string_view directory) { deviceContext.shaderDirectory = std::string(directory); }
         void SetAllocationHooks(const tachyon::AllocationHooks& hooks) override { deviceContext.SetAllocationHooks(hooks); }
+        /// 4096 by default; fewer when the device can't sample that many in a shader stage.
+        void SetImageSlotCount(uint32_t count) override { deviceContext.requestedImageSlots = std::max(1u, count); }
+        /// The slots asked for before Initialize; the ones there are after it.
+        uint32_t GetImageSlotCount() const override
+        {
+            return deviceContext.imageSlots > 0 ? deviceContext.imageSlots : deviceContext.requestedImageSlots;
+        }
         Result<void> Initialize(tachyon::IWindowBackend* windowBackend) override;
         void Cleanup() override;
         bool DeviceLost() const override { return tachyon::vulkan::IsDeviceLost(); }

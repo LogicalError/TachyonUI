@@ -37,8 +37,9 @@ namespace tachyon::vulkan
     class VulkanImageSet : public tachyon::ImageSet
     {
     public:
-        /// Size of the shader's bindless texture array.
-        static constexpr uint32_t kCapacity = 256;
+        /// Size of the shader's bindless texture array: the device context's imageSlots once
+        /// the device is up.
+        uint32_t capacity = 4096;
 
         std::vector<VkDescriptorImageInfo> textures;
         std::vector<VulkanImage*>          owners;     ///< the image behind each index, or null

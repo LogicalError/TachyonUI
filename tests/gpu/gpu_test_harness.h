@@ -128,6 +128,7 @@ namespace GpuTestHarness
             cfg.enableSyncValidation = std::getenv("TACHYON_GPU_TEST_NO_SYNC_VALIDATION") == nullptr;
 #endif
             vk->deviceContext.SetInstanceDebugConfig(cfg);
+            BeforeInitialize();
 
             if (!graphicsContext->Initialize(windowBackend))
             {
@@ -142,6 +143,9 @@ namespace GpuTestHarness
             // the driver rejects.
             styleManager.Register(tachyon::Style{});
         }
+
+        // Sets up the context (vk) before the device is made, for a test fixture that needs to.
+        virtual void BeforeInitialize() {}
 
         // ---- Swapchain tier: a real (hidden) window + VulkanWindowContext ----
         struct OwnedWindowContext

@@ -1000,7 +1000,8 @@ VulkanWindowContext* VulkanWindowContext::Create(tachyon::ID id, void* nativeHan
             { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 },
             { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
             { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 },
+            // The image set's descriptors: every slot in use, each window draw.
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4, context->deviceContext->imageSlots },
         };
 
         frame.frameDescriptors = DescriptorAllocatorGrowable{};

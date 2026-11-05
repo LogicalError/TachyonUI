@@ -2,6 +2,8 @@
 #include <gui_core/graphics/vulkan/vk_descriptors.h>
 #include <gui_core/graphics/vulkan/vk_initializers.h>
 
+#include <algorithm>
+
 using namespace tachyon::vulkan;
 
 void DescriptorLayoutBuilder::add_binding(uint32_t binding, VkDescriptorType type)
@@ -218,7 +220,7 @@ VkDescriptorPool DescriptorAllocatorGrowable::create_pool(VkDevice device, uint3
 		poolSizes.push_back(VkDescriptorPoolSize
             {
 			    .type = ratio.type,
-			    .descriptorCount = uint32_t(ratio.ratio * setCount)
+			    .descriptorCount = ratio.CountFor(setCount)
 		    });
 	}
 

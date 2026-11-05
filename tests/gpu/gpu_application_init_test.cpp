@@ -44,6 +44,28 @@ namespace
 
     // Lifecycle misuse (#87): Cleanup without Initialize (or twice) has nothing to free, and
     // Initialize on an initialized app is reported and ignored.
+    // The image slots asked for in the options are the ones there are; without, the
+    // backend's default.
+    TEST(GpuApplicationInit, ImageSlotsComeFromTheOptions)
+    {
+        {
+            EmptyApp app;
+            if (!app.Initialize())
+            {
+                app.Cleanup();
+                GTEST_SKIP() << "no Vulkan device or window system available";
+            }
+            EXPECT_EQ(app.graphicsContext->GetImageSlotCount(), 4096u);
+            app.Cleanup();
+        }
+        EmptyApp app;
+        tachyon::GUIApplication::InitializeOptions options;
+        options.imageSlots = 500;
+        ASSERT_TRUE(app.Initialize(options));
+        EXPECT_EQ(app.graphicsContext->GetImageSlotCount(), 500u);
+        app.Cleanup();
+    }
+
     TEST(GpuApplicationInit, CleanupWithoutInitializeIsHarmless)
     {
         EmptyApp app;

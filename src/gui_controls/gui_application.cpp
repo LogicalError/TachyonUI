@@ -172,6 +172,8 @@ namespace tachyon
             m_graphicsBackend = std::make_unique<vulkan::VulkanGraphicsContext>();
         graphicsContext  = m_graphicsBackend.get();
         graphicsContext->SetAllocationHooks(m_allocationHooks);
+        if (options.imageSlots > 0)
+            graphicsContext->SetImageSlotCount(options.imageSlots);
         m_imageWindows   = new tachyon::ImageWindowBackend(*m_osWindowBackend);
         windowBackend    = m_imageWindows;
         windowBackend->SetGraphicsContext(graphicsContext);
