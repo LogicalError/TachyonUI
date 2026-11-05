@@ -148,12 +148,12 @@ namespace tachyon
             {
                 const PropertyEndpoint input = WireInput(*view.wireMenuWire);
                 MenuItem("Delete wire", [&view, input] { CommitNodeViewEdit(view, DisconnectEdit(view, input)); });
-                // A reroute where it was clicked, its dot on the grid point nearest. Its ID is
-                // the app's to release, as for its own nodes.
+                // A reroute where it was clicked, its dot on the grid point nearest when
+                // snapping. Its ID is the app's to release, as for its own nodes.
                 MenuItem("Add reroute here", [this, &view, wire = *view.wireMenuWire] {
                     const int32_t grid = std::max(1, theme.nodeGridSize);
-                    const int2 pos{ GridLineNearest(int32_t(std::lround(view.wireMenuPos.x)) - grid, 0, grid),
-                                    GridLineNearest(int32_t(std::lround(view.wireMenuPos.y)) - grid, 0, grid) };
+                    const int2 at{ int32_t(std::lround(view.wireMenuPos.x)) - grid, int32_t(std::lround(view.wireMenuPos.y)) - grid };
+                    const int2 pos = view.snapToGrid ? int2{ GridLineNearest(at.x, 0, grid), GridLineNearest(at.y, 0, grid) } : at;
                     CommitNodeViewEdit(view, RerouteWireEdit(view, wire, idManager.CreateStaticID(), pos));
                 });
             }
@@ -935,7 +935,7 @@ namespace tachyon
 
             // Snap the node's top-left onto the grid.
             const int32_t grid = theme.nodeGridSize;
-            if (grid > 0)
+            if (grid > 0 && view.snapToGrid)
                 node.pos = { SnapToGrid(node.pos.x, grid), SnapToGrid(node.pos.y, grid) };
             // Width: last frame's content width rounded UP to whole grid cells (minimum on the first frame).
             const int32_t minNodeWidth = (grid > 0) ? grid * 6 : styleManager.Px(120);
@@ -1020,7 +1020,7 @@ namespace tachyon
                             {
                                 const NodeModel& other = view.nodes[i];
                                 if (i != n && !view.selectedNodeIDs.count(other.stableID)) continue;
-                                const int2 to = grid > 0 ? int2{ SnapToGrid(other.pos.x, grid), SnapToGrid(other.pos.y, grid) } : other.pos;
+                                const int2 to = grid > 0 && view.snapToGrid ? int2{ SnapToGrid(other.pos.x, grid), SnapToGrid(other.pos.y, grid) } : other.pos;
                                 if (to.x != other.startPos.x || to.y != other.startPos.y)
                                     edit.moves.push_back({ i, other.startPos, to });
                             }

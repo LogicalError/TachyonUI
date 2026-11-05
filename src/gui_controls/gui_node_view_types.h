@@ -229,6 +229,9 @@ namespace tachyon
         /// the minimap and selection still have it. Tab still reaches its controls: it's
         /// laid out as the focus moves into it. Off: every node, every frame.
         bool                            virtualizeLayout = true;
+        /// Keeps node positions on the grid: dragged nodes land on it, and positions set
+        /// in code are moved onto it. Off: nodes go where they're dropped or put.
+        bool                            snapToGrid       = true;
 
         /// Last frame's minimap mapping (canvas = origin + minimap pixels / scale), for clicks.
         float                           minimapScale  = 0.0f;
