@@ -232,6 +232,7 @@ Keyboard:
 | `items` | Affected items, each with an optional color dot, note and checkbox |
 | `dontAskAgain` | `bool*`; when set, the dialog shows the checkbox |
 | `details` | Expandable technical text |
+| `input` | `std::string*`; when set, a text field editing it, under the message. The keyboard starts in it, and Enter in it chooses the default button |
 
 The CSS classes:
 
@@ -267,6 +268,22 @@ const int answer = MessageDialog(MessageDialogDesc{
     .buttons = kSaveButtons, .defaultButton = 2, .cancelButton = 1,
     .items = affected, .dontAskAgain = &dontAskAgain });
 if (answer >= 0) asking = false;
+```
+
+A dialog that asks for a name:
+
+```cpp
+// members: bool naming; std::string layoutName
+static constexpr MessageButton kNameButtons[] = {
+    { .label = "Cancel" },
+    { .label = "Save", .kind = MessageButtonKind::Primary },
+};
+const int answer = MessageDialog(MessageDialogDesc{
+    .icon = MessageIcon::Question, .title = "Save this layout as?",
+    .message = "Saved layouts can be picked for any document.",
+    .buttons = kNameButtons, .defaultButton = 1, .cancelButton = 0, .input = &layoutName });
+if (answer == 1) presets.Save(layoutName, SaveDockLayout(document.layout));
+if (answer >= 0) naming = false;
 ```
 
 The color picker and gradient editor dialogs open from `ColorField` and `GradientField`.

@@ -116,6 +116,46 @@ namespace tachyon
         Upsert(m_persistDocuments, std::move(key), std::move(windows));
     }
     void GUIApplication::PersistShortcuts(std::string key, CommandManager& commands)     { Upsert(m_persistShortcuts, std::move(key), &commands); }
+    void GUIApplication::PersistLayoutPresets(std::string key, LayoutPresets& presets)   { Upsert(m_persistPresets, std::move(key), &presets); }
+
+    std::string GUIApplication::SaveDockLayout(const DockingLayout& layout) const
+    {
+        const std::optional<JsonValue> tree = DockTreeJson(layout);
+        return tree ? tree->Write() : std::string();
+    }
+
+    bool GUIApplication::ApplyDockLayout(DockingLayout& layout, std::string_view tree,
+                                         const std::function<std::optional<ID>(std::string_view key)>& makePanel)
+    {
+        // Each key to a panel: the layout's own, else a new one.
+        std::vector<ID> made;
+        std::unique_ptr<DockNode> root = ParseDockTree(tree, [&](std::string_view panelKey) -> std::optional<ID> {
+            for (const auto& [id, panel] : layout.panels)
+                if (PanelKey(panel) == panelKey) return id;
+            if (!makePanel)
+                return std::nullopt;
+            const std::optional<ID> created = makePanel(panelKey);
+            if (!created || layout.panels.find(*created) == layout.panels.end())
+                return std::nullopt;   // it made none
+            made.push_back(*created);
+            return created;
+        });
+        if (!root)
+        {
+            for (const ID id : made)
+                layout.panels.erase(id);
+            return false;
+        }
+
+        DisableAllPanels(layout);
+        std::vector<ID> all;
+        for (const auto& [id, panel] : layout.panels) all.push_back(id);
+        for (const ID id : UnplacedPanels(*root, all))
+            layout.panels.erase(id);
+        ReleaseDockTreeIDs(layout.root.get(), &idManager);
+        layout.root = std::move(root);
+        return true;
+    }
 
     std::vector<SavedDocumentWindow> GUIApplication::TakeSavedDocuments(std::string_view key)
     {
@@ -209,8 +249,7 @@ namespace tachyon
                     d.Set("extension", document->extension);
                     d.Set("kind", document->kind);
                     if (std::optional<JsonValue> tree = DockTreeJson(document->layout))
-                        d.Set("layout", std::move(*tree));
-                    items.Push(std::move(d));
+                        d.Set("layout", std::move(*tree));                    items.Push(std::move(d));
                 }
                 w.Set("documents", std::move(items));
                 list.Push(std::move(w));
@@ -282,6 +321,12 @@ namespace tachyon
             shortcuts.Set(key, std::move(list));
         }
         doc.Set("shortcuts", std::move(shortcuts));
+
+        JsonValue presets = JsonValue::MakeObject();
+        for (const auto& [key, target] : m_persistPresets)
+            if (Result<JsonValue> parsed = JsonValue::Parse(target->ToJson()))
+                presets.Set(key, std::move(*parsed));
+        doc.Set("layoutPresets", std::move(presets));
 
         JsonValue values = JsonValue::MakeObject();
         for (const auto& [key, target] : m_persistValues)
@@ -477,6 +522,11 @@ namespace tachyon
                 }
             }
         }
+
+        // Layout presets: the saved ones and the file types'; the app's built-in ones stay.
+        for (const auto& [key, target] : m_persistPresets)
+            if (const JsonValue* saved = section("layoutPresets", key))
+                (void)target->FromJson(saved->Write());
 
         // App values, by their own type; a value of another type is skipped.
         for (const auto& [key, target] : m_persistValues)

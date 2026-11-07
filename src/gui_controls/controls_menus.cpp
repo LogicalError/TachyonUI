@@ -314,6 +314,14 @@ namespace tachyon
         return open;
     }
 
+    bool GUIApplication::BeginDropdownMenu(ID menuID, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints)
+    {
+        m_nextMenuIsDropdown = menuManager.currentDepth == -1;
+        const bool open = BeginMenu(menuID, text, buttonStyle, menuStyle, itemStyle, std::move(constraints));
+        m_nextMenuIsDropdown = false;
+        return open;
+    }
+
     bool GUIApplication::OpenMenu(ID menuID, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints)
     {
         auto& level = menuManager.GetOrCreateNextLevel(idManager);
@@ -322,10 +330,12 @@ namespace tachyon
         if (menuManager.currentDepth == -1)
         {
             // Register as a menu-bar trigger (ordered) so Left/Right nav is
-            // data-driven across whatever triggers the app placed in the bar.
-            if (menuManager.buildingMenuBar)
+            // data-driven across whatever triggers the app placed in the bar. A dropdown
+            // placed in the bar isn't one of its menus.
+            const bool inMenuBar = menuManager.buildingMenuBar && !std::exchange(m_nextMenuIsDropdown, false);
+            if (inMenuBar)
                 menuManager.menuBarTriggers.push_back(menuID);
-		    MenuTriggerButton(*this, menuID, text, buttonStyle, menuManager.buildingMenuBar, std::move(constraints));
+		    MenuTriggerButton(*this, menuID, text, buttonStyle, inMenuBar, std::move(constraints));
         } else
         {
             // Inside another menu: create submenu trigger item

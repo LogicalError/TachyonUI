@@ -221,7 +221,7 @@ namespace tachyon
         item.textID   = textSystem->RegisterText(id, icon, text, style, item.state);
 
         item.eventHandler = [this, containerID, id, itemIndex, selectedIndex, multi, dd,
-                             clickTracker, pendingRename,
+                             clickTracker, pendingRename, onOpen = m_gridViewState.onOpen,
                              wasSelected = selected, canRename = (renameBuffer != nullptr)]
             (ElementEvent&& event) -> bool
         {
@@ -256,6 +256,13 @@ namespace tachyon
                                           && clickInfo.elapsedMs >= std::max(500.0f, DoubleClickMilliseconds())
                                           && clickInfo.elapsedMs < 3000.0f)
                                        ? id : tachyon::ID::Invalid();
+                        // A double-click opens it (once selected, below); a third click starts over.
+                        if (onOpen && *onOpen && !ctrl && !shift && clickInfo.sameAsPrevious
+                            && clickInfo.elapsedMs < DoubleClickMilliseconds())
+                        {
+                            clickTracker->Reset();
+                            (*onOpen)(id);
+                        }
                     }
 
                     if (multi)
@@ -418,6 +425,7 @@ namespace tachyon
         m_gridViewState.dragDrop           = dragDrop;
         m_gridViewState.clickTracker       = &vstate.internal.itemClickTracker;
         m_gridViewState.pendingRenameClick = &vstate.internal.pendingRenameClick;
+        m_gridViewState.onOpen             = &vstate.onOpen;
         if (multiSelect)
             multiSelect->orderedItemIDs.clear();
 
@@ -506,6 +514,22 @@ namespace tachyon
                                 return true;
                             }
                             break;
+                        }
+                        // Enter opens the selected item.
+                        const tachyon::KeyCode key = event.state.lastKey;
+                        if ((key == tachyon::KeyCode::Return || key == tachyon::KeyCode::Return2 || key == tachyon::KeyCode::KeyPadEnter)
+                            && vsPtr->onOpen)
+                        {
+                            tachyon::ID target = tachyon::ID::Invalid();
+                            if (multiSelect)
+                                target = multiSelect->selectedIDs.count(multiSelect->lastClickedID) ? multiSelect->lastClickedID : tachyon::ID::Invalid();
+                            else if (selectedIndex && *selectedIndex >= 0 && *selectedIndex < itemCount
+                                     && vsPtr->internal.itemsRangeID != tachyon::ID::Invalid())
+                                target = idManager.GetSubID(vsPtr->internal.itemsRangeID, static_cast<uint32_t>(*selectedIndex));
+                            if (target == tachyon::ID::Invalid())
+                                break;
+                            vsPtr->onOpen(target);
+                            return true;
                         }
                         if (!selectedIndex || itemCount <= 0) break;
                         const int navCols = std::max(1, vsPtr->internal.cols);

@@ -146,6 +146,53 @@ namespace tachyon
             EXPECT_EQ(logs[0]->draws, forestDraws);
         }
 
+        // The bar and the panels apart: the tabs in the window's title bar, a menu bar between
+        // them and the panels. A tab is clicked as before, the bar's empty space drags the
+        // window, and "N open" stays a dropdown, not one of the title bar's menus.
+        TEST_F(DocumentsTest, TheBarCanBeInTheTitleBar)
+        {
+            Add("Forest", ".level", "level");
+            Add("Terrain", ".mat", "material");
+            const ID titleBarID = app.idManager.CreateStaticID(), menuBarID = app.idManager.CreateStaticID();
+            const ID fileID = app.idManager.CreateStaticID();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow(windowSize, ElementFlags::WindowCustomTitleBar, app.theme.mainWindowStyleRef);
+                    app.BeginTitleBar(titleBarID);
+                    app.DocumentBar(documentsID, set, app.theme.titleBarDocumentsStyleRef);
+                    app.EndTitleBar();
+                    EXPECT_TRUE(app.menuManager.menuBarTriggers.empty()) << "\"N open\" isn't one of the title bar's menus";
+                    app.BeginMenuBar(menuBarID);
+                    if (app.BeginMenu(fileID, "File", app.theme.menuBarTriggerStyleRef, app.theme.menuStyleRef, app.theme.menuItemRowStyleRef))
+                        app.MenuItem("New", nullptr);
+                    app.EndMenu();
+                    app.EndMenuBar();
+                    app.DocumentPanels(set);
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            frame();
+            EXPECT_GE(logs[0]->draws, 1) << "the active document's panels";
+            EXPECT_EQ(logs[1]->draws, 0);
+
+            const IntRect titleBar = app.GetElementRect(titleBarID);
+            const IntRect bar = BarOf(set);
+            EXPECT_GE(bar.y, titleBar.y);
+            EXPECT_LE(bar.y + bar.h, titleBar.y + titleBar.h) << "the tabs fit in the title bar";
+            EXPECT_GE(app.GetElementRect(menuBarID).y, titleBar.y + titleBar.h) << "the menus under it";
+            const int2 tab = TabCenter(*set.documents[1]);
+            EXPECT_EQ(app.TitleBarHitTest(app.RootWindowID(), tab), WindowHitArea::Client) << "a tab takes clicks";
+            EXPECT_EQ(app.TitleBarHitTest(app.RootWindowID(), { bar.x + bar.w * 3 / 4, bar.y + 4 }), WindowHitArea::Caption)
+                << "the bar's empty space drags the window";
+
+            app.ClickAt(tab);
+            frame();
+            frame();
+            EXPECT_EQ(set.active, 1);
+            EXPECT_GE(logs[1]->draws, 1);
+        }
+
         TEST_F(DocumentsTest, ClickingATabShowsItsDocument)
         {
             Add("Forest", ".level", "level");

@@ -60,6 +60,36 @@ The menu animates:
 
 To let the user pick one value from a list, use [`Dropdown`](fields.md#dropdown) instead.
 
+`BeginDropdownMenu` is a `BeginMenu` that stays a dropdown button inside a menu bar or
+title bar:
+
+- It has the dropdown arrow after its text.
+  - In the theme's style, `menu-bar-dropdown`: flat like the bar's menus, with a small
+    arrow on the right, as the document bar's "N open".
+- It isn't one of the bar's menus: Left and Right in the bar skip it.
+- Use it for a picker that also has actions of its own, such as the showcase's layout
+  picker in its title bar.
+
+```cpp
+bool BeginDropdownMenu(ID id, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle,
+                       LayoutOverride&& constraints = {});
+bool BeginDropdownMenu(ID id, std::string_view text, LayoutOverride&& constraints = {});   // menu-bar-dropdown
+```
+
+```cpp
+BeginTitleBar(titleBarID);
+// ... File, Edit, View ...
+if (BeginDropdownMenu(layoutMenuID, "Layouts"))
+{
+    for (const LayoutPreset& preset : presets.All())
+        MenuItem(preset.name, [this, name = preset.name] { pendingPreset = name; });
+    MenuSeparator();
+    MenuItem("Save layout as...", [this] { naming = true; });
+}
+EndMenu();
+EndTitleBar();
+```
+
 Wrap the current choice in `BeginSelected()` / `EndSelected()` to show a check mark before
 it:
 

@@ -2212,6 +2212,33 @@
 .menu-bar-trigger:focus  { background-color: var(--bg-control); }
 .menu-bar-trigger::highlight(selected) { background-color: var(--bg-pressed); }
 
+/* A dropdown in the menu bar or title bar (BeginDropdownMenu): a menu-bar trigger with
+   the small dropdown arrow after its text, as the document bar's "N open". */
+.menu-bar-dropdown {
+    -tachyon-state-layer: content;
+    border-width: var(--border-thin);
+    border-radius: var(--radius-sm);
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--text-2);
+    margin: 0px;
+    padding: 2px 8px;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    text-align: start;
+    text-wrap: nowrap;
+    font-size: var(--font-size);
+    -tachyon-icon-side: right;   /* the dropdown arrow */
+    -tachyon-icon-size: 12px;
+    -tachyon-icon-text-gap: 6px;
+    -tachyon-icon-color: var(--text-3);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.menu-bar-dropdown:hover  { color: var(--text-1); }
+.menu-bar-dropdown:focus  { background-color: var(--bg-control); }
+.menu-bar-dropdown::highlight(selected) { color: var(--text-1); background-color: var(--bg-pressed); }
+
 /* ---- title bar: a menu bar the window is dragged by ----------------------- */
 .title-bar {
     display: flex;
@@ -3427,6 +3454,24 @@
     border-color: transparent;
     flex-grow: 0;
     flex-shrink: 0;
+}
+/* A document bar in a title bar (DocumentBar): the title bar's height, its line along the
+   title bar's bottom edge. */
+.title-bar-documents {
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-end;
+    gap: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    align-self: stretch;
+    flex-grow: 1;
+    flex-shrink: 1;
 }
 .document-row {
     border-width: 0px;

@@ -152,6 +152,44 @@ namespace
         EXPECT_FALSE(dontAsk) << "Esc didn't reach the checkbox";
     }
 
+    // With a text field, the keyboard starts in it: what's typed goes into the string, and
+    // Enter chooses the default button.
+    TEST_F(MessageDialogTest, ItsTextFieldTakesTypingAndEnterChooses)
+    {
+        static constexpr MessageButton kButtons[] = { { .label = "Cancel" }, { .label = "Save", .kind = MessageButtonKind::Primary } };
+        std::string name = "My";
+        int choice = -1;
+        auto emit = [&] {
+            app.Frame([&] {
+                app.BeginRootWindow({ 1200, 800 });
+                choice = app.MessageDialog(dialogID, MessageDialogDesc{
+                    .title = "Save this layout as?", .message = "Saved layouts can be picked for any document.",
+                    .buttons = kButtons, .defaultButton = 1, .cancelButton = 0, .input = &name });
+                app.EndRootWindow();
+            });
+        };
+        app.activeWindow = dialogID;
+        emit();
+        emit();
+        const ID save = FindByStyle(app.theme.dialogPrimaryButtonStyleRef);
+        ASSERT_NE(save, ID::Invalid());
+        EXPECT_NE(app.guiStateManager.Interaction().GetFocusedID(), save) << "the field has it, not the default button";
+
+        app.InjectKey(KeyCode::End);
+        emit();
+        app.InjectText(" layout");
+        emit();
+        emit();
+        EXPECT_EQ(name, "My layout");
+        EXPECT_EQ(choice, -1);
+
+        app.InjectKey(KeyCode::Return);
+        emit();
+        if (choice < 0) emit();
+        EXPECT_EQ(choice, 1) << "Save";
+        EXPECT_EQ(name, "My layout");
+    }
+
     // The dialog is its own window over the one it's asked from: it takes no room in that
     // window's layout, and dims it (the window's scrim draw) only while asking.
     TEST_F(MessageDialogTest, TheDialogTakesNoRoomAndDimsItsWindow)

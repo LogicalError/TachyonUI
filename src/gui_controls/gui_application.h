@@ -71,6 +71,7 @@
 #include <gui_controls/gui_table_types.h>
 #include <gui_controls/gui_tree_grid_types.h>
 #include <gui_controls/gui_docking_types.h>
+#include <gui_controls/gui_layout_presets.h>
 #include <gui_controls/gui_notification_types.h>
 
 #include <gui_controls/subsystems/gui_subsystem_state.h>
@@ -137,6 +138,9 @@ namespace tachyon
         std::span<const MessageDialogItem> items;      ///< affected items, listed in a well
         bool*                              dontAskAgain = nullptr;   ///< shows "Don't ask again" when set
         std::string_view                   details;    ///< collapsible technical details (mono)
+        /// Shows a text field editing it, under the message, with the keyboard in it at
+        /// first; Enter in it chooses the default button. For a name to give, say.
+        std::string*                       input = nullptr;
     };
 
     // Outside GUIApplication: GCC can't use a nested struct's member initializers in a
@@ -638,6 +642,12 @@ namespace tachyon
         inline bool BeginMenu(       std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return BeginMenu(idManager.AllocateDynamicID(site), text, buttonStyle, menuStyle, itemStyle, std::move(constraints)); }
         /// As above, with the call site as the ID, in the theme's menu styles.
         inline bool BeginMenu(       std::string_view text, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return BeginMenu(idManager.AllocateDynamicID(site), text, theme.controls->menuTrigger, theme.menuStyleRef, theme.menuItemRowStyleRef, std::move(constraints)); }
+        /// A menu opened from a dropdown: as BeginMenu, with an arrow after its text also in a
+        /// menu bar or title bar, where it isn't one of the bar's menus (Left and Right don't
+        /// go to it). For a picker with actions of its own, beside the bar's menus.
+        bool        BeginDropdownMenu(ID id, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints = {});
+        /// As above, in the theme's menu-bar dropdown style (menu-bar-dropdown) and menu styles.
+        inline bool BeginDropdownMenu(ID id, std::string_view text, LayoutOverride&& constraints = {}) { return BeginDropdownMenu(id, text, theme.menuBarDropdownStyleRef, theme.menuStyleRef, theme.menuItemRowStyleRef, std::move(constraints)); }
         /// A dropdown: a field showing options[selected] that opens the list of options under
         /// itself. Picking one (click, or arrows and Enter) sets `selected` and returns true on
         /// that frame; Escape or a click elsewhere closes the list unchanged. The open list
@@ -1430,6 +1440,15 @@ namespace tachyon
         /// colors; a click shows that document, its close button (or Ctrl+W) asks
         /// DocumentSet::onClose and closes it on the next frame. Then call EmitFloatingDockWindows.
         void Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
+        /// The document bar of `set` alone: its tabs, "+", "N open" and the line in the active
+        /// document's color. With DocumentPanels, the two parts of Documents placed apart (the
+        /// bar in the title bar, say); call it first, once a frame.
+        void DocumentBar(ID id, DocumentSet& set, StyleRef style, LayoutOverride&& constraints = LayoutOverride::Auto());
+        /// As above, in the theme's document bar style; theme.titleBarDocumentsStyleRef fits it in
+        /// a title bar.
+        inline void DocumentBar(ID id, DocumentSet& set, LayoutOverride&& constraints = LayoutOverride::Auto()) { DocumentBar(id, set, theme.documentBarStyleRef, std::move(constraints)); }
+        /// The active document's panels of `set`, after its DocumentBar.
+        void DocumentPanels(DocumentSet& set, LayoutOverride&& constraints = LayoutOverride::Auto());
 
         ///@}
 
@@ -2420,6 +2439,7 @@ namespace tachyon
         ///     PersistValue("zoom", zoom);                  // an app setting, if it wants
         ///     PersistDocuments("documents", windows);      // each main window's documents
         ///     PersistShortcuts("shortcuts", commandManager); // the shortcuts the user changed
+        ///     PersistLayoutPresets("layouts", presets);    // saved layouts, file types' layouts
         ///
         /// RestoreUIState applies saved text: windows when they are next declared, the rest
         /// at once. What it doesn't know (keys, panels, columns) is skipped.
@@ -2449,6 +2469,9 @@ namespace tachyon
         /// matching commands by mode name and description. Register the commands before
         /// RestoreUIState; ones it doesn't find keep their own.
         void PersistShortcuts(std::string key, CommandManager& commands);
+        /// Keeps the layouts the user saved and the file types' layouts; the app adds its
+        /// built-in ones itself, before or after RestoreUIState.
+        void PersistLayoutPresets(std::string key, LayoutPresets& presets);
         /// The main windows of documents RestoreUIState read for `key`, in the order they were
         /// listed; empty when none were saved. Taking them clears them. Make each document with
         /// its panels, then RestoreDocumentLayout, and place each window with RestoreWindowPlace.
@@ -2459,6 +2482,19 @@ namespace tachyon
         /// Puts a window where `saved` was when it's next declared, as PersistWindow does
         /// (on its monitor, or the same place on another). Nothing when no place was saved.
         void RestoreWindowPlace(ID windowID, const SavedDocumentWindow& saved);
+        /// A layout's dock tree as text, panels by type, else title, as a LayoutPreset keeps
+        /// it; empty when it has none. Floating panels aren't in it.
+        std::string  SaveDockLayout(const DockingLayout& layout) const;
+        /// Lays a layout's panels out as `tree` (SaveDockLayout's text) says:
+        /// - a panel it names that the layout hasn't is made by `makePanel`, given the panel's
+        ///   type, else title; it creates the panel in layout.panels and returns its ID, or
+        ///   nullopt to leave it out
+        /// - panels it doesn't name are closed, as closing their tabs does
+        ///
+        /// False when the tree can't be read or has no panel left: the layout stays as it was.
+        /// Call it outside the layout's Docking, e.g. before it in the frame.
+        bool         ApplyDockLayout(DockingLayout& layout, std::string_view tree,
+                                     const std::function<std::optional<ID>(std::string_view key)>& makePanel = {});
         /// The named state as JSON text.
         std::string  SaveUIState() const;
         /// Applies JSON text from SaveUIState. An error when it doesn't parse, isn't an object
@@ -2705,6 +2741,7 @@ namespace tachyon
         struct PersistedValue    { using Target = std::variant<bool*, int*, float*, std::string*>; std::string key; Target target; };
         struct PersistedDocuments { std::string key; std::function<std::vector<DocumentWindowRef>()> target; };
         struct PersistedShortcuts { std::string key; CommandManager* target; };
+        struct PersistedPresets   { std::string key; LayoutPresets* target; };
         struct RestoredWindow
         {
             IntRect    rect {};
@@ -2721,6 +2758,7 @@ namespace tachyon
         std::vector<PersistedValue>    m_persistValues;
         std::vector<PersistedDocuments> m_persistDocuments;
         std::vector<PersistedShortcuts> m_persistShortcuts;
+        std::vector<PersistedPresets>   m_persistPresets;
         /// Read by RestoreUIState, until the app takes them (TakeSavedDocuments).
         std::unordered_map<std::string, std::vector<SavedDocumentWindow>> m_savedDocuments;
         std::unordered_map<ID, RestoredWindow> m_restoredWindows;
@@ -2731,6 +2769,7 @@ namespace tachyon
         /// Begin/End contract: whether each open BeginWindow / BeginMenu (and BeginContextMenu)
         /// / BeginTooltip / BeginCached scope is showing; its End pops it.
         std::vector<bool> m_windowOpen, m_menuOpen, m_tooltipOpen, m_cachedOpen;
+        bool m_nextMenuIsDropdown = false;   ///< BeginDropdownMenu's trigger isn't a menu-bar item
         /// The disabled, selected and invalid scopes around each open tooltip, set aside while
         /// it's built (OpenTooltip) and put back when it's closed.
         std::vector<ConstructionScopes> m_tooltipScopes;

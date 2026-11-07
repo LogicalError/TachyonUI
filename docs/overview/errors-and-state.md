@@ -58,6 +58,12 @@ There is also:
 
 - `PersistDocuments`, for each main window's documents (see Documents in
   [Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md))
+- `PersistLayoutPresets`, for the layout presets the user saved and the file types' presets
+  (see Layout presets in [Tabs, docking and toolbars](../controls/tabs-docking-toolbars.md)):
+
+  ```cpp
+  PersistLayoutPresets("layouts", presets);
+  ```
 
 Save and restore:
 

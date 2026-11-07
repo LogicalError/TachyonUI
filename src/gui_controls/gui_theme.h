@@ -341,6 +341,7 @@ namespace tachyon
         StyleRef menuScrollButtonStyleRef{};    ///< the scroll up / down arrows of a menu taller than the screen
         StyleRef menuBarStyleRef {};        ///< horizontal strip at the top of the main window
         StyleRef menuBarTriggerStyleRef {}; ///< flat top-level trigger inside the menu bar
+        StyleRef menuBarDropdownStyleRef {}; ///< a dropdown in the menu bar or title bar (BeginDropdownMenu)
         StyleRef titleBarStyleRef {};            ///< a window's own title bar (BeginTitleBar)
         StyleRef titleBarButtonStyleRef {};      ///< its minimize and maximize buttons
         StyleRef titleBarCloseButtonStyleRef {}; ///< its close button
@@ -477,6 +478,7 @@ namespace tachyon
         StyleRef documentLineStyleRef {};       ///< under the bar, in the active document's color
         StyleRef documentNewStyleRef {};        ///< "+"
         StyleRef documentListStyleRef {};       ///< "N open", listing every document
+        StyleRef titleBarDocumentsStyleRef {};  ///< a document bar in a title bar (DocumentBar)
         ///@}
 
         StyleRef dockContainerStyleRef {};       ///< a docking container

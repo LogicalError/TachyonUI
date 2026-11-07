@@ -582,6 +582,68 @@ namespace tachyon
             EXPECT_TRUE(app.IsRenaming());
         }
 
+        // A double-click opens an item (onOpen), and doesn't rename it; a slow second click
+        // still renames, without opening.
+        TEST_F(VirtualGridRenameTest, ADoubleClickOpensTheItem)
+        {
+            std::vector<tachyon::ID> opened;
+            vstate.onOpen = [&](tachyon::ID id) { opened.push_back(id); };
+            GridFrame();
+            GridFrame();
+            app.ClickAt(app.CenterOf(itemIDs[2]));
+            GridFrame();
+            EXPECT_TRUE(opened.empty()) << "one click selects";
+            app.ClickAt(app.CenterOf(itemIDs[2]));
+            GridFrame();
+            GridFrame();
+            EXPECT_EQ(opened, (std::vector<tachyon::ID>{ itemIDs[2] }));
+            EXPECT_FALSE(app.IsRenaming());
+
+            app.ClickAt(app.CenterOf(itemIDs[2]));   // a third: starts over
+            GridFrame();
+            EXPECT_EQ(opened.size(), 1u);
+
+            opened.clear();
+            vstate.internal.itemClickTracker.lastTimeNanos -= 800000000;   // the tracker reads the real clock
+            app.ClickAt(app.CenterOf(itemIDs[2]));
+            GridFrame();
+            GridFrame();
+            EXPECT_TRUE(opened.empty());
+            EXPECT_TRUE(app.IsRenaming());
+        }
+
+        // Enter opens the selected item, the last one clicked; nothing with none selected.
+        TEST_F(VirtualGridRenameTest, EnterOpensTheSelectedItem)
+        {
+            std::vector<tachyon::ID> opened;
+            vstate.onOpen = [&](tachyon::ID id) { opened.push_back(id); };
+            GridFrame();
+            GridFrame();
+            app.guiStateManager.Interaction().SetFocusID(gridID);
+            app.InjectKey(tachyon::KeyCode::Return);
+            GridFrame();
+            EXPECT_TRUE(opened.empty()) << "none selected";
+
+            app.ClickAt(app.CenterOf(itemIDs[1]));
+            GridFrame();
+            app.ClickAt(app.CenterOf(itemIDs[3]), MouseButtons::Left, KeyModifier::Control);
+            GridFrame();
+            app.guiStateManager.Interaction().SetFocusID(gridID);
+            app.InjectKey(tachyon::KeyCode::Return);
+            GridFrame();
+            GridFrame();
+            EXPECT_EQ(opened, (std::vector<tachyon::ID>{ itemIDs[3] }));
+
+            // The last one clicked, then unselected: nothing to open.
+            app.ClickAt(app.CenterOf(itemIDs[3]), MouseButtons::Left, KeyModifier::Control);
+            GridFrame();
+            app.guiStateManager.Interaction().SetFocusID(gridID);
+            app.InjectKey(tachyon::KeyCode::Return);
+            GridFrame();
+            GridFrame();
+            EXPECT_EQ(opened.size(), 1u);
+        }
+
         TEST_F(VirtualGridRenameTest, DraggingAnItemOntoItselfDoesNotStartARename)
         {
             ItemDragDropConfig dnd;
