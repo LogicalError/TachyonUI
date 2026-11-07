@@ -68,6 +68,48 @@ TEST_F(GpuTest, ATransparentWindowReadsBackWhatItRenders)
     windowBackend->DestroyWindow(window);
 }
 
+// A layered window, as a tooltip's is, shows only when the backend shows it: a frame
+// presented to it while hidden leaves it hidden. Shown from the present instead, SDL took it
+// for a window shown by the OS and restored it, which activated it.
+TEST_F(GpuTest, ALayeredWindowShowsOnlyWhenTheBackendShowsIt)
+{
+    using WF = tachyon::WindowFlags;
+    const WF flags = WF::Borderless | WF::PopupMenu | WF::NotFocusable | WF::AlwaysOnTop | WF::Transparent;
+    const tachyon::int2 size{ 64, 32 };
+    const tachyon::OSWindowHandle window =
+        windowBackend->CreateWindow("tooltip-test", tachyon::IntRect{ -3000, -3000, size.x, size.y }, flags | WF::Hidden, nullptr);
+    ASSERT_NE(window, nullptr);
+    const HWND hwnd = static_cast<HWND>(windowBackend->GetNativeHandle(window));
+    ASSERT_NE(hwnd, nullptr);
+    tachyon::ID id{};
+    id.value.dynamicParts.mode      = tachyon::IDMode::Static;
+    id.value.dynamicParts.hashValue = 778;
+    auto* ctx = tachyon::vulkan::VulkanWindowContext::Create(id, hwnd, window, size, flags, &vk->deviceContext, [] {});
+    ASSERT_NE(ctx, nullptr);
+    ASSERT_TRUE(ctx->needsReadback);
+
+    for (int frame = 0; frame < 3; ++frame)
+        RenderOneFrameWithDot(ctx, size);
+    EXPECT_FALSE(IsWindowVisible(hwnd)) << "presented to while hidden";
+    EXPECT_NE(GetActiveWindow(), hwnd);
+
+    windowBackend->SetWindowVisible(window, true);
+    for (int frame = 0; frame < 3; ++frame)
+        RenderOneFrameWithDot(ctx, size);
+    EXPECT_TRUE(IsWindowVisible(hwnd)) << "shown by the backend";
+    EXPECT_NE(GetActiveWindow(), hwnd) << "not activated";
+    EXPECT_NE(GetForegroundWindow(), hwnd);
+
+    windowBackend->SetWindowVisible(window, false);
+    RenderOneFrameWithDot(ctx, size);
+    EXPECT_FALSE(IsWindowVisible(hwnd)) << "hidden by the backend, presented to again";
+
+    vk->deviceContext.WaitIdle();
+    ctx->Destroy();
+    delete ctx;
+    windowBackend->DestroyWindow(window);
+}
+
 namespace
 {
     // An app whose only window is a cursor ghost, as a drag shows one; off-screen.

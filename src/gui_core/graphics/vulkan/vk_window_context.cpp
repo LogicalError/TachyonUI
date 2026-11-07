@@ -796,8 +796,9 @@ void VulkanWindowContext::UpdateLayeredWindowFromCache([[maybe_unused]] int scre
     blend.SourceConstantAlpha = 255;
     blend.AlphaFormat = AC_SRC_ALPHA;
     
+    // Only the content and rect; the window backend shows and hides the window. Shown here,
+    // SDL takes it for a window the OS showed and restores it, which activates it.
     UpdateLayeredWindow(hwnd, hdcScreen, &ptDst, &szWnd, hdcMem, &ptSrc, 0, &blend, ULW_ALPHA);
-    ShowWindow(hwnd, SW_SHOWNOACTIVATE);
     
     SelectObject(hdcMem, hOldBmp);
     DeleteObject(hbmp);
