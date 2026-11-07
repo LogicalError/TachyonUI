@@ -26,6 +26,17 @@ namespace tachyon
             const IntRect clip{ 0, 0, 2000, 2000 };
             const ID      element{ .value{ .integer = 81 } };
 
+            // The glyph drawn last for `text` in a box `width` wide.
+            GlyphDraw LastGlyph(StyleRef style, std::string_view text, int width)
+            {
+                const TextID id = Register(style, ElementState::None, text);
+                const IntRect box{ 0, 0, width, 40 };
+                graphicsContext.Renderer().glyphDraws.clear();
+                textSystem->RenderText(id, box, box, clip);
+                const std::vector<GlyphDraw>& draws = graphicsContext.Renderer().glyphDraws;
+                return draws.empty() ? GlyphDraw{} : draws.back();
+            }
+
             // 14px blue text in every state.
             static Style BaseStyle()
             {
@@ -60,6 +71,27 @@ namespace tachyon
                 return size_t(std::ranges::count_if(draws, [&](const GlyphDraw& d) { return d.color == color; }));
             }
         };
+
+        // Text cut short ends in an ellipsis on the line, where a typed one sits, not raised
+        // above the text.
+        TEST_F(TextPaintTest, ACutTextsEllipsisSitsWhereATypedOneDoes)
+        {
+            for (const TextBaseline baseline : { TextBaseline::Alphabetic, TextBaseline::Middle, TextBaseline::Central })
+            {
+                SCOPED_TRACE(int(baseline));
+                Style s = BaseStyle();
+                s.SetOverflow(Overflow::Hidden);
+                s.textLayoutStyle.textOverflow = TextOverflow::Ellipsis;
+                s.textLayoutStyle.baseline     = baseline;
+                const StyleRef style = styleManager.Register(s);
+
+                const GlyphDraw typed = LastGlyph(style, "x\xE2\x80\xA6", 200);
+                const GlyphDraw cut   = LastGlyph(style, "a long name that doesn't fit in the box", 40);
+                ASSERT_GT(cut.size.y, 0.0f);
+                EXPECT_FLOAT_EQ(cut.size.y, typed.size.y) << "the same glyph";
+                EXPECT_NEAR(cut.pos.y, typed.pos.y, 0.5f) << "at the same height";
+            }
+        }
 
         TEST_F(TextPaintTest, AStateThatOnlyRecolorsKeepsTheLayout)
         {

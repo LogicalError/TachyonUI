@@ -1206,6 +1206,32 @@ namespace tachyon
             EXPECT_EQ(SocketsOf(dotID), dotSockets);
         }
 
+        // Home and the Fit button frame the selected nodes: B selected, B in the middle.
+        TEST_F(NodeViewVirtualTest, HomeAndFitFrameTheSelection)
+        {
+            view.nodes.resize(2);   // A and B
+            Settle();
+            const tachyon::float2 nodeMiddle{ float(view.nodes[1].pos.x + view.nodes[1].lastSize.x / 2),
+                                     float(view.nodes[1].pos.y + view.nodes[1].lastSize.y / 2) };
+            auto middle = [&] { return view.transform.Inverse().TransformPoint(tachyon::float2{ 0.0f, 0.0f }); };
+
+            app.ClickAt(CanvasPoint());   // focuses the canvas
+            Frame();
+            view.selectedNodeIDs = { nodeB };
+            view.transform = tachyon::float3x2::Scale(1.0f);
+            app.InjectKey(KeyCode::Home);
+            Frame();
+            EXPECT_NEAR(middle().x, nodeMiddle.x, 1.0f) << "Home";
+            EXPECT_NEAR(middle().y, nodeMiddle.y, 1.0f);
+
+            view.transform = tachyon::float3x2::Scale(1.0f);
+            Settle();
+            app.ClickAt(app.CenterOf(app.FindByText("Fit")));
+            Frame();
+            EXPECT_NEAR(middle().x, nodeMiddle.x, 1.0f) << "Fit";
+            EXPECT_NEAR(middle().y, nodeMiddle.y, 1.0f);
+        }
+
         // A node holding the focus stays laid out whole when the view leaves it.
         TEST_F(NodeViewVirtualTest, TheFocusedNodeStaysWhole)
         {

@@ -381,8 +381,8 @@ namespace tachyon
                                 return true;
                             }
                         }
-                        // With the canvas focused, the keys do what the mouse does: Home frames all
-                        // nodes; the arrows move the selected nodes a grid step (Shift: four), or pan
+                        // With the canvas focused, the keys do what the mouse does: Home frames the
+                        // selected nodes, or all of them; the arrows move the selected nodes a grid step (Shift: four), or pan
                         // the view when none is selected; + and - zoom; Ctrl+A selects every node,
                         // Escape none; Enter collapses or expands the selected ones.
                         if (guiStateManager.Interaction().GetFocusedID() != canvasID)
@@ -444,8 +444,7 @@ namespace tachyon
                         switch (key)
                         {
                             case KeyCode::Home:
-                                if (!view.nodes.empty())
-                                    FrameAllNodes(view);
+                                FrameSelectedNodes(view);
                                 return true;
                             case KeyCode::Plus: case KeyCode::Equals: case KeyCode::KeyPadPlus:
                                 ZoomNodeView(view, 1.1f);
@@ -1691,7 +1690,7 @@ namespace tachyon
                 const std::string percent = std::to_string(int(std::lround(NodeViewZoom(view) * 100.0f))) + "%";
                 Button(idManager.AllocateDynamicID(), percent, [&view] { ZoomNodeView(view, 1.0f / NodeViewZoom(view)); }, button);
                 Button(idManager.AllocateDynamicID(), "+", [&view] { ZoomNodeView(view, kZoomStep); }, button);
-                Button(idManager.AllocateDynamicID(), "Fit", [&view] { FrameAllNodes(view); }, button);
+                Button(idManager.AllocateDynamicID(), "Fit", [&view] { FrameSelectedNodes(view); }, button);
                 if (pushed)
                     (void)idManager.PopParent();
                 EndHorizontal();

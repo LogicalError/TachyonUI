@@ -511,9 +511,9 @@ namespace tachyon
         void InitSettingsPages();
         void RenderSettingsAppearance();
         void RenderSettingsGeneral();
-        void RenderSettingsAdvanced();
+        /// The font scale, as a percentage: 100 to 300 in steps of 10, the theme reloaded at it.
+        void SetFontScale(float percent);
         void RenderSettingsShortcuts();
-        void RenderSettingsAbout();
         /// Reduced motion as settingsMotionIndex says.
         void ApplyMotionSetting();
         /// The Appearance settings read from the saved UI state, applied (--theme wins).

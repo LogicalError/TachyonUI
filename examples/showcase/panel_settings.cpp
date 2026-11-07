@@ -37,8 +37,6 @@ namespace tachyon
         showcase.settings.AddPage(idManager.CreateStaticID(), "Shortcuts",  [this]() { RenderSettingsShortcuts(); });
         showcase.settings.AddPage(idManager.CreateStaticID(), "Appearance", [this]() { RenderSettingsAppearance(); });
         showcase.settings.AddPage(idManager.CreateStaticID(), "General",    [this]() { RenderSettingsGeneral(); });
-        showcase.settings.AddPage(idManager.CreateStaticID(), "Advanced",   [this]() { RenderSettingsAdvanced(); });
-        showcase.settings.AddPage(idManager.CreateStaticID(), "About",      [this]() { RenderSettingsAbout(); });
         showcase.settings.treeWidth = 120; // narrower than the default page list
     }
 
@@ -60,19 +58,21 @@ namespace tachyon
         if (Dropdown(idManager.AllocateDynamicID("settingsThemeMenu"), themeIndex, kThemeNames))
             RequestReloadTheme(kThemePaths[themeIndex], showcase.settingsFontScalePct / 100.0f);
 
-        // Font size (percent), snapped to steps of 10 in [100, 300] before
-        // SliderField so knob and textbox show the quantized value. SliderField's
-        // return is false during a drag (it writes after OnGUI), so the reload is
-        // requested unconditionally; it no-ops when the scale is unchanged.
-        Label("Font size (%)");
-        const float kFontStep = 10.0f;
-        showcase.settingsFontScalePct = std::clamp(
-            std::round(showcase.settingsFontScalePct / kFontStep) * kFontStep, 100.0f, 300.0f);
-        SliderField(showcase.settingsFontScalePct, 100.0f, 300.0f, /*label*/ "");
-        RequestReloadTheme(GetThemePath(), showcase.settingsFontScalePct / 100.0f);
+        // Font size: smaller, the size (back to 100% when clicked) and larger, as the node
+        // view's zoom; 100% to 300% in steps of 10.
+        Label("Font size");
+        BeginHorizontal(idManager.AllocateDynamicID("settingsFontSize"), theme.searchRowStyleRef);
+        Button("\xE2\x88\x92", [this] { SetFontScale(showcase.settingsFontScalePct - 10.0f); });
+        SetTooltip("Smaller");
+        Button(std::to_string(int(std::lround(showcase.settingsFontScalePct))) + "%", [this] { SetFontScale(100.0f); });
+        SetTooltip("Back to 100%");
+        Button("+", [this] { SetFontScale(showcase.settingsFontScalePct + 10.0f); });
+        SetTooltip("Larger");
+        EndHorizontal();
 
-        // Reduced motion: changes of state show at once.
-        Label("Motion");
+        // Reduced: changes of state, menus and tooltips show at once instead of fading or sliding.
+        Label("Animations");
+        SetTooltip("How changes of state, menus and tooltips animate. Reduced shows them at once.");
         static constexpr std::string_view motionNames[] = { "As the system", "Reduced", "Full" };
         if (Dropdown(idManager.AllocateDynamicID("settingsMotionMenu"), showcase.settingsMotionIndex, motionNames))
             ApplyMotionSetting();
@@ -94,14 +94,6 @@ namespace tachyon
 
         Label("Autosave");
         Switch(showcase.settingsAutosave, showcase.settingsAutosave ? "On" : "Off");
-
-        EndLabelGroup();
-    }
-
-    void Application::RenderSettingsAdvanced()
-    {
-        Text(idManager.AllocateDynamicID("settingsTitle"), "Advanced", settingsTitleStyleRef);
-        BeginLabelGroup(140);
 
         Label("Max undo levels");
         Field(showcase.settingsMaxUndo, TextEditBehavior::None);
@@ -434,13 +426,6 @@ namespace tachyon
 
         EndHorizontal();  // shortcutGridCol
         EndHorizontal();  // shortcutSplit
-    }
-
-    void Application::RenderSettingsAbout()
-    {
-        Text(idManager.AllocateDynamicID("settingsTitle"), "About", settingsTitleStyleRef);
-        Text("TachyonUI — Vulkan-based GUI framework showcase.");
-        Text("These are placeholder settings pages.");
     }
 
 }

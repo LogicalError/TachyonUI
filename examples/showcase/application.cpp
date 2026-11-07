@@ -80,6 +80,12 @@ namespace tachyon
         ApplyMotionSetting();
     }
 
+    void Application::SetFontScale(float percent)
+    {
+        showcase.settingsFontScalePct = std::clamp(std::round(percent / 10.0f) * 10.0f, 100.0f, 300.0f);
+        RequestReloadTheme(GetThemePath(), showcase.settingsFontScalePct / 100.0f);
+    }
+
     void Application::ApplyMotionSetting()
     {
         SetReducedMotion(showcase.settingsMotionIndex == 0 ? std::nullopt
@@ -600,9 +606,11 @@ namespace tachyon
                 MenuItem("Add Reroute here", [this, at] {
                     CommitNodeViewEdit(showcase.nodeView, AddNodeEdit(showcase.nodeView, RerouteNode(at, { 0.20f, 0.75f, 0.72f, 1.0f })));
                 });
-                MenuItem("Frame all", [this] { FrameAllNodes(showcase.nodeView); });
+                MenuSeparator();
+                const bool selection = !showcase.nodeView.selectedNodeIDs.empty();
+                MenuItem(selection ? "Frame selection" : "Frame all", [this] { FrameSelectedNodes(showcase.nodeView); });
                 const bool curved = showcase.nodeView.wireShape == NodeWireShape::Curved;
-                MenuItem(curved ? "Use grid wires" : "Use curved wires", [this, curved] {
+                MenuItem(curved ? "Show grid aligned wires" : "Show curved wires", [this, curved] {
                     showcase.nodeView.wireShape = curved ? NodeWireShape::Orthogonal : NodeWireShape::Curved;
                 });
             };
@@ -1220,18 +1228,9 @@ namespace tachyon
 
             // Zoom = font scale, clamped to [100, 300]% in steps of 10 to match the
             // Appearance page. RequestReloadTheme no-ops when the scale is unchanged.
-            MenuItem({ showcase.zoomInIcon, "Zoom In" }, [this]() {
-                showcase.settingsFontScalePct = std::clamp(showcase.settingsFontScalePct + 10.0f, 100.0f, 300.0f);
-                RequestReloadTheme(GetThemePath(), showcase.settingsFontScalePct / 100.0f);
-            });
-            MenuItem({ showcase.zoomOutIcon, "Zoom Out" }, [this]() {
-                showcase.settingsFontScalePct = std::clamp(showcase.settingsFontScalePct - 10.0f, 100.0f, 300.0f);
-                RequestReloadTheme(GetThemePath(), showcase.settingsFontScalePct / 100.0f);
-            });
-            MenuItem({ showcase.recenterIcon, "Reset Zoom" }, [this]() {
-                showcase.settingsFontScalePct = 100.0f;
-                RequestReloadTheme(GetThemePath(), 1.0f);
-            });
+            MenuItem({ showcase.zoomInIcon, "Zoom In" }, [this]() { SetFontScale(showcase.settingsFontScalePct + 10.0f); });
+            MenuItem({ showcase.zoomOutIcon, "Zoom Out" }, [this]() { SetFontScale(showcase.settingsFontScalePct - 10.0f); });
+            MenuItem({ showcase.recenterIcon, "Reset Zoom" }, [this]() { SetFontScale(100.0f); });
 
             MenuSeparator();
             // For the window this menu is in.
