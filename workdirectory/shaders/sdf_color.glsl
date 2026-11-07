@@ -25,7 +25,8 @@ float cross2(vec2 a, vec2 b)
 //   point (the middle of a box, a ring's stroke or a triangle's incircle); SDFGradient uses it.
 // textureIndex: override texture index (1-based), or 0 to use ColorStyle's own texture.
 // boxSize: original box pixel size (for RepeatedTexture UV).
-vec4 getSDFColor(in int colorStyleIndex, vec2 pos, vec2 size, float edgeDepth, int textureIndex, vec2 boxSize, vec4 weights)
+// uvRect: the texture's part a StretchedTexture stretches over the shape (min.xy, max.zw).
+vec4 getSDFColor(in int colorStyleIndex, vec2 pos, vec2 size, float edgeDepth, int textureIndex, vec2 boxSize, vec4 weights, vec4 uvRect)
 {
     if (colorStyleIndex < 1)
         return vec4(0); // default to transparent if no color style is set
@@ -54,7 +55,7 @@ vec4 getSDFColor(in int colorStyleIndex, vec2 pos, vec2 size, float edgeDepth, i
 
     if (colorType == 1) // StretchedTexture
     {
-        vec2 normalizedUV = fract((pos / (size * 2)) + 0.5 + animOffset);
+        vec2 normalizedUV = mix(uvRect.xy, uvRect.zw, fract((pos / (size * 2)) + 0.5 + animOffset));
         color = texture(allTextures[nonuniformEXT(textureIndex)], normalizedUV.xy);
     }
 
@@ -148,4 +149,10 @@ vec4 getSDFColor(in int colorStyleIndex, vec2 pos, vec2 size, float edgeDepth, i
         color = solidColor;
     }
     return color;
+}
+
+// As above, a texture stretched whole.
+vec4 getSDFColor(in int colorStyleIndex, vec2 pos, vec2 size, float edgeDepth, int textureIndex, vec2 boxSize, vec4 weights)
+{
+    return getSDFColor(colorStyleIndex, pos, size, edgeDepth, textureIndex, boxSize, weights, vec4(0, 0, 1, 1));
 }

@@ -133,12 +133,41 @@ Draws an image, stretched to fill its box.
 ```cpp
 void Image(ID id, ImageIndex image, StyleRef style, LayoutOverride&& constraints = {});
 void Image(ID id, ImageIndex image, uint2 sourceSize, StyleRef style, LayoutOverride&& constraints = {});
+void Image(ID id, ImageIndex image, const UVRect& uv, StyleRef style, LayoutOverride&& constraints = {});
+void Image(ID id, ImageIndex image, uint2 sourceSize, const UVRect& uv, StyleRef style, LayoutOverride&& constraints = {});
 ```
 
 ```cpp
 Image(preview, LayoutOverride::FixedSize(96, 96));   // member: ImageIndex preview, from RegisterImage
 Image(preview, uint2{ 64, 64 });   // a 64x64 source, aspect ratio kept
 ```
+
+**Part of an image.** Pass a `UVRect` to draw only part of it, stretched over the box.
+
+- UV runs from 0,0 at the image's top-left corner to 1,1 at its bottom-right.
+  - `UVRect{}` is the whole image.
+  - `UVRect{ { 0.5f, 0.0f }, { 1.0f, 1.0f } }` is its right half.
+  - A `min` past `max` flips it.
+- `UVRect::FromPixels(cell, imageSize)` turns a rect in pixels into UV, for example a
+  cell of a thumbnail atlas: many thumbnails in one image take one image slot.
+
+  ```cpp
+  // The thumbnail in column 2, row 1 of a 1024x1024 atlas of 128x128 cells.
+  const UVRect cell = UVRect::FromPixels(IntRect{ 2 * 128, 1 * 128, 128, 128 }, uint2{ 1024, 1024 });
+  Image(atlas, cell, LayoutOverride::FixedSize(64, 64));
+  ```
+
+- It also zooms and pans a big image without drawing it bigger than its box.
+
+  ```cpp
+  // Zoomed in 4x around (cx, cy), in UV.
+  Image(photo, UVRect{ { cx - 0.125f, cy - 0.125f }, { cx + 0.125f, cy + 0.125f } }, LayoutOverride::FixedSize(256, 256));
+  ```
+
+- With `sourceSize`, the image's size in pixels, the box takes the aspect of the part
+  shown: a quarter of a 200x100 image's width is 50x100.
+- The part fills the box's padding box, over a clear background, and its border shows
+  as usual.
 
 The default style is `theme.imageStyleRef`. It's built in code, since CSS can't express
 how the image fills the box.

@@ -554,6 +554,8 @@ namespace tachyon
         tachyon::VisualColorStyleIndex treeDropIndicatorStyle; ///< drop indicator lines + closed-branch outline
 
         tachyon::VisualColorStyleIndex marqueeFillColorStyle; ///< selection-marquee fill (fixed translucent blue)
+        tachyon::VisualColorStyleIndex imageFillColorStyle;   ///< a texture stretched over a quad (RenderQuad with an image)
+        tachyon::VisualColorStyleIndex clearColorStyle;       ///< fully transparent
         tachyon::VisualColorStyleIndex tooltipArrowFill;      ///< --tooltip-bg: a tooltip's arrow
         tachyon::VisualColorStyleIndex tooltipArrowLine;      ///< --tooltip-border: its edges
         tachyon::VisualColorStyleIndex popupArrowFill;        ///< --bg-popup: property help's arrow

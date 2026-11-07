@@ -249,6 +249,85 @@ namespace
         app.Cleanup();
     }
 
+    // An Image of a two-pixel image, red then blue, showing the part `uv` of it.
+    class ImagePartApp : public tachyon::GUIApplicationInternals
+    {
+    public:
+        tachyon::ID         windowID = tachyon::ID::Invalid();
+        tachyon::ImageIndex image    = tachyon::ImageIndex::Invalid;
+        tachyon::UVRect     uv;
+
+        void OnGUI() override
+        {
+            if (BeginWindow(windowID, "Image", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(200, 120),
+                            tachyon::ElementFlags::WindowRenderToImage))
+                Image(image, uv, tachyon::LayoutOverride::FixedSize(tachyon::Pixels{ 80 }, tachyon::Pixels{ 60 }));
+            EndWindow();
+        }
+
+        bool Start()
+        {
+            if (!Initialize())
+                return false;
+            windowID = idManager.CreateStaticID();
+            uint32_t pixels[2] = { 0xff0000ffu, 0xffff0000u };   // RGBA: red, blue
+            created = graphicsContext->CreateImage(pixels, tachyon::uint2{ 2, 1 }, tachyon::ImageFormat::R8G8B8A8,
+                                                   tachyon::Sampler::NearestRepeat);
+            image = created != nullptr ? graphicsContext->RegisterImage(created) : tachyon::ImageIndex::Invalid;
+            return image != tachyon::ImageIndex::Invalid;
+        }
+
+        void Release()
+        {
+            if (created != nullptr)
+                graphicsContext->DestroyImageAtEnd(created, tachyon::DeviceScope::Application);
+            created = nullptr;
+            Cleanup();
+        }
+
+        tachyon::Image* created = nullptr;
+
+        // How many of the window's pixels are red, and how many blue.
+        std::pair<int, int> RedAndBlue()
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                if (!UpdateFrame() || !RecordFrame()) return { -1, -1 };
+                PresentFrame();
+            }
+            const tachyon::IntRect rect = windowManager->GetWindowRect(windowID);
+            std::vector<uint8_t> pixels(size_t(std::max(rect.w, 0)) * size_t(std::max(rect.h, 0)) * 4);
+            if (pixels.empty() || !ReadWindowPixels(windowID, pixels)) return { -1, -1 };
+            int red = 0, blue = 0;
+            for (size_t i = 0; i < pixels.size(); i += 4)   // BGRA8
+            {
+                red  += pixels[i + 2] > 200 && pixels[i + 1] < 50 && pixels[i] < 50;
+                blue += pixels[i] > 200 && pixels[i + 1] < 50 && pixels[i + 2] < 50;
+            }
+            return { red, blue };
+        }
+    };
+
+    // Image with a UV rect shows that part of the image only, filling the box.
+    TEST(GpuApplicationInit, AnImageShowsThePartItsUVRectPicks)
+    {
+        ImagePartApp app;
+        if (!app.Start())
+        {
+            app.Release();
+            GTEST_SKIP() << "no Vulkan device available";
+        }
+        const auto [wholeRed, wholeBlue] = app.RedAndBlue();
+        EXPECT_GT(wholeRed, 1000) << "the whole image, red";
+        EXPECT_GT(wholeBlue, 1000) << "and blue";
+
+        app.uv = tachyon::UVRect{ { 0.5f, 0.0f }, { 1.0f, 1.0f } };
+        const auto [partRed, partBlue] = app.RedAndBlue();
+        EXPECT_EQ(partRed, 0) << "its right half: no red";
+        EXPECT_GT(partBlue, wholeBlue + 1000) << "blue over the whole box";
+        app.Release();
+    }
+
     // A host loop drives the frame through the split calls (#55): a render-to-image window
     // is drawn once RecordFrame returns, before any present.
     TEST(GpuApplicationInit, AHostLoopDrivesTheFrameCalls)

@@ -73,7 +73,11 @@ namespace GUITest
         void RenderDot(tachyon::float2, tachyon::IntRect, float, tachyon::color4f) override {}
         void RenderTriangle(tachyon::float2, tachyon::float2, tachyon::float2, tachyon::IntRect,
                             tachyon::VisualColorStyleIndex, tachyon::ImageIndex, tachyon::TriangleEdges) override {}
-        void RenderQuad(tachyon::IntRect, tachyon::IntRect, tachyon::VisualColorStyleIndex, float, tachyon::ImageIndex) override {}
+        void RenderQuad(tachyon::IntRect rect, tachyon::IntRect, tachyon::VisualColorStyleIndex color, float, tachyon::ImageIndex image,
+                        const tachyon::UVRect& uv) override
+        {
+            quads.push_back({ rect, color, image, uv });
+        }
         void RenderShadow(tachyon::IntRect, tachyon::IntRect, tachyon::VisualColorStyleIndex, float, int) override {}
         void RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int, int,
                          tachyon::VisualColorStyleIndex color, tachyon::IntRect, tachyon::ImageIndex, float shadowBlur) override
@@ -97,6 +101,15 @@ namespace GUITest
             float shadowBlur; // below 0: the glyph itself
         };
         std::vector<GlyphDraw> glyphDraws; // every glyph quad drawn since last cleared, shadows included
+
+        struct QuadDraw
+        {
+            tachyon::IntRect               rect;
+            tachyon::VisualColorStyleIndex color;
+            tachyon::ImageIndex            image;
+            tachyon::UVRect                uv;
+        };
+        std::vector<QuadDraw> quads;   // every RenderQuad, in order
 
         float glyphRight     = 0.0f; // right edge of the rightmost glyph drawn since last reset
         float glyphTop       = 1e9f; // top edge of the highest glyph drawn since last reset

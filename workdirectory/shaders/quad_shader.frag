@@ -57,7 +57,7 @@ void main()
 
     // In units of the quad's smaller side: its middle is half a unit deep.
     vec4 color = getSDFColor(int(quad.colorIndex), uv, uvsize, saturate(-dist * 2.0),
-                             inSurface.textureIndex, inSurface.boxSize, weights);
+                             inSurface.textureIndex, inSurface.boxSize, weights, quad.uvRect);
 
     float alpha = clamp(1.0 - (dist / pixelrange), 0.0, 1.0);
     if (blurPx > 0.0)

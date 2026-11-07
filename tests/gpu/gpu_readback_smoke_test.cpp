@@ -118,6 +118,51 @@ namespace
         EXPECT_NEAR(b,  32, 2);
     }
 
+    // A textured quad stretches the part of the image its UV rect picks: of a two-pixel
+    // image, red then blue, the left half is all red, the right half all blue, the whole
+    // both, and the whole flipped both the other way round.
+    TEST_F(GpuReadbackTest, ATexturedQuadDrawsThePartItsUVRectPicks)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        uint32_t pixels[2] = { 0xff0000ffu, 0xffff0000u };   // RGBA: red, blue
+        tachyon::Image* image = vk->deviceContext.CreateImage(pixels, tachyon::uint2{ 2, 1 }, tachyon::ImageFormat::R8G8B8A8,
+                                                              tachyon::Sampler::NearestRepeat, false);
+        ASSERT_NE(image, nullptr);
+        const tachyon::ImageIndex index = vk->RegisterImage(image);
+        const tachyon::VisualColorStyleIndex stretched = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
+            tachyon::color4b{ 255, 255, 255, 255 }, tachyon::color4b{ 255, 255, 255, 255 }, tachyon::ColorType::StretchedTexture));
+
+        // 'r' or 'b' for the pixel a quarter and three quarters across, '?' otherwise.
+        const auto colors = [&](const tachyon::UVRect& uv) {
+            for (int frame = 0; frame < 2; ++frame)   // the image's upload lands with the first
+            {
+                graphicsContext->BeginFrame();
+                RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+                    r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x, kSize.y }, kFullClip, stretched, 0.0f, index, uv);
+                });
+            }
+            std::string out;
+            for (const int x : { kSize.x / 4, kSize.x * 3 / 4 })
+            {
+                const uint32_t px = PixelAt(ctx, x, kSize.y / 2);   // BGRA8
+                const int b = int(px & 0xFF), g = int((px >> 8) & 0xFF), rr = int((px >> 16) & 0xFF);
+                out += rr > 200 && g < 50 && b < 50 ? 'r' : b > 200 && g < 50 && rr < 50 ? 'b' : '?';
+            }
+            return out;
+        };
+        EXPECT_EQ(colors({}), "rb") << "the whole image";
+        EXPECT_EQ(colors({ { 0.0f, 0.0f }, { 0.5f, 1.0f } }), "rr") << "its left half";
+        EXPECT_EQ(colors({ { 0.5f, 0.0f }, { 1.0f, 1.0f } }), "bb") << "its right half";
+        EXPECT_EQ(colors(tachyon::UVRect::FromPixels({ 1, 0, 1, 1 }, { 2, 1 })), "bb") << "its second pixel";
+        EXPECT_EQ(colors({ { 1.0f, 0.0f }, { 0.0f, 1.0f } }), "br") << "flipped";
+        EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+
+        vk->UnregisterImage(index);
+        vk->deviceContext.DestroyImageAtEnd(image, tachyon::DeviceScope::Application);
+    }
+
     // A quad rounded to half its size is a disc (CustomDrawContext::RenderDisc, switch
     // knobs, slider thumbs): covered at every angle just inside its radius, empty just
     // outside, and the same in mirrored spots.

@@ -4,6 +4,9 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "skribidi_test_fixture.h"
+
+#include <gui_core/graphics/gui_custom_draw_context.h>
 
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_id_manager.h>
@@ -58,6 +61,101 @@ namespace tachyon
             ASSERT_NE(number, nullptr);
             EXPECT_EQ(number->textStyle.family, FontFamily::Monospace);
             EXPECT_EQ(app.GetElementRect(numberID).h, app.GetElementRect(textID).h) << "rows stay aligned";
+        }
+
+        // ---------------------------------------------------------------------
+        // Image
+        // ---------------------------------------------------------------------
+
+        // An image part (a UV rect) draws over a clear box: the box itself has no image, so
+        // the box's texture fill doesn't show the whole image under the part.
+        TEST_F(ControlsBasicTest, AnImagePartDrawsOverAClearBox)
+        {
+            const ID whole = app.idManager.CreateStaticID();
+            const ID part  = app.idManager.CreateStaticID();
+            app.Frame([&] {
+                app.BeginRootWindow();
+                app.Image(whole, ImageIndex(3), LayoutOverride::FixedSize(Pixels{ 40 }, Pixels{ 40 }));
+                app.Image(part, ImageIndex(3), UVRect{ { 0.5f, 0.0f }, { 1.0f, 1.0f } }, LayoutOverride::FixedSize(Pixels{ 40 }, Pixels{ 40 }));
+                app.EndRootWindow();
+            });
+            const Element& wholeElement = app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(whole));
+            EXPECT_EQ(wholeElement.backgroundImage, ImageIndex(3));
+            const ElementRef partRef = app.elementStorage.FindElementRefByID(part);
+            ASSERT_TRUE(partRef.IsValid());
+            const Element& partElement = app.elementStorage.GetElementUnsafe(partRef);
+            EXPECT_EQ(partElement.backgroundImage, ImageIndex::Invalid);
+            EXPECT_EQ(partElement.colorStyleIndex, app.theme.clearColorStyle);
+            EXPECT_EQ(partElement.styleRef, app.theme.imageStyleRef);
+            EXPECT_EQ(app.GetElementRect(part).size, app.GetElementRect(whole).size);
+
+            // Its draw: the part of the image, stretched over the padding box.
+            const ElementCustomDraw* draw = app.elementStorage.GetCustomDraw(partRef);
+            ASSERT_TRUE(draw != nullptr && draw->callback);
+            const ElementRect* rects = app.elementStorage.GetElementRectPtr(partRef);
+            GUITest::StubGUIRenderer renderer;
+            CustomDrawContext ctx{ renderer, app.elementStorage, partRef, rects->rect, rects->innerRect,
+                                   IntRect{ 0, 0, 4000, 4000 }, float3x2{}, int2{ 0, 0 } };
+            draw->callback(ctx);
+            ASSERT_EQ(renderer.quads.size(), 1u);
+            EXPECT_EQ(renderer.quads[0].rect, (IntRect{ 0, 0, rects->innerRect.w, rects->innerRect.h }));
+            EXPECT_EQ(renderer.quads[0].color, app.theme.imageFillColorStyle);
+            EXPECT_EQ(renderer.quads[0].image, ImageIndex(3));
+            EXPECT_EQ(renderer.quads[0].uv, (UVRect{ { 0.5f, 0.0f }, { 1.0f, 1.0f } }));
+        }
+
+        // A custom draw's quad takes the UV rect it's given, with a sub-clip or without.
+        TEST_F(ControlsBasicTest, ACustomDrawQuadKeepsItsUVRect)
+        {
+            const ID id = app.idManager.CreateStaticID();
+            app.Frame([&] {
+                app.BeginRootWindow();
+                app.Image(id, ImageIndex(3), LayoutOverride::FixedSize(Pixels{ 40 }, Pixels{ 40 }));
+                app.EndRootWindow();
+            });
+            const ElementRef ref = app.elementStorage.FindElementRefByID(id);
+            ASSERT_TRUE(ref.IsValid());
+            GUITest::StubGUIRenderer renderer;
+            CustomDrawContext ctx{ renderer, app.elementStorage, ref, IntRect{ 0, 0, 40, 40 }, IntRect{ 0, 0, 40, 40 },
+                                   IntRect{ 0, 0, 4000, 4000 }, float3x2{}, int2{ 0, 0 } };
+            const UVRect a{ { 0.25f, 0.5f }, { 0.75f, 1.0f } }, b{ { 1.0f, 0.0f }, { 0.0f, 1.0f } };
+            ctx.RenderQuad(IntRect{ 0, 0, 10, 10 }, app.theme.imageFillColorStyle, 0.0f, ImageIndex(3), a);
+            ctx.RenderQuad(IntRect{ 0, 0, 10, 10 }, IntRect{ 0, 0, 5, 5 }, app.theme.imageFillColorStyle, 0.0f, ImageIndex(3), b);
+            ctx.RenderQuad(IntRect{ 0, 0, 10, 10 }, app.theme.imageFillColorStyle);
+            ASSERT_EQ(renderer.quads.size(), 3u);
+            EXPECT_EQ(renderer.quads[0].uv, a);
+            EXPECT_EQ(renderer.quads[1].uv, b) << "with a sub-clip";
+            EXPECT_EQ(renderer.quads[2].uv, UVRect{}) << "none given: the whole image";
+        }
+
+        // A rect in pixels over the image's size: an atlas cell's UV rect.
+        TEST(UVRectTest, FromPixelsIsTheRectOverTheImageSize)
+        {
+            EXPECT_EQ(UVRect::FromPixels(IntRect{ 256, 128, 128, 64 }, uint2{ 1024, 512 }),
+                      (UVRect{ { 0.25f, 0.25f }, { 0.375f, 0.375f } }));
+            EXPECT_EQ(UVRect::FromPixels(IntRect{ 0, 0, 1024, 512 }, uint2{ 1024, 512 }), UVRect{}) << "the whole image";
+            EXPECT_EQ(UVRect::FromPixels(IntRect{ 2, 3, 4, 5 }, uint2{ 0, 0 }),
+                      (UVRect{ { 2.0f, 3.0f }, { 6.0f, 8.0f } })) << "no size: the pixels as they are";
+        }
+
+        // Sized from the source, an image part takes the aspect of the pixels it shows.
+        TEST_F(ControlsBasicTest, AnImagePartIsSizedToThePartsAspect)
+        {
+            const ID part  = app.idManager.CreateStaticID();
+            const ID same  = app.idManager.CreateStaticID();
+            const ID boxed = app.idManager.CreateStaticID();
+            app.Frame([&] {
+                app.BeginRootWindow();
+                // A quarter of a 200x100 image's width and half its height is 50x50.
+                app.Image(part, ImageIndex(3), uint2{ 200, 100 }, UVRect{ { 0.25f, 0.5f }, { 0.5f, 1.0f } });
+                app.Image(same, ImageIndex(3), uint2{ 50, 50 });
+                // In a 40 by 40 box: 20 by 40.
+                app.Image(boxed, ImageIndex(3), uint2{ 200, 100 }, UVRect{ { 0.5f, 0.0f }, { 0.25f, 1.0f } },
+                          LayoutOverride::FixedSize(Pixels{ 40 }, Pixels{ 40 }));
+                app.EndRootWindow();
+            });
+            EXPECT_EQ(app.GetElementRect(part).size, app.GetElementRect(same).size);
+            EXPECT_EQ(app.GetElementRect(boxed).size, (int2{ 20, 40 })) << "flipped, the same aspect";
         }
 
         TEST_F(ControlsBasicTest, ButtonRendersAndIsHittable)

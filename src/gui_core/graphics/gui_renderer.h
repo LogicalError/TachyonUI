@@ -88,7 +88,7 @@ namespace tachyon
 
         /// Draws a filled, optionally rounded and textured rect: a box without borders, style
         /// blending or element state.
-        virtual void RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius = 0.0f, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid) = 0;
+        virtual void RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius = 0.0f, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, const tachyon::UVRect& uv = {}) = 0;
         /// A box shadow: `rect` is the shadow's shape, which fades out over `blur` pixels
         /// on either side of its edge (Gaussian, sigma = blur / 2, as CSS).
         virtual void RenderShadow(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, int blur) = 0;

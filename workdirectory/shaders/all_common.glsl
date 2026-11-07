@@ -132,6 +132,8 @@ struct Quad
     int16_t    colorIndex;
     int16_t    blur;         // pixels; a shadow: the rect includes the blur on every side
     float      cornerRadius;
+    float      _padUV;
+    vec4       uvRect;       // the texture's part a StretchedTexture stretches over the quad: min.xy, max.zw
 };
 
 layout(buffer_reference, std430) readonly buffer Boxes  { Box   boxes []; };
