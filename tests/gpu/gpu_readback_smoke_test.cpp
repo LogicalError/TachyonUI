@@ -97,6 +97,32 @@ namespace
             << "a solid quad must change the pixels it covers";
     }
 
+    // A window without a swapchain shrunk draws and reads back at its new size, not its draw
+    // image's larger one: a layered window (a tooltip) takes the size it's presented at, so
+    // a larger one undid every resize and it was resized again each frame.
+    TEST_F(GpuReadbackTest, AShrunkWindowDrawsAtItsNewSize)
+    {
+        auto* ctx = CreateImageWindowContext({ 300, 200 });
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        RenderOneFrameWithDot(ctx, { 300, 200 });
+        EXPECT_EQ(ctx->drawExtent.width, 300u);
+        EXPECT_EQ(ctx->drawExtent.height, 200u);
+
+        graphicsContext->BeginFrame();
+        RenderOneFrameWithDot(ctx, { 120, 60 });
+        EXPECT_EQ(ctx->drawExtent.width, 120u) << "the size asked for";
+        EXPECT_EQ(ctx->drawExtent.height, 60u);
+        std::vector<uint8_t> pixels(size_t(120) * 60 * 4);
+        EXPECT_TRUE(ctx->ReadPixels(pixels)) << "read back at that size";
+
+        graphicsContext->BeginFrame();
+        RenderOneFrameWithDot(ctx, { 300, 200 });
+        EXPECT_EQ(ctx->drawExtent.width, 300u) << "and back up";
+        EXPECT_EQ(ctx->drawExtent.height, 200u);
+        EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+    }
+
     // A quad shows its color as given, like a box would: the quad shader used to convert
     // every color as if it were linear, which lightened anything custom-drawn.
     TEST_F(GpuReadbackTest, QuadKeepsItsColor)

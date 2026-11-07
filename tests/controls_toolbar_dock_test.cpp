@@ -118,6 +118,7 @@ namespace tachyon
 
         // Whether the tooltip showed, frame by frame, with the mouse resting on `target`
         // in a toolbar drawn by `body` ('1' shown, '0' not), after the hover delay.
+        std::vector<int2> tooltipSizes;   // the tooltip window's size, each frame it was there
         std::string TooltipFrames(ID target, const std::function<void()>& body, int frames = 40)
         {
             const ID item = app.idManager.CreateStaticID();
@@ -142,6 +143,9 @@ namespace tachyon
             {
                 app.Frame(draw);
                 shown += app.tooltipManager.IsVisible() ? '1' : '0';
+                const ElementRef tip = app.elementStorage.FindElementRefByID(app.tooltipWindowID);
+                if (tip.IsValid())
+                    tooltipSizes.push_back(app.elementStorage.GetElementRectUnsafe(tip).rect.size);
                 app.AdvanceTime(16);
             }
             return shown;
@@ -215,8 +219,14 @@ namespace tachyon
             app.SetTooltip("Toggle textured view mode");
         };
         const std::string all(40, '1');
-        EXPECT_EQ(TooltipFrames(first, body), all);
-        EXPECT_EQ(TooltipFrames(second, body), all);
+        for (const ID target : { first, second })
+        {
+            tooltipSizes.clear();
+            EXPECT_EQ(TooltipFrames(target, body), all);
+            ASSERT_FALSE(tooltipSizes.empty());
+            for (const int2 s : tooltipSizes)
+                EXPECT_EQ(s, tooltipSizes.back()) << "its window keeps its size";
+        }
     }
 
     // -------------------------------------------------------------------------
