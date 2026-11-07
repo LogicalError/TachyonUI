@@ -5,6 +5,7 @@
 
 #include <gui_controls/gui_widget_state_types.h>     // MultiSelectState, ItemDragDropConfig, DoubleClickTracker
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -48,6 +49,7 @@ namespace tachyon
         /// null in the non-virtual grid, which offers only Ctrl+Shift+Click and F2.
         DoubleClickTracker* clickTracker = nullptr;
         tachyon::ID*            pendingRenameClick = nullptr;   ///< see clickTracker
+        const std::function<void(tachyon::ID)>* onOpen = nullptr;  ///< GridViewVirtualState::onOpen
     };
 
     // ---- GridView rename lookup ----
@@ -93,6 +95,9 @@ namespace tachyon
         /// Cell width (pixels) that makes the columns exactly fill the viewport; use it for
         /// fill-width items.
         int32_t cellStretchedW = 0;
+        /// Called with an item's ID when it's opened: double-clicked, or Enter while it's the
+        /// selected one (the last one clicked, with a multi-selection).
+        std::function<void(tachyon::ID itemID)> onOpen;
 
         /// Written by the grid view each frame; not part of the API.
         struct Internal

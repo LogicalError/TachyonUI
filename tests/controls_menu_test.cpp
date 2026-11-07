@@ -142,6 +142,40 @@ namespace tachyon
             }
         }
 
+        // A dropdown menu in a menu bar opens like the bar's menus, but isn't one of them: Left
+        // and Right don't go to it, and the bar's next menu is still one.
+        TEST_F(ControlsMenuTest, ADropdownInAMenuBarIsntOneOfItsMenus)
+        {
+            const ID fileID = app.idManager.CreateStaticID();
+            const ID layoutID = app.idManager.CreateStaticID();
+            const ID helpID = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.BeginMenuBar();
+                if (app.BeginMenu(fileID, "File", app.theme.menuBarTriggerStyleRef, app.theme.menuStyleRef, app.theme.menuItemRowStyleRef))
+                    app.MenuItem("New", nullptr);
+                app.EndMenu();
+                if (app.BeginDropdownMenu(layoutID, "Scene"))
+                    app.MenuItem("Graph", nullptr);
+                app.EndMenu();
+                if (app.BeginMenu(helpID, "Help", app.theme.menuBarTriggerStyleRef, app.theme.menuStyleRef, app.theme.menuItemRowStyleRef))
+                    app.MenuItem("About", nullptr);
+                app.EndMenu();
+                app.EndMenuBar();
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            EXPECT_EQ(app.menuManager.menuBarTriggers, (std::vector<ID>{ fileID, helpID }));
+
+            app.ClickAt(app.CenterOf(layoutID));
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.IsOpen());
+            EXPECT_EQ(app.menuManager.levels[0].triggerID, layoutID);
+            EXPECT_TRUE(app.HasElement(app.FindByText("Graph")));
+            EXPECT_EQ(app.menuManager.menuBarTriggers, (std::vector<ID>{ fileID, helpID }));
+        }
+
         // A disabled item shows but can't be chosen: a click doesn't run it, and opening
         // the menu doesn't put the keyboard on it. A destructive item takes its own styles.
         TEST_F(ControlsMenuTest, DisabledItemsCantBeChosenAndDestructiveOnesStandOut)

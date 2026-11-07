@@ -442,6 +442,15 @@ namespace tachyon
             bool          dockInitialized = false;
             std::string   savedUIState;   // kUIStateFile's text, restored at start
 
+            // The title bar's layout picker: the built-in layouts, the saved ones, and the file
+            // types' ones (kept in the saved UI state).
+            LayoutPresets layoutPresets;
+            ID            pendingLayoutDocument { ID::Invalid() };   // given pendingLayoutName next frame
+            std::string   pendingLayoutName;
+            ID            namingLayoutDocument { ID::Invalid() };    // "Save layout as...": asking for a name
+            std::string   layoutNameInput;
+            ID            layoutNameDialogID { ID::Invalid() };
+
             // Settings panel chrome (page list, selection, tree width); page content
             // state lives in the fields below.
             SettingsPanelState settings;
@@ -548,8 +557,29 @@ namespace tachyon
         /// Which of kThemePaths the theme is (however it was picked: the menu, the settings,
         /// --theme); -1 for another.
         int CurrentThemeIndex() const;
-        /// The title bar's menus of `window`; `withSearch` adds the command search (one window has it).
-        void RenderMainMenu(ID window, bool withSearch = true);
+        /// The title bar of `window`, with the tabs of `documents` (their bar is `documentsID`),
+        /// and under it the menus for the active document; `withSearch` adds the command search
+        /// (one window has it).
+        void RenderMainMenu(ID window, ID documentsID, DocumentSet& documents, bool withSearch = true);
+        /// The title bar's layout picker for the active document of `documents`.
+        void RenderLayoutMenu(DocumentSet& documents);
+        /// While "Save layout as..." waits, in the window asking: the name to save it as.
+        void AskLayoutName(DocumentSet& documents);
+        /// The layouts a document can be given; the file types' ones are set here, and may be
+        /// changed by the saved UI state.
+        void AddBuiltInLayouts();
+        /// Gives a document the layout of that name, making the panels it lacks. False when
+        /// there's none of that name or it can't be applied.
+        bool ApplyLayoutPreset(Document& document, std::string_view name);
+        /// The layout picked last frame, given to its document before the documents are built.
+        void ApplyPendingLayout();
+        /// The document with that ID, in any window; null when it's gone.
+        Document* FindShowcaseDocument(ID id);
+        /// The documents of the main window `windowID` is; the first open one's for another.
+        DocumentSet& DocumentsOfWindow(ID windowID);
+        /// A file opened in `set` as a document (its type's layout, if it has one), or brought to
+        /// the front when it's open already; `icon` for a type the showcase has none for.
+        void OpenFileAsDocument(DocumentSet& set, std::string_view fileName, IconID icon);
         /// State on the left, the active document in `documents`, frame time on the right.
         void RenderStatusBar(const DocumentSet& documents);
         /// Quits, or asks first (in `from`, else the window with the focus) while a document in
@@ -571,8 +601,6 @@ namespace tachyon
         void UpdateDemoToasts();
         /// A document of `kind` with its panels (the samples by name), added to `set`.
         Document& CreateShowcaseDocument(DocumentSet& set, std::string name, std::string extension, std::string kind);
-        /// The first document's panels: every one, in the full docking demo layout.
-        void FillForest(Document& document);
         /// On the first frame: the documents as they were saved, else the samples.
         void MakeShowcaseDocuments();
         /// A document's panels: `main`, and `side` docked to its right.

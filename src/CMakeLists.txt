@@ -403,6 +403,8 @@ list(APPEND GUI_CONTROLS_FILES
   gui_controls/controls_docking.cpp
   gui_controls/controls_settings.cpp
   gui_controls/gui_ui_state.cpp
+  gui_controls/gui_layout_presets.h
+  gui_controls/gui_layout_presets.cpp
   gui_controls/controls_toolbar_dock.h
   gui_controls/controls_toolbar_dock.cpp
 )

@@ -680,6 +680,7 @@ namespace tachyon
         documentLineStyleRef              = registerCSS("document-line");
         documentNewStyleRef               = registerCSS("document-new");
         documentListStyleRef              = registerCSS("document-list");
+        titleBarDocumentsStyleRef         = registerCSS("title-bar-documents");
 
         // Docking container styles
         dockContainerStyleRef             = registerCSS("dock-container");
@@ -746,6 +747,7 @@ namespace tachyon
         menuScrollButtonStyleRef          = registerCSS("menu-scroll-button");
         menuBarStyleRef                   = registerCSS("menu-bar");
         menuBarTriggerStyleRef            = registerCSS("menu-bar-trigger");
+        menuBarDropdownStyleRef           = registerCSS("menu-bar-dropdown");
         titleBarStyleRef                  = registerCSS("title-bar");
         titleBarButtonStyleRef            = registerCSS("title-bar-button");
         titleBarCloseButtonStyleRef       = registerCSS("title-bar-close-button");

@@ -97,6 +97,8 @@ namespace tachyon
         std::vector<std::pair<tachyon::ID, int>> gridItemIDs;
         // The folder a drag from another application would drop into now; none while there's none.
         std::optional<std::string> fileDropFolder;
+        // The window it was last built in, whose documents a file it opens goes to.
+        tachyon::ID windowID = tachyon::ID::Invalid();
         // Grid of icons, or a list (the toolbar's grid/list toggles).
         bool filesListMode = false;
         bool wasRenaming = false;
@@ -361,6 +363,10 @@ namespace tachyon
         p.rootName = std::string(name.begin(), name.end());
 
         p.files         = std::make_unique<MemoryFileSystem>(root);
+        // Some documents to open with a double-click, in the copy only.
+        if (m_filesRoot.empty())
+            for (const char* file : { "Forest.level", "Desert.level", "Canyon.level", "Terrain.mat", "Rock.prefab", "Walk.anim", "Hud.layout" })
+                (void)p.files->AddFile(std::string("documents/") + file);
         p.openFolders   = { "" };
         p.currentFolder.clear();
         p.filesGeneration = p.files->Generation();
@@ -380,6 +386,23 @@ namespace tachyon
                 AddGhostIcon(icon);
             }
             EndGhostWindow();
+        };
+
+        // A double-click (or Enter) opens a folder, or a file as a document in this window.
+        p.gridScrollState.onOpen = [this, &p](tachyon::ID id) {
+            const FilesPanel::GridEntry* entry = p.GridEntryAt(GridItemIndex(id));
+            if (!entry)
+                return;
+            if (entry->file.isFolder)
+            {
+                p.currentFolder = JoinPath(p.currentFolder, entry->file.name);
+                p.openFolders.insert(std::string(ParentPath(p.currentFolder)));
+                p.folderTreeState.selectedRowID = tachyon::ID::Invalid();   // re-selected from currentFolder
+                p.treeDirty       = true;
+                p.gridFilterDirty = true;
+                return;
+            }
+            OpenFileAsDocument(DocumentsOfWindow(p.windowID), entry->file.name, FileIcon(p, entry->file));
         };
 
         p.gridDnD.payloadType = kGridPayload;
@@ -486,6 +509,7 @@ namespace tachyon
     {
         if (!p.files)
             return;
+        p.windowID = windowRegistry.GetCurrentWindowID();
 
         // A rename moves the item to its new place in the sorted view once it's done.
         if (p.wasRenaming && !IsRenaming())

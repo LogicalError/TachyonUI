@@ -169,6 +169,20 @@ VirtualGridView(gridID, gridState, int(files.size()), int2{ width, styleManager.
                 &selectedFile);
 ```
 
+To open an item, set `vstate.onOpen`:
+
+- It's called with the item's ID when the user double-clicks the item.
+- It's also called on Enter, with the selected item: the last one clicked when there's a
+  multi-selection.
+- A slow second click still renames the item, as before.
+
+```cpp
+gridState.onOpen = [this](ID itemID) {
+    const int i = int(itemID.value.subRangeParts.index);   // its index
+    OpenFile(files[i]);
+};
+```
+
 ## File views
 
 The file views show a tree and a grid of files. They read the files through an

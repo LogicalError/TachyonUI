@@ -43,12 +43,15 @@ namespace tachyon
 
         // The saved UI state (the showcase stores it next to its themes): the main window, the
         // toolbars, the documents of each window (made again on the first frame), the
-        // Appearance settings and the shortcuts the user changed.
+        // Appearance settings, the shortcuts the user changed, and the layouts saved and the file
+        // types' layouts.
         showcase.settingsThemePath = GetThemePath();
         PersistValue("theme", showcase.settingsThemePath);
         PersistValue("fontSize", showcase.settingsFontScalePct);
         PersistValue("motion", showcase.settingsMotionIndex);
         PersistShortcuts("shortcuts", commandManager);
+        AddBuiltInLayouts();
+        PersistLayoutPresets("layouts", showcase.layoutPresets);
         PersistWindow("main", showcase.windowLayoutID2);
         PersistToolbars("toolbars", toolbars.sides);
         PersistDocuments("documents", [this] {
@@ -129,6 +132,7 @@ namespace tachyon
         idManager.ReleaseStaticID(showcase.dragGhostWindowID);
         idManager.ReleaseStaticID(showcase.documentsID);
         idManager.ReleaseStaticID(showcase.closeDocumentDialogID);
+        idManager.ReleaseStaticID(showcase.layoutNameDialogID);
         for (const auto& window : showcase.documentWindows)
         {
             idManager.ReleaseStaticID(window->windowID);
@@ -185,6 +189,7 @@ namespace tachyon
         // Documents: made with their panels on the first frame (MakeShowcaseDocuments).
         showcase.documentsID           = idManager.CreateStaticID();
         showcase.closeDocumentDialogID = idManager.CreateStaticID();
+        showcase.layoutNameDialogID    = idManager.CreateStaticID();
         SetUpDocuments(showcase.documents);
 
         showcase.smallMenuID = idManager.CreateStaticID();
@@ -1163,12 +1168,17 @@ namespace tachyon
 
     // Title bar with the main menu and the command search. Most items only log;
     // Theme and Zoom reload the theme and Exit ends the run loop.
-    void Application::RenderMainMenu(ID window, bool withSearch)
+    void Application::RenderMainMenu(ID window, ID documentsID, DocumentSet& documents, bool withSearch)
     {
-        BeginTitleBar(idManager.AllocateDynamicID("mainMenuBar"));
-
-        // The application's mark, before the menus.
+        // The title bar: the application's mark, then the documents' tabs.
+        BeginTitleBar(idManager.AllocateDynamicID("titleBar"));
         Text(idManager.AllocateDynamicID("appIcon"), "T", appIconStyleRef);
+        DocumentBar(documentsID, documents, theme.titleBarDocumentsStyleRef);
+        EndTitleBar();
+
+        // Under it, the menus, the command search and the layouts: they act on the active
+        // document.
+        BeginMenuBar(idManager.AllocateDynamicID("mainMenuBar"));
 
         // ---- File ----
         if (BeginMenu(idManager.AllocateDynamicID("menuFile"), "File",
@@ -1265,9 +1275,9 @@ namespace tachyon
             BeginHorizontal(LayoutOverride::Auto().FlexGrow(1));
             EndHorizontal();
         }
-        StatusText("Test");
+        RenderLayoutMenu(documents);
 
-        EndTitleBar();
+        EndMenuBar();
     }
 
     int Application::CurrentThemeIndex() const
@@ -1382,6 +1392,12 @@ namespace tachyon
         if (title == "Hierarchy") return CreateHierarchyPanel(panels, name);
         if (title == "Log")       return CreateLogPanel(panels, name);
         if (title == "Files")     return CreateFilesPanel(panels, name);
+        if (title == "TreeTable")   return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderTreeTablePanel(); });
+        if (title == "Table")       return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderTablePanel(); });
+        if (title == "FrozenTable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderSplitScrollPanel(); });
+        if (title == "Reorderable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderReorderablePanel(); });
+        // Pages are registered once in InitSettingsPages.
+        if (title == "Settings")    return CreatePanel(panels, name, showcase.panelSettingsIcon, [this] { RenderSettingsPanel(showcase.settings); });
         if (title == "Profiler")
         {
             const ID id = CreatePanel(panels, name, showcase.panelProfilerIcon, [this] { RenderProfilerTreePanel(); }, {},
@@ -1403,71 +1419,187 @@ namespace tachyon
         document.layout.root = MakeSplit(DockSplitMode::RightPinned, 420, MakeLeaf({ mainID }), MakeLeaf({ sideID }));
     }
 
-    // The first document: every panel, in the full DockingContainer demo layout.
-    void Application::FillForest(Document& document)
+    namespace
     {
-        DockingLayout& dock = document.layout;
-        auto hierarchyPanelID   = CreateHierarchyPanel(dock.panels, "Hierarchy");
-        auto inspectorPanelID   = CreateInspectorPanel(dock.panels, "Inspector");
-        auto consolePanelID     = CreateLogPanel(dock.panels, "Log");
-        auto filesPanelID       = CreateFilesPanel(dock.panels, "Files");
-        auto nodeViewPanelID    = CreatePanel(dock.panels, "NodeView",    showcase.panelNodeViewIcon,  [this]() { RenderNodeViewPanel(); });
-        auto viewportPanelID    = CreatePanel(dock.panels, "Viewport",    showcase.panelViewportIcon,  [this]() { RenderViewportPanel(); });
-        auto profilerPanelID    = CreatePanel(dock.panels, "Profiler",    showcase.panelProfilerIcon,  [this]() { RenderProfilerTreePanel(); }, {}, [this]() { EnableProfilerTreePanel(); });
-        // Panels are cached by default; the profiler opts out while profiling is on.
-        dock.panels[profilerPanelID].cacheSignature =
-            []() -> std::optional<uint64_t> { return Diagnostics::IsProfilingEnabled() ? std::nullopt : std::optional<uint64_t>(0); };
+        // A dock tree's text, as SaveDockLayout writes it: a tab group, and two parts split.
+        std::string Tabs(std::initializer_list<std::string_view> titles)
+        {
+            std::string tabs;
+            for (const std::string_view title : titles)
+                tabs += std::format("{}\"{}\"", tabs.empty() ? "" : ",", title);
+            return std::format("{{\"tabs\":[{}],\"selected\":0}}", tabs);
+        }
 
-        auto treeTablePanelID   = CreatePanel(dock.panels, "TreeTable",   showcase.panelMiscIcon, [this]() { RenderTreeTablePanel(); });
-        auto tablePanelID       = CreatePanel(dock.panels, "Table",       showcase.panelMiscIcon, [this]() { RenderTablePanel(); });
-        auto splitScrollPanelID = CreatePanel(dock.panels, "FrozenTable", showcase.panelMiscIcon, [this]() { RenderSplitScrollPanel(); });
-        auto reorderablePanelID = CreatePanel(dock.panels, "Reorderable", showcase.panelMiscIcon, [this]() { RenderReorderablePanel(); });
-        auto boxTestPanelID     = CreatePanel(dock.panels, "BoxTest",     showcase.panelMiscIcon, [this]() { RenderBoxTestPanel(); });
-        auto miscPanelID        = CreatePanel(dock.panels, "Misc",        showcase.panelMiscIcon, [this]() { RenderMiscPanel(); });
-        // Misc animates during construction (rotating triangle, cycling hue), so it
-        // must rebuild every frame - opt out of caching.
-        dock.panels[miscPanelID].cacheSignature =
-            []() -> std::optional<uint64_t> { return std::nullopt; };
+        std::string Split(std::string_view mode, int size, const std::string& first, const std::string& second,
+                          int minFirst = 80, int minSecond = 80)
+        {
+            return std::format("{{\"split\":\"{}\",\"size\":{},\"minFirst\":{},\"minSecond\":{},\"first\":{},\"second\":{}}}",
+                               mode, size, minFirst, minSecond, first, second);
+        }
+    }
 
-        // Pages are registered once in InitSettingsPages.
-        auto settingsPanelID    = CreatePanel(dock.panels, "Settings", showcase.panelSettingsIcon, [this]() { RenderSettingsPanel(showcase.settings); });
-    
-        // bottom
-        auto&& filesLeaf         = MakeLeaf({ filesPanelID });
-        auto&& consolePanelLeaf  = MakeLeaf({ consolePanelID });
-    						// left / center / right
-        auto&& leftPanelGroup    = MakeLeaf({ hierarchyPanelID });
-        auto&& centerPanelGroup  = MakeLeaf({ nodeViewPanelID, viewportPanelID, settingsPanelID });
-        auto&& rightPanelGroup   = MakeLeaf({ profilerPanelID, inspectorPanelID,
-                    reorderablePanelID, miscPanelID, boxTestPanelID, treeTablePanelID,
-                    tablePanelID, splitScrollPanelID });
+    void Application::AddBuiltInLayouts()
+    {
+        LayoutPresets& presets = showcase.layoutPresets;
+        // Every panel: the hierarchy left, the views in the middle, the tools right, the files
+        // and the log along the bottom, which keeps its height as the window grows.
+        presets.AddBuiltIn("Everything",
+            Split("BottomPinned", 280,
+                Split("LeftPinned", 320,
+                    Tabs({ "Hierarchy" }),
+                    Split("RightPinned", 540,
+                        Tabs({ "NodeView", "Viewport", "Settings" }),
+                        Tabs({ "Profiler", "Inspector", "Reorderable", "Misc", "BoxTest", "TreeTable", "Table", "FrozenTable" }))),
+                Split("LeftPinned", 500, Tabs({ "Files" }), Tabs({ "Log" })),
+                120, 160));
+        presets.AddBuiltIn("Scene",
+            Split("LeftPinned", 280,
+                Tabs({ "Hierarchy" }),
+                Split("RightPinned", 360,
+                    Split("BottomPinned", 220, Tabs({ "Viewport" }), Tabs({ "Log", "Files" })),
+                    Tabs({ "Inspector" }))));
+        presets.AddBuiltIn("Graph", Split("RightPinned", 420, Tabs({ "NodeView" }), Tabs({ "Inspector" })));
+        presets.AddBuiltIn("Tables", Split("RightPinned", 420, Tabs({ "Table", "TreeTable", "FrozenTable" }), Tabs({ "Inspector" })));
+        presets.AddBuiltIn("Viewport", Tabs({ "Viewport" }));
+        // A file of these types opens with its layout (from the Files panel, or "+" for a level).
+        presets.SetForFileType(".level", "Scene");
+        presets.SetForFileType(".mat", "Graph");
+    }
 
-        // Build tree:  Vsplit( Hsplit( left, Hsplit(center, right) ), Hsplit(files, console) )
-        // Resize semantics:
-        //  - outer Vsplit:  bottom row pinned -> top group absorbs vertical resize
-        //  - top Hsplit:    left pinned       -> (center+right) absorbs horizontal resize
-        //  - inner Hsplit:  right pinned      -> center absorbs horizontal resize
-        //  - bottom Hsplit: left (files) pinned
-        dock.root =
-            MakeSplit(DockSplitMode::BottomPinned, 280,
-                MakeSplit(DockSplitMode::LeftPinned, 320,
-                    // left panel group
-                    std::move(leftPanelGroup),
-                    MakeSplit(DockSplitMode::RightPinned, 540,
-                        // center panel group
-                        std::move(centerPanelGroup),
-                        // right panel group
-                        std::move(rightPanelGroup)
-                    )
-                ),
-                // bottom panel group
-                MakeSplit(DockSplitMode::LeftPinned, 500,
-                    std::move(filesLeaf),
-                    std::move(consolePanelLeaf)
-                ),
-                120, // minFirst
-                160  // minSecond
-            );
+    bool Application::ApplyLayoutPreset(Document& document, std::string_view name)
+    {
+        const LayoutPreset* preset = showcase.layoutPresets.Find(name);
+        if (!preset)
+            return false;
+        DockingLayout& layout = document.layout;
+        if (!ApplyDockLayout(layout, preset->tree, [this, &layout](std::string_view key) -> std::optional<ID> {
+                return CreateShowcasePanel(layout, key); }))
+            return false;
+        return true;
+    }
+
+    Document* Application::FindShowcaseDocument(ID id)
+    {
+        if (id == ID::Invalid())
+            return nullptr;
+        for (const auto& document : showcase.documents.documents)
+            if (document->id == id) return document.get();
+        for (const auto& window : showcase.documentWindows)
+            for (const auto& document : window->documents.documents)
+                if (document->id == id) return document.get();
+        return nullptr;
+    }
+
+    void Application::ApplyPendingLayout()
+    {
+        const ID id = std::exchange(showcase.pendingLayoutDocument, ID::Invalid());
+        if (Document* document = FindShowcaseDocument(id); document && !ApplyLayoutPreset(*document, showcase.pendingLayoutName))
+            TACHYON_LOG_WARNING(kLogShowcase, "Layout \"{}\" not applied", showcase.pendingLayoutName);
+    }
+
+    void Application::RenderLayoutMenu(DocumentSet& documents)
+    {
+        Document* const document = documents.Active();
+        if (!document)
+            return;
+        LayoutPresets& presets = showcase.layoutPresets;
+        const ID documentID = document->id;
+        if (BeginDropdownMenu(idManager.AllocateDynamicID("layoutMenu"), "Layouts"))
+        {
+            // Picked here, given before the documents are built next frame.
+            for (const LayoutPreset& preset : presets.All())
+                MenuItem(preset.name, [this, documentID, name = preset.name] {
+                    showcase.pendingLayoutDocument = documentID;
+                    showcase.pendingLayoutName     = name;
+                });
+            MenuSeparator();
+
+            MenuItem({ showcase.saveAsIcon, "Save layout as..." }, [this, documentID] {
+                showcase.namingLayoutDocument = documentID;
+                showcase.layoutNameInput.clear();
+            });
+
+            const bool anySaved = std::any_of(presets.All().begin(), presets.All().end(), [](const LayoutPreset& p) { return !p.builtIn; });
+            if (!anySaved) BeginDisabled();
+            if (BeginMenu(idManager.AllocateDynamicID("layoutMenuDelete"), "Delete layout"))
+            {
+                for (const LayoutPreset& preset : presets.All())
+                    if (!preset.builtIn)
+                        DestructiveMenuItem({ theme.deleteIcon, preset.name }, [this, name = preset.name] {
+                            (void)showcase.layoutPresets.Remove(name);
+                        });
+            }
+            EndMenu();
+            if (!anySaved) EndDisabled();
+        }
+        EndMenu();
+    }
+
+    void Application::AskLayoutName(DocumentSet& documents)
+    {
+        Document* const document = FindShowcaseDocument(showcase.namingLayoutDocument);
+        if (!document)
+        {
+            showcase.namingLayoutDocument = ID::Invalid();
+            return;
+        }
+        if (std::none_of(documents.documents.begin(), documents.documents.end(), [document](const auto& d) { return d.get() == document; }))
+            return;   // asked in the window it's in
+
+        std::string name = showcase.layoutNameInput;
+        while (!name.empty() && name.back() == ' ')  name.pop_back();
+        while (!name.empty() && name.front() == ' ') name.erase(name.begin());
+        const LayoutPreset* existing = showcase.layoutPresets.Find(name);
+        const std::string_view message = existing && existing->builtIn ? "A built-in layout has that name. Built-in layouts can't be replaced."
+                                       : existing                      ? "It replaces the saved layout of that name."
+                                                                       : "Saved layouts can be picked for any document.";
+        static constexpr MessageButton kButtons[] = {
+            { .label = "Cancel" },
+            { .label = "Save", .kind = MessageButtonKind::Primary },
+        };
+        const int choice = MessageDialog(showcase.layoutNameDialogID, MessageDialogDesc{
+            .icon = MessageIcon::Question, .title = "Save this layout as?", .message = message,
+            .buttons = kButtons, .defaultButton = 1, .cancelButton = 0, .input = &showcase.layoutNameInput });
+        if (choice == 1 && !showcase.layoutPresets.Save(name, SaveDockLayout(document->layout)))
+            ShowToast(ToastDesc{ .severity = Severity::Warning, .title = "Layout not saved",
+                                 .body = name.empty() ? std::string("It needs a name.") : std::format("\"{}\" is a built-in layout.", name) });
+        if (choice >= 0)
+            showcase.namingLayoutDocument = ID::Invalid();
+    }
+
+    DocumentSet& Application::DocumentsOfWindow(ID windowID)
+    {
+        for (const auto& window : showcase.documentWindows)
+            if (window->windowID == windowID)
+                return window->documents;
+        if (!showcase.mainWindowOpen && !showcase.documentWindows.empty())
+            return showcase.documentWindows.front()->documents;
+        return showcase.documents;
+    }
+
+    void Application::OpenFileAsDocument(DocumentSet& set, std::string_view fileName, IconID icon)
+    {
+        const size_t dot = fileName.rfind('.');
+        const std::string name(fileName.substr(0, dot == 0 ? fileName.size() : dot));
+        const std::string extension(dot == 0 || dot == std::string_view::npos ? std::string_view{} : fileName.substr(dot));
+        // Open already: it comes to the front.
+        for (size_t i = 0; i < set.documents.size(); ++i)
+            if (set.documents[i]->name == name && set.documents[i]->extension == extension)
+            {
+                set.active = int(i);
+                return;
+            }
+        const std::string kind = extension == ".level"  ? "level"
+                               : extension == ".mat"    ? "material"
+                               : extension == ".layout" ? "layout"
+                               : extension == ".prefab" ? "prefab"
+                               : extension == ".anim"   ? "animation"
+                                                        : "";
+        Document& document = CreateShowcaseDocument(set, name, extension, kind);
+        if (kind.empty() && icon != IconID::Invalid)
+            document.icon = icon;
+        document.dirty = false;
+        set.active = int(set.documents.size()) - 1;
     }
 
     Document& Application::CreateShowcaseDocument(DocumentSet& set, std::string name, std::string extension, std::string kind)
@@ -1478,8 +1610,11 @@ namespace tachyon
                           : kind == "animation" ? showcase.documentAnimationIcon
                                                 : showcase.documentLevelIcon;
         Document& document = CreateDocument(set, name, std::move(extension), std::move(kind), icon);
-        // Each sample document has its own panels; one made with "+" a viewport and an inspector.
-        if (name == "Forest")        FillForest(document);
+        // Each sample document has its own panels, or its file type's layout; one made with "+" a
+        // viewport and an inspector.
+        const LayoutPreset* forType = showcase.layoutPresets.ForFileType(document.extension);
+        if (name == "Forest")        (void)ApplyLayoutPreset(document, "Everything");
+        else if (forType && ApplyLayoutPreset(document, forType->name)) {}
         else if (name == "Terrain")  FillDocument(document, "NodeView", "Inspector");
         else if (name == "Hud")      FillDocument(document, "BoxTest", "Misc");
         else if (name == "Rock")     FillDocument(document, "Viewport", "Hierarchy");
@@ -1605,7 +1740,9 @@ namespace tachyon
         documents.onNew = [this, set] {
             Document& created = CreateDocument(*set, std::format("Untitled {}", ++showcase.untitledCount),
                                                ".level", "level", showcase.documentLevelIcon);
-            FillDocument(created, "Viewport", "Inspector");
+            const LayoutPreset* forType = showcase.layoutPresets.ForFileType(created.extension);
+            if (!forType || !ApplyLayoutPreset(created, forType->name))
+                FillDocument(created, "Viewport", "Inspector");
             set->active = int(set->documents.size()) - 1;
         };
         // An unsaved document asks first; the dialog closes it (AskBeforeClosingDocument).
@@ -1661,9 +1798,10 @@ namespace tachyon
                             RequestExit(window.windowID);
                     }
                     AskBeforeExit(window.windowID);
-                    RenderMainMenu(window.windowID, /*withSearch*/ false);
+                    RenderMainMenu(window.windowID, window.documentsID, window.documents, /*withSearch*/ false);
                     AskBeforeClosingDocument(window.documents);
-                    Documents(window.documentsID, window.documents);
+                    AskLayoutName(window.documents);
+                    DocumentPanels(window.documents);
                     RenderStatusBar(window.documents);
                     EmitFloatingDockWindows(window.documents);
                     if (!showcase.mainWindowOpen)
@@ -1745,6 +1883,7 @@ namespace tachyon
 
     void Application::OnGUI()
     {
+        ApplyPendingLayout();
         auto&& sizeConstraints = LayoutOverride::FixedSize(1700, 900);
         
         {
@@ -1767,19 +1906,17 @@ namespace tachyon
                         RequestExit(showcase.windowLayoutID2);
                     AskBeforeExit(showcase.windowLayoutID2);
 
-                    RenderMainMenu(showcase.windowLayoutID2);
-
-                    // ---- Documents, the first with the DockingContainer demo ----
+                    // ---- Documents, the first with the DockingContainer demo: their tabs in
+                    // the title bar, the active one's panels under the menus ----
+                    if (!showcase.dockInitialized)
                     {
-                        if (!showcase.dockInitialized)
-                        {
-                            MakeShowcaseDocuments();
-                            showcase.dockInitialized = true;
-                        }
-
-                        AskBeforeClosingDocument(showcase.documents);
-                        Documents(showcase.documentsID, showcase.documents);
+                        MakeShowcaseDocuments();
+                        showcase.dockInitialized = true;
                     }
+                    RenderMainMenu(showcase.windowLayoutID2, showcase.documentsID, showcase.documents);
+                    AskBeforeClosingDocument(showcase.documents);
+                    AskLayoutName(showcase.documents);
+                    DocumentPanels(showcase.documents);
 
                     RenderStatusBar(showcase.documents);
 

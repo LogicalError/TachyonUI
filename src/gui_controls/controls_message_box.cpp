@@ -67,12 +67,14 @@ namespace tachyon
         // The keyboard starts on the default button, which shows the focus ring, and stays in
         // the dialog: Tab goes through all its controls, and focus anywhere else (still on
         // what asked, say) moves back to that button.
+        // With a text field, the keyboard starts in it instead.
+        const ID inputID = idManager.AllocateDynamicID("message_box_input");
         const ID focused = guiStateManager.Interaction().GetFocusedID();
         bool inside = std::find(state.controls.begin(), state.controls.end(), focused) != state.controls.end();
         for (int i = 0; i < count; ++i) inside |= focused == buttonID(i);
         if (!inside)
         {
-            guiStateManager.Interaction().SetFocusID(buttonID(defaultButton));
+            guiStateManager.Interaction().SetFocusID(desc.input ? inputID : buttonID(defaultButton));
             guiStateManager.Interaction().SetFocusVisible(true);
         }
         std::vector<ID> controls;
@@ -86,7 +88,17 @@ namespace tachyon
             for (size_t e = 0; e < events.size(); ++e)
             {
                 const auto& event = events[e];
-                if (event.type != EventType::KeyDown || event.consumed)
+                if (event.type != EventType::KeyDown)
+                    continue;
+                const KeyCode key = event.state.lastKey;
+                const bool enter = key == KeyCode::Return || key == KeyCode::Return2 || key == KeyCode::KeyPadEnter;
+                // Enter in the text field, which takes it to commit its text.
+                if (enter && desc.input && focused == inputID)
+                {
+                    choose(defaultButton);
+                    break;
+                }
+                if (event.consumed)
                     continue;
                 int chosen = -1;
                 if (event.state.lastKey == KeyCode::Escape)
@@ -131,6 +143,12 @@ namespace tachyon
             BeginVertical(idManager.AllocateDynamicID("message_box_text"), theme.messageBoxTextStyleRef, LayoutOverride{}.FlexGrow(1).FlexShrink(1));
             Text(idManager.AllocateDynamicID("message_box_title"), desc.title, theme.messageBoxTitleStyleRef);
             Text(idManager.AllocateDynamicID("message_box_message"), desc.message, theme.messageBoxMessageStyleRef);
+
+            if (desc.input)
+            {
+                controls.push_back(inputID);
+                Field(inputID, *desc.input, TextEditBehavior::ContinuousUpdate, LayoutOverride{}.NoShrink());
+            }
 
             // Affected items, each to tick or untick.
             if (!desc.items.empty())

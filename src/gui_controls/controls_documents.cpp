@@ -164,6 +164,19 @@ namespace tachyon
 
     void GUIApplication::Documents(ID id, DocumentSet& set, LayoutOverride&& constraints)
     {
+        RegisterElement(tachyon::Element{ .id = id, .styleRef = theme.documentsStyleRef, .state = guiStateManager.GetCurrentState(id) },
+                        std::move(constraints));
+        VERIFY(elementStorage.BeginChildren());
+        [[maybe_unused]] const bool pushed = idManager.PushParent(id);
+        DocumentBar(idManager.AllocateDynamicID("document_bar"), set);
+        if (pushed)
+            (void)idManager.PopParent();
+        DocumentPanels(set);
+        VERIFY(elementStorage.EndChildren());
+    }
+
+    void GUIApplication::DocumentBar(ID id, DocumentSet& set, StyleRef style, LayoutOverride&& constraints)
+    {
         // The documents whose tabs asked to close, now that no handler holds on to them.
         for (size_t i = set.documents.size(); i-- > 0; )
         {
@@ -184,16 +197,11 @@ namespace tachyon
             if (document.get() != active)
                 DisableAllPanels(document->layout);
 
-        RegisterElement(tachyon::Element{ .id = id, .styleRef = theme.documentsStyleRef, .state = guiStateManager.GetCurrentState(id) },
-                        std::move(constraints));
+        // ---- The bar: the tabs, "+", and the list of every document ----
+        set.internal.barID = id;
+        RegisterElement(tachyon::Element{ .id = id, .styleRef = style }, std::move(constraints));
         VERIFY(elementStorage.BeginChildren());
         [[maybe_unused]] const bool pushed = idManager.PushParent(id);
-
-        // ---- The bar: the tabs, "+", and the list of every document ----
-        set.internal.barID = idManager.AllocateDynamicID("document_bar");
-        RegisterElement(tachyon::Element{ .id = set.internal.barID, .styleRef = theme.documentBarStyleRef },
-                        LayoutOverride::Auto());
-        VERIFY(elementStorage.BeginChildren());
         RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("document_row"), .styleRef = theme.documentRowStyleRef },
                         LayoutOverride::Auto());
         VERIFY(elementStorage.BeginChildren());
@@ -370,8 +378,9 @@ namespace tachyon
         if (!set.documents.empty())
         {
             const ID listID = idManager.AllocateDynamicID("document_list");
-            if (BeginMenu(listID, std::to_string(set.documents.size()) + " open", theme.documentListStyleRef,
-                          theme.menuStyleRef, theme.menuItemRowStyleRef, LayoutOverride{}.NoGrow().NoShrink()))
+            // A dropdown also when the bar is in a title bar, not one of its menus.
+            if (BeginDropdownMenu(listID, std::to_string(set.documents.size()) + " open", theme.documentListStyleRef,
+                                  theme.menuStyleRef, theme.menuItemRowStyleRef, LayoutOverride{}.NoGrow().NoShrink()))
             {
                 for (size_t i = 0; i < set.documents.size(); ++i)
                 {
@@ -389,18 +398,18 @@ namespace tachyon
         RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("document_line"),
                                           .styleRef = active ? StylesOf(theme, active->kind).line : theme.documentLineStyleRef },
                         LayoutOverride::Auto());
-        VERIFY(elementStorage.EndChildren());   // bar
-
         if (pushed)
             (void)idManager.PopParent();
+        VERIFY(elementStorage.EndChildren());   // bar
+    }
 
-        // ---- The active document's panels ----
-        if (active)
+    void GUIApplication::DocumentPanels(DocumentSet& set, LayoutOverride&& constraints)
+    {
+        if (Document* const active = set.Active())
         {
-            BeginDockingContainer(active->internal.dockID, &active->layout, theme.dockContainerMainStyleRef, LayoutOverride::Auto());
+            BeginDockingContainer(active->internal.dockID, &active->layout, theme.dockContainerMainStyleRef, std::move(constraints));
             EndDockingContainer();
         }
-        VERIFY(elementStorage.EndChildren());
     }
 
     void GUIApplication::ApplyDocumentMove()

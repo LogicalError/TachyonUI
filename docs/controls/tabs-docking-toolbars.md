@@ -298,6 +298,29 @@ Each main window is built by your app, in this order:
    that set. They belong to that main window, and follow a document that moves to
    another one.
 
+The bar can also go in the title bar, with the menus under it, so the menus sit with the
+document they act on:
+
+- `DocumentBar(id, set, theme.titleBarDocumentsStyleRef)` draws only the bar: the tabs,
+  "+", "N open" and the line in the active document's color.
+  - Put it in the title bar, after its other items.
+  - The bar's empty space still drags the window.
+- `DocumentPanels(set)` draws the active document's panels, after the bar.
+- `Documents(id, set)` is the two together, the bar on top.
+
+```cpp
+BeginTitleBar(titleBarID);
+Text(appIconID, "T", appIconStyle);
+DocumentBar(documentsID, documents, theme.titleBarDocumentsStyleRef);
+EndTitleBar();
+
+BeginMenuBar(menuBarID);
+// ... File, Edit, View ...
+EndMenuBar();
+
+DocumentPanels(documents);
+```
+
 - Close a main window when no documents are left in it.
 - A set must stay alive until the end of the frame it was built in.
 
@@ -339,6 +362,8 @@ Document& CreateDocument(DocumentSet& set, std::string name, std::string extensi
                          std::string kind, IconID icon);
 void      CloseDocument(DocumentSet& set, int index);
 void      Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
+void      DocumentBar(ID id, DocumentSet& set, StyleRef style, LayoutOverride&& constraints = LayoutOverride::Auto());
+void      DocumentPanels(DocumentSet& set, LayoutOverride&& constraints = LayoutOverride::Auto());
 void      EmitFloatingDockWindows(const DocumentSet& documents);
 ```
 
@@ -358,6 +383,7 @@ void      EmitFloatingDockWindows(const DocumentSet& documents);
   - `document-dirty`
   - `document-new`
   - `document-list`
+  - `title-bar-documents`, for a bar in a title bar
 
 ```cpp
 // Once:
@@ -378,6 +404,100 @@ documents.onTearOff = [this](std::unique_ptr<Document> document, int2 at) {
     window->documents.onTearOff = documents.onTearOff;
     window->documents.documents.push_back(std::move(document));
 };
+```
+
+### Layout presets
+
+A layout preset is a named arrangement of a document's panels, such as "Scene" or
+"Graph". The user picks one for the document they're in, and the panels move to where the
+preset puts them.
+
+- A preset is a dock tree as text.
+  - `SaveDockLayout(layout)` writes a layout's tree.
+  - Panels are named in it by their `panelType`, or by their title when they have none.
+  - Floating panels aren't in it.
+- `ApplyDockLayout(layout, tree, makePanel)` lays a layout out as a tree says.
+  - A panel the tree names that the layout already has stays, and moves to its new place.
+  - A panel the tree names that the layout lacks is made by `makePanel`. It gets the
+    panel's type or title, creates the panel in `layout.panels`, and returns its ID.
+  - A panel the layout has that the tree doesn't name is closed, as closing its tab does.
+  - It returns false, and changes nothing, when the tree can't be read or no panel is left.
+  - Call it outside the layout's `Docking`, for example at the start of the frame.
+
+```cpp
+const std::string tree = SaveDockLayout(document.layout);
+
+// Later, on any document:
+(void)ApplyDockLayout(other.layout, tree, [this, &other](std::string_view title) -> std::optional<ID> {
+    return MakeMyPanel(other.layout, title);   // CreatePanel by title
+});
+```
+
+`LayoutPresets` keeps the presets:
+
+- Built-in presets are the app's own.
+  - Add them with `AddBuiltIn(name, tree)`.
+  - They come first, and can't be replaced or deleted.
+- Saved presets are the user's.
+  - `Save(name, tree)` adds one, or replaces the saved one of that name.
+  - It returns false for an empty name, or the name of a built-in preset.
+  - `Remove(name)` deletes one.
+- `All()` lists them all, built-in ones first, each in the order added.
+- `Find(name)` returns the preset of that name, or null.
+
+```cpp
+LayoutPresets presets;
+presets.AddBuiltIn("Graph", graphTree);
+presets.Save("My layout", SaveDockLayout(document.layout));
+for (const LayoutPreset& preset : presets.All())
+    MenuItem(preset.name, [this, name = preset.name] { pendingPreset = name; });
+```
+
+A file type can open with a preset, so a file the user opens (a `.mat` file
+double-clicked in a file view, say) gets its type's layout:
+
+- `SetForFileType(".mat", "Graph")` makes `.mat` documents open with "Graph".
+  - The extension's case doesn't matter.
+  - An empty name stops it.
+  - Deleting a saved preset stops the file types that used it.
+- `ForFileType(extension)` returns that type's preset, or null when it has none.
+
+```cpp
+// A file opened: a document with its type's layout.
+Document& document = CreateDocument(documents, name, ".mat", "material", materialIcon);
+if (const LayoutPreset* preset = presets.ForFileType(document.extension))
+    (void)ApplyDockLayout(document.layout, preset->tree, makePanel);
+```
+
+`PersistLayoutPresets(key, presets)` keeps the saved presets and the file types in the
+saved UI state. Add the built-in presets yourself, before or after `RestoreUIState`.
+
+The showcase:
+
+- Has a "Layouts" dropdown in its title bar (`BeginDropdownMenu`, see [Menus](menus.md)).
+  - It lists the presets; picking one lays out the active document.
+  - "Save layout as..." asks for a name with a `MessageDialog` text field (see
+    [Tooltips and dialogs](tooltips-and-dialogs.md)).
+  - "Delete layout" deletes a saved preset.
+- Opens `.level` files with "Scene" and `.mat` files with "Graph": double-click one in the
+  Files panel's `documents` folder (see `GridViewVirtualState::onOpen` in
+  [Trees and grids](trees-and-grids.md#virtualgridview)).
+
+```cpp
+// LayoutPresets (gui_layout_presets.h)
+void                AddBuiltIn(std::string name, std::string tree);
+bool                Save(std::string name, std::string tree);
+bool                Remove(std::string_view name);
+const LayoutPreset* Find(std::string_view name) const;
+const std::vector<LayoutPreset>& All() const;
+void                SetForFileType(std::string_view extension, std::string name);
+const LayoutPreset* ForFileType(std::string_view extension) const;
+
+// GUIApplication
+std::string SaveDockLayout(const DockingLayout& layout) const;
+bool        ApplyDockLayout(DockingLayout& layout, std::string_view tree,
+                            const std::function<std::optional<ID>(std::string_view key)>& makePanel = {});
+void        PersistLayoutPresets(std::string key, LayoutPresets& presets);
 ```
 
 
