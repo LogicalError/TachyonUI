@@ -388,8 +388,12 @@ VkCommandBuffer VulkanWindowContext::BeginWindowFrame(FrameData& currentFrame)
     }
     else
     {
-        drawExtent.width = currentFrame.drawImage.imageExtent.width;
-        drawExtent.height = currentFrame.drawImage.imageExtent.height;
+        // The draw image only grows, so it can be larger than the window: draw (and read
+        // back, and present) the size asked for. A layered window takes the size it's
+        // presented at, and a larger one would undo every resize down.
+        const VkExtent3D image = currentFrame.drawImage.imageExtent;
+        drawExtent.width  = requestedExtent.width  > 0 ? std::min(requestedExtent.width,  image.width)  : image.width;
+        drawExtent.height = requestedExtent.height > 0 ? std::min(requestedExtent.height, image.height) : image.height;
     }
 
     TACHYON_VK_CHECK(vkResetFences(deviceContext->device, 1, &currentFrame.renderFence));
@@ -832,6 +836,7 @@ void VulkanWindowContext::RecordFrame(tachyon::GraphicsContext* graphicsContext,
     {
         uint32_t requestedWidth  = rect.size.x > 0 ? static_cast<uint32_t>(rect.size.x) : 0u;
         uint32_t requestedHeight = rect.size.y > 0 ? static_cast<uint32_t>(rect.size.y) : 0u;
+        requestedExtent = { requestedWidth, requestedHeight };
 
         // All FRAME_OVERLAP draw images share one extent, so any slot's is representative.
         if (requestedWidth > swapchain.swapchainExtent.width ||

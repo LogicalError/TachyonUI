@@ -96,7 +96,9 @@ namespace tachyon::vulkan
         VkSurfaceKHR             surface = {};
         VkExtent2D               windowExtent = {};
         VkExtent2D               drawExtent = {};
-                                 
+        /// The size the last frame was recorded for; without a swapchain, what's drawn.
+        VkExtent2D               requestedExtent = {};
+
         bool                     resize_requested{ false };
         bool                     freeze_rendering{ false };
         tachyon::int2                mouse_pos = { 0,0 };
