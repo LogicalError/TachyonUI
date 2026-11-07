@@ -409,27 +409,60 @@ namespace tachyon
         auto ref = RegisterElement(std::move(el), std::move(constraints));
     }
 
+    void GUIApplication::Image(ID id, ImageIndex image, const UVRect& uv, StyleRef style, LayoutOverride&& constraints)
+    {
+        // The box drawn clear, then the part of the image as a quad over its padding box.
+        tachyon::Element el{ .id = id, .styleRef = style };
+        el.colorStyleIndex = theme.clearColorStyle;
+        auto ref = RegisterElement(std::move(el), std::move(constraints));
+        if (!ref.IsValid())
+            return;
+        VERIFY(elementStorage.AddCustomDraw(ref, [this, image, uv](tachyon::CustomDrawContext& ctx)
+        {
+            const IntRect inner = ctx.ElementInnerRect();
+            ctx.RenderQuad(IntRect{ 0, 0, inner.w, inner.h }, theme.imageFillColorStyle, 0.0f, image, uv);
+        }));
+    }
+
+    namespace
+    {
+        // The largest rect of `sourceSize`'s aspect that fits the box the constraints fix. An
+        // axis they leave free falls back to the source's pixel extent.
+        int2 AspectFit(uint2 sourceSize, const LayoutOverride& constraints)
+        {
+            const int32_t boxW = constraints.HasFixedWidth()  ? constraints.width.value  : int32_t(sourceSize.x);
+            const int32_t boxH = constraints.HasFixedHeight() ? constraints.height.value : int32_t(sourceSize.y);
+            int32_t w = boxW, h = boxH;
+            if (sourceSize.x > 0 && sourceSize.y > 0 && boxW > 0 && boxH > 0)
+            {
+                if (int64_t(sourceSize.x) * boxH <= int64_t(sourceSize.y) * boxW)   // height-limited
+                {
+                    h = boxH;
+                    w = int32_t((int64_t(boxH) * sourceSize.x + sourceSize.y / 2) / sourceSize.y);
+                }
+                else                                                                // width-limited
+                {
+                    w = boxW;
+                    h = int32_t((int64_t(boxW) * sourceSize.y + sourceSize.x / 2) / sourceSize.x);
+                }
+            }
+            return { w, h };
+        }
+    }
+
     void GUIApplication::Image(ID id, ImageIndex image, uint2 sourceSize, StyleRef style, LayoutOverride&& constraints)
     {
-        // Largest source-aspect rectangle that fits the requested box. An axis
-        // the caller left unconstrained falls back to the source pixel extent.
-        const int32_t boxW = constraints.HasFixedWidth()  ? constraints.width.value  : int32_t(sourceSize.x);
-        const int32_t boxH = constraints.HasFixedHeight() ? constraints.height.value : int32_t(sourceSize.y);
-        int32_t w = boxW, h = boxH;
-        if (sourceSize.x > 0 && sourceSize.y > 0 && boxW > 0 && boxH > 0)
-        {
-            if (int64_t(sourceSize.x) * boxH <= int64_t(sourceSize.y) * boxW)   // height-limited
-            {
-                h = boxH;
-                w = int32_t((int64_t(boxH) * sourceSize.x + sourceSize.y / 2) / sourceSize.y);
-            }
-            else                                                                // width-limited
-            {
-                w = boxW;
-                h = int32_t((int64_t(boxW) * sourceSize.y + sourceSize.x / 2) / sourceSize.x);
-            }
-        }
-        Image(id, image, style, tachyon::LayoutOverride::FixedSize(Pixels{ w }, Pixels{ h }));
+        const int2 size = AspectFit(sourceSize, constraints);
+        Image(id, image, style, tachyon::LayoutOverride::FixedSize(Pixels{ size.x }, Pixels{ size.y }));
+    }
+
+    void GUIApplication::Image(ID id, ImageIndex image, uint2 sourceSize, const UVRect& uv, StyleRef style, LayoutOverride&& constraints)
+    {
+        // The aspect of the part shown: the source's pixels the UV rect covers.
+        const uint2 shown{ uint32_t(std::lround(std::abs(uv.max.x - uv.min.x) * float(sourceSize.x))),
+                           uint32_t(std::lround(std::abs(uv.max.y - uv.min.y) * float(sourceSize.y))) };
+        const int2 size = AspectFit(shown, constraints);
+        Image(id, image, uv, style, tachyon::LayoutOverride::FixedSize(Pixels{ size.x }, Pixels{ size.y }));
     }
 
     bool GUIApplication::Button(ID id, const GUIContent& content, std::function<void()> onClick, StyleRef style, LayoutOverride&& constraints)

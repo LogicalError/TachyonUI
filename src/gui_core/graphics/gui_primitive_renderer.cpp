@@ -221,7 +221,7 @@ void PrimitiveRenderTarget::RenderTriangle(tachyon::float2 p0, tachyon::float2 p
 }
 
 
-void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex)
+void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex, const tachyon::UVRect& uv)
 {
     Append(PrimitiveKind::Quad, Quad
                     {
@@ -234,7 +234,8 @@ void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect c
 
                         .textureIndex = textureIndex,
                         .colorIndex = int16_t(colorStyleIndex),
-                        .cornerRadius = cornerRadius
+                        .cornerRadius = cornerRadius,
+                        .uvRect = { uv.min.x, uv.min.y, uv.max.x, uv.max.y }
                     });
 }
 
@@ -619,10 +620,10 @@ void PrimitiveRenderer::RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, t
     currentTarget->RenderTriangle(p0, p1, p2, clipRect, colorStyleIndex, textureIndex, hardEdges);
 }
 
-void PrimitiveRenderer::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex)
+void PrimitiveRenderer::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex, const tachyon::UVRect& uv)
 {
     assert(currentTarget != nullptr);
-    currentTarget->RenderQuad(rect, clipRect, colorStyleIndex, cornerRadius, textureIndex);
+    currentTarget->RenderQuad(rect, clipRect, colorStyleIndex, cornerRadius, textureIndex, uv);
 }
 
 void PrimitiveRenderer::RenderOccluder(tachyon::IntRect rect, tachyon::IntRect clipRect)

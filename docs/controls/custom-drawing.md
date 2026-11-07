@@ -77,7 +77,7 @@ VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)
 | `ElementRect()`, `ElementInnerRect()` | Border box and padding box, in the current space |
 | `GetElementRect(ref)`, `GetInnerRect(ref)` | Another element's rects |
 | `RenderBox(rect, boxStyle, state, ...)` | Styled box |
-| `RenderQuad(rect, colorStyle, cornerRadius, ...)` | Filled rectangle |
+| `RenderQuad(rect, colorStyle, cornerRadius, image, uv)` | Filled rectangle; with an image and `theme.imageFillColorStyle`, the part `uv` of the image stretched over it |
 | `RenderLine(p0, p1, lineStyle)` | Line (also a four-point form) |
 | `RenderPolyline(points, closed, lineStyle, cornerRadius)` | Polyline |
 | `RenderCircle`, `RenderDisc`, `RenderDot` | Circle outline, filled disc, dot. The circle is exactly round; gradients and dashes run clockwise from the right. |
@@ -98,6 +98,21 @@ VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)
     const IntRect r = ctx.ElementInnerRect();
     const LineStyle line{ .colorStyleIndex = theme.lineWhiteStyle, .lineWidth = styleManager.Px(2.0f) };
     ctx.RenderLine(r.position, r.position + r.size, line);
+}));
+```
+
+An image, or part of one, is a quad with an image and a texture color style:
+
+- `theme.imageFillColorStyle` stretches the image over the quad.
+- `uv`, a `UVRect`, picks the part: the whole image by default. See
+  [Image](text-and-images.md#image) for UV and `UVRect::FromPixels`.
+
+```cpp
+VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)
+{
+    // The 2D view's visible part of the texture, panned and zoomed, filling the element.
+    const IntRect r = ctx.ElementInnerRect();
+    ctx.RenderQuad(IntRect{ 0, 0, r.w, r.h }, theme.imageFillColorStyle, 0.0f, texture, visibleUV);
 }));
 ```
 

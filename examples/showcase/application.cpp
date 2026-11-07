@@ -255,6 +255,9 @@ namespace tachyon
 							enableAudio = !enableAudio;
                         });
                     SetTooltip(enableAudio ? "Audio on" : "Audio off");
+
+                    Button(showGrid ? showcase.gridOnIcon : showcase.gridOffIcon, [this]() { showGrid = !showGrid; });
+                    SetTooltip(showGrid ? "Grid on" : "Grid off");
                 }
             });
         toolbars.sides[(int)ToolbarSide::Top].push_back(ToolbarItem
@@ -286,15 +289,6 @@ namespace tachyon
 					SetTooltip("Rotate mode");
                     Toggle(tool == Tool::Scale,  showcase.toolScaleIcon,  [this](bool value) { if (value) tool = Tool::Scale;  });
 					SetTooltip("Scale mode");
-                }
-            });
-        toolbars.sides[(int)ToolbarSide::Bottom].push_back(ToolbarItem
-            {
-                .id = idManager.CreateStaticID(), .debugName = "Status",
-                .renderBody = [this]()
-                {
-                    Button(showGrid ? showcase.gridOnIcon : showcase.gridOffIcon, [this]() { showGrid = !showGrid; });
-					SetTooltip(showGrid ? "Grid on" : "Grid off");
                 }
             });
 

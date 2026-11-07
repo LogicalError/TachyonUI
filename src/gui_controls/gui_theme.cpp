@@ -297,6 +297,10 @@ namespace tachyon
         marqueeFillColorStyle = styleManager.RegisterColorStyle(
             ColorStyle::Create(color4f{ 0.3f, 0.6f, 1.0f, 0.15f }));
 
+        imageFillColorStyle = styleManager.RegisterColorStyle(
+            ColorStyle::Create(color4b{ 255, 255, 255, 255 }, color4b{ 255, 255, 255, 255 }, ColorType::StretchedTexture));
+        clearColorStyle = styleManager.RegisterColorStyle(ColorStyle::Create(color4f{ 0.0f, 0.0f, 0.0f, 0.0f }));
+
         // Registers a parsed style by name, with the global font scale applied. A class with
         // :first-child / :last-child rules is registered once, with its child styles.
         auto scaled = [&](Style s)
