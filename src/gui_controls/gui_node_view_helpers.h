@@ -25,8 +25,14 @@ namespace tachyon
     void  ZoomNodeView(NodeView& view, float factor, int2 pivot = {});
     /// Centres the view on canvas point `center` at `zoom` (clamped to minZoom..maxZoom).
     void  SetNodeViewCenter(NodeView& view, float2 center, float zoom);
-    /// Centres and zooms the view on all nodes (Home, the Fit button).
+    /// Centres and zooms the view on all nodes.
     void  FrameAllNodes(NodeView& view);
+    /// Centres and zooms the view on the nodes at `indices` (ones out of range skipped); none
+    /// leaves the view as it is. Never past 100%, so a small group shows at its own size.
+    void  FrameNodes(NodeView& view, std::span<const int> indices);
+    /// Centres and zooms the view on the selected nodes, or on all of them when none is
+    /// selected (Home, the Fit button).
+    void  FrameSelectedNodes(NodeView& view);
     /// Pans the view, at the same zoom, by as little as brings node `nodeIdx` inside it with
     /// `margin` pixels to spare; a node larger than the view shows its top-left.
     void  ScrollNodeIntoView(NodeView& view, int nodeIdx, int32_t margin);

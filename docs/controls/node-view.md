@@ -186,7 +186,8 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
 - `minZoom`, `maxZoom`: how far the wheel, the keys and the zoom controls go, 10% to 400%
   by default (1 is 100%).
   - Text is drawn at the zoom's size, so it stays sharp above 100%.
-  - Fit (and Home) shows a small graph at 100% at most, rather than magnifying it.
+  - Fit (and Home) shows a small graph at 100% at most, rather than magnifying it (see
+    Framing below).
 
   ```cpp
   view.maxZoom = 2.0f;   // up to 200%
@@ -220,17 +221,27 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
 - Focusing a partly hidden node pans just enough to show it. The zoom stays the same.
 - A node far out of view isn't laid out (see Large graphs below); Tab into it lays it out
   and pans to it, the focus on its first control (its last, with Shift+Tab).
-- From code: `ScrollNodeIntoView` and `FrameAllNodes` in `gui_node_view_helpers.h`.
+- From code: `ScrollNodeIntoView` in `gui_node_view_helpers.h`.
+
+**Framing.** The Fit button and Home zoom and centre the view on the selected nodes, or on
+all of them when none is selected.
+
+- From code, in `gui_node_view_helpers.h`:
+  - `FrameSelectedNodes(view)` does what Fit does.
+  - `FrameAllNodes(view)` frames every node, selected or not.
+  - `FrameNodes(view, indices)` frames the nodes you give it.
+- None of them zooms past 100%, so a small group shows at its own size.
 
 ```cpp
-Button("Frame all", [this] { FrameAllNodes(view); });
+MenuItem(view.selectedNodeIDs.empty() ? "Frame all" : "Frame selection",
+         [this] { FrameSelectedNodes(view); });
 ```
 
 **Keys**, while the canvas has focus (click its background):
 
 | Key | Action |
 | --- | --- |
-| Home | Frame all nodes |
+| Home | Frame the selected nodes, or all of them |
 | Arrows | Move selected nodes one grid step (four with Shift) as one edit; pan if nothing is selected |
 | + / - | Zoom in / out |
 | Ctrl+A / Escape | Select all / clear selection |

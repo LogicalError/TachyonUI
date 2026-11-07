@@ -44,17 +44,40 @@ namespace tachyon
 
     void FrameAllNodes(NodeView& view)
     {
-        if (view.nodes.empty())
-            return;
-        int2 bmin = view.nodes[0].pos;
-        int2 bmax = bmin;
-        for (const auto& node : view.nodes)
+        std::vector<int> all(view.nodes.size());
+        for (int n = 0; n < int(all.size()); ++n)
+            all[size_t(n)] = n;
+        FrameNodes(view, all);
+    }
+
+    void FrameSelectedNodes(NodeView& view)
+    {
+        std::vector<int> selected;
+        for (int n = 0; n < int(view.nodes.size()); ++n)
+            if (view.selectedNodeIDs.contains(view.nodes[size_t(n)].stableID))
+                selected.push_back(n);
+        if (selected.empty())
+            FrameAllNodes(view);
+        else
+            FrameNodes(view, selected);
+    }
+
+    void FrameNodes(NodeView& view, std::span<const int> indices)
+    {
+        bool any = false;
+        int2 bmin{}, bmax{};
+        for (const int n : indices)
         {
-            bmin.x = std::min(bmin.x, node.pos.x);
-            bmin.y = std::min(bmin.y, node.pos.y);
-            bmax.x = std::max(bmax.x, node.pos.x + node.lastSize.x);
-            bmax.y = std::max(bmax.y, node.pos.y + node.lastSize.y);
+            if (n < 0 || n >= int(view.nodes.size()))
+                continue;
+            const NodeModel& node = view.nodes[size_t(n)];
+            const int2 lo = node.pos, hi{ node.pos.x + node.lastSize.x, node.pos.y + node.lastSize.y };
+            bmin = any ? int2{ std::min(bmin.x, lo.x), std::min(bmin.y, lo.y) } : lo;
+            bmax = any ? int2{ std::max(bmax.x, hi.x), std::max(bmax.y, hi.y) } : hi;
+            any = true;
         }
+        if (!any)
+            return;
         const int bw = std::max(1, bmax.x - bmin.x);
         const int bh = std::max(1, bmax.y - bmin.y);
         const int2 vp = view.lastInnerSize;

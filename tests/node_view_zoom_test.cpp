@@ -112,6 +112,65 @@ namespace
         EXPECT_GE(bottomRight.y, 650.0f);
     }
 
+    // With nodes selected, Fit (and Home) frames those; with none, all of them.
+    TEST(NodeViewZoom, FitFramesTheSelection)
+    {
+        NodeView view;
+        view.lastInnerSize = { 400, 300 };
+        view.nodes.resize(3);
+        view.nodes[0].stableID = ID{ .value{ .integer = 1 } };
+        view.nodes[1].stableID = ID{ .value{ .integer = 2 } };
+        view.nodes[2].stableID = ID{ .value{ .integer = 3 } };
+        view.nodes[0].pos = { 0, 0 };       view.nodes[0].lastSize = { 100, 50 };
+        view.nodes[1].pos = { 900, 600 };   view.nodes[1].lastSize = { 100, 50 };
+        view.nodes[2].pos = { 1000, 700 };  view.nodes[2].lastSize = { 100, 50 };
+
+        view.selectedNodeIDs = { view.nodes[1].stableID, view.nodes[2].stableID };
+        FrameSelectedNodes(view);
+        float2 middle = CanvasAt(view, { 0.0f, 0.0f });
+        EXPECT_NEAR(middle.x, 1000.0f, 1.0f) << "between the two selected";
+        EXPECT_NEAR(middle.y, 675.0f, 1.0f);
+        EXPECT_NEAR(NodeViewZoom(view), 1.0f, 1e-4f) << "they fit at 100%";
+
+        view.selectedNodeIDs.clear();
+        FrameSelectedNodes(view);
+        middle = CanvasAt(view, { 0.0f, 0.0f });
+        EXPECT_NEAR(middle.x, 550.0f, 1.0f) << "none selected: all of them";
+        EXPECT_NEAR(middle.y, 375.0f, 1.0f);
+        EXPECT_LT(NodeViewZoom(view), 1.0f);
+    }
+
+    // FrameNodes frames those given, skips indices out of range, and leaves the view as it
+    // is for none.
+    TEST(NodeViewZoom, FrameNodesFramesTheOnesGiven)
+    {
+        NodeView view;
+        view.lastInnerSize = { 400, 300 };
+        view.nodes.resize(2);
+        view.nodes[0].pos = { -100, -100 }; view.nodes[0].lastSize = { 100, 50 };
+        view.nodes[1].pos = { 900, 600 };   view.nodes[1].lastSize = { 100, 50 };
+        const int one[] = { 1, 7, -1 };
+        FrameNodes(view, one);
+        const float2 middle = CanvasAt(view, { 0.0f, 0.0f });
+        EXPECT_NEAR(middle.x, 950.0f, 1.0f);
+        EXPECT_NEAR(middle.y, 625.0f, 1.0f);
+
+        // In any order: the bottom-right one first.
+        const int both[] = { 1, 0 };
+        FrameNodes(view, both);
+        const float2 between = CanvasAt(view, { 0.0f, 0.0f });
+        EXPECT_NEAR(between.x, 450.0f, 1.0f);
+        EXPECT_NEAR(between.y, 275.0f, 1.0f);
+
+        const float3x2 before = view.transform;
+        FrameNodes(view, std::span<const int>{});
+        EXPECT_EQ(view.transform.r0.z, before.r0.z);
+        EXPECT_EQ(view.transform.r1.z, before.r1.z);
+        const int outOfRange[] = { 5 };
+        FrameNodes(view, outOfRange);
+        EXPECT_EQ(view.transform.r0.z, before.r0.z);
+    }
+
     TEST(NodeViewScrollIntoView, ANodeInViewDoesntMove)
     {
         NodeView view;

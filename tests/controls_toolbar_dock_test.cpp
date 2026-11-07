@@ -8,6 +8,9 @@
 #include <gui_controls/controls_toolbar_dock.h>
 #include <gui_core/elements/gui_element_storage.h>
 
+#include <functional>
+#include <string>
+
 namespace tachyon
 {
     using GUITest::HeadlessGUIApp;
@@ -113,6 +116,37 @@ namespace tachyon
             app.EndRootWindow();
         }
 
+        // Whether the tooltip showed, frame by frame, with the mouse resting on `target`
+        // in a toolbar drawn by `body` ('1' shown, '0' not), after the hover delay.
+        std::string TooltipFrames(ID target, const std::function<void()>& body, int frames = 40)
+        {
+            const ID item = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                std::vector<ToolbarItem> items[kToolbarSideCount];
+                items[(int)ToolbarSide::Top].push_back(ToolbarItem{ .id = item, .debugName = "tips", .renderBody = body });
+                app.BeginRootWindow();
+                RenderToolbarDock(app, dock, items, ToolbarDockCallbacks{}, [this]() {
+                    app.BeginVertical(LayoutOverride{}.FlexGrow(1));
+                    app.EndVertical();
+                });
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+            app.InjectMouseMove(app.CenterOf(target));
+            app.Frame(draw);
+            app.Frame(draw);
+            app.AdvanceTime(700);
+            std::string shown;
+            for (int i = 0; i < frames; ++i)
+            {
+                app.Frame(draw);
+                shown += app.tooltipManager.IsVisible() ? '1' : '0';
+                app.AdvanceTime(16);
+            }
+            return shown;
+        }
+
         // Center of a side's group element rect (after layout completes).
         int2 SideCenter(ToolbarSide s) const
         {
@@ -164,6 +198,25 @@ namespace tachyon
 
         // Re-init for TearDown to release cleanly.
         InitializeToolbarDockState(dock, app);
+    }
+
+    // A toggle's tooltip in a toolbar stays up while the mouse rests on it, the first
+    // toggle's and one further along, with a fixed ID or from its call site.
+    TEST_F(ToolbarDockTest, AToolbarTogglesTooltipStaysWhileHovered)
+    {
+        const ID first = app.idManager.CreateStaticID(), second = app.idManager.CreateStaticID();
+        bool a = false, b = true;
+        auto body = [&] {
+            app.Toggle(first, a, "W");
+            app.SetTooltip("Toggle wireframe view mode");
+            app.Toggle(second, b, "S");
+            app.SetTooltip("Toggle solid view mode");
+            app.Toggle(a, "T");
+            app.SetTooltip("Toggle textured view mode");
+        };
+        const std::string all(40, '1');
+        EXPECT_EQ(TooltipFrames(first, body), all);
+        EXPECT_EQ(TooltipFrames(second, body), all);
     }
 
     // -------------------------------------------------------------------------
