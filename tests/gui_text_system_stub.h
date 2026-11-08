@@ -127,6 +127,13 @@ namespace tachyon
                 return StyleRef{};
             return m_registry[((uint32_t)textId) - 1].styleIndex;
         }
+        // The icon a text was registered with.
+        IconID IconOf(TextID textId) const
+        {
+            if (textId == TextID::Invalid || ((uint32_t)textId) > m_registry.size())
+                return IconID::Invalid;
+            return m_registry[((uint32_t)textId) - 1].iconId;
+        }
 
 
         std::string_view GetText(TextID textId) const override
@@ -221,12 +228,17 @@ namespace tachyon
 
         // -------------------- Icon Registration --------------------
 
-        IconID RegisterIconFromSVG(const char* /*name*/, const char* /*svg_data*/, size_t /*svg_size*/) override
+        IconID RegisterIconFromSVG(const char* /*name*/, const char* svg_data, size_t svg_size) override
         {
             // Unique ID per call.
             static uint32_t nextIconId = 1;
-            return IconID{ nextIconId++ };
+            const IconID id{ nextIconId++ };
+            svgOfIcon[static_cast<uint32_t>(id)] = std::string(svg_data, svg_size);
+            return id;
         }
+
+        /// The SVG each icon was registered from.
+        std::unordered_map<uint32_t, std::string> svgOfIcon;
 
         IconID RegisterIconFromSVGFile(const char* /*path*/) override
         {

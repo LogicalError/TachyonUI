@@ -39,7 +39,7 @@ results all controls share.
 | [Tree and grid views](controls/trees-and-grids.md) | `VirtualTreeView`, grid views, virtual grid views |
 | [Tabs, docking and toolbars](controls/tabs-docking-toolbars.md) | Tab bars, docking containers, toolbars, toolbar dock |
 | [Node view](controls/node-view.md) | `RenderNodeView` node graph editor |
-| [Other controls](controls/other-controls.md) | Breadcrumb, status bar, command search, settings panel |
+| [Other controls](controls/other-controls.md) | Breadcrumb, status bar, progress bars, spinners and skeletons, command search, settings panel |
 | [Custom drawing](controls/custom-drawing.md) | Drawing shapes and text inside an element |
 | [Default CSS classes](controls/css-classes.md) | Each control's class when you pass no style |
 

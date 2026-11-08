@@ -158,6 +158,12 @@ namespace tachyon
         m_renderer->RenderQuad(rect, m_clipRect, colorStyleIndex, float(size) * 0.5f);
     }
 
+    void CustomDrawContext::RenderArc(float2 center, float radius, float width, float startTurns, float sweepTurns,
+                                      VisualColorStyleIndex colorStyleIndex) const
+    {
+        m_renderer->RenderArc(center, radius, width, startTurns, sweepTurns, m_clipRect, colorStyleIndex);
+    }
+
     void CustomDrawContext::RenderFilledPolygon(std::span<const float2> points,
                                                 VisualColorStyleIndex colorStyleIndex,
                                                 ImageIndex textureIndex) const

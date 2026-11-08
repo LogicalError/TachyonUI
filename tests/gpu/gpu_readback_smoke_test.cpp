@@ -1155,6 +1155,76 @@ namespace
         EXPECT_LE(Green(PixelAt(ctx, 160 + 84, 120)) - bg, 8) << "a 2px line, not 4";
     }
 
+    // ---- Arcs -------------------------------------------------------------------
+
+    // Half a ring, see-through: the same all along it (no seam or overlap between its
+    // triangles), round at its ends, and nothing past them or off the ring.
+    TEST_F(GpuReadbackTest, AnArcIsEvenAlongItsRingAndRoundAtItsEnds)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        const auto halfWhite = styleManager.RegisterColorStyle(
+            tachyon::ColorStyle::Create(tachyon::color4b{ 255, 255, 255, 128 }));
+
+        constexpr float kCx = 160.0f, kCy = 120.0f, kR = 70.0f, kWidth = 12.0f;
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderArc(tachyon::float2{ kCx, kCy }, kR, kWidth, 0.0f, 0.5f, kFullClip, halfWhite);
+        });
+
+        const int bg = Green(PixelAt(ctx, 2, 2));
+        const int drawn = bg + (255 - bg) * 128 / 255;
+        auto at = [&](float turns, float radius) {
+            const float a = turns * 6.2831853f;
+            return Green(PixelAt(ctx, int(std::floor(kCx + std::cos(a) * radius)), int(std::floor(kCy + std::sin(a) * radius))));
+        };
+        for (int i = 1; i < 50; ++i)
+        {
+            const float turns = 0.5f * float(i) / 50.0f;
+            for (const float dr : { -3.0f, 0.0f, 3.0f })
+                EXPECT_NEAR(at(turns, kR + dr), drawn, 3) << "on the ring at " << turns << ", " << dr;
+            EXPECT_NEAR(at(turns, kR - kWidth), bg, 3) << "inside it at " << turns;
+            EXPECT_NEAR(at(turns, kR + kWidth), bg, 3) << "outside it at " << turns;
+        }
+        for (int i = 0; i < 10; ++i)
+        {
+            const float turns = 0.6f + 0.3f * float(i) / 10.0f;
+            EXPECT_NEAR(at(turns, kR), bg, 3) << "past its sweep at " << turns;
+        }
+
+        // The start's end: half a disc of radius 6 round (kCx + kR, kCy), bulging up.
+        const int endX = int(kCx + kR);
+        EXPECT_NEAR(Green(PixelAt(ctx, endX, int(kCy) - 4)), drawn, 3) << "in its round end";
+        EXPECT_NEAR(Green(PixelAt(ctx, endX, int(kCy) - 9)), bg, 3) << "past it";
+        EXPECT_NEAR(Green(PixelAt(ctx, endX + 5, int(kCy) - 5)), bg, 3) << "round, not square";
+        // The other end, at (kCx - kR, kCy): the arc comes up to it round the bottom, so it
+        // bulges up too.
+        const int otherX = int(kCx - kR);
+        EXPECT_NEAR(Green(PixelAt(ctx, otherX - 1, int(kCy) - 4)), drawn, 3) << "in the other round end";
+        EXPECT_NEAR(Green(PixelAt(ctx, otherX - 1, int(kCy) - 9)), bg, 3) << "past it";
+    }
+
+    // A whole turn joins up without a seam where it starts.
+    TEST_F(GpuReadbackTest, AWholeArcIsARingWithoutASeam)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        const auto halfWhite = styleManager.RegisterColorStyle(
+            tachyon::ColorStyle::Create(tachyon::color4b{ 255, 255, 255, 128 }));
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderArc(tachyon::float2{ 160.0f, 120.0f }, 70.0f, 12.0f, 0.1f, 1.0f, kFullClip, halfWhite);
+        });
+        const int bg = Green(PixelAt(ctx, 2, 2));
+        const int drawn = bg + (255 - bg) * 128 / 255;
+        for (int i = 0; i < 64; ++i)
+        {
+            const float a = 6.2831853f * float(i) / 64.0f;
+            EXPECT_NEAR(Green(PixelAt(ctx, int(std::floor(160.0f + std::cos(a) * 70.0f)), int(std::floor(120.0f + std::sin(a) * 70.0f)))),
+                        drawn, 3) << "at " << i;
+        }
+    }
+
     // ---- SDFGradient --------------------------------------------------------
 
     // SDFGradient runs by depth inside the shape, from its edge (the first color) to its

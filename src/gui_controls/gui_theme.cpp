@@ -13,7 +13,9 @@
 #include <gui_controls/gui_theme.h>
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -24,6 +26,15 @@ namespace tachyon
     namespace
     {
         constexpr Diagnostics::LogCategory kLogTheme = Diagnostics::MakeLogCategory("theme");
+    }
+
+    IconID GUITheme::SpinnerIcon(float timeSecs) const
+    {
+        constexpr float kTurnSecs = 0.8f;
+        const float turns = timeSecs / kTurnSecs;
+        int frame = int(std::floor((turns - std::floor(turns)) * float(kSpinnerFrames)));
+        frame = std::clamp(frame, 0, kSpinnerFrames - 1);
+        return spinnerIcons[frame];
     }
 
     void GUITheme::InitializeDefaultStyles(StyleManager& styleManager, ITextSystem* textSystem)
@@ -95,6 +106,19 @@ namespace tachyon
             windowMaximizeIcon = registerIcon("window-maximize", R"(<rect x="4" y="4" width="16" height="16" rx="2"/>)");
             windowRestoreIcon  = registerIcon("window-restore",
                 R"(<rect x="4" y="8" width="12" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2"/>)");
+
+            // The spinner: a quarter of a circle of radius 9, a frame every 15 degrees.
+            for (int frame = 0; frame < kSpinnerFrames; ++frame)
+            {
+                constexpr double kTau = 6.283185307179586;
+                const double from = kTau * double(frame) / kSpinnerFrames - kTau / 4.0;   // the first frame starts at the top
+                const double to   = from + kTau / 4.0;
+                const std::string arc = std::format(R"(<path d="M{:.3f} {:.3f}A9 9 0 0 1 {:.3f} {:.3f}"/>)",
+                                                    12.0 + 9.0 * std::cos(from), 12.0 + 9.0 * std::sin(from),
+                                                    12.0 + 9.0 * std::cos(to),   12.0 + 9.0 * std::sin(to));
+                const std::string name = std::format("spinner-{}", frame);
+                spinnerIcons[frame] = registerIcon(name.c_str(), arc.c_str());
+            }
         }
 
         {
@@ -257,6 +281,8 @@ namespace tachyon
         lineDarkStyle      = lineColorFromCSS("--bg-app", color4f{ 0.1f, 0.1f, 0.1f, 1.0f });
         treeGuideLineStyle = lineColorFromCSS("--line-node", color4f{ 0.5f, 0.5f, 0.5f, 1.0f });
         dividerHoverLineStyle = lineColorFromCSS("--divider-hover", color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
+        progressTrackColor    = lineColorFromCSS("--line-subtle", color4f{ 0.14f, 0.15f, 0.18f, 1.0f });
+        progressArcColor      = lineColorFromCSS("--accent", color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
         tooltipArrowFill      = lineColorFromCSS("--tooltip-bg", color4f{ 0.16f, 0.18f, 0.22f, 1.0f });
         tooltipArrowLine      = lineColorFromCSS("--tooltip-border", color4f{ 0.21f, 0.24f, 0.28f, 1.0f });
         popupArrowFill        = lineColorFromCSS("--bg-popup", color4f{ 0.10f, 0.11f, 0.14f, 1.0f });
@@ -638,6 +664,15 @@ namespace tachyon
         tabOverflowStyleRef               = registerCSS("tab-overflow");
         tabContentStyleRef                = registerCSS("tab-content");
         tabCloseStyleRef                  = registerCSS("tab-close");
+
+        progressBarStyleRef               = registerCSS("progress-bar");
+        progressBarSmallStyleRef          = registerCSS("progress-bar-small");
+        progressFillStyleRef              = registerCSS("progress-fill");
+        progressFillFailedStyleRef        = registerCSS("progress-fill-failed");
+        progressSegmentStyleRef           = registerCSS("progress-segment");
+        circularProgressStyleRef          = registerCSS("circular-progress");
+        skeletonStyleRef                  = registerCSS("skeleton");
+        skeletonShineStyleRef             = registerCSS("skeleton-shine");
 
         toastStackStyleRef                = registerCSS("toast-stack");
         toastStyleRef                     = registerCSS("toast");

@@ -394,6 +394,54 @@ namespace tachyon
                 Image(pastedImageIndex, pastedImageSize, tachyon::LayoutOverride::FixedSize(160, 96));
         }
 
+        // --- Progress and loading -----------------------------------------------------
+        {
+            const float clock = guiStateManager.Interaction().GetFrameTime();
+            BeginVertical(tachyon::LayoutOverride::Auto().NoGrow().Width(360));
+            Text("Progress and loading", theme.labelStyleRef);
+
+            // An import running: a bar filling over 6 s, then again.
+            const float done = std::fmod(clock, 6.0f) / 6.0f;
+            BeginHorizontal(tachyon::LayoutOverride::Auto().NoGrow());
+            Text("Importing character.fbx", tachyon::LayoutOverride::Auto().FlexGrow(1));
+            Text(std::to_string(int(done * 100.0f)) + "%");
+            EndHorizontal();
+            ProgressBar(done);
+            Text("Compiling shaders...");
+            IndeterminateProgressBar();
+            Text("Bake failed at 73%");
+            ProgressBar(idManager.AllocateDynamicID("bakeFailed"), 0.73f, true, theme.progressBarStyleRef);
+            Text("Indexing assets (a status bar's bar)");
+            ProgressBar(idManager.AllocateDynamicID("indexing"), 0.33f, false, theme.progressBarSmallStyleRef,
+                        tachyon::LayoutOverride::Auto().Width(120));
+
+            // Spinners in their three sizes, a ring filling as the import does, and a button
+            // that's busy for a while once clicked.
+            BeginHorizontal(tachyon::LayoutOverride::Auto().NoGrow());
+            Spinner(SpinnerSize::Small);
+            Spinner(SpinnerSize::Medium);
+            Spinner(SpinnerSize::Large);
+            CircularProgress(done);
+            BusyButton(idManager.AllocateDynamicID("save"), { theme.menuCheckIcon, "Save" }, clock < saveBusyUntil, "Saving...",
+                       [this, clock] { saveBusyUntil = clock + 2.5f; });
+            SetTooltip("Busy for 2.5 s once clicked");
+            EndHorizontal();
+
+            // A list still loading: placeholder rows, indented as the tree they stand for.
+            static const int rows[][2] = { { 0, 140 }, { 16, 110 }, { 16, 160 }, { 32, 90 }, { 16, 130 } };
+            for (const auto& row : rows)
+            {
+                BeginHorizontal(tachyon::LayoutOverride::Auto().NoGrow().Height(26));
+                if (row[0] > 0)   // the indent, empty
+                    RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("indent"), .styleRef = theme.emptyHorzStyleRef },
+                                    tachyon::LayoutOverride::Auto().Width(row[0]));
+                Skeleton(tachyon::LayoutOverride::Auto().Size(14, 14));
+                Skeleton(tachyon::LayoutOverride::Auto().Width(row[1]));
+                EndHorizontal();
+            }
+            EndVertical();
+        }
+
         // --- Demo: per-run font override via textStyleOverride ---
         {
             // A family registered from code (one face) and a generic family.
