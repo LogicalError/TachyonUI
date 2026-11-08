@@ -395,12 +395,13 @@ namespace tachyon
         styleManager.SetUIScale(m_displayScale * m_uiScale);
         theme.InitializeDefaultStyles(styleManager, textSystem);
         const float fontScale = m_globalFontScale > 0.0f ? m_globalFontScale : 1.0f;
-        if (theme.LoadTheme(styleManager, textSystem, ResourcePath(m_themePath), m_styleFiles, fontScale))
+        if (theme.LoadTheme(styleManager, textSystem, ResourcePath(m_themePath), m_styleFiles, fontScale, m_accent))
         {
             // After LoadTheme, so .table-cell / .tree-table-cell are resolved.
             if (textSystem) theme.ComputeRowMetrics(styleManager, *textSystem);
             m_loadedThemePath = m_themePath;
             m_loadedFontScale = m_globalFontScale;
+            m_loadedAccent    = m_accent;
             return {};
         }
         TACHYON_LOG_ERROR(kLogApp, "could not load theme {}", m_themePath);
@@ -547,6 +548,14 @@ namespace tachyon
         m_themeReloadPending = true;
     }
 
+    void GUIApplication::SetAccent(std::optional<AccentColors> accent)
+    {
+        // Callers (a settings page) may call this every frame; skip no-ops.
+        if (accent == m_accent) return;
+        m_accent = accent;
+        m_themeReloadPending = true;
+    }
+
     void GUIApplication::ApplyPendingStyleReload()
     {
         // Runs before BeginFrame so style state is consistent for the whole frame.
@@ -556,8 +565,9 @@ namespace tachyon
             return;
         m_themeReloadPending = false;
 
-        // Another palette (not just another scale or font size): the old look crossfades out.
-        if (m_themePath != m_loadedThemePath && !m_loadedThemePath.empty() && !transitionManager.IsReducedMotion())
+        // Another palette or accent (not just another scale or font size): the old look crossfades out.
+        if ((m_themePath != m_loadedThemePath || m_accent != m_loadedAccent) && !m_loadedThemePath.empty()
+            && !transitionManager.IsReducedMotion())
             CaptureThemeCrossfade();
 
         // Tear down panel resources before their styles disappear; m_dockingLayoutsThisFrame

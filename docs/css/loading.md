@@ -120,9 +120,66 @@ Button("Larger text", [this] { RequestReloadTheme(GetThemePath(), GetGlobalFontS
 - The theme also reloads:
   - on `SetUIScale`
   - when the main window moves to a monitor with a different display scale
+  - on `SetAccent` (see [The accent color](#the-accent-color))
 - Parse errors are logged as `file:line:column: message`.
   - The bad declaration or rule is skipped.
   - Parsing continues after it.
+
+## The accent color
+
+The accent is the one color the UI uses for what's active or chosen: selected rows, toggles
+that are on, slider fills, progress bars, the focus ring, the text caret. A user can pick
+another one without a new palette file.
+
+- `SetAccent(colors)` replaces the palette's accent.
+  - `colors` is an `AccentColors`: one color for dark palettes, one for light ones.
+  - The theme uses the one that suits the palette loaded, so a switch from dark to light
+    keeps the user's choice.
+  - It applies at the start of the next frame, with the same 200 ms crossfade as a palette
+    switch.
+  - It stays through palette and font changes.
+- `SetAccent(std::nullopt)` goes back to the palette's own accent.
+- `GetAccent()` returns the accent set, or none.
+- `kAccentPresets` has the design's four, each with a `name` and its `colors`: Blue (the
+  palettes' own), Teal, Violet and Orange.
+
+```cpp
+SetAccent(kAccentPresets[1].colors);   // teal
+```
+
+```cpp
+SetAccent(AccentColors{ .dark = { 0xF4, 0x72, 0xB6, 0xFF }, .light = { 0xB8, 0x30, 0x6F, 0xFF } });   // your own pink
+```
+
+A settings page with the presets in a dropdown (from the showcase's Appearance page):
+
+```cpp
+std::string_view names[std::size(kAccentPresets)];
+for (size_t i = 0; i < std::size(kAccentPresets); ++i)
+    names[i] = kAccentPresets[i].name;
+if (Dropdown(accentMenuID, accentIndex, names))   // member: int accentIndex
+    SetAccent(accentIndex == 0 ? std::nullopt : std::optional(kAccentPresets[accentIndex].colors));
+```
+
+The palette variables that follow the accent:
+
+| Variable | What it is | Dark | Light |
+| --- | --- | --- | --- |
+| `--accent`, `--caret`, `--divider-hover` | The accent itself | | |
+| `--selection` | Selected text | 35% | 25% |
+| `--accent-soft` | Selected rows and items, over `--bg-panel` | 16% | 12% |
+| `--bg-menu-hover` | The highlighted menu row, over `--bg-popup` | 16% | 12% |
+| `--focus-ring` | The focus ring's 3px halo | 30% | 25% |
+| `--selected-ring` | A selected node's halo | 16% | 16% |
+
+- These are the amounts the palettes use for their own blue, so Blue gives the palettes'
+  colors back.
+- `--info`, the link colors and the document colors keep the palette's values. They're
+  other meanings that happen to be blue too.
+- `--on-accent`, the text on accent fills, keeps the palette's value: dark on the dark
+  palette, white on the light one. That suits the four presets; with a color of your own,
+  check that text on it reads well.
+- `theme.IsLight()` says whether the palette loaded is a light one.
 
 ---
 

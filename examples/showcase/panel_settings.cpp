@@ -58,6 +58,14 @@ namespace tachyon
         if (Dropdown(idManager.AllocateDynamicID("settingsThemeMenu"), themeIndex, kThemeNames))
             RequestReloadTheme(kThemePaths[themeIndex], showcase.settingsFontScalePct / 100.0f);
 
+        // The accent: the palette's own blue or another of the design's, in either theme.
+        Label("Accent");
+        std::string_view accentNames[std::size(kAccentPresets)];
+        for (size_t i = 0; i < std::size(kAccentPresets); ++i)
+            accentNames[i] = kAccentPresets[i].name;
+        if (Dropdown(idManager.AllocateDynamicID("settingsAccentMenu"), showcase.settingsAccentIndex, accentNames))
+            ApplyAccentSetting();
+
         // Font size: smaller, the size (back to 100% when clicked) and larger, as the node
         // view's zoom; 100% to 300% in steps of 10.
         Label("Font size");

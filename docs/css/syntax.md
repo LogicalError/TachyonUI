@@ -147,7 +147,7 @@ Popups and palette switches:
 | A menu or popup opening | 120 ms, fading in and sliding 4px away from what it opens from | ease-out |
 | A tooltip appearing | 100 ms, fading in | ease-out |
 | Either closing | 80 ms, fading out | ease-out |
-| Another palette (`RequestReloadTheme`) | 200 ms, with the old look fading out over the new one | ease-in-out |
+| Another palette (`RequestReloadTheme`) or accent (`SetAccent`) | 200 ms, with the old look fading out over the new one | ease-in-out |
 
 With reduced motion every change is instant:
 

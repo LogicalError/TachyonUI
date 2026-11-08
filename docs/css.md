@@ -17,7 +17,7 @@ From `themes/styles.css`:
 
 | Page | Covers |
 | --- | --- |
-| [How a theme loads](css/loading.md) | Theme files, load order, palettes, reloads |
+| [How a theme loads](css/loading.md) | Theme files, load order, palettes, reloads, the accent color |
 | [Syntax](css/syntax.md) | Rules, selectors, states, comments, `@font-face`, custom properties |
 | [Values](css/values.md) | Numbers, units, colors, gradients |
 | [Properties](css/properties.md) | Every supported property, and what isn't supported |
