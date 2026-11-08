@@ -221,7 +221,7 @@ void PrimitiveRenderTarget::RenderTriangle(tachyon::float2 p0, tachyon::float2 p
 }
 
 
-void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex, const tachyon::UVRect& uv)
+void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex, const tachyon::UVRect& uv, const tachyon::ImageDisplay& display)
 {
     Append(PrimitiveKind::Quad, Quad
                     {
@@ -235,7 +235,9 @@ void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect c
                         .textureIndex = textureIndex,
                         .colorIndex = int16_t(colorStyleIndex),
                         .cornerRadius = cornerRadius,
-                        .uvRect = { uv.min.x, uv.min.y, uv.max.x, uv.max.y }
+                        .displayFlags = display.PackedFlags(),
+                        .uvRect = { uv.min.x, uv.min.y, uv.max.x, uv.max.y },
+                        .tint = { display.tint.r, display.tint.g, display.tint.b, display.tint.a }
                     });
 }
 
@@ -620,10 +622,10 @@ void PrimitiveRenderer::RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, t
     currentTarget->RenderTriangle(p0, p1, p2, clipRect, colorStyleIndex, textureIndex, hardEdges);
 }
 
-void PrimitiveRenderer::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex, const tachyon::UVRect& uv)
+void PrimitiveRenderer::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex, const tachyon::UVRect& uv, const tachyon::ImageDisplay& display)
 {
     assert(currentTarget != nullptr);
-    currentTarget->RenderQuad(rect, clipRect, colorStyleIndex, cornerRadius, textureIndex, uv);
+    currentTarget->RenderQuad(rect, clipRect, colorStyleIndex, cornerRadius, textureIndex, uv, display);
 }
 
 void PrimitiveRenderer::RenderOccluder(tachyon::IntRect rect, tachyon::IntRect clipRect)

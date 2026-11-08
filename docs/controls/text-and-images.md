@@ -169,6 +169,38 @@ Image(preview, uint2{ 64, 64 });   // a 64x64 source, aspect ratio kept
 - The part fills the box's padding box, over a clear background, and its border shows
   as usual.
 
+**How it's shown.** Pass an `ImageDisplay` to change how the image looks, without changing
+the image. It works in this order:
+
+1. Each channel shown (`red`, `green`, `blue`, `alpha`) is taken from one of the image's
+   channels, or is a constant (`ImageChannel::Zero`, `ImageChannel::One`).
+   - `ImageDisplay::Channel(ImageChannel::Alpha)` shows the alpha as grey, opaque: a mask.
+   - The same with `Red` shows a roughness map packed in the red channel.
+   - `display.alpha = ImageChannel::One` shows an image without its transparency.
+2. With `srgbEncode`, the color is sRGB-encoded: for an image that holds linear values,
+   such as a normal map or a render target, which would look too dark otherwise.
+3. The color is multiplied by `tint`.
+
+The default `ImageDisplay{}` shows the image as it is.
+
+```cpp
+void Image(ID id, ImageIndex image, const ImageDisplay& display, LayoutOverride&& constraints = {});
+void Image(ID id, ImageIndex image, uint2 sourceSize, const ImageDisplay& display, LayoutOverride&& constraints = {});
+void Image(ID id, ImageIndex image, const UVRect& uv, const ImageDisplay& display, StyleRef style, LayoutOverride&& constraints = {});
+void Image(ID id, ImageIndex image, uint2 sourceSize, const UVRect& uv, const ImageDisplay& display, StyleRef style, LayoutOverride&& constraints = {});
+```
+
+```cpp
+// A texture's alpha, as a grey mask.
+Image(maskID, texture, ImageDisplay::Channel(ImageChannel::Alpha), LayoutOverride::FixedSize(96, 96));
+
+// A linear render target, encoded for the screen and dimmed.
+ImageDisplay preview;
+preview.srgbEncode = true;
+preview.tint = color4f{ 0.5f, 0.5f, 0.5f, 1.0f };
+Image(previewID, renderTarget, uint2{ 512, 256 }, preview);
+```
+
 The default style is `theme.imageStyleRef`. It's built in code, since CSS can't express
 how the image fills the box.
 

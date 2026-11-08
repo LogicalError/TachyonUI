@@ -144,6 +144,63 @@ namespace
         EXPECT_NEAR(b,  32, 2);
     }
 
+    // An image's display options on the GPU: its channels picked (one as grey, swapped, the
+    // alpha as grey or made opaque), sRGB-encoded, and tinted.
+    TEST_F(GpuReadbackTest, AnImageShowsAsItsDisplayOptionsSay)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        uint32_t pixel = 0x803264C8u;   // RGBA 200, 100, 50, 128
+        tachyon::Image* image = vk->deviceContext.CreateImage(&pixel, tachyon::uint2{ 1, 1 }, tachyon::ImageFormat::R8G8B8A8,
+                                                              tachyon::Sampler::NearestRepeat, false);
+        ASSERT_NE(image, nullptr);
+        const tachyon::ImageIndex index = vk->RegisterImage(image);
+        const tachyon::VisualColorStyleIndex stretched = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
+            tachyon::color4b{ 255, 255, 255, 255 }, tachyon::color4b{ 255, 255, 255, 255 }, tachyon::ColorType::StretchedTexture));
+
+        // The middle pixel, RGB, for an opaque result.
+        const auto shown = [&](const tachyon::ImageDisplay& display) {
+            for (int frame = 0; frame < 2; ++frame)   // the image's upload lands with the first
+            {
+                graphicsContext->BeginFrame();
+                RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+                    r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x, kSize.y }, kFullClip, stretched, 0.0f, index, {}, display);
+                });
+            }
+            const uint32_t px = PixelAt(ctx, kSize.x / 2, kSize.y / 2);   // BGRA8
+            return std::array<int, 3>{ int((px >> 16) & 0xFF), int((px >> 8) & 0xFF), int(px & 0xFF) };
+        };
+        const auto near = [](std::array<int, 3> got, std::array<int, 3> want) {
+            for (int i = 0; i < 3; ++i)
+                if (std::abs(got[size_t(i)] - want[size_t(i)]) > 3)
+                    return false;
+            return true;
+        };
+        using tachyon::ImageChannel;
+        tachyon::ImageDisplay opaque;
+        opaque.alpha = ImageChannel::One;
+        EXPECT_TRUE(near(shown(opaque), { 200, 100, 50 })) << "as it is, made opaque";
+        EXPECT_TRUE(near(shown(tachyon::ImageDisplay::Channel(ImageChannel::Red)), { 200, 200, 200 })) << "red as grey";
+        EXPECT_TRUE(near(shown(tachyon::ImageDisplay::Channel(ImageChannel::Blue)), { 50, 50, 50 })) << "blue as grey";
+        EXPECT_TRUE(near(shown(tachyon::ImageDisplay::Channel(ImageChannel::Alpha)), { 128, 128, 128 })) << "alpha as grey";
+        tachyon::ImageDisplay swapped = opaque;
+        swapped.red  = ImageChannel::Blue;
+        swapped.blue = ImageChannel::Red;
+        swapped.green = ImageChannel::Zero;
+        EXPECT_TRUE(near(shown(swapped), { 50, 0, 200 })) << "red and blue swapped, no green";
+        tachyon::ImageDisplay encoded = tachyon::ImageDisplay::Channel(ImageChannel::Alpha);
+        encoded.srgbEncode = true;
+        EXPECT_TRUE(near(shown(encoded), { 188, 188, 188 })) << "0.5 linear is 188 in sRGB";
+        tachyon::ImageDisplay tinted = opaque;
+        tinted.tint = tachyon::color4f{ 1.0f, 0.5f, 0.25f, 1.0f };
+        EXPECT_TRUE(near(shown(tinted), { 200, 50, 12 })) << "tinted";
+        EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+
+        vk->UnregisterImage(index);
+        vk->deviceContext.DestroyImageAtEnd(image, tachyon::DeviceScope::Application);
+    }
+
     // A textured quad stretches the part of the image its UV rect picks: of a two-pixel
     // image, red then blue, the left half is all red, the right half all blue, the whole
     // both, and the whole flipped both the other way round.

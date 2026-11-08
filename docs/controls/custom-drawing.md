@@ -106,6 +106,8 @@ An image, or part of one, is a quad with an image and a texture color style:
 - `theme.imageFillColorStyle` stretches the image over the quad.
 - `uv`, a `UVRect`, picks the part: the whole image by default. See
   [Image](text-and-images.md#image) for UV and `UVRect::FromPixels`.
+- `display`, an `ImageDisplay`, says how it's shown: a tint, its channels, sRGB-encoded.
+  See [Image](text-and-images.md#image). The tint applies to a quad of any color.
 
 ```cpp
 VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)

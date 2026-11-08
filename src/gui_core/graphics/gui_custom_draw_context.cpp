@@ -106,17 +106,17 @@ namespace tachyon
     }
 
     void CustomDrawContext::RenderQuad(IntRect rect, VisualColorStyleIndex colorStyleIndex,
-                                       float cornerRadius, ImageIndex textureIndex, const UVRect& uv) const
+                                       float cornerRadius, ImageIndex textureIndex, const UVRect& uv, const ImageDisplay& display) const
     {
-        m_renderer->RenderQuad(rect, m_clipRect, colorStyleIndex, cornerRadius, textureIndex, uv);
+        m_renderer->RenderQuad(rect, m_clipRect, colorStyleIndex, cornerRadius, textureIndex, uv, display);
     }
 
     void CustomDrawContext::RenderQuad(IntRect rect, IntRect subClip,
                                        VisualColorStyleIndex colorStyleIndex,
-                                       float cornerRadius, ImageIndex textureIndex, const UVRect& uv) const
+                                       float cornerRadius, ImageIndex textureIndex, const UVRect& uv, const ImageDisplay& display) const
     {
         const IntRect clip = m_clipRect.Intersection(MapSubClipToScreen(m_currentTransform, subClip));
-        m_renderer->RenderQuad(rect, clip, colorStyleIndex, cornerRadius, textureIndex, uv);
+        m_renderer->RenderQuad(rect, clip, colorStyleIndex, cornerRadius, textureIndex, uv, display);
     }
 
     void CustomDrawContext::RenderLine(int2 p0, int2 p1, const LineStyle& style) const

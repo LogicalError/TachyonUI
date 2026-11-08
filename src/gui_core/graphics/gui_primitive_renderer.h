@@ -83,7 +83,7 @@ namespace tachyon
         void RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle);
         void RenderDot(tachyon::float2 pos, tachyon::IntRect clipRect, float size, tachyon::color4f color);
         void RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, TriangleEdges hardEdges = TriangleEdges::None);
-        void RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius = 0.0f, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, const tachyon::UVRect& uv = {});
+        void RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius = 0.0f, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, const tachyon::UVRect& uv = {}, const tachyon::ImageDisplay& display = {});
         void RenderShadow(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, int blur);
         void RenderOccluder(tachyon::IntRect rect, tachyon::IntRect clipRect);
 
@@ -124,7 +124,7 @@ namespace tachyon
         void RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle) override;
         void RenderDot(tachyon::float2 pos, tachyon::IntRect clipRect, float size, tachyon::color4f color) override;
         void RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, TriangleEdges hardEdges = TriangleEdges::None) override;
-        void RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius = 0.0f, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, const tachyon::UVRect& uv = {}) override;
+        void RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius = 0.0f, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, const tachyon::UVRect& uv = {}, const tachyon::ImageDisplay& display = {}) override;
         void RenderShadow(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, int blur) override;
         void RenderOccluder(tachyon::IntRect rect, tachyon::IntRect clipRect) override;
 
