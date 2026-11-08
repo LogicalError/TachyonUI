@@ -104,6 +104,61 @@ namespace tachyon
             EXPECT_EQ(renderer.quads[0].uv, (UVRect{ { 0.5f, 0.0f }, { 1.0f, 1.0f } }));
         }
 
+        // An image shown with display options draws as a quad that carries them, over a clear
+        // box, sized as the image without them would be.
+        TEST_F(ControlsBasicTest, AnImageWithDisplayOptionsDrawsThem)
+        {
+            const ID plain = app.idManager.CreateStaticID(), shown = app.idManager.CreateStaticID(), sized = app.idManager.CreateStaticID();
+            ImageDisplay display = ImageDisplay::Channel(ImageChannel::Alpha);
+            display.tint = color4f{ 1.0f, 0.5f, 0.25f, 1.0f };
+            app.Frame([&] {
+                app.BeginRootWindow();
+                app.Image(plain, ImageIndex(3), uint2{ 200, 100 });
+                app.Image(shown, ImageIndex(3), display, LayoutOverride::FixedSize(Pixels{ 40 }, Pixels{ 40 }));
+                app.Image(sized, ImageIndex(3), uint2{ 200, 100 }, display);
+                app.EndRootWindow();
+            });
+            EXPECT_EQ(app.GetElementRect(sized).size, app.GetElementRect(plain).size) << "the image's aspect";
+            for (const ID id : { shown, sized })
+            {
+                const ElementRef ref = app.elementStorage.FindElementRefByID(id);
+                ASSERT_TRUE(ref.IsValid());
+                EXPECT_EQ(app.elementStorage.GetElementUnsafe(ref).colorStyleIndex, app.theme.clearColorStyle);
+                const ElementCustomDraw* draw = app.elementStorage.GetCustomDraw(ref);
+                ASSERT_TRUE(draw != nullptr && draw->callback);
+                const ElementRect* rects = app.elementStorage.GetElementRectPtr(ref);
+                GUITest::StubGUIRenderer renderer;
+                CustomDrawContext ctx{ renderer, app.elementStorage, ref, rects->rect, rects->innerRect,
+                                       IntRect{ 0, 0, 4000, 4000 }, float3x2{}, int2{ 0, 0 } };
+                draw->callback(ctx);
+                ASSERT_EQ(renderer.quads.size(), 1u);
+                EXPECT_EQ(renderer.quads[0].image, ImageIndex(3));
+                EXPECT_EQ(renderer.quads[0].uv, UVRect{}) << "the whole image";
+                EXPECT_EQ(renderer.quads[0].display, display);
+            }
+        }
+
+        // The display flags the shader reads: none for the default, whatever the tint.
+        TEST(ImageDisplayTest, ItsFlagsSayWhatDiffersFromTheDefault)
+        {
+            EXPECT_EQ(ImageDisplay{}.PackedFlags(), 0u);
+            ImageDisplay tinted;
+            tinted.tint = color4f{ 0.5f, 0.5f, 0.5f, 1.0f };
+            EXPECT_EQ(tinted.PackedFlags(), 0u) << "the tint goes apart";
+
+            const uint32_t alpha = ImageDisplay::Channel(ImageChannel::Alpha).PackedFlags();
+            EXPECT_EQ(alpha, (1u << 31) | 3u | (3u << 3) | (3u << 6) | (5u << 9)) << "alpha as grey, opaque";
+            ImageDisplay linear;
+            linear.srgbEncode = true;
+            EXPECT_EQ(linear.PackedFlags(), (1u << 31) | (1u << 12) | (1u << 3) | (2u << 6) | (3u << 9));
+            ImageDisplay noAlpha;
+            noAlpha.alpha = ImageChannel::One;
+            EXPECT_EQ(noAlpha.PackedFlags(), (1u << 31) | (1u << 3) | (2u << 6) | (5u << 9));
+            ImageDisplay zeroRed;
+            zeroRed.red = ImageChannel::Zero;
+            EXPECT_EQ(zeroRed.PackedFlags(), (1u << 31) | 4u | (1u << 3) | (2u << 6) | (3u << 9));
+        }
+
         // A custom draw's quad takes the UV rect it's given, with a sub-clip or without.
         TEST_F(ControlsBasicTest, ACustomDrawQuadKeepsItsUVRect)
         {
@@ -126,6 +181,15 @@ namespace tachyon
             EXPECT_EQ(renderer.quads[0].uv, a);
             EXPECT_EQ(renderer.quads[1].uv, b) << "with a sub-clip";
             EXPECT_EQ(renderer.quads[2].uv, UVRect{}) << "none given: the whole image";
+            EXPECT_EQ(renderer.quads[2].display, ImageDisplay{}) << "and shown as it is";
+
+            // And the display options, with a sub-clip or without.
+            const ImageDisplay grey = ImageDisplay::Channel(ImageChannel::Green);
+            ctx.RenderQuad(IntRect{ 0, 0, 10, 10 }, app.theme.imageFillColorStyle, 0.0f, ImageIndex(3), a, grey);
+            ctx.RenderQuad(IntRect{ 0, 0, 10, 10 }, IntRect{ 0, 0, 5, 5 }, app.theme.imageFillColorStyle, 0.0f, ImageIndex(3), b, grey);
+            ASSERT_EQ(renderer.quads.size(), 5u);
+            EXPECT_EQ(renderer.quads[3].display, grey);
+            EXPECT_EQ(renderer.quads[4].display, grey) << "with a sub-clip";
         }
 
         // A rect in pixels over the image's size: an atlas cell's UV rect.
