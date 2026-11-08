@@ -65,6 +65,56 @@ if (GradientField(gradient))   // true when the gradient changed
 - Class: `gradient-swatch`.
 - The editor's classes: `gradient-editor` and `gradient-editor-*`.
 
+### Float gradients (GradientF)
+
+A `Gradient` has at most 8 stops of 8-bit colors: what styles and CSS use. For gradients
+that are data, such as a material editor's gradient map, use a `GradientF`:
+
+- Up to 64 stops (`GradientF::kMaxStops`).
+- Float colors (`color4f`): red, green and blue can go past 1 (HDR).
+- Each stop says how it blends to the next stop (`StopInterpolation`):
+  - `Linear`: a straight blend.
+  - `Smooth`: eases out of the stop and into the next.
+  - `Constant`: the stop's color all the way to the next stop, a step.
+- `colorSpace` is the space the stops blend in, as for a `Gradient` (sRGB, linear RGB,
+  HSL, HSV, Lab, Oklab).
+
+```cpp
+GradientF heat;
+heat.colorSpace = ColorSpace::Oklab;
+heat.AddStop(color4f{ 0.05f, 0.0f, 0.1f, 1.0f }, 0.0f, StopInterpolation::Smooth);
+heat.AddStop(color4f{ 1.0f, 0.8f, 0.3f, 1.0f }, 0.75f, StopInterpolation::Constant);
+heat.AddStop(color4f{ 3.0f, 2.6f, 2.0f, 1.0f }, 0.9f);   // brighter than white
+```
+
+Reading it:
+
+- `Sample(t)` is the color at `t`, 0 to 1, with values over 1 kept.
+- `WriteTo(span<color4f>)` samples it evenly into a row, for a lookup texture say.
+- `WriteTo(span<color4b>)` does the same clamped to 0..1, for display.
+- The stops can be in any order; they're sorted when it's sampled.
+
+Converting:
+
+- `GradientF::From(gradient)` takes a `Gradient`'s stops, blending linearly.
+- `ToGradient()` gives the first 8 stops as a `Gradient`, colors clamped to 0..1.
+
+`GradientField` edits a `GradientF` too:
+
+- The editor allows its 64 stops and colors over 1.
+- The selected stop has a "To next" choice: how it blends to the next stop.
+- The swatch and the bar show it clamped to 0..1, as the screen can't show more.
+
+```cpp
+bool GradientField(ID id, GradientF& value, StyleRef style, LayoutOverride&& constraints = {});
+```
+
+```cpp
+DragLabel("Gradient map");
+if (GradientField(gradientMap))   // member: GradientF gradientMap
+    UploadRamp(gradientMap);
+```
+
 ---
 
 [Previous: Sliders](sliders.md) | [Controls](../controls.md) | [Next: Menus](menus.md)

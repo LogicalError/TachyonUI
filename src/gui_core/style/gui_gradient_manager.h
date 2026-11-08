@@ -96,6 +96,9 @@ namespace tachyon
         GradientHandle AcquireColors(const color4f& c0, const color4f& c1, const color4f& c2, const color4f& c3);
 
         GradientHandle AcquireGradient(const Gradient& g);
+        /// A full row of these pixels (a GradientF's WriteTo, say), resampled to Width() when
+        /// it's another size. Invalid for no pixels.
+        GradientHandle AcquireRowPixels(std::span<const color4b> pixels);
         ///@}
 
         /// Raises the refcount of a live handle; pair with one Release.

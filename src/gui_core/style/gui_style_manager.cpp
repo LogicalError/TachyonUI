@@ -585,10 +585,10 @@ namespace tachyon
         return RegisterVisualColorStyle(visual, handle);
     }
 
-    VisualColorStyleIndex StyleManager::CreateColorStyle(const ColorStyle& s) noexcept
+    VisualColorStyleIndex StyleManager::CreateColorStyle(const ColorStyle& s, std::span<const color4b> row) noexcept
     {
         GradientHandle handle;
-        VisualColorStyle visual = s.ToVisualStyle(m_gradientManager, ImageIndex::Invalid, handle);
+        VisualColorStyle visual = s.ToVisualStyle(m_gradientManager, ImageIndex::Invalid, handle, row);
 
         if (!m_freeColorStyleSlots.empty())
         {
@@ -614,14 +614,14 @@ namespace tachyon
         return static_cast<VisualColorStyleIndex>(rawIdx + 1);
     }
 
-    void StyleManager::UpdateColorStyle(VisualColorStyleIndex idx, const ColorStyle& s) noexcept
+    void StyleManager::UpdateColorStyle(VisualColorStyleIndex idx, const ColorStyle& s, std::span<const color4b> row) noexcept
     {
         if (idx == VisualColorStyleIndex::Invalid) return;
         size_t i = static_cast<size_t>(idx) - 1;
         if (i >= m_visualColorStyles.size()) return;
 
         GradientHandle newHandle;
-        auto newVisualStyle = s.ToVisualStyle(m_gradientManager, ImageIndex::Invalid, newHandle);
+        auto newVisualStyle = s.ToVisualStyle(m_gradientManager, ImageIndex::Invalid, newHandle, row);
 
         if (m_visualColorStyles[i] == newVisualStyle)
         {

@@ -11,18 +11,25 @@
 
 namespace
 {
-    // Create/update a VisualColorStyleIndex that renders a user Gradient horizontally.
+    // Create/update a VisualColorStyleIndex that draws a gradient horizontally, from its
+    // samples (a GradientF's colors clamped for display).
     void SetGradientPreviewStyle(tachyon::StyleManager& sm, tachyon::VisualColorStyleIndex& idx,
-                                 const tachyon::Gradient& gradient)
+                                 const tachyon::GradientF& gradient)
     {
-        tachyon::Gradient g = gradient;
-        g.type = tachyon::GradientType::Linear;
-        tachyon::ColorStyle cs = tachyon::ColorStyle::Create(g, tachyon::ColorType::LinearGradient);
+        std::array<tachyon::color4b, 256> row{};
+        gradient.WriteTo(std::span<tachyon::color4b>(row));
+        tachyon::ColorStyle cs;
+        cs.type = tachyon::ColorType::LinearGradient;
         cs.SetTransformation(tachyon::float3(0, 1, 0), tachyon::float3(1, 0, 0)); // horizontal
         if (idx == tachyon::VisualColorStyleIndex::Invalid)
-            idx = sm.CreateColorStyle(cs);
+            idx = sm.CreateColorStyle(cs, row);
         else
-            sm.UpdateColorStyle(idx, cs);
+            sm.UpdateColorStyle(idx, cs, row);
+    }
+
+    tachyon::color4f Clamp01(tachyon::color4f c)
+    {
+        return { std::clamp(c.r, 0.0f, 1.0f), std::clamp(c.g, 0.0f, 1.0f), std::clamp(c.b, 0.0f, 1.0f), std::clamp(c.a, 0.0f, 1.0f) };
     }
 }
 
@@ -41,6 +48,46 @@ namespace tachyon
             value.stopCount = Gradient::kMaxStops;
         }
         const Gradient before = value;
+        GradientF edited = GradientF::From(value);
+        bool cancelled = false;
+        (void)GradientFieldCore(id, edited, &value, cancelled, style, std::move(constraints));
+        if (cancelled)
+            value = m_gradientEditorSub->State().originalGradient8;   // exactly as it was
+        else if (!(edited == GradientF::From(value)))
+        {
+            // Only an edit writes back: the stops and the blend space, the rest kept.
+            Gradient out = edited.ToGradient();
+            out.type  = value.type == GradientType::None ? GradientType::Linear : value.type;
+            out.value = value.value;
+            value = out;
+        }
+        const bool changed = !(value == before);
+        guiStateManager.SetModified(changed);
+        return changed;
+    }
+
+    bool GUIApplication::GradientField(ID id, GradientF& value, StyleRef style, LayoutOverride&& constraints)
+    {
+        if (value.stops.size() > size_t(GradientF::kMaxStops))
+        {
+            ReportMisuse("GUIApplication: a gradient with more stops than GradientF::kMaxStops (clamped)");
+            value.stops.resize(size_t(GradientF::kMaxStops));
+        }
+        const GradientF before = value;
+        bool cancelled = false;
+        (void)GradientFieldCore(id, value, nullptr, cancelled, style, std::move(constraints));
+        const bool changed = !(value == before);
+        guiStateManager.SetModified(changed);
+        return changed;
+    }
+
+    bool GUIApplication::GradientFieldCore(ID id, GradientF& value, const Gradient* gradient8, bool& cancelled,
+                                           StyleRef style, LayoutOverride&& constraints)
+    {
+        cancelled = false;
+        const GradientEditLimits limits = gradient8 ? GradientEditLimits{ Gradient::kMaxStops, false, false }
+                                                    : GradientEditLimits{ GradientF::kMaxStops, true, true };
+        const Gradient original8 = gradient8 ? *gradient8 : Gradient{};
 
         // ---- Gradient swatch (inline preview bar) ----
         const ID swatchID = id;
@@ -56,7 +103,10 @@ namespace tachyon
         if (ge.triggerID == swatchID && ge.closeRequest != GradientEditorState::CloseRequest::None)
         {
             if (ge.closeRequest == GradientEditorState::CloseRequest::Cancel)
+            {
                 value = ge.originalGradient;
+                cancelled = true;
+            }
             ge.closeRequest = GradientEditorState::CloseRequest::None;
             ge.triggerID = ID::Invalid();
         }
@@ -73,7 +123,7 @@ namespace tachyon
         swatch.state           = guiStateManager.GetCurrentState(swatchID);
         swatch.colorStyleIndex = swatchStyle;
         // A copy: the editor starts from the gradient as drawn, whatever becomes of the caller's.
-        swatch.eventHandler = MakeButtonHandler([this, value, swatchID, editorIsOpen, context]()
+        swatch.eventHandler = MakeButtonHandler([this, value, original8, limits, swatchID, editorIsOpen, context]()
         {
             auto& ge = m_gradientEditorSub->State();
             if (editorIsOpen)
@@ -86,6 +136,8 @@ namespace tachyon
                     ge.windowID = idManager.CreateStaticID();
                 ge.workingCopy = value;
                 ge.originalGradient = value;
+                ge.originalGradient8 = original8;
+                ge.limits = limits;
                 ge.context = context;
                 ge.selectedStop = 0;
                 ge.press.Reset();
@@ -97,14 +149,13 @@ namespace tachyon
 
         // The stops, as diamonds on the bar's bottom edge: light with a dark outline.
         {
-            std::array<float, Gradient::kMaxStops> offsets{};
-            const int stopCount = std::min(int(value.stopCount), Gradient::kMaxStops);
-            for (int i = 0; i < stopCount; i++)
-                offsets[size_t(i)] = value.stops[size_t(i)].GetOffset();
+            std::vector<float> offsets;
+            for (int i = 0; i < value.StopCount(); i++)
+                offsets.push_back(std::clamp(value.stops[size_t(i)].offset, 0.0f, 1.0f));
             const VisualColorStyleIndex fill    = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--text-1", color4f{ 0.9f, 0.9f, 0.9f, 1.0f })));
             const VisualColorStyleIndex outline = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--bg-app", color4f{ 0.05f, 0.05f, 0.05f, 1.0f })));
             VERIFY(elementStorage.AddCustomDraw(swatchRef,
-                [offsets, stopCount, fill, outline, half = float(styleManager.Px(4)), edge = float(styleManager.Px(1))](CustomDrawContext& ctx)
+                [offsets = std::move(offsets), fill, outline, half = float(styleManager.Px(4)), edge = float(styleManager.Px(1))](CustomDrawContext& ctx)
                 {
                     const auto outer = ctx.ElementRect();
                     if (outer.w <= 0 || outer.h <= 0) return;
@@ -112,10 +163,10 @@ namespace tachyon
                         const float2 corners[] = { { c.x - r, c.y }, { c.x, c.y - r }, { c.x + r, c.y }, { c.x, c.y + r } };
                         ctx.RenderFilledPolygon(corners, color);
                     };
-                    for (int i = 0; i < stopCount; i++)
+                    for (const float offset : offsets)
                     {
                         // Kept inside the bar's ends so the end stops stay whole.
-                        const float x = float(outer.x) + half + offsets[size_t(i)] * float(std::max(0, outer.w) - 2.0f * half);
+                        const float x = float(outer.x) + half + offset * float(std::max(0, outer.w) - 2.0f * half);
                         const float2 center{ x, float(outer.y + outer.h) };
                         diamond(center, half + edge, outline);
                         diamond(center, half, fill);
@@ -141,10 +192,7 @@ namespace tachyon
             }
             EndWindow();
         }
-
-        const bool changed = !(value == before);
-        guiStateManager.SetModified(changed);
-        return changed;
+        return editorIsOpen;
     }
 
     // ---------------------------------------------------------------------------
@@ -166,10 +214,9 @@ namespace tachyon
             { "Fade",      { Rgb(0x2D3BFF), Rgb(0x2D3BFF) }, true },
         };
 
-        Gradient MakePreset(const GradientPreset& preset, ColorSpace space)
+        GradientF MakePreset(const GradientPreset& preset, ColorSpace space)
         {
-            Gradient g;
-            g.type = GradientType::Linear;
+            GradientF g;
             g.colorSpace = space;
             const int n = int(preset.colors.size());
             int i = 0;
@@ -184,32 +231,42 @@ namespace tachyon
         }
 
         // Keeps the stops sorted by location; returns where the one that was at `index` went.
-        int SortStops(Gradient& g, int index)
+        int SortStops(GradientF& g, int index)
         {
-            if (index < 0 || index >= g.stopCount) return index;
-            const ColorStop tracked = g.stops[size_t(index)];
-            std::stable_sort(g.stops.begin(), g.stops.begin() + g.stopCount,
-                             [](const ColorStop& a, const ColorStop& b) { return a.GetOffset() < b.GetOffset(); });
-            for (int i = 0; i < g.stopCount; i++)
+            const int count = int(g.stops.size());
+            if (index < 0 || index >= count) return index;
+            const GradientStop tracked = g.stops[size_t(index)];
+            std::stable_sort(g.stops.begin(), g.stops.end(),
+                             [](const GradientStop& a, const GradientStop& b) { return a.offset < b.offset; });
+            for (int i = 0; i < count; i++)
                 if (g.stops[size_t(i)] == tracked) return i;
             return index;
         }
 
-        void RemoveStop(Gradient& g, int index)
+        void RemoveStop(GradientF& g, int index)
         {
-            if (g.stopCount <= 2 || index < 0 || index >= g.stopCount) return;
-            for (int i = index; i < g.stopCount - 1; i++)
-                g.stops[size_t(i)] = g.stops[size_t(i + 1)];
-            g.stopCount--;
+            if (g.stops.size() <= 2 || index < 0 || index >= int(g.stops.size())) return;
+            g.stops.erase(g.stops.begin() + index);
         }
 
-        std::string StopHex(const ColorStop& stop)
+        // A stop's color as hex, or its numbers when it's brighter than 1; with its alpha
+        // when it isn't opaque.
+        std::string StopText(const GradientStop& stop)
         {
-            const color4b c = stop.GetColor4b();
-            char buf[24];
-            if (c.a == 255) std::snprintf(buf, sizeof(buf), "#%02X%02X%02X", c.r, c.g, c.b);
-            else            std::snprintf(buf, sizeof(buf), "#%02X%02X%02X %d%%", c.r, c.g, c.b, int(std::lround(float(c.a) / 2.55f)));
-            return buf;
+            const color4f c = stop.color;
+            const int alpha = int(std::lround(std::clamp(c.a, 0.0f, 1.0f) * 100.0f));
+            char buf[64];
+            if (c.r > 1.0f || c.g > 1.0f || c.b > 1.0f)
+                std::snprintf(buf, sizeof(buf), "%.2f %.2f %.2f", double(c.r), double(c.g), double(c.b));
+            else
+            {
+                const color4f k = Clamp01(c);
+                std::snprintf(buf, sizeof(buf), "#%02X%02X%02X", int(std::lround(k.r * 255.0f)), int(std::lround(k.g * 255.0f)), int(std::lround(k.b * 255.0f)));
+            }
+            std::string text = buf;
+            if (alpha != 100)
+                text += " " + std::to_string(alpha) + "%";
+            return text;
         }
 
         std::string Percent(float t)
@@ -218,19 +275,22 @@ namespace tachyon
             std::snprintf(buf, sizeof(buf), "%.1f%%", double(t) * 100.0);
             return buf;
         }
+
+        constexpr std::string_view kInterpolationNames[] = { "Linear", "Smooth", "Constant" };
     }
 
-    void GUIApplication::EmitGradientEditor(Gradient& outGradient)
+    void GUIApplication::EmitGradientEditor(GradientF& outGradient)
     {
-        if (outGradient.stopCount > Gradient::kMaxStops)
-        {
-            ReportMisuse("GUIApplication: a gradient with more stops than Gradient::kMaxStops (clamped)");
-            outGradient.stopCount = Gradient::kMaxStops;
-        }
         auto& ge = m_gradientEditorSub->State();
         auto& g  = ge.workingCopy;
-        if (ge.selectedStop >= g.stopCount)
-            ge.selectedStop = g.stopCount > 0 ? g.stopCount - 1 : 0;
+        if (int(g.stops.size()) > ge.limits.maxStops)
+        {
+            ReportMisuse("GUIApplication: a gradient with more stops than its field takes (clamped)");
+            g.stops.resize(size_t(ge.limits.maxStops));
+        }
+        const int stopCount = int(g.stops.size());
+        if (ge.selectedStop >= stopCount)
+            ge.selectedStop = stopCount > 0 ? stopCount - 1 : 0;
 
         SetGradientPreviewStyle(styleManager, ge.previewGradientStyle, g);
         SetColorStyle(styleManager, ge.stopEdgeColor, theme.GetColor("--text-1", color4f{ 0.91f, 0.92f, 0.94f, 1.0f }));
@@ -257,12 +317,12 @@ namespace tachyon
         {
             Text(idManager.AllocateDynamicID("ge_presets_label"), "Presets", theme.gradientEditorSectionLabelStyleRef);
             // A chip draws its gradient over the checkerboard; the one matching the gradient is ringed.
-            auto chip = [&](ID id, const Gradient& preset, std::string_view name)
+            auto chip = [&](ID id, const GradientF& preset, std::string_view name)
             {
                 NoteSwatchClaim(id);
                 auto& style = m_gradientEditorSub->ClaimSwatchStyle(id);
                 SetGradientPreviewStyle(styleManager, style, preset);
-                Gradient asIs = preset;
+                GradientF asIs = preset;
                 asIs.colorSpace = g.colorSpace;
                 const bool current = (asIs == g);
                 const ElementRef ref = RegisterControl(Element{ .id = id,
@@ -271,6 +331,8 @@ namespace tachyon
                         const ColorSpace space = ge.workingCopy.colorSpace;
                         ge.workingCopy = preset;
                         ge.workingCopy.colorSpace = space;
+                        if (int(ge.workingCopy.stops.size()) > ge.limits.maxStops)
+                            ge.workingCopy.stops.resize(size_t(ge.limits.maxStops));
                         ge.selectedStop = 0;
                     }),
                     .styleRef = theme.gradientEditorPresetStyleRef }, LayoutOverride{});
@@ -338,12 +400,13 @@ namespace tachyon
                 const float t = std::clamp(float(c.x - r.x - inset) / float(barW), 0.0f, 1.0f);
                 const int top = r.y + (r.h - (barH + pointer + stopBox)) / 2;
                 const bool belowBar = c.y >= top + barH;
+                const int count = int(g.stops.size());
 
                 auto hitStop = [&]() -> int {
                     if (!belowBar || c.y > top + barH + pointer + stopBox) return -1;
-                    for (int i = 0; i < g.stopCount; i++)
+                    for (int i = 0; i < count; i++)
                     {
-                        const int sx = r.x + inset + int(std::lround(g.stops[size_t(i)].GetOffset() * float(barW)));
+                        const int sx = r.x + inset + int(std::lround(g.stops[size_t(i)].offset * float(barW)));
                         if (std::abs(c.x - sx) <= stopBox / 2) return i;
                     }
                     return -1;
@@ -363,30 +426,32 @@ namespace tachyon
                             ge.selectedStop  = hit;
                             ge.press.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ true);
                             ge.dragStopIndex = hit;
-                            ge.dragGrab      = t - g.stops[size_t(hit)].GetOffset();
+                            ge.dragGrab      = t - g.stops[size_t(hit)].offset;
                             ge.dragOff       = false;
                             guiStateManager.Interaction().SetCaptureID(barID);
                             return true;
                         }
-                        // A click on the bar adds a stop with the gradient's color there.
-                        if (!belowBar && c.y >= top && g.stopCount < Gradient::kMaxStops)
+                        // A click on the bar adds a stop with the gradient's color there, blending on
+                        // as the stop before it did.
+                        if (!belowBar && c.y >= top && count < ge.limits.maxStops)
                         {
-                            color4b samples[256];
-                            g.WriteTo(std::span<color4b>(samples, 256));
-                            g.AddStop(samples[std::clamp(int(t * 255.0f), 0, 255)], t);
-                            ge.selectedStop = SortStops(g, g.stopCount - 1);
+                            StopInterpolation blend = StopInterpolation::Linear;
+                            for (const GradientStop& stop : g.stops)
+                                if (stop.offset <= t) blend = stop.interpolation;
+                            g.AddStop(g.Sample(t), t, blend);
+                            ge.selectedStop = SortStops(g, int(g.stops.size()) - 1);
                             return true;
                         }
                         break;
                     }
                     case EventType::MouseMove:
-                        if (ge.dragStopIndex >= 0 && ge.dragStopIndex < g.stopCount && ge.press.Move(event, 0))
+                        if (ge.dragStopIndex >= 0 && ge.dragStopIndex < count && ge.press.Move(event, 0))
                         {
                             // The cursor in the bar's own units, without the barW clamp's dead zone.
                             const float cursorT = float(c.x - r.x - inset) / float(barW);
-                            g.stops[size_t(ge.dragStopIndex)].SetOffset(std::clamp(cursorT - ge.dragGrab, 0.0f, 1.0f));
+                            g.stops[size_t(ge.dragStopIndex)].offset = std::clamp(cursorT - ge.dragGrab, 0.0f, 1.0f);
                             ge.dragStopIndex = ge.selectedStop = SortStops(g, ge.dragStopIndex);
-                            ge.dragOff = (c.y > top + barH + pointer + stopBox + removeDistance) && g.stopCount > 2;
+                            ge.dragOff = (c.y > top + barH + pointer + stopBox + removeDistance) && count > 2;
                             return true;
                         }
                         break;
@@ -397,7 +462,7 @@ namespace tachyon
                             if (ge.dragOff)
                             {
                                 RemoveStop(g, ge.dragStopIndex);
-                                ge.selectedStop = std::min(ge.dragStopIndex, g.stopCount - 1);
+                                ge.selectedStop = std::min(ge.dragStopIndex, int(g.stops.size()) - 1);
                             }
                             ge.dragStopIndex = -1;
                             ge.dragOff = false;
@@ -416,10 +481,10 @@ namespace tachyon
                             guiStateManager.Interaction().ReleaseCaptureID();
                             return true;
                         }
-                        if (event.state.lastKey == KeyCode::Delete && g.stopCount > 2)
+                        if (event.state.lastKey == KeyCode::Delete && count > 2)
                         {
                             RemoveStop(g, ge.selectedStop);
-                            ge.selectedStop = std::min(ge.selectedStop, g.stopCount - 1);
+                            ge.selectedStop = std::min(ge.selectedStop, int(g.stops.size()) - 1);
                             return true;
                         }
                         break;
@@ -430,15 +495,14 @@ namespace tachyon
             const ElementRef barRef = RegisterControl(std::move(bar), LayoutOverride{});
 
             struct StopDraw { float t; VisualColorStyleIndex color; };
-            std::array<StopDraw, Gradient::kMaxStops> stops{};
-            const int stopCount = g.stopCount;
+            std::vector<StopDraw> stops;
             for (int i = 0; i < stopCount; i++)
             {
                 const ID stopStyleID = idManager.AllocateDynamicID("ge_stop_color");
                 NoteSwatchClaim(stopStyleID);
                 auto& stopStyle = m_gradientEditorSub->ClaimSwatchStyle(stopStyleID);
-                SetColorStyle(styleManager, stopStyle, g.stops[size_t(i)].GetColor4f());
-                stops[size_t(i)] = { g.stops[size_t(i)].GetOffset(), stopStyle };
+                SetColorStyle(styleManager, stopStyle, Clamp01(g.stops[size_t(i)].color));
+                stops.push_back({ std::clamp(g.stops[size_t(i)].offset, 0.0f, 1.0f), stopStyle });
             }
             const int selected = ge.selectedStop;
             const bool hideSelected = ge.dragOff;
@@ -446,7 +510,7 @@ namespace tachyon
                 Percent(selected < stopCount ? stops[size_t(selected)].t : 0.0f), theme.gradientEditorBadgeStyleRef, ElementState::None);
             const auto badgeSize = textSystem->GetTextMeasurement(badgeText);
             VERIFY(elementStorage.AddCustomDraw(barRef,
-                [look, preview = ge.previewGradientStyle, stops, stopCount, selected, hideSelected, badgeText,
+                [look, preview = ge.previewGradientStyle, stops = std::move(stops), selected, hideSelected, badgeText,
                  badgeW = badgeSize.maxWidth, badgeH = badgeSize.minHeight,
                  edgeColor = ge.stopEdgeColor, outline = ge.stopOutlineColor, halo = ge.stopHaloColor,
                  accent = theme.accentColor, barH, stopBox, pointer, inset,
@@ -489,6 +553,7 @@ namespace tachyon
                             ctx.RenderText(badgeText, IntRect{ .position = { badge.x + badgePadX, badge.y + badgePadY }, .size = { badgeW, badgeH } });
                         }
                     };
+                    const int stopCount = int(stops.size());
                     for (int i = 0; i < stopCount; i++)
                         if (i != selected) drawStop(i);
                     if (selected >= 0 && selected < stopCount && !hideSelected) drawStop(selected);
@@ -499,13 +564,13 @@ namespace tachyon
         BeginHorizontal(idManager.AllocateDynamicID("ge_columns"), theme.gradientEditorColumnsStyleRef, LayoutOverride{}.NoShrink());
 
         BeginVertical(idManager.AllocateDynamicID("ge_left"), theme.gradientEditorColumnStyleRef, LayoutOverride{}.FlexGrow(3));   // room for the six blend spaces
-        if (ge.selectedStop >= 0 && ge.selectedStop < g.stopCount)
+        if (ge.selectedStop >= 0 && ge.selectedStop < int(g.stops.size()))
         {
             // "Color stop  2 / 3", previous, next.
             BeginHorizontal(idManager.AllocateDynamicID("ge_stop_head"), theme.gradientEditorRowStyleRef, LayoutOverride{}.NoShrink());
             Text(idManager.AllocateDynamicID("ge_stop_title"), "Color stop", theme.gradientEditorHeadingStyleRef);
             char count[32];
-            std::snprintf(count, sizeof(count), "%d / %d", ge.selectedStop + 1, int(g.stopCount));
+            std::snprintf(count, sizeof(count), "%d / %d", ge.selectedStop + 1, int(g.stops.size()));
             Text(idManager.AllocateDynamicID("ge_stop_count"), count, theme.gradientEditorCountStyleRef, LayoutOverride{}.FlexGrow(1));
             Button(idManager.AllocateDynamicID("ge_prev"), theme.chevronLeftIcon, [this]() {
                 auto& ge = m_gradientEditorSub->State();
@@ -514,7 +579,7 @@ namespace tachyon
             SetTooltip("Previous stop");
             Button(idManager.AllocateDynamicID("ge_next"), theme.treeArrowRight, [this]() {
                 auto& ge = m_gradientEditorSub->State();
-                ge.selectedStop = std::min(int(ge.workingCopy.stopCount) - 1, ge.selectedStop + 1);
+                ge.selectedStop = std::min(int(ge.workingCopy.stops.size()) - 1, ge.selectedStop + 1);
             }, theme.dialogIconButtonStyleRef);
             SetTooltip("Next stop");
             EndHorizontal();
@@ -522,19 +587,19 @@ namespace tachyon
             // Color, then location with duplicate and delete.
             BeginHorizontal(idManager.AllocateDynamicID("ge_color_row"), theme.gradientEditorRowStyleRef, LayoutOverride{}.NoShrink());
             Text(idManager.AllocateDynamicID("ge_color_label"), "Color", theme.gradientEditorLabelStyleRef);
-            ge.selectedStopColor = g.stops[size_t(ge.selectedStop)].GetColor4f();
-            if (ColorField(ge.selectedStopColor, false, LayoutOverride{}.FlexGrow(1)))
-                g.stops[size_t(ge.selectedStop)].SetColor(ge.selectedStopColor);
+            ge.selectedStopColor = g.stops[size_t(ge.selectedStop)].color;
+            if (ColorField(ge.selectedStopColor, ge.limits.hdr, LayoutOverride{}.FlexGrow(1)))
+                g.stops[size_t(ge.selectedStop)].color = ge.limits.hdr ? ge.selectedStopColor : Clamp01(ge.selectedStopColor);
             EndHorizontal();
 
             BeginHorizontal(idManager.AllocateDynamicID("ge_location_row"), theme.gradientEditorRowStyleRef, LayoutOverride{}.NoShrink());
             Text(idManager.AllocateDynamicID("ge_location_label"), "Location", theme.gradientEditorLabelStyleRef);
             BeginFieldBox(idManager.AllocateDynamicID("ge_location_box"), theme.gradientEditorLocationStyleRef, LayoutOverride{}.FlexGrow(1));
-            float percent = std::round(g.stops[size_t(ge.selectedStop)].GetOffset() * 1000.0f) / 10.0f;
+            float percent = std::round(g.stops[size_t(ge.selectedStop)].offset * 1000.0f) / 10.0f;
             if (Field(idManager.AllocateDynamicID("ge_location_value"), percent, TextEditBehavior::None, theme.gradientEditorLocationInputStyleRef,
                       NumericFieldConfig<float>{ .stepPerPixel = 0.1, .minVal = 0.0f, .maxVal = 100.0f }, LayoutOverride{}.FlexGrow(1)))
             {
-                g.stops[size_t(ge.selectedStop)].SetOffset(percent / 100.0f);
+                g.stops[size_t(ge.selectedStop)].offset = std::clamp(percent / 100.0f, 0.0f, 1.0f);
                 ge.selectedStop = SortStops(g, ge.selectedStop);
             }
             Text(idManager.AllocateDynamicID("ge_location_unit"), "%", theme.gradientEditorLocationUnitStyleRef);
@@ -542,23 +607,39 @@ namespace tachyon
             Button(idManager.AllocateDynamicID("ge_duplicate"), theme.duplicateIcon, [this]() {
                 auto& ge = m_gradientEditorSub->State();
                 auto& g = ge.workingCopy;
-                if (g.stopCount >= Gradient::kMaxStops || ge.selectedStop >= g.stopCount) return;
+                const int count = int(g.stops.size());
+                if (count >= ge.limits.maxStops || ge.selectedStop >= count) return;
                 // A copy halfway to the next stop (or the previous one at the end).
-                const ColorStop stop = g.stops[size_t(ge.selectedStop)];
-                const float here = stop.GetOffset();
-                const float there = (ge.selectedStop + 1 < g.stopCount) ? g.stops[size_t(ge.selectedStop + 1)].GetOffset()
-                                  : (ge.selectedStop > 0 ? g.stops[size_t(ge.selectedStop - 1)].GetOffset() : 1.0f);
-                g.AddStop(stop.GetColor4f(), (here + there) * 0.5f);
-                ge.selectedStop = SortStops(g, g.stopCount - 1);
+                const GradientStop stop = g.stops[size_t(ge.selectedStop)];
+                const float there = (ge.selectedStop + 1 < count) ? g.stops[size_t(ge.selectedStop + 1)].offset
+                                  : (ge.selectedStop > 0 ? g.stops[size_t(ge.selectedStop - 1)].offset : 1.0f);
+                g.AddStop(stop.color, (stop.offset + there) * 0.5f, stop.interpolation);
+                ge.selectedStop = SortStops(g, int(g.stops.size()) - 1);
             }, theme.dialogSquareButtonStyleRef);
             SetTooltip("Duplicate the stop");
             Button(idManager.AllocateDynamicID("ge_delete"), theme.deleteIcon, [this]() {
                 auto& ge = m_gradientEditorSub->State();
                 RemoveStop(ge.workingCopy, ge.selectedStop);
-                ge.selectedStop = std::min(ge.selectedStop, int(ge.workingCopy.stopCount) - 1);
+                ge.selectedStop = std::min(ge.selectedStop, int(ge.workingCopy.stops.size()) - 1);
             }, theme.dialogDeleteButtonStyleRef);
             SetTooltip("Delete the stop");
             EndHorizontal();
+
+            // How it blends to the next stop (a GradientF's; the last stop has no next).
+            if (ge.limits.perStopInterpolation)
+            {
+                BeginHorizontal(idManager.AllocateDynamicID("ge_blend_row"), theme.gradientEditorRowStyleRef, LayoutOverride{}.NoShrink());
+                Text(idManager.AllocateDynamicID("ge_blend_label"), "To next", theme.gradientEditorLabelStyleRef);
+                const bool last = ge.selectedStop == int(g.stops.size()) - 1;
+                int blend = int(g.stops[size_t(ge.selectedStop)].interpolation);
+                if (last) BeginDisabled();
+                if (Dropdown(idManager.AllocateDynamicID("ge_blend"), blend, std::span<const std::string_view>(kInterpolationNames),
+                             LayoutOverride{}.FlexGrow(1)))
+                    g.stops[size_t(ge.selectedStop)].interpolation = StopInterpolation(std::clamp(blend, 0, 2));
+                if (last) EndDisabled();
+                SetTooltip(last ? "The last stop has no next stop to blend to" : "How the color goes from this stop to the next");
+                EndHorizontal();
+            }
         }
 
         Element divider{ .id = idManager.AllocateDynamicID("ge_divider"), .styleRef = theme.gradientEditorDividerStyleRef, .flags = ElementFlags::NoInput };
@@ -591,15 +672,23 @@ namespace tachyon
         Button(idManager.AllocateDynamicID("ge_reverse"), { theme.reverseIcon, "Reverse" }, [this]() {
             auto& ge = m_gradientEditorSub->State();
             auto& g = ge.workingCopy;
-            for (int i = 0; i < g.stopCount; i++)
-                g.stops[size_t(i)].SetOffset(1.0f - g.stops[size_t(i)].GetOffset());
-            std::reverse(g.stops.begin(), g.stops.begin() + g.stopCount);
-            ge.selectedStop = g.stopCount - 1 - ge.selectedStop;
+            const int count = int(g.stops.size());
+            // Each stretch keeps its blend: it's now the other stop's to give.
+            std::vector<StopInterpolation> blends;
+            for (const GradientStop& stop : g.stops)
+                blends.push_back(stop.interpolation);
+            for (GradientStop& stop : g.stops)
+                stop.offset = 1.0f - stop.offset;
+            std::reverse(g.stops.begin(), g.stops.end());
+            for (int i = 0; i < count; i++)
+                g.stops[size_t(i)].interpolation = i + 1 < count ? blends[size_t(count - 2 - i)] : StopInterpolation::Linear;
+            ge.selectedStop = count - 1 - ge.selectedStop;
         }, theme.dialogSmallButtonStyleRef);
         Button(idManager.AllocateDynamicID("ge_distribute"), { theme.distributeIcon, "Distribute evenly" }, [this]() {
             auto& g = m_gradientEditorSub->State().workingCopy;
-            for (int i = 0; i < g.stopCount; i++)
-                g.stops[size_t(i)].SetOffset(g.stopCount > 1 ? float(i) / float(g.stopCount - 1) : 0.0f);
+            const int count = int(g.stops.size());
+            for (int i = 0; i < count; i++)
+                g.stops[size_t(i)].offset = count > 1 ? float(i) / float(count - 1) : 0.0f;
         }, theme.dialogSmallButtonStyleRef);
         EndHorizontal();
         EndVertical();   // left
@@ -615,8 +704,9 @@ namespace tachyon
             Text(idManager.AllocateDynamicID("ge_th_location"), "Location", theme.gradientEditorHeadLocationStyleRef);
             EndHorizontal();
 
-            const ID rowRange = idManager.AllocateRangedID(uint32_t(std::max<int>(1, g.stopCount)), "ge_table_row");
-            for (int i = 0; i < g.stopCount; i++)
+            const int rows = int(g.stops.size());
+            const ID rowRange = idManager.AllocateRangedID(uint32_t(std::max<int>(1, rows)), "ge_table_row");
+            for (int i = 0; i < rows; i++)
             {
                 const ID rowID = idManager.GetSubID(rowRange, uint32_t(i));
                 const bool sel = (i == ge.selectedStop);
@@ -626,11 +716,15 @@ namespace tachyon
                     .styleRef = theme.gradientEditorTableRowStyleRef, .state = guiStateManager.GetCurrentState(rowID) },
                     LayoutOverride{}.NoShrink());
                 VERIFY(elementStorage.BeginChildren());
-                Text(idManager.AllocateDynamicID("ge_td_type"), "Color", theme.gradientEditorTypeCellStyleRef);
+                // The type: a color stop, and with per-stop blends how it goes on to the next.
+                const std::string_view type = ge.limits.perStopInterpolation && i + 1 < rows
+                    ? kInterpolationNames[std::min<size_t>(size_t(g.stops[size_t(i)].interpolation), std::size(kInterpolationNames) - 1)]
+                    : std::string_view("Color");
+                Text(idManager.AllocateDynamicID("ge_td_type"), type, theme.gradientEditorTypeCellStyleRef);
                 const ID swID = idManager.AllocateDynamicID("ge_td_swatch");
                 NoteSwatchClaim(swID);
                 auto& swStyle = m_gradientEditorSub->ClaimSwatchStyle(swID);
-                SetColorStyle(styleManager, swStyle, g.stops[size_t(i)].GetColor4f());
+                SetColorStyle(styleManager, swStyle, Clamp01(g.stops[size_t(i)].color));
                 Element sw{ .id = swID, .styleRef = theme.gradientEditorSwatchCellStyleRef, .flags = ElementFlags::NoInput };
                 const ElementRef swRef = RegisterElement(std::move(sw), LayoutOverride{});
                 VERIFY(elementStorage.AddCustomDraw(swRef, [look, swStyle, radius = float(styleManager.Px(3))](CustomDrawContext& ctx) {
@@ -641,8 +735,8 @@ namespace tachyon
                     DrawCheckerboard(ctx, r, r, l);
                     ctx.RenderQuad(r, swStyle, radius);
                 }));
-                Text(idManager.AllocateDynamicID("ge_td_value"), StopHex(g.stops[size_t(i)]), theme.gradientEditorValueCellStyleRef, LayoutOverride{}.FlexGrow(1));
-                Text(idManager.AllocateDynamicID("ge_td_location"), Percent(g.stops[size_t(i)].GetOffset()), theme.gradientEditorLocationCellStyleRef);
+                Text(idManager.AllocateDynamicID("ge_td_value"), StopText(g.stops[size_t(i)]), theme.gradientEditorValueCellStyleRef, LayoutOverride{}.FlexGrow(1));
+                Text(idManager.AllocateDynamicID("ge_td_location"), Percent(g.stops[size_t(i)].offset), theme.gradientEditorLocationCellStyleRef);
                 VERIFY(elementStorage.EndChildren());
                 if (sel) guiStateManager.Construction().PopSelected();
             }
@@ -654,7 +748,7 @@ namespace tachyon
         BeginHorizontal(idManager.AllocateDynamicID("ge_footer"), theme.dialogFooterStyleRef, LayoutOverride{}.NoShrink());
         {
             char status[96];
-            std::snprintf(status, sizeof(status), "%d stops \xC2\xB7 click the bar to add, drag a stop off to remove", int(g.stopCount));
+            std::snprintf(status, sizeof(status), "%d stops \xC2\xB7 click the bar to add, drag a stop off to remove", int(g.stops.size()));
             Text(idManager.AllocateDynamicID("ge_status"), status, theme.dialogStatusStyleRef, LayoutOverride{}.FlexGrow(1));
             Button(idManager.AllocateDynamicID("ge_cancel"), "Cancel", requestClose(GradientEditorState::CloseRequest::Cancel),
                    theme.dialogButtonStyleRef);

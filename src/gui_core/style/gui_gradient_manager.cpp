@@ -425,6 +425,19 @@ namespace tachyon
         return AcquireRow(h, tmp);
     }
 
+    GradientHandle GradientManager::AcquireRowPixels(std::span<const color4b> pixels)
+    {
+        if (pixels.empty())
+            return GradientHandle::Invalid();
+        std::vector<color4b> row(m_width);
+        for (size_t i = 0; i < m_width; ++i)
+            row[i] = pixels[pixels.size() == m_width ? i : std::min(pixels.size() - 1, i * pixels.size() / m_width)];
+        // Kept apart from the gradients' hashes, which hash a Gradient.
+        constexpr uint64_t kRowPixels = 0x524F5750495845ull;
+        const uint64_t h = Hash::Combine(kRowPixels, Hash::CalculateBytes(row.data(), row.size() * sizeof(color4b)));
+        return AcquireRow(h, row);   // the same pixels share a slot
+    }
+
     // --------------------------------------------------------------------
     // Refcount / release
     // --------------------------------------------------------------------

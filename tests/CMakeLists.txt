@@ -43,6 +43,7 @@ list(APPEND GUI_CORE_TEST_FILES
   ui_state_test.cpp
   layout_presets_test.cpp
   clipboard_image_test.cpp
+  gradient_float_test.cpp
   icon_names_test.cpp
   fuzz_test.cpp
   node_view_drop_test.cpp
