@@ -114,6 +114,38 @@ if(TACHYON_SYSTEM_HARFBUZZ)
   set(FETCHCONTENT_SOURCE_DIR_HARFBUZZ "${CMAKE_CURRENT_SOURCE_DIR}/host_harfbuzz")
 endif()
 add_subdirectory(skribidi ${_tachyon_tp_exclude})
+
+# The text libraries allocate through gui_core's library allocator (gui_library_allocator.cpp),
+# which a host's allocation hooks can be routed into. HarfBuzz has hooks for this; skribidi
+# and SheenBidi call malloc and free, which a header included ahead of their sources
+# redirects. A host's own HarfBuzz is left as it is.
+if(NOT TACHYON_SYSTEM_HARFBUZZ)
+  foreach(_hb_target IN ITEMS harfbuzz harfbuzz-subset)
+    if(TARGET ${_hb_target})
+      target_compile_definitions(${_hb_target} PRIVATE
+        hb_malloc_impl=tachyon_library_malloc
+        hb_calloc_impl=tachyon_library_calloc
+        hb_realloc_impl=tachyon_library_realloc
+        hb_free_impl=tachyon_library_free)
+    endif()
+  endforeach()
+endif()
+set(_tachyon_alloc_redirect "${CMAKE_CURRENT_SOURCE_DIR}/library_alloc_redirect.h")
+if(MSVC)
+  set(_tachyon_alloc_include "/FI${_tachyon_alloc_redirect}")
+else()
+  set(_tachyon_alloc_include -include "${_tachyon_alloc_redirect}")
+endif()
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/skribidi/src/skb_common.c"
+  TARGET_DIRECTORY skribidi
+  PROPERTIES COMPILE_OPTIONS "${_tachyon_alloc_include}")
+# SheenBidi builds as one file that includes the others, or file by file.
+set_source_files_properties(
+    "${FETCHCONTENT_SOURCE_DIR_SHEENBIDI}/Source/SheenBidi.c"
+    "${FETCHCONTENT_SOURCE_DIR_SHEENBIDI}/Source/Object.c"
+  TARGET_DIRECTORY SheenBidi
+  PROPERTIES COMPILE_OPTIONS "${_tachyon_alloc_include}")
+
 if(NOT DEFINED TACHYON_BUILD_TESTS OR TACHYON_BUILD_TESTS)
   add_subdirectory(googletest ${_tachyon_tp_exclude})
 endif()

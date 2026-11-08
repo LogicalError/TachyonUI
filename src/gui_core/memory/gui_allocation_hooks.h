@@ -8,9 +8,11 @@ namespace tachyon
     /// @{
 
     /// Memory functions a host gives the library, for the allocations that can be routed:
-    /// Vulkan objects, VMA, vk-bootstrap and SDL. They must be thread-safe (drivers call
-    /// them from their own threads) and stay valid for the rest of the process: SDL can keep
-    /// a few allocations past SDL_Quit (logged) and keeps using the hooks.
+    /// Vulkan objects, VMA, vk-bootstrap, SDL, and the text and SVG libraries (HarfBuzz,
+    /// skribidi, SheenBidi, nanosvg). They must be thread-safe (drivers call them from their
+    /// own threads) and stay valid for the rest of the process: SDL can keep a few
+    /// allocations past SDL_Quit (logged) and keeps using the hooks, and HarfBuzz frees at
+    /// exit what it keeps for good.
     struct AllocationHooks
     {
         /// Returns `size` bytes aligned to `alignment` (a power of two).

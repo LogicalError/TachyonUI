@@ -165,7 +165,7 @@ namespace tachyon
 #endif
         }
 
-        textSystem       = new tachyon::SkribidiTextSystem();
+        textSystem       = new tachyon::SkribidiTextSystem(m_allocationHooks);
         inputManager     = std::make_unique<tachyon::InputManager>();
         inputBroadcaster = tachyon::InputHandlerBroadcaster({ inputManager.get(), textSystem });
         if (!m_graphicsBackend)

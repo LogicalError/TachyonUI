@@ -8,6 +8,9 @@
 #include <gui_core/graphics/gui_primitive_renderer.h>
 #include <gui_controls/controls_toolbar_dock.h>
 #include <gui_controls/subsystems/gui_ui_cache_subsystem.h>
+#include "gpu_injected_input.h"
+
+#include <gui_core/memory/gui_library_allocator.h>
 #include <gui_core/memory/gui_tracking_allocator.h>
 
 #include <SDL3/SDL_init.h>
@@ -147,7 +150,7 @@ namespace
     };
 
     // Everything allocated through the host's hooks (Vulkan objects, vk-bootstrap,
-    // VMA, SDL) is freed again by Cleanup.
+    // VMA, SDL, the text and SVG libraries) is freed again by Cleanup.
     TEST(GpuApplicationInit, AllocationHooksSeeEverythingFreedByCleanup)
     {
         tachyon::TrackingAllocator tracker;
@@ -169,6 +172,7 @@ namespace
             {
                 EXPECT_NE(current, original) << "SDL allocates through the hooks";
             }
+            EXPECT_TRUE(tachyon::LibraryAllocator::IsRouted()) << "the text and SVG libraries allocate through the hooks";
 
             app.windowID = app.idManager.CreateStaticID();
             for (int i = 0; i < 3; ++i)
@@ -176,6 +180,7 @@ namespace
             EXPECT_GT(tracker.LiveAllocations(), 0u);
             app.Cleanup();
         }
+        EXPECT_FALSE(tachyon::LibraryAllocator::IsRouted()) << "back on the C heap";
         EXPECT_GT(tracker.TotalAllocations(), 0u);
         EXPECT_EQ(tracker.LiveAllocations(), 0u) << tracker.LiveBytes() << " bytes still live";
         tracker.ReportLeaks();
@@ -211,6 +216,7 @@ namespace
 
         bool Start()
         {
+            UseInjectedInputOnly(*this);
             if (!Initialize())
                 return false;
             windowID = idManager.CreateStaticID();

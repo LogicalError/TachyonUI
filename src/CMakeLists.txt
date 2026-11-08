@@ -40,6 +40,8 @@ list(APPEND GUI_FILES
   gui_core/memory/gui_allocation_hooks.h
   gui_core/memory/gui_tracking_allocator.h
   gui_core/memory/gui_tracking_allocator.cpp
+  gui_core/memory/gui_library_allocator.h
+  gui_core/memory/gui_library_allocator.cpp
 
 
   # State

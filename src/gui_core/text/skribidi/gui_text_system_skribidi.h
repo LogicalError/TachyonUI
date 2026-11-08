@@ -4,6 +4,7 @@
 #include <gui_core/input/gui_undo_history.h>
 #include <gui_core/text/gui_text_system.h>
 #include <gui_core/gui_hash.h>
+#include <gui_core/memory/gui_library_allocator.h>
 
 #include <span>
 #include <unordered_map>
@@ -28,7 +29,9 @@ namespace tachyon
     class SkribidiTextSystem : public ITextSystem
     {
     public:
-        SkribidiTextSystem();
+        /// With `hooks` set, the text libraries (HarfBuzz, skribidi, SheenBidi, nanosvg)
+        /// allocate through them while this text system lives.
+        explicit SkribidiTextSystem(const AllocationHooks& hooks = {});
         ~SkribidiTextSystem() override;
 
         // -------------------- Initialization --------------------
@@ -218,6 +221,7 @@ namespace tachyon
 
         ID m_pendingCursorVisibleEditorId = ID::Invalid();
 
+        LibraryAllocator::RouteHandle m_libraryRoute = nullptr;   ///< the hooks the libraries allocate through, if any
         SkribidiContext* m_skribidiContext;
         std::string      m_fontDirectory { "fonts" };
         std::string      m_fallbackFontDirectory;

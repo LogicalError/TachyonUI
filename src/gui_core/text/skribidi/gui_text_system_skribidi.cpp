@@ -36,14 +36,16 @@ namespace tachyon
 		constexpr Diagnostics::LogCategory kLogText = Diagnostics::MakeLogCategory("text");
 	}
 
-	SkribidiTextSystem::SkribidiTextSystem()
-		: m_skribidiContext(nullptr)
+	SkribidiTextSystem::SkribidiTextSystem(const AllocationHooks& hooks)
+		: m_libraryRoute(LibraryAllocator::Route(hooks))
+		, m_skribidiContext(nullptr)
 	{
 	}
 
 	SkribidiTextSystem::~SkribidiTextSystem()
 	{
 		Shutdown();
+		LibraryAllocator::Unroute(m_libraryRoute);
 	}
 
 	// -------------------- Initialization --------------------
@@ -442,6 +444,11 @@ namespace tachyon
 		if (m_skribidiContext->m_defaultLanguage == languageTag)
 			return;
 		m_skribidiContext->m_defaultLanguage = std::string(languageTag);
+		{
+			// HarfBuzz keeps each language until the process ends: this one on the C heap.
+			LibraryAllocator::HeapScope heap;
+			(void)skb_attribute_make_lang(m_skribidiContext->m_defaultLanguage.c_str());
+		}
 		// Laid-out text carries the old language; lay it out again.
 		ClearCache();
 	}
