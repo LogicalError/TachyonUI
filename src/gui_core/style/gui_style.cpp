@@ -21,7 +21,8 @@ namespace tachyon
 
     VisualColorStyle ColorStyle::ToVisualStyle(GradientManager& gradientManager,
                                                ImageIndex textureIndex,
-                                               GradientHandle& outHandle) const
+                                               GradientHandle& outHandle,
+                                               std::span<const color4b> row) const
     {
         auto localTransformationX = this->transformationX;
         auto localTransformationY = this->transformationY;
@@ -48,7 +49,7 @@ namespace tachyon
             case ColorType::EllipsoidAngularGradient:
             case ColorType::RadialGradient:
             {
-                outHandle = gradientManager.AcquireGradient(gradient);
+                outHandle = row.empty() ? gradientManager.AcquireGradient(gradient) : gradientManager.AcquireRowPixels(row);
                 gradientPage = ApplyHandle(gradientManager, outHandle, colorUV);
 
                 float angle = gradient.GetValue() * 2.0f * 3.14159265f;
@@ -83,7 +84,7 @@ namespace tachyon
             }
             case ColorType::SDFGradient:
             {
-                outHandle = gradientManager.AcquireGradient(gradient);
+                outHandle = row.empty() ? gradientManager.AcquireGradient(gradient) : gradientManager.AcquireRowPixels(row);
                 gradientPage = ApplyHandle(gradientManager, outHandle, colorUV);
                 break;
             }

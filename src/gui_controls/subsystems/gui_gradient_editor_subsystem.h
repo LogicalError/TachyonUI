@@ -17,29 +17,40 @@ namespace tachyon
     class FramePipeline;
     struct FrameContext;
 
+    /// What the gradient editor lets a field's gradient have: a Gradient's 8 stops of 8-bit
+    /// colors, or a GradientF's 64 of HDR ones, each blending to the next its own way.
+    struct GradientEditLimits
+    {
+        int  maxStops            = Gradient::kMaxStops;
+        bool hdr                 = false;   ///< colors over 1
+        bool perStopInterpolation = false;  ///< each stop's StopInterpolation
+    };
+
     /// Gradient editor popup state: edits a working copy, written back each frame it's open.
     struct GradientEditorState
     {
         tachyon::ID       triggerID = tachyon::ID::Invalid(); ///< swatch that opened the editor
         tachyon::ID       windowID  = tachyon::ID::Invalid(); ///< popup window ID
-        tachyon::Gradient workingCopy {};                  ///< the gradient being edited
-        int           selectedStop          = 0;       ///< index into workingCopy.stops[]
+        tachyon::GradientF workingCopy {};                 ///< the gradient being edited
+        GradientEditLimits limits {};                       ///< what the field's gradient can have
+        int           selectedStop          = 0;       ///< index into workingCopy.stops
         tachyon::color4f  selectedStopColor {};            ///< selected stop's color, for its ColorField
         float         selectedStopPosition  = 0.0f;    ///< selected stop's position, for its Field
 
-        tachyon::Gradient originalGradient {};             ///< to restore on Cancel
+        tachyon::GradientF originalGradient {};            ///< to restore on Cancel
+        tachyon::Gradient  originalGradient8 {};           ///< a Gradient field's own, restored exactly
         std::string          context;                         ///< the field's label, shown after the title
 
         /// OK keeps the gradient, Cancel and the close button restore the original one.
         /// Handled by the GradientField on its next frame.
         enum class CloseRequest { None, Ok, Cancel } closeRequest = CloseRequest::None;
-        std::vector<tachyon::Gradient> savedPresets;       ///< "Save preset", for the session
+        std::vector<tachyon::GradientF> savedPresets;      ///< "Save preset", for the session
 
         tachyon::PointerDrag press;                     ///< the press on a stop, a drag from the start
         int           dragStopIndex          = -1;      ///< the dragged stop, or -1
         float         dragGrab               = 0.0f;    ///< cursor minus the stop's offset at the press, so it doesn't jump
         bool          dragOff                = false;   ///< dragged well below the bar: removed on release
-        tachyon::Gradient beforeDrag {};                ///< the gradient before the drag; put back by Escape
+        tachyon::GradientF beforeDrag {};               ///< the gradient before the drag; put back by Escape
         int           selectedBeforeDrag     = 0;
 
         tachyon::VisualColorStyleIndex previewGradientStyle = tachyon::VisualColorStyleIndex::Invalid;

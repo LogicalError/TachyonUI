@@ -545,10 +545,12 @@ namespace tachyon
 
         /// Bakes the GPU-facing style and acquires its atlas slot. The caller owns
         /// outHandle and must Release it (or hand it to RegisterVisualColorStyle).
-        /// Texture types return an invalid handle.
+        /// Texture types return an invalid handle. With `row`, a gradient type takes those
+        /// pixels as its ramp instead of the gradient's (a GradientF's, say).
         VisualColorStyle ToVisualStyle(GradientManager& gradientManager,
                                        ImageIndex textureIndex,
-                                       GradientHandle& outHandle) const;
+                                       GradientHandle& outHandle,
+                                       std::span<const color4b> row = {}) const;
 
 
         /// A SolidColor style.

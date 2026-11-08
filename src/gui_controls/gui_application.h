@@ -1843,6 +1843,15 @@ namespace tachyon
         inline bool GradientField(       tachyon::Gradient& value, StyleRef style, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return GradientField(idManager.AllocateDynamicID(site), value, style, std::move(constraints)); }
         /// As above, with the call site as the ID, in the theme's gradient swatch style.
         inline bool GradientField(       tachyon::Gradient& value, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return GradientField(idManager.AllocateDynamicID(site), value, theme.gradientSwatchStyleRef, std::move(constraints)); }
+        /// As above, for a GradientF: up to GradientF::kMaxStops stops, colors over 1 (HDR),
+        /// and each stop's interpolation to the next. The swatch shows it clamped to 0..1.
+        bool        GradientField(ID id, tachyon::GradientF& value, StyleRef style, LayoutOverride&& constraints = {});
+        /// As above, in the theme's gradient swatch style.
+        inline bool GradientField(ID id, tachyon::GradientF& value, LayoutOverride&& constraints = {}) { return GradientField(id, value, theme.gradientSwatchStyleRef, std::move(constraints)); }
+        /// As above, with the call site as the ID.
+        inline bool GradientField(       tachyon::GradientF& value, StyleRef style, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return GradientField(idManager.AllocateDynamicID(site), value, style, std::move(constraints)); }
+        /// As above, with the call site as the ID, in the theme's gradient swatch style.
+        inline bool GradientField(       tachyon::GradientF& value, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return GradientField(idManager.AllocateDynamicID(site), value, theme.gradientSwatchStyleRef, std::move(constraints)); }
 
         ///@}
 
@@ -2919,7 +2928,13 @@ namespace tachyon
 
         /// Popup content for ColorField / GradientField.
         void EmitColorPicker(tachyon::color4f& outColor, bool allowHDR);
-        void EmitGradientEditor(tachyon::Gradient& outGradient);
+        /// The editor's body, on its working copy, which it writes to `outGradient`.
+        void EmitGradientEditor(tachyon::GradientF& outGradient);
+        /// GradientField on a GradientF; `gradient8` is the Gradient it stands for, which limits
+        /// the editor to its stops and colors (null for a GradientF field). `cancelled` when the
+        /// editor's Cancel put the gradient back this frame.
+        bool GradientFieldCore(ID id, tachyon::GradientF& value, const tachyon::Gradient* gradient8,
+                               bool& cancelled, StyleRef style, LayoutOverride&& constraints);
 
         /// Column-boundary sizers for [colStart, colEnd), anchored to each header cell's right edge.
         /// skipDragged leaves out the dragged column's sizer; EmitDraggedColumnOnTop emits it last.

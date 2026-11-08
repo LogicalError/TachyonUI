@@ -5,6 +5,7 @@
 #include <span>
 #include <cmath>
 #include <array>
+#include <vector>
 
 namespace tachyon
 {
@@ -268,6 +269,62 @@ namespace tachyon
             
             return true;
         }
+    };
+
+    /// How a GradientF blends from a stop to the next one.
+    enum class StopInterpolation : uint8_t
+    {
+        Linear,    ///< a straight blend
+        Smooth,    ///< eases out of the stop and into the next (smoothstep)
+        Constant   ///< the stop's color all the way to the next stop: a step
+    };
+
+    /// A stop of a GradientF.
+    struct GradientStop
+    {
+        float             offset = 0.0f;   ///< along the gradient, 0..1
+        color4f           color {};        ///< alpha not premultiplied; red, green and blue may pass 1 (HDR)
+        StopInterpolation interpolation = StopInterpolation::Linear;   ///< from this stop to the next
+
+        bool operator==(const GradientStop&) const = default;
+    };
+
+    /// A gradient of float colors, for data such as a material editor's gradient map: up to
+    /// kMaxStops stops, each with its own interpolation to the next, blended in colorSpace.
+    /// Gradient (8 stops, 8 bits a channel) is what styles and CSS use; GradientField edits
+    /// either.
+    ///
+    ///     GradientF heat;
+    ///     heat.AddStop(color4f{ 0.0f, 0.0f, 0.0f, 1.0f }, 0.0f);
+    ///     heat.AddStop(color4f{ 4.0f, 1.5f, 0.2f, 1.0f }, 1.0f, StopInterpolation::Smooth);   // HDR
+    ///     const color4f mid = heat.Sample(0.5f);
+    struct GradientF
+    {
+        static constexpr int kMaxStops = 64;   ///< stops past this are left out
+
+        std::vector<GradientStop> stops;              ///< in any order
+        ColorSpace                colorSpace = ColorSpace::sRGB;   ///< space the stops are blended in
+
+        /// Adds a stop at `offset` (clamped to 0..1); false when kMaxStops are in use.
+        bool AddStop(const color4f& color, float offset, StopInterpolation interpolation = StopInterpolation::Linear);
+        /// The stops in use: at most kMaxStops.
+        int StopCount() const { return stops.size() < size_t(kMaxStops) ? int(stops.size()) : kMaxStops; }
+
+        /// The color at `t` (0..1, clamped), unclamped: HDR stays. Transparent black without
+        /// stops; before the first stop its color, after the last that one's.
+        color4f Sample(float t) const;
+        /// Samples the gradient evenly across `out`, unclamped.
+        void WriteTo(std::span<color4f> out) const;
+        /// As above, clamped to 0..1 and stored as 8 bits, for display.
+        void WriteTo(std::span<color4b> out) const;
+
+        /// The same stops as `gradient`, blending linearly in its color space.
+        static GradientF From(const Gradient& gradient);
+        /// The first Gradient::kMaxStops stops as a linear Gradient: colors clamped to 0..1 and
+        /// stored as 8 bits; the interpolation of each stop is dropped.
+        Gradient ToGradient() const;
+
+        bool operator==(const GradientF&) const = default;
     };
 
     /// @}

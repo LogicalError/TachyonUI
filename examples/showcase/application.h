@@ -164,6 +164,17 @@ namespace tachyon
             tachyon::Gradient demoGradient = tachyon::Gradient::Linear(
                 tachyon::color4f{1.0f, 0.0f, 0.0f, 1.0f},
                 tachyon::color4f{0.0f, 0.0f, 1.0f, 1.0f}); // GradientField demo
+            // GradientField on a GradientF: an HDR heat ramp with a step and a smooth stretch.
+            tachyon::GradientF demoGradientF = []
+            {
+                tachyon::GradientF g;
+                g.colorSpace = tachyon::ColorSpace::Oklab;
+                g.AddStop(tachyon::color4f{ 0.05f, 0.0f, 0.1f, 1.0f }, 0.0f, tachyon::StopInterpolation::Smooth);
+                g.AddStop(tachyon::color4f{ 0.9f, 0.2f, 0.05f, 1.0f }, 0.45f, tachyon::StopInterpolation::Linear);
+                g.AddStop(tachyon::color4f{ 1.0f, 0.8f, 0.3f, 1.0f }, 0.75f, tachyon::StopInterpolation::Constant);
+                g.AddStop(tachyon::color4f{ 3.0f, 2.6f, 2.0f, 1.0f }, 0.9f);   // brighter than white
+                return g;
+            }();
             int listSelected = 0;
 
             // ListView

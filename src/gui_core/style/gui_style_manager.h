@@ -182,11 +182,12 @@ namespace tachyon
 
         /// A color style of its own that can be changed later (UpdateColorStyle); never
         /// shared with other registrations. Valid until DestroyColorStyle or ClearAll.
-        VisualColorStyleIndex CreateColorStyle(const ColorStyle& s) noexcept;
+        /// With `row`, a gradient type takes those pixels as its ramp (a GradientF's).
+        VisualColorStyleIndex CreateColorStyle(const ColorStyle& s, std::span<const color4b> row = {}) noexcept;
 
         /// Replaces the CreateColorStyle style at `idx` in place. The GPU copy is
-        /// re-uploaded only when the contents changed.
-        void UpdateColorStyle(VisualColorStyleIndex idx, const ColorStyle& s) noexcept;
+        /// re-uploaded only when the contents changed. With `row`, as CreateColorStyle.
+        void UpdateColorStyle(VisualColorStyleIndex idx, const ColorStyle& s, std::span<const color4b> row = {}) noexcept;
 
         /// Frees a CreateColorStyle style and its atlas slot; `idx` may be reused later.
         void DestroyColorStyle(VisualColorStyleIndex idx) noexcept;

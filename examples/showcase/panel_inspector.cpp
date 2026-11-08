@@ -181,6 +181,7 @@ namespace tachyon
         section = InspectorPanel::ColorAndVectors;
         add("Color",    [this]() { DragLabel("Color");    ColorField(showcase.demoColor);       });
         add("Gradient", [this]() { DragLabel("Gradient"); GradientField(showcase.demoGradient); });
+        add("HDR gradient", [this]() { DragLabel("HDR gradient"); GradientField(showcase.demoGradientF); });
         add("Int2", [this]() { DragLabel("Int2"); Field(showcase.int2Value); });
         add("Int3", [this]() { DragLabel("Int3"); Field(showcase.int3Value); });
         add("Int4", [this]() { DragLabel("Int4"); Field(showcase.int4Value); });
