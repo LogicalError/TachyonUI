@@ -346,6 +346,24 @@ namespace tachyon
             Image(demoImageIndex, tachyon::LayoutOverride::FixedSize(96, 96));
             Image(demoImageIndex, tachyon::LayoutOverride::FixedSize(48, 48));
 
+            // The same image shown differently (ImageDisplay): its red as grey, red and blue
+            // swapped, as if it held linear values, and tinted.
+            Image(demoImageIndex, ImageDisplay::Channel(ImageChannel::Red), tachyon::LayoutOverride::FixedSize(48, 48));
+            SetTooltip("Its red channel, as grey");
+            ImageDisplay swapped;
+            swapped.red  = ImageChannel::Blue;
+            swapped.blue = ImageChannel::Red;
+            Image(demoImageIndex, swapped, tachyon::LayoutOverride::FixedSize(48, 48));
+            SetTooltip("Red and blue swapped");
+            ImageDisplay encoded;
+            encoded.srgbEncode = true;
+            Image(demoImageIndex, encoded, tachyon::LayoutOverride::FixedSize(48, 48));
+            SetTooltip("sRGB-encoded, as for an image of linear values");
+            ImageDisplay tinted;
+            tinted.tint = color4f{ 1.0f, 0.6f, 0.2f, 1.0f };
+            Image(demoImageIndex, tinted, tachyon::LayoutOverride::FixedSize(48, 48));
+            SetTooltip("Tinted orange");
+
             const tachyon::ID fieldID = idManager.AllocateDynamicID("imageField");
             tachyon::Element field{};
             field.id              = fieldID;

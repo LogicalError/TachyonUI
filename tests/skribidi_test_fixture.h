@@ -74,9 +74,9 @@ namespace GUITest
         void RenderTriangle(tachyon::float2, tachyon::float2, tachyon::float2, tachyon::IntRect,
                             tachyon::VisualColorStyleIndex, tachyon::ImageIndex, tachyon::TriangleEdges) override {}
         void RenderQuad(tachyon::IntRect rect, tachyon::IntRect, tachyon::VisualColorStyleIndex color, float, tachyon::ImageIndex image,
-                        const tachyon::UVRect& uv) override
+                        const tachyon::UVRect& uv, const tachyon::ImageDisplay& display) override
         {
-            quads.push_back({ rect, color, image, uv });
+            quads.push_back({ rect, color, image, uv, display });
         }
         void RenderShadow(tachyon::IntRect, tachyon::IntRect, tachyon::VisualColorStyleIndex, float, int) override {}
         void RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int, int,
@@ -108,6 +108,7 @@ namespace GUITest
             tachyon::VisualColorStyleIndex color;
             tachyon::ImageIndex            image;
             tachyon::UVRect                uv;
+            tachyon::ImageDisplay          display;
         };
         std::vector<QuadDraw> quads;   // every RenderQuad, in order
 

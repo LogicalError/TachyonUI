@@ -29,6 +29,46 @@ namespace tachyon
         bool operator==(const UVRect&) const = default;
     };
 
+    /// A channel of an image's pixel, or a constant, for ImageDisplay.
+    enum class ImageChannel : uint8_t { Red, Green, Blue, Alpha, Zero, One };
+
+    /// How an image is shown, in this order:
+    /// 1. each channel shown taken from one of the image's channels, or a constant
+    /// 2. the color sRGB-encoded, for an image that holds linear values
+    /// 3. multiplied by `tint`
+    ///
+    /// The default shows the image as it is.
+    struct ImageDisplay
+    {
+        color4f      tint  { 1.0f, 1.0f, 1.0f, 1.0f };
+        ImageChannel red   = ImageChannel::Red;
+        ImageChannel green = ImageChannel::Green;
+        ImageChannel blue  = ImageChannel::Blue;
+        ImageChannel alpha = ImageChannel::Alpha;
+        bool         srgbEncode = false;
+
+        /// One channel shown as grey, opaque: a mask, a roughness map, an image's alpha.
+        static ImageDisplay Channel(ImageChannel channel)
+        {
+            ImageDisplay display;
+            display.red = display.green = display.blue = channel;
+            display.alpha = ImageChannel::One;
+            return display;
+        }
+
+        /// The channels and the sRGB flag as the shader reads them: 3 bits a channel (red
+        /// first), bit 12 sRGB-encode, bit 31 set when any of it differs from the default.
+        uint32_t PackedFlags() const
+        {
+            const uint32_t channels = uint32_t(red) | (uint32_t(green) << 3) | (uint32_t(blue) << 6) | (uint32_t(alpha) << 9);
+            const uint32_t flags = channels | (srgbEncode ? (1u << 12) : 0u);
+            constexpr uint32_t kIdentity = 0u | (1u << 3) | (2u << 6) | (3u << 9);
+            return flags == kIdentity ? 0u : (flags | (1u << 31));
+        }
+
+        bool operator==(const ImageDisplay&) const = default;
+    };
+
     /// Pixel formats for GraphicsContext::CreateImage, 8 bits per channel. The _SRGB
     /// formats decode sRGB to linear when sampled.
     enum class ImageFormat

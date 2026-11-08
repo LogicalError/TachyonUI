@@ -20,6 +20,24 @@ layout (location = 0) out vec4 outFragColor;
 
 #include "sdf_color.glsl"
 
+// A channel of `c` (0 red, 1 green, 2 blue, 3 alpha), or a constant (4 zero, 5 one).
+float imageChannel(vec4 c, uint source)
+{
+    return source == 0u ? c.r : source == 1u ? c.g : source == 2u ? c.b : source == 3u ? c.a : source == 4u ? 0.0 : 1.0;
+}
+
+// ImageDisplay: each channel from its source, then sRGB-encoded when asked.
+vec4 applyImageDisplay(vec4 c, uint flags)
+{
+    if ((flags & 0x80000000u) == 0u)
+        return c;
+    vec4 shown = vec4(imageChannel(c, flags & 7u), imageChannel(c, (flags >> 3) & 7u),
+                      imageChannel(c, (flags >> 6) & 7u), imageChannel(c, (flags >> 9) & 7u));
+    if ((flags & 0x1000u) != 0u)
+        shown.rgb = linearToSrgb(clamp(shown.rgb, 0.0, 1.0));
+    return shown;
+}
+
 // Rounded box SDF (uniform radius on all corners)
 float sdf_roundedBox(vec2 p, vec2 b, float r)
 {
@@ -58,6 +76,7 @@ void main()
     // In units of the quad's smaller side: its middle is half a unit deep.
     vec4 color = getSDFColor(int(quad.colorIndex), uv, uvsize, saturate(-dist * 2.0),
                              inSurface.textureIndex, inSurface.boxSize, weights, quad.uvRect);
+    color = applyImageDisplay(color, quad.displayFlags) * quad.tint;
 
     float alpha = clamp(1.0 - (dist / pixelrange), 0.0, 1.0);
     if (blurPx > 0.0)

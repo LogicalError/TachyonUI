@@ -154,14 +154,17 @@ namespace tachyon
         int16_t         colorIndex = 0;
         int16_t         blur = 0;           ///< shadow blur, pixels; pos/size include it on every side
         float           cornerRadius = 0.0f;
-        float           _padUV = 0.0f;
+        uint32_t        displayFlags = 0;   ///< ImageDisplay::PackedFlags; 0 shows the color as it is
         /// The part of the texture a StretchedTexture color style stretches over the quad:
         /// { min.x, min.y, max.x, max.y } in UV.
         glsl_float4     uvRect = { 0, 0, 1, 1 };
+        glsl_float4     tint   = { 1, 1, 1, 1 };   ///< ImageDisplay::tint, multiplying the color
     };
-    static_assert(sizeof(Quad) == 96,                "Quad struct size mismatch with GLSL std430 layout");
+    static_assert(sizeof(Quad) == 112,               "Quad struct size mismatch with GLSL std430 layout");
     static_assert(offsetof(Quad, cornerRadius) == 72, "Quad::cornerRadius offset mismatch");
+    static_assert(offsetof(Quad, displayFlags) == 76, "Quad::displayFlags offset mismatch");
     static_assert(offsetof(Quad, uvRect) == 80,       "Quad::uvRect offset mismatch");
+    static_assert(offsetof(Quad, tint) == 96,         "Quad::tint offset mismatch");
 
     /// A circle outline: the ring `lineWidth` wide around `center` at `radius`, its color
     /// and dashes running clockwise from the right (+x towards +y), as LineStyle sets them.

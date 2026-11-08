@@ -131,18 +131,21 @@ namespace tachyon
 
         /// A plain filled rect (no border or element state), optionally rounded or textured.
         /// With a texture and a StretchedTexture color style, `uv` picks the part of it
-        /// stretched over the rect, for example a cell of an atlas or a zoomed-in view.
+        /// stretched over the rect, for example a cell of an atlas or a zoomed-in view, and
+        /// `display` how it's shown (a tint, its channels, sRGB-encoded); it applies to any color.
         void RenderQuad(IntRect rect, VisualColorStyleIndex colorStyleIndex,
                         float cornerRadius = 0.0f,
                         ImageIndex textureIndex = ImageIndex::Invalid,
-                        const UVRect& uv = {}) const;
+                        const UVRect& uv = {},
+                        const ImageDisplay& display = {}) const;
 
         /// RenderQuad with a sub-clip in the same space as `rect`.
         void RenderQuad(IntRect rect, IntRect subClip,
                         VisualColorStyleIndex colorStyleIndex,
                         float cornerRadius = 0.0f,
                         ImageIndex textureIndex = ImageIndex::Invalid,
-                        const UVRect& uv = {}) const;
+                        const UVRect& uv = {},
+                        const ImageDisplay& display = {}) const;
 
         /// A straight line from p0 to p1.
         void RenderLine(int2 p0, int2 p1, const LineStyle& style) const;

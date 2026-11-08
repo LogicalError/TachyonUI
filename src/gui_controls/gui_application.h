@@ -1986,6 +1986,21 @@ namespace tachyon
         /// As above, with the call site as the ID, in the theme's image style.
         inline void Image(       ImageIndex image, uint2 sourceSize, const UVRect& uv,                 LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { Image(idManager.AllocateDynamicID(site), image, sourceSize, uv, theme.imageStyleRef, std::move(constraints)); }
 
+        /// The part `uv` of `image` shown as `display` says: tinted, its channels picked (one
+        /// shown as grey, say), sRGB-encoded for an image of linear values.
+        void        Image(ID id, ImageIndex image, const UVRect& uv, const ImageDisplay& display, StyleRef style, LayoutOverride&& constraints = {});
+        /// As above, the whole image, in the theme's image style.
+        inline void Image(ID id, ImageIndex image, const ImageDisplay& display, LayoutOverride&& constraints = {}) { Image(id, image, UVRect{}, display, theme.imageStyleRef, std::move(constraints)); }
+        /// As above, with the call site as the ID.
+        inline void Image(       ImageIndex image, const ImageDisplay& display, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { Image(idManager.AllocateDynamicID(site), image, UVRect{}, display, theme.imageStyleRef, std::move(constraints)); }
+        /// The part `uv` of an image `sourceSize` pixels big, shown as `display` says, sized
+        /// like the aspect-preserving Image to the aspect of that part.
+        void        Image(ID id, ImageIndex image, uint2 sourceSize, const UVRect& uv, const ImageDisplay& display, StyleRef style, LayoutOverride&& constraints = {});
+        /// As above, the whole image, in the theme's image style.
+        inline void Image(ID id, ImageIndex image, uint2 sourceSize, const ImageDisplay& display, LayoutOverride&& constraints = {}) { Image(id, image, sourceSize, UVRect{}, display, theme.imageStyleRef, std::move(constraints)); }
+        /// As above, with the call site as the ID.
+        inline void Image(       ImageIndex image, uint2 sourceSize, const ImageDisplay& display, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { Image(idManager.AllocateDynamicID(site), image, sourceSize, UVRect{}, display, theme.imageStyleRef, std::move(constraints)); }
+
         ///@}
 
         /// @name Ghost windows
