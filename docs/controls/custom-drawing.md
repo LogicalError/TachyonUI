@@ -81,6 +81,7 @@ VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)
 | `RenderLine(p0, p1, lineStyle)` | Line (also a four-point form) |
 | `RenderPolyline(points, closed, lineStyle, cornerRadius)` | Polyline |
 | `RenderCircle`, `RenderDisc`, `RenderDot` | Circle outline, filled disc, dot. The circle is exactly round; gradients and dashes run clockwise from the right. |
+| `RenderArc(center, radius, width, startTurns, sweepTurns, colorStyle)` | Part of a ring with round ends. Angles are in turns (1 is a full circle), clockwise from the right, so -0.25 is the top. A sweep of a whole turn or more is a full ring with no ends. |
 | `RenderTriangle`, `RenderFilledPolygon` | Filled triangle, convex polygon. `hardEdges` (edges shared with another triangle) get no soft edge, so no seam shows. |
 | `RenderText(textId, rect)` | Text registered with `textSystem->RegisterText` |
 
@@ -99,6 +100,15 @@ VERIFY(elementStorage.AddCustomDraw(ref, [this](CustomDrawContext& ctx)
     const LineStyle line{ .colorStyleIndex = theme.lineWhiteStyle, .lineWidth = styleManager.Px(2.0f) };
     ctx.RenderLine(r.position, r.position + r.size, line);
 }));
+```
+
+An arc, for example a dial filled a third of the way, clockwise from the top (inside a
+draw function like the one above):
+
+```cpp
+const IntRect r = ctx.ElementInnerRect();
+const float2 center{ float(r.x) + float(r.w) * 0.5f, float(r.y) + float(r.h) * 0.5f };
+ctx.RenderArc(center, 30.0f, 4.0f, -0.25f, 1.0f / 3.0f, theme.progressArcColor);
 ```
 
 An image, or part of one, is a quad with an image and a texture color style:

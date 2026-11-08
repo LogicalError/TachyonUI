@@ -21,6 +21,8 @@
     /* ---- Lines ------------------------------------------------------------ */
     --panel-border: #DADDE3;
     --line-subtle: #E3E6EB;
+    --skeleton: #E9EBEF;
+    --skeleton-shine: #F4F5F7;
     --line-node: #D5D9E0;
     --line-strong: #C9CED6;
     --line-section: #E9EBEF;

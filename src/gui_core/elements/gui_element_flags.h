@@ -50,6 +50,9 @@ namespace tachyon
         /// Turning Selected on or off blends like a toggle (a switch's track, a check box's
         /// box); without it Selected changes at once, as a row's selection does.
         AnimatesSelected          = 1u << 23,
+        /// Drawn differently every frame (a spinner, a sliding bar): a BeginCached scope
+        /// holding it is rebuilt every frame instead of replayed.
+        Animated                  = 1u << 24,
 
         IsMenuWindow = IsWindow | WindowUserControlled | WindowNoCaption | WindowIsPopup | Shadows
     };

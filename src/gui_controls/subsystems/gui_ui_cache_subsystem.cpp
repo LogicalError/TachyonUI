@@ -167,7 +167,8 @@ namespace tachyon
 
         // Collect the subtree's element ids (membership for the interaction/scroll
         // invalidation checks). A window opened in the subtree can't be replayed from
-        // a blit, so mark the scope non-cacheable (always rebuild).
+        // a blit, nor can an element drawn differently every frame (a spinner), so mark
+        // the scope non-cacheable (always rebuild).
         auto recurse = [&](auto&& self, ElementRef parentRef) -> void
         {
             const IndexRange range = m_storage.GetChildRange(parentRef);
@@ -176,7 +177,7 @@ namespace tachyon
                 const ElementRef childRef{ parentRef.depth + 1, i };
                 const Element* e = m_storage.GetElementPtr(childRef);
                 if (!e) continue;
-                if ((e->flags & ElementFlags::IsWindow) != ElementFlags::None)
+                if ((e->flags & (ElementFlags::IsWindow | ElementFlags::Animated)) != ElementFlags::None)
                     s.nonCacheable = true;
                 s.scopeIDs.insert(e->id);
                 if (m_storage.HasChildren(childRef))

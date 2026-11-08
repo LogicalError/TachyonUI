@@ -434,6 +434,26 @@ namespace tachyon
         StyleRef tabCloseStyleRef {};
         ///@}
 
+        /// @name Progress and loading
+        ///@{
+        StyleRef progressBarStyleRef {};         ///< ProgressBar's track, 6px high
+        StyleRef progressBarSmallStyleRef {};    ///< the 4px track, for lists and the status bar
+        StyleRef progressFillStyleRef {};        ///< the part done
+        StyleRef progressFillFailedStyleRef {};  ///< the part done of a failed one, in the error color
+        StyleRef progressSegmentStyleRef {};     ///< the segment sliding along a bar of unknown length
+        StyleRef circularProgressStyleRef {};    ///< CircularProgress: its size and its percentage's text
+        StyleRef skeletonStyleRef {};            ///< Skeleton: a placeholder bar
+        StyleRef skeletonShineStyleRef {};       ///< the shine sweeping across it
+        tachyon::VisualColorStyleIndex progressTrackColor {};   ///< --line-subtle: a spinner's ring
+        tachyon::VisualColorStyleIndex progressArcColor {};     ///< --accent: a spinner's arc
+        static constexpr int kSpinnerFrames = 24;
+        /// A 90-degree arc, one frame per 15 degrees round: a spinner that goes where an icon
+        /// goes, in the color of the icon it stands in for (BusyButton).
+        IconID spinnerIcons[kSpinnerFrames] {};
+        /// The spinner frame at `timeSecs`: a turn every 0.8 s.
+        IconID SpinnerIcon(float timeSecs) const;
+        ///@}
+
         /// @name Toasts and banners
         /// The circle, banner and banner message come per severity, indexed by Severity.
         ///@{

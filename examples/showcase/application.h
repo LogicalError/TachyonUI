@@ -138,6 +138,8 @@ namespace tachyon
         tachyon::Image*  pastedImage = nullptr;
         ImageIndex       pastedImageIndex { ImageIndex::Invalid };
         uint2            pastedImageSize {};
+        // "Save" in the progress demos: busy until this time (seconds on the frame clock).
+        float            saveBusyUntil = -1.0f;
 
         // ---- Showcase state ----
         // State used by the showcase panels for testing and prototyping GUI features.

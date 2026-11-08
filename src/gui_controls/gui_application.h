@@ -63,6 +63,7 @@
 #include <gui_controls/gui_table_helpers.h>
 #include <gui_controls/gui_theme.h>
 #include <gui_controls/gui_content.h>
+#include <gui_controls/gui_progress_types.h>
 #include <gui_controls/controls_toolbar_dock.h>
 #include <gui_core/gui_result.h>
 
@@ -628,6 +629,62 @@ namespace tachyon
         inline bool Toggle(       bool& value, const GUIContent& content, StyleRef style, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Toggle(idManager.AllocateDynamicID(site), value, content, [&value](bool newValue){ value = newValue; }, style, std::move(constraints)); }
         /// As above, with the call site as the ID, in the theme's toggle style.
         inline bool Toggle(       bool& value, const GUIContent& content,                 LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Toggle(idManager.AllocateDynamicID(site), value, content, [&value](bool newValue){ value = newValue; }, theme.controls->toggle, std::move(constraints)); }
+
+        /// A button at work: a spinner in place of its icon and `busyText` ("Saving...") in
+        /// place of its text, as wide as it was before, and clicks ignored. While `busy` is
+        /// false it's an ordinary Button; empty `busyText` keeps the text.
+        bool        BusyButton(ID id, const GUIContent& content, bool busy, std::string_view busyText,
+                               std::function<void()> onClick, StyleRef style, LayoutOverride&& constraints = {});
+        /// As above, in the theme's button style.
+        inline bool BusyButton(ID id, const GUIContent& content, bool busy, std::string_view busyText,
+                               std::function<void()> onClick, LayoutOverride&& constraints = {}) { return BusyButton(id, content, busy, busyText, std::move(onClick), theme.controls->button, std::move(constraints)); }
+
+        ///@}
+
+        /// @name Progress and loading
+        /// Spinners, the sliding segment and the skeleton's shine move every frame; a
+        /// BeginCached scope holding one is rebuilt every frame (ElementFlags::Animated).
+        ///@{
+
+        /// A bar `value` (0 to 1, clamped) of the way full; `failed` fills it in the error
+        /// color, for work that stopped. The theme's bar is 6px high; progressBarSmallStyleRef's
+        /// is 4px, for lists and the status bar.
+        void        ProgressBar(ID id, float value, bool failed, StyleRef style, LayoutOverride&& constraints = {});
+        /// As above, not failed, in the theme's bar style.
+        inline void ProgressBar(ID id, float value, LayoutOverride&& constraints = {}) { ProgressBar(id, value, false, theme.progressBarStyleRef, std::move(constraints)); }
+        /// As above, with the call site as the ID.
+        inline void ProgressBar(       float value, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { ProgressBar(idManager.AllocateDynamicID(site), value, false, theme.progressBarStyleRef, std::move(constraints)); }
+
+        /// A bar for work of unknown length: a segment with soft ends slides along it, from
+        /// start to end every 1.2 s.
+        void        IndeterminateProgressBar(ID id, StyleRef style, LayoutOverride&& constraints = {});
+        /// As above, in the theme's bar style.
+        inline void IndeterminateProgressBar(ID id, LayoutOverride&& constraints = {}) { IndeterminateProgressBar(id, theme.progressBarStyleRef, std::move(constraints)); }
+        /// As above, with the call site as the ID.
+        inline void IndeterminateProgressBar(LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { IndeterminateProgressBar(idManager.AllocateDynamicID(site), theme.progressBarStyleRef, std::move(constraints)); }
+
+        /// A ring with an arc going round it, a turn every 0.8 s, in the theme's track and
+        /// accent colors: work under way. 12, 16 or 24px across unless `constraints` say.
+        void        Spinner(ID id, SpinnerSize size = SpinnerSize::Medium, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline void Spinner(SpinnerSize size = SpinnerSize::Medium, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { Spinner(idManager.AllocateDynamicID(site), size, std::move(constraints)); }
+
+        /// A ring filled `value` (0 to 1, clamped) of the way round, clockwise from the top,
+        /// the percentage in its middle. The theme's is 40px across.
+        void        CircularProgress(ID id, float value, StyleRef style, LayoutOverride&& constraints = {});
+        /// As above, in the theme's style.
+        inline void CircularProgress(ID id, float value, LayoutOverride&& constraints = {}) { CircularProgress(id, value, theme.circularProgressStyleRef, std::move(constraints)); }
+        /// As above, with the call site as the ID.
+        inline void CircularProgress(       float value, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { CircularProgress(idManager.AllocateDynamicID(site), value, theme.circularProgressStyleRef, std::move(constraints)); }
+
+        /// A placeholder bar where content is still loading, sized as the content it stands
+        /// for (give it a width), with a shine sweeping across it every 1.5 s; still with
+        /// reduced motion.
+        void        Skeleton(ID id, StyleRef style, LayoutOverride&& constraints = {});
+        /// As above, in the theme's style.
+        inline void Skeleton(ID id, LayoutOverride&& constraints = {}) { Skeleton(id, theme.skeletonStyleRef, std::move(constraints)); }
+        /// As above, with the call site as the ID.
+        inline void Skeleton(LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { Skeleton(idManager.AllocateDynamicID(site), theme.skeletonStyleRef, std::move(constraints)); }
 
         ///@}
 
@@ -2576,6 +2633,8 @@ namespace tachyon
         // ---- ListView ID->index map (shared by every list view; cleared once per frame) ----
         // Filled by ListItem when dragDrop is on; valid in end-of-frame handlers via FindListItemIndex().
         std::unordered_map<tachyon::ID, int> m_listItemIndexByID;
+        /// A BusyButton's width while it wasn't busy, kept while it is.
+        std::unordered_map<tachyon::ID, int32_t> m_busyButtonWidths;
 
 
         /// Transient construction state (defs in gui_tree_grid_types.h), valid only between

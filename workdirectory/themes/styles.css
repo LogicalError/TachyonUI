@@ -5055,6 +5055,64 @@
     background-color: var(--accent);
     border-color: transparent;
 }
+/* ProgressBar: a track with the part done drawn over it (.progress-fill), or a segment
+   sliding along it while the length isn't known (.progress-segment). */
+.progress-bar, .progress-bar-small {
+    height: 6px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 3px;
+    background-color: var(--line-subtle);
+    border-color: transparent;
+    flex-shrink: 0;
+}
+.progress-bar-small { height: 4px; border-radius: 2px; }
+.progress-fill, .progress-fill-failed, .progress-segment {
+    border-width: 0px;
+    border-radius: 3px;
+    background-color: var(--accent);
+    border-color: transparent;
+}
+.progress-fill-failed { background-color: var(--error); }
+/* Soft ends, so the track's ends cut it off unseen. */
+.progress-segment {
+    background-color: linear-gradient(90deg, transparent 0%, var(--accent) 30%, var(--accent) 70%, transparent 100%);
+}
+/* CircularProgress: 40px round, the percentage in its middle. */
+.circular-progress {
+    width: 40px;
+    height: 40px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-1);
+    font-family: monospace;
+    font-size: 10.5px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    flex-shrink: 0;
+}
+/* Skeleton: a placeholder bar where content is still loading, a shine sweeping across it. */
+.skeleton {
+    height: 10px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 5px;
+    background-color: var(--skeleton);
+    border-color: transparent;
+    flex-shrink: 0;
+}
+.skeleton-shine {
+    border-width: 0px;
+    border-radius: 5px;
+    background-color: linear-gradient(90deg, transparent 0%, var(--skeleton-shine) 50%, transparent 100%);
+    border-color: transparent;
+}
 .toast-actions {
     display: flex;
     flex-direction: row;

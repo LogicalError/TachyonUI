@@ -164,6 +164,10 @@ namespace tachyon
         /// A circle outline, stroked with `style`; see GUIRenderer::RenderCircle.
         void RenderCircle(float2 center, float radius, const LineStyle& style) const;
         void RenderCircle(int2 center, float radius, const LineStyle& style) const; ///< see above
+        /// Part of a ring with round ends, angles in turns clockwise from the right; see
+        /// GUIRenderer::RenderArc.
+        void RenderArc(float2 center, float radius, float width, float startTurns, float sweepTurns,
+                       VisualColorStyleIndex colorStyleIndex) const;
         /// A filled, anti-aliased disc (a quad rounded to a circle).
         void RenderDisc(int2 center, float radius, VisualColorStyleIndex colorStyleIndex) const;
 

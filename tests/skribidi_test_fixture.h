@@ -59,20 +59,28 @@ namespace GUITest
     public:
         void Reset() override {}
         void SetTransform(tachyon::float3x2) override {}
-        void RenderBox(tachyon::IntRect rect, tachyon::IntRect, uint32_t style, uint32_t, float,
+        void RenderBox(tachyon::IntRect rect, tachyon::IntRect clip, uint32_t style, uint32_t, float,
                        tachyon::VisualColorStyleIndex, tachyon::ImageIndex, tachyon::IntRect) override
         {
             lastBoxStyle = style;
             boxes.push_back(rect);
+            boxStyles.push_back(style);
+            boxClips.push_back(clip);
         }
         void RenderLine(tachyon::int2 p0, tachyon::int2, tachyon::int2, tachyon::int2, tachyon::IntRect, const tachyon::LineStyle&) override
         {
             lineStarts.push_back(p0);
         }
-        void RenderCircle(tachyon::float2, float, tachyon::IntRect, const tachyon::LineStyle&) override {}
+        void RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect, const tachyon::LineStyle& style) override
+        {
+            circles.push_back({ center, radius, style });
+        }
         void RenderDot(tachyon::float2, tachyon::IntRect, float, tachyon::color4f) override {}
-        void RenderTriangle(tachyon::float2, tachyon::float2, tachyon::float2, tachyon::IntRect,
-                            tachyon::VisualColorStyleIndex, tachyon::ImageIndex, tachyon::TriangleEdges) override {}
+        void RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect,
+                            tachyon::VisualColorStyleIndex color, tachyon::ImageIndex, tachyon::TriangleEdges hardEdges) override
+        {
+            triangles.push_back({ { p0, p1, p2 }, color, hardEdges });
+        }
         void RenderQuad(tachyon::IntRect rect, tachyon::IntRect, tachyon::VisualColorStyleIndex color, float, tachyon::ImageIndex image,
                         const tachyon::UVRect& uv, const tachyon::ImageDisplay& display) override
         {
@@ -117,7 +125,25 @@ namespace GUITest
         float lastGlyphScale = 0.0f; // atlas-to-layout scale of the last glyph (1 / raster scale)
         uint32_t lastBoxStyle = 0;   // style slot of the last box drawn (a selection's), state included
         std::vector<tachyon::IntRect> boxes;   // boxes drawn since last cleared
+        std::vector<uint32_t> boxStyles;       // ... the style slot of each, state included
+        std::vector<tachyon::IntRect> boxClips; // ... and the scissor of each
         std::vector<tachyon::int2> lineStarts; // first point of each line (carets) since last cleared
+
+        struct CircleDraw
+        {
+            tachyon::float2    center;
+            float              radius;
+            tachyon::LineStyle style;
+        };
+        std::vector<CircleDraw> circles;   // every RenderCircle, in order
+
+        struct TriangleDraw
+        {
+            tachyon::float2                points[3];
+            tachyon::VisualColorStyleIndex color;
+            tachyon::TriangleEdges         hardEdges;
+        };
+        std::vector<TriangleDraw> triangles;   // every RenderTriangle, in order
     };
 
     // Only carries the stub renderer; the text system reads nothing else from it.

@@ -23,7 +23,7 @@ Button("Delete", onDelete, theme.GetStyle("my-danger-button"));  // your own cla
 | `Text` | `static-text` |
 | `Label`, `DragLabel` | `label`, `drag-label` (`group-label`, `group-drag-label` in a resizable label group) |
 | `Image` | none (built in code) |
-| `Button`, `CommandButton` | `button` |
+| `Button`, `CommandButton`, `BusyButton` | `button` |
 | `Toggle`, `Field(bool&)` | `toggle` |
 | `Switch` | `switch` |
 | `Checkbox` | `checkbox` |
@@ -61,6 +61,10 @@ Button("Delete", onDelete, theme.GetStyle("my-danger-button"));  // your own cla
 | `BeginToolbar` | controls inside use `toolbar-*` variants |
 | `Breadcrumb` | `breadcrumb` |
 | `BeginStatusBar`, `StatusText` | `status-bar`, `status-text` |
+| `ProgressBar`, `IndeterminateProgressBar` | `progress-bar` (small: `progress-bar-small`) |
+| `Spinner` | none (drawn in code, in the theme's track and accent colors) |
+| `CircularProgress` | `circular-progress` |
+| `Skeleton` | `skeleton` |
 | `CommandSearch` | `command-search` |
 | `RenderSettingsPanel` | `settings-page` |
 | `RenderNodeView` | `node-view` |

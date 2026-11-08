@@ -26,6 +26,38 @@ if (Button("Reset", [this] { Reset(); }))   // true the frame after the click
     statusText = "Reset done";
 ```
 
+## BusyButton
+
+A button that can show it's at work, for example while a save runs.
+
+- While `busy` is `false` it's an ordinary [Button](#button).
+- While `busy` is `true`:
+  - a turning spinner takes the place of its icon
+  - `busyText` takes the place of its text ("Saving..."); an empty `busyText` keeps the
+    text
+  - it stays exactly as wide as it was, so the row around it doesn't shift
+  - it still hovers and takes focus, but clicks do nothing
+  - it returns `false`
+
+```cpp
+bool BusyButton(ID id, const GUIContent& content, bool busy, std::string_view busyText,
+                std::function<void()> onClick, StyleRef style, LayoutOverride&& constraints = {});
+```
+
+You decide when it's busy, so pass a flag your own work sets and clears:
+
+```cpp
+// member: bool saving
+BusyButton(saveID, { saveIcon, "Save" }, saving, "Saving...", [this] { saving = true; StartSave(); });
+```
+
+```cpp
+// When the save finishes, somewhere else in your code:
+saving = false;
+```
+
+Class: `button`, the same as Button.
+
 ## CommandButton
 
 An icon button that runs a command of `commandManager`. A command is registered once,

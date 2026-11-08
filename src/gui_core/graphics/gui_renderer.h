@@ -112,6 +112,13 @@ namespace tachyon
         void RenderPolyline(std::span<const tachyon::int2> points, bool closed,
                             tachyon::IntRect clipRect, const LineStyle& style);
 
+        /// Part of a ring `width` wide, centred on the circle of `radius` around `center`, with
+        /// round ends. Angles are in turns (1 = all the way round), clockwise from the right
+        /// (+x towards +y) as RenderCircle's: from `startTurns`, `sweepTurns` round (negative
+        /// goes the other way). A sweep of a whole turn or more is a closed ring, without ends.
+        void RenderArc(tachyon::float2 center, float radius, float width, float startTurns, float sweepTurns,
+                       tachyon::IntRect clipRect, VisualColorStyleIndex colorIndex);
+
     public:
         virtual bool StartResizing(ID id) = 0;
         virtual void StopResizing() = 0;

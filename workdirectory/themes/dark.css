@@ -21,7 +21,9 @@
     --canvas-dot: #39404D;  /* node view dot grid; brighter than the mockup's #252A33, whose soft CSS dots read stronger */
     /* ---- Lines ------------------------------------------------------------ */
     --panel-border: #1C1F25; /* outline around each panel */
-    --line-subtle: #23272F;  /* dividers, header bottom border, input border */
+    --line-subtle: #23272F;  /* dividers, header bottom border, input border, progress tracks */
+    --skeleton: #1C1F25;       /* a placeholder bar while content loads */
+    --skeleton-shine: #262A32; /* the shine sweeping across it */
     --line-node: #2A2F39;    /* node border, node header divider, tree guides */
     --line-strong: #2E333D;  /* button border, scrollbar thumb */
     --line-section: #1E2128; /* section divider */
