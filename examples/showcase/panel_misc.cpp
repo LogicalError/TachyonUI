@@ -5,8 +5,12 @@
 // This file is for testing and prototyping various miscellaneous GUI rendering features that don't fit into other categories, such as custom draw, on-demand color styles, polygons, dashed borders, etc.
 //
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <format>
+#include <iterator>
+#include <vector>
 
 static constexpr tachyon::Diagnostics::LogCategory kLogShowcase = tachyon::Diagnostics::MakeLogCategory("showcase");
 
@@ -400,20 +404,76 @@ namespace tachyon
             BeginVertical(tachyon::LayoutOverride::Auto().NoGrow().Width(360));
             Text("Progress and loading", theme.labelStyleRef);
 
-            // An import running: a bar filling over 6 s, then again.
-            const float done = std::fmod(clock, 6.0f) / 6.0f;
-            BeginHorizontal(tachyon::LayoutOverride::Auto().NoGrow());
-            Text("Importing character.fbx", tachyon::LayoutOverride::Auto().FlexGrow(1));
-            Text(std::to_string(int(done * 100.0f)) + "%");
-            EndHorizontal();
-            ProgressBar(done);
-            Text("Compiling shaders...");
-            IndeterminateProgressBar();
-            Text("Bake failed at 73%");
-            ProgressBar(idManager.AllocateDynamicID("bakeFailed"), 0.73f, true, theme.progressBarStyleRef);
-            Text("Indexing assets (a status bar's bar)");
-            ProgressBar(idManager.AllocateDynamicID("indexing"), 0.33f, false, theme.progressBarSmallStyleRef,
-                        tachyon::LayoutOverride::Auto().Width(120));
+            // An import: 6 s running, then done for 3 s, then again. Cancel stops it, and Retry
+            // starts it over.
+            float elapsed = clock - importStart;
+            if (elapsed >= 9.0f && !importCancelled)
+            {
+                importStart = clock;
+                elapsed     = 0.0f;
+            }
+            const float done = std::min(elapsed / 6.0f, 1.0f);
+            const std::string importDetail = std::format("{:.1f} MB of 19.3 MB, about {} s left", 19.3f * done,
+                                                         int(std::ceil(6.0f - elapsed)));
+            if (importCancelled)
+                TaskProgress(ProgressTask{ .name = "Import cancelled", .value = done, .state = TaskState::Failed,
+                                           .detail = "character.fbx was not imported",
+                                           .onRetry = [this, clock] { importStart = clock; importCancelled = false; } });
+            else if (elapsed < 6.0f)
+                TaskProgress(ProgressTask{ .name = "Importing character.fbx", .value = done, .detail = importDetail,
+                                           .onCancel = [this] { importCancelled = true; } });
+            else
+                TaskProgress(ProgressTask{ .name = "Import complete", .state = TaskState::Done, .note = "6.0 s" });
+
+            TaskProgress(ProgressTask{ .name = "Compiling shaders..." });
+
+            // A bake that failed; Retry runs it for 3 s, and it fails again.
+            if (clock < bakeRetryUntil)
+                TaskProgress(ProgressTask{ .name = "Baking lightmaps", .note = "retrying" });
+            else
+                TaskProgress(ProgressTask{ .name = "Bake failed at 73%", .value = 0.73f, .state = TaskState::Failed,
+                                           .detail = "Out of GPU memory while baking lightmap 4 of 6",
+                                           .onRetry = [this, clock] { bakeRetryUntil = clock + 3.0f; } });
+
+            // The steps of a build, one every 3 s.
+            Text("Build player", theme.labelStyleRef);
+            const float build = std::fmod(clock, 15.0f) / 3.0f;
+            auto stepState = [build](int step) {
+                return build >= float(step + 1) ? TaskState::Done : build >= float(step) ? TaskState::Running : TaskState::Pending;
+            };
+            const ProgressTask steps[] = {
+                { .name = "Compile scripts", .value = build,         .state = stepState(0), .note = stepState(0) == TaskState::Done ? "3.0 s" : "" },
+                { .name = "Bake lighting",   .value = build - 1.0f,  .state = stepState(1), .note = stepState(1) == TaskState::Done ? "3.0 s" : "" },
+                { .name = "Package assets",  .value = build - 2.0f,  .state = stepState(2), .note = stepState(2) == TaskState::Done ? "3.0 s" : "" },
+                { .name = "Upload",          .value = build - 3.0f,  .state = stepState(3), .note = stepState(3) == TaskState::Done ? "3.0 s" : "" },
+            };
+            ProgressSteps(steps);
+
+            // A status bar: the indexing under way, and the tasks in the background behind
+            // the pill.
+            const float indexed = std::fmod(clock, 20.0f) / 20.0f;
+            const std::string count = std::format("{} / 3,800", int(indexed * 3800.0f));
+            BeginStatusBar(tachyon::LayoutOverride::Auto().NoGrow());
+            StatusProgress(ProgressTask{ .name = "Indexing assets", .value = indexed, .note = count });
+            StatusText("", tachyon::LayoutOverride::Auto().FlexGrow(1));
+            std::vector<ProgressTask> background;
+            const ProgressTask all[] = {
+                { .name = "Bake lighting",       .value = std::fmod(clock, 30.0f) / 30.0f },
+                { .name = "Generate thumbnails", .value = std::fmod(clock + 10.0f, 30.0f) / 30.0f },
+                { .name = "Upload build",        .value = 0.15f, .state = TaskState::Paused },
+            };
+            for (int i = 0; i < 3; ++i)
+                if (!backgroundCancelled[i])
+                {
+                    background.push_back(all[i]);
+                    background.back().onCancel = [this, i] { backgroundCancelled[i] = true; };
+                }
+            BackgroundTasks(idManager.AllocateDynamicID("background"), background);
+            EndStatusBar();
+            if (background.empty())
+                Button(idManager.AllocateDynamicID("restartTasks"), "Restart background tasks",
+                       [this] { std::fill(std::begin(backgroundCancelled), std::end(backgroundCancelled), false); },
+                       tachyon::LayoutOverride::Auto().NoGrow());
 
             // Spinners in their three sizes, a ring filling as the import does, and a button
             // that's busy for a while once clicked.

@@ -686,6 +686,34 @@ namespace tachyon
         /// As above, with the call site as the ID.
         inline void Skeleton(LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { Skeleton(idManager.AllocateDynamicID(site), theme.skeletonStyleRef, std::move(constraints)); }
 
+        /// A piece of work in full: its name and percent (or `note`) over its bar, a cancel
+        /// button when `onCancel` is set, and `detail` under it. Failed: the error icon, the bar
+        /// in the error color, the reason in error text and a Retry button when `onRetry` is
+        /// set. Done: a check, the name and `note` (how long it took) on one line.
+        void        TaskProgress(ID id, const ProgressTask& task, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline void TaskProgress(       const ProgressTask& task, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { TaskProgress(idManager.AllocateDynamicID(site), task, std::move(constraints)); }
+
+        /// The steps of a longer job, one a row: a glyph for its state (a check once done, a
+        /// spinner while running, a dashed ring while pending), its name, a small bar under the
+        /// running one, and its `note` (or percent) at the end.
+        void        ProgressSteps(ID id, std::span<const ProgressTask> steps, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline void ProgressSteps(       std::span<const ProgressTask> steps, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { ProgressSteps(idManager.AllocateDynamicID(site), steps, std::move(constraints)); }
+
+        /// A piece of work in a status bar: a small spinner, its name, a 120px bar and its
+        /// `note` ("1,240 / 3,800") or percent.
+        void        StatusProgress(ID id, const ProgressTask& task, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline void StatusProgress(       const ProgressTask& task, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { StatusProgress(idManager.AllocateDynamicID(site), task, std::move(constraints)); }
+
+        /// A "3 tasks" pill, for a status bar, that opens a popover listing `tasks`: each with its
+        /// name, a small bar, its percent or state and a cancel button when `onCancel` is set.
+        /// Shows nothing while `tasks` is empty. Returns whether the popover is open.
+        bool        BackgroundTasks(ID id, std::span<const ProgressTask> tasks, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline bool BackgroundTasks(       std::span<const ProgressTask> tasks, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return BackgroundTasks(idManager.AllocateDynamicID(site), tasks, std::move(constraints)); }
+
         ///@}
 
         /// @name Menus and message dialogs
@@ -2635,6 +2663,17 @@ namespace tachyon
         std::unordered_map<tachyon::ID, int> m_listItemIndexByID;
         /// A BusyButton's width while it wasn't busy, kept while it is.
         std::unordered_map<tachyon::ID, int32_t> m_busyButtonWidths;
+        /// A BackgroundTasks pill's popover: its window, and whether it's open.
+        struct TasksPopover
+        {
+            tachyon::ID windowID = tachyon::ID::Invalid();
+            bool        open     = false;
+        };
+        std::unordered_map<tachyon::ID, TasksPopover> m_tasksPopovers;
+        /// A task's bar: the fill by its state, sliding while running with no value known.
+        void TaskBar(ID id, const ProgressTask& task, StyleRef trackStyle, LayoutOverride&& constraints);
+        /// A step's 16px glyph for `state`.
+        void StepGlyph(ID id, TaskState state);
 
 
         /// Transient construction state (defs in gui_tree_grid_types.h), valid only between

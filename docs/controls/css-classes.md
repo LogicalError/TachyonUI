@@ -65,6 +65,10 @@ Button("Delete", onDelete, theme.GetStyle("my-danger-button"));  // your own cla
 | `Spinner` | none (drawn in code, in the theme's track and accent colors) |
 | `CircularProgress` | `circular-progress` |
 | `Skeleton` | `skeleton` |
+| `TaskProgress` | `task-progress` |
+| `ProgressSteps` | `progress-steps` |
+| `StatusProgress` | `status-progress` |
+| `BackgroundTasks` | `tasks-pill`, popover `tasks-popover` |
 | `CommandSearch` | `command-search` |
 | `RenderSettingsPanel` | `settings-page` |
 | `RenderNodeView` | `node-view` |

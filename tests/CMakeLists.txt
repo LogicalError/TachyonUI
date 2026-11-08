@@ -18,6 +18,7 @@ list(APPEND GUI_CORE_TEST_FILES
   tracking_allocator_test.cpp
   library_allocator_test.cpp
   progress_test.cpp
+  progress_composites_test.cpp
   null_backends_test.cpp
   breadcrumb_test.cpp
   node_view_zoom_test.cpp

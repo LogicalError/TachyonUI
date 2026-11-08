@@ -5113,6 +5113,336 @@
     background-color: linear-gradient(90deg, transparent 0%, var(--skeleton-shine) 50%, transparent 100%);
     border-color: transparent;
 }
+.progress-fill-paused {
+    border-width: 0px;
+    border-radius: 3px;
+    background-color: var(--warn);
+    border-color: transparent;
+}
+/* TaskProgress: the name and percent over the bar, a detail line under it. */
+.task-progress {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 6px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.task-progress-header {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 20px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+.task-progress-name, .task-progress-failed, .task-progress-done {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    -tachyon-icon-size: 14px;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.task-progress-failed { -tachyon-icon-color: var(--error); }
+.task-progress-done   { -tachyon-icon-color: var(--ok); }
+.task-progress-percent, .task-progress-note {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-1);
+    font-family: monospace;
+    font-size: 11px;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.task-progress-note { color: var(--text-3); }
+.task-progress-cancel {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
+    width: 20px;
+    height: 20px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 4px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-3);
+    -tachyon-icon-size: 12px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.task-progress-cancel:hover { color: var(--text-1); }
+.task-progress-retry {
+    -tachyon-state-layer: content;
+    height: 22px;
+    margin: 0px;
+    padding: 0px 10px;
+    border-width: 1px;
+    border-radius: 4px;
+    background-color: var(--bg-control);
+    border-color: var(--line-strong);
+    color: var(--text-1);
+    font-size: var(--font-size);
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.task-progress-detail, .task-progress-error {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 11px;
+    text-wrap: wrap;
+}
+.task-progress-error { color: var(--error-text); }
+/* ProgressSteps: a glyph, the name (with a bar under the running step) and a note. */
+.progress-steps {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 10px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.progress-step {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 22px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+/* A step's glyph, 16px: a check on a disc once done, a cross once failed, a dashed ring
+   while still to come (in the warning color while paused). A running step has a spinner. */
+.progress-step-done, .progress-step-failed, .progress-step-waiting, .progress-step-paused {
+    width: 16px;
+    height: 16px;
+    margin: 0px;
+    padding: 3px;
+    border-width: 0px;
+    border-radius: 8px;
+    background-color: transparent;
+    border-color: transparent;
+    -tachyon-icon-size: 10px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.progress-step-done   { background-color: var(--ok);    -tachyon-icon-color: var(--on-ok); }
+.progress-step-failed { background-color: var(--error); -tachyon-icon-color: var(--on-ok); }
+.progress-step-waiting, .progress-step-paused {
+    border-width: 1.5px;
+    border-style: dashed;
+    border-color: var(--line-strong);
+}
+.progress-step-paused { border-color: var(--warn); }
+.progress-step-body {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 5px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.progress-step-name, .progress-step-pending {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+}
+.progress-step-pending { color: var(--text-3); }
+/* StatusProgress: in a status bar, a small spinner, a name, a 120px bar and a count. */
+.status-progress {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 1;
+}
+.status-text-mono {
+    border-width: 0px;
+    background-color: transparent;
+    padding: 0px;
+    margin: 0px;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    color: var(--text-3);
+    font-family: monospace;
+    font-size: var(--font-size-sm);
+    flex-shrink: 0;
+}
+/* BackgroundTasks: a "3 tasks" pill and the popover it opens. */
+.tasks-pill {
+    -tachyon-state-layer: content;
+    height: 16px;
+    margin: 0px;
+    padding: 0px 6px;
+    border-width: 0px;
+    border-radius: 8px;
+    background-color: var(--accent-soft);
+    border-color: transparent;
+    color: var(--text-link);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.tasks-popover {
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 4px;
+    margin: 0px;
+    padding: 8px;
+    border-width: 1px;
+    border-radius: 8px;
+    background-color: var(--bg-popup);
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-popup);
+}
+.tasks-popover-header {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    height: 28px;
+    margin: 0px;
+    padding: 0px 6px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+.tasks-popover-title {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    font-weight: 600;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.tasks-popover-count {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 11px;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.tasks-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0px;
+    padding: 6px;
+    border-width: 0px;
+    border-radius: 4px;
+    background-color: transparent;
+    border-color: transparent;
+}
+.tasks-row:hover { background-color: var(--bg-hover); }
+.tasks-row-body {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 5px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.tasks-row-state {
+    width: 48px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-2);
+    font-family: monospace;
+    font-size: 11px;
+    text-align: right;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
 .toast-actions {
     display: flex;
     flex-direction: row;

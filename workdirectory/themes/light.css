@@ -55,6 +55,8 @@
     --warn: #D99A2B;
     --warn-text: #8E5D11;
     --error: #D64545;
+    --error-text: #B83232;    /* error messages in running text */
+    --on-ok: #FFFFFF;         /* a mark on an --ok fill */
     --invalid-halo: 0 0 0 3px #D645452E;  /* around an invalid control: the error color at 18% */
     --danger: #C93C3C;
     --on-danger: #FFFFFF;

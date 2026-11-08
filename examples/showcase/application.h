@@ -140,6 +140,13 @@ namespace tachyon
         uint2            pastedImageSize {};
         // "Save" in the progress demos: busy until this time (seconds on the frame clock).
         float            saveBusyUntil = -1.0f;
+        // The import demo: when it started, and whether it was cancelled.
+        float            importStart = 0.0f;
+        bool             importCancelled = false;
+        // The failed bake demo: running again until this time after Retry.
+        float            bakeRetryUntil = -1.0f;
+        // The background tasks demo: which were cancelled.
+        bool             backgroundCancelled[3] = {};
 
         // ---- Showcase state ----
         // State used by the showcase panels for testing and prototyping GUI features.
