@@ -1443,11 +1443,15 @@ namespace tachyon
         void Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
         /// The document bar of `set` alone: its tabs, "+", "N open" and the line in the active
         /// document's color. With DocumentPanels, the two parts of Documents placed apart (the
-        /// bar in the title bar, say); call it first, once a frame.
+        /// bar in the title bar, say); call it first, once a frame. In
+        /// theme.titleBarDocumentsStyleRef, which fits it in a title bar, it leaves its line out:
+        /// DocumentLine draws it under the whole title bar.
         void DocumentBar(ID id, DocumentSet& set, StyleRef style, LayoutOverride&& constraints = LayoutOverride::Auto());
-        /// As above, in the theme's document bar style; theme.titleBarDocumentsStyleRef fits it in
-        /// a title bar.
+        /// As above, in the theme's document bar style.
         inline void DocumentBar(ID id, DocumentSet& set, LayoutOverride&& constraints = LayoutOverride::Auto()) { DocumentBar(id, set, theme.documentBarStyleRef, std::move(constraints)); }
+        /// The line under the document bar of `set`, in the active document's color, across
+        /// what it's in: after the title bar the bar is in.
+        void DocumentLine(const DocumentSet& set, LayoutOverride&& constraints = LayoutOverride::Auto());
         /// The active document's panels of `set`, after its DocumentBar.
         void DocumentPanels(DocumentSet& set, LayoutOverride&& constraints = LayoutOverride::Auto());
 

@@ -161,6 +161,7 @@ namespace tachyon
                     app.BeginTitleBar(titleBarID);
                     app.DocumentBar(documentsID, set, app.theme.titleBarDocumentsStyleRef);
                     app.EndTitleBar();
+                    app.DocumentLine(set);
                     EXPECT_TRUE(app.menuManager.menuBarTriggers.empty()) << "\"N open\" isn't one of the title bar's menus";
                     app.BeginMenuBar(menuBarID);
                     if (app.BeginMenu(fileID, "File", app.theme.menuBarTriggerStyleRef, app.theme.menuStyleRef, app.theme.menuItemRowStyleRef))
@@ -186,11 +187,36 @@ namespace tachyon
             EXPECT_EQ(app.TitleBarHitTest(app.RootWindowID(), { bar.x + bar.w * 3 / 4, bar.y + 4 }), WindowHitArea::Caption)
                 << "the bar's empty space drags the window";
 
+            // One line, under the whole title bar (not only under the tabs), in the active
+            // document's color.
+            const std::vector<ID> levelLines = FindAllByStyle(Class("document-line-level"));
+            ASSERT_EQ(levelLines.size(), 1u) << "none in the bar itself";
+            const IntRect line = app.GetElementRect(levelLines[0]);
+            EXPECT_EQ(line.x, titleBar.x);
+            EXPECT_EQ(line.w, titleBar.w) << "across the window, past the tabs";
+            EXPECT_EQ(line.y, titleBar.y + titleBar.h) << "right under the title bar";
+            EXPECT_GT(line.h, 0);
+
             app.ClickAt(tab);
             frame();
             frame();
             EXPECT_EQ(set.active, 1);
             EXPECT_GE(logs[1]->draws, 1);
+            EXPECT_TRUE(FindAllByStyle(Class("document-line-level")).empty());
+            EXPECT_EQ(FindAllByStyle(Class("document-line-material")).size(), 1u) << "the active document's color";
+        }
+
+        // The bar in its own style keeps its line, under its tabs.
+        TEST_F(DocumentsTest, TheBarKeepsItsLineOutsideATitleBar)
+        {
+            Add("Forest", ".level", "level");
+            Settle();
+            const std::vector<ID> lines = FindAllByStyle(Class("document-line-level"));
+            ASSERT_EQ(lines.size(), 1u);
+            const IntRect bar = BarOf(set);
+            const IntRect line = app.GetElementRect(lines[0]);
+            EXPECT_EQ(line.y + line.h, bar.y + bar.h) << "the bar's last part";
+            EXPECT_EQ(line.w, bar.w);
         }
 
         TEST_F(DocumentsTest, ClickingATabShowsItsDocument)

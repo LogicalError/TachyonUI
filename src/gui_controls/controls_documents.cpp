@@ -395,12 +395,20 @@ namespace tachyon
         VERIFY(elementStorage.EndChildren());   // row
 
         // The line under the bar, in the active document's color: the workspace below is its.
-        RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("document_line"),
-                                          .styleRef = active ? StylesOf(theme, active->kind).line : theme.documentLineStyleRef },
-                        LayoutOverride::Auto());
+        // In a title bar it goes under the whole bar instead (DocumentLine).
+        if (style != theme.titleBarDocumentsStyleRef)
+            DocumentLine(set);
         if (pushed)
             (void)idManager.PopParent();
         VERIFY(elementStorage.EndChildren());   // bar
+    }
+
+    void GUIApplication::DocumentLine(const DocumentSet& set, LayoutOverride&& constraints)
+    {
+        const Document* const active = set.Active();
+        RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("document_line"),
+                                          .styleRef = active ? StylesOf(theme, active->kind).line : theme.documentLineStyleRef },
+                        std::move(constraints));
     }
 
     void GUIApplication::DocumentPanels(DocumentSet& set, LayoutOverride&& constraints)

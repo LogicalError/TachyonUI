@@ -3455,8 +3455,8 @@
     flex-grow: 0;
     flex-shrink: 0;
 }
-/* A document bar in a title bar (DocumentBar): the title bar's height, its line along the
-   title bar's bottom edge. */
+/* A document bar in a title bar (DocumentBar): the title bar's height, without its line,
+   which DocumentLine draws under the whole title bar. */
 .title-bar-documents {
     border-width: 0px;
     padding: 0px;
