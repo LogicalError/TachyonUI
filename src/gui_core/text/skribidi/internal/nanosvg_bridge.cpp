@@ -1,5 +1,18 @@
 #include "nanosvg_bridge.h"
 
+#include <gui_core/memory/gui_library_allocator.h>
+
+// nanosvg's own includes, ahead of the redirect below, so only nanosvg's calls are redirected.
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// nanosvg calls malloc and free directly: its memory goes through the library allocator.
+#define malloc(size)        tachyon_library_malloc(size)
+#define calloc(count, size) tachyon_library_calloc(count, size)
+#define realloc(ptr, size)  tachyon_library_realloc(ptr, size)
+#define free(ptr)           tachyon_library_free(ptr)
 #define NANOSVG_IMPLEMENTATION
 #if defined(_MSC_VER)
 #pragma warning(push)
@@ -9,6 +22,10 @@
 #if defined(_MSC_VER)
 #pragma warning(pop)
 #endif
+#undef malloc
+#undef calloc
+#undef realloc
+#undef free
 
 #include <skribidi/skb_common.h>
 #include <skribidi/skb_icon_collection.h>

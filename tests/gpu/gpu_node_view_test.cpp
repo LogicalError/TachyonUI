@@ -6,6 +6,8 @@
 #include <gui_controls/gui_application_internal.h>
 #include <gui_controls/gui_node_view_helpers.h>
 
+#include "gpu_injected_input.h"
+
 namespace
 {
     using namespace tachyon;
@@ -56,6 +58,7 @@ namespace
 
         bool Start()
         {
+            UseInjectedInputOnly(*this);
             if (!Initialize())
                 return false;
             windowID = idManager.CreateStaticID();

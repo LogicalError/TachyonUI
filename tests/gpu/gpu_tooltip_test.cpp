@@ -12,6 +12,8 @@
 
 #include <gui_controls/gui_application_internal.h>
 
+#include "gpu_injected_input.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -107,6 +109,7 @@ namespace
         bool Start(float scale)
         {
             SetUIScale(scale);
+            UseInjectedInputOnly(*this);
             if (!Initialize())
                 return false;
             windowID = idManager.CreateStaticID();

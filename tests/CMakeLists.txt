@@ -16,6 +16,7 @@ list(APPEND GUI_CORE_TEST_FILES
   controls_tree_list_test.cpp
   default_handlers_test.cpp
   tracking_allocator_test.cpp
+  library_allocator_test.cpp
   null_backends_test.cpp
   breadcrumb_test.cpp
   node_view_zoom_test.cpp
@@ -188,6 +189,7 @@ set_target_properties(gui_core_tests PROPERTIES
 if(TACHYON_SDL)
   list(APPEND GUI_GPU_TEST_FILES
     gpu/gpu_test_harness.h
+    gpu/gpu_injected_input.h
     gpu/gpu_descriptor_test.cpp
     gpu/gpu_image_set_test.cpp
     gpu/gpu_window_lifecycle_test.cpp
