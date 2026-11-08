@@ -133,6 +133,11 @@ namespace tachyon
 
         ImageIndex checkerboardIndex { ImageIndex::Invalid };
         ImageIndex demoImageIndex { ImageIndex::Invalid };   // sample image for the Image() element demo
+        std::vector<uint8_t> demoImagePixels;                 // its RGBA, for "Copy image"
+        // "Paste image": the clipboard's image, shown in the Misc panel, while there is one.
+        tachyon::Image*  pastedImage = nullptr;
+        ImageIndex       pastedImageIndex { ImageIndex::Invalid };
+        uint2            pastedImageSize {};
 
         // ---- Showcase state ----
         // State used by the showcase panels for testing and prototyping GUI features.
@@ -542,6 +547,10 @@ namespace tachyon
         void RenderBoxTestPanel();
         void RenderInspectorPanel(InspectorPanel& panel);
         void RenderMiscPanel();
+        /// Puts the sample image on the clipboard.
+        void CopyDemoImage();
+        /// Shows the clipboard's image in the Misc panel, in place of the one pasted before.
+        void PasteImage();
         void RenderTablePanel();
         void RenderLogPanel(LogPanel& panel);
         void RenderTreeTablePanel();

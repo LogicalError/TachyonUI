@@ -200,7 +200,8 @@ namespace tachyon
         std::unique_ptr<OSWindowManager>  windowManager;
         /// The glyph atlas. Created by Initialize.
         std::unique_ptr<TextAtlasManager> textAtlasManager;
-        std::unique_ptr<IClipboard>       clipboard;          ///< from SetClipboard
+        /// Text and images to copy and paste (Get / Set, GetImage / SetImage); from SetClipboard.
+        std::unique_ptr<IClipboard>       clipboard;
 
         /// Shapes, measures and edits text. Created by Initialize.
         ITextSystem*        textSystem      { nullptr };
@@ -444,7 +445,7 @@ namespace tachyon
         /// windows. Without one it creates an SDLWindowBackend (SDL builds only).
         /// Owned until Cleanup. Call before Initialize.
         void SetWindowBackend(std::unique_ptr<IWindowBackend> backend) { m_osWindowBackend = std::move(backend); }
-        /// Copy and paste for text fields. Defaults to SDL's clipboard, or a
+        /// Copy and paste for text fields, and of images. Defaults to SDL's clipboard, or a
         /// LocalClipboard without SDL. Owned until Cleanup. Call before Initialize.
         void SetClipboard(std::unique_ptr<IClipboard> clipboardImpl) { clipboard = std::move(clipboardImpl); }
 

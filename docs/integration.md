@@ -22,7 +22,7 @@ TachyonUI running inside it.
 | --- | --- |
 | [Adding the library to a build](integration/build.md) | Subproject or installed package; CMake options; resources. |
 | [Using your own Vulkan device](integration/vulkan-device.md) | Device requirements, handing it over, showing your own image. |
-| [Your own window and input](integration/window-and-input.md) | Writing a window backend; running SDL's event loop yourself. |
+| [Your own window and input](integration/window-and-input.md) | Writing a window backend; images on the clipboard; running SDL's event loop yourself. |
 | [Your own loop](integration/frame-loop.md) | Per-frame calls; errors and device loss. |
 | [Rendering the UI into a host image](integration/render-to-image.md) | Windows without an OS window: copy to your image, read pixels, inject input. |
 | [Allocation hooks and headless backends](integration/allocation-and-headless.md) | Your own allocator; running without GPU or display. |

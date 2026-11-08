@@ -12,6 +12,39 @@ static constexpr tachyon::Diagnostics::LogCategory kLogShowcase = tachyon::Diagn
 
 namespace tachyon
 {
+    void Application::CopyDemoImage()
+    {
+        const ClipboardImage image{ 64, 64, demoImagePixels };
+        if (!clipboard || !clipboard->SetImage(image))
+            ShowToast(ToastDesc{ .severity = Severity::Warning, .title = "Image not copied", .body = "This clipboard takes no images." });
+    }
+
+    void Application::PasteImage()
+    {
+        const ClipboardImage image = clipboard ? clipboard->GetImage() : ClipboardImage{};
+        if (image.Empty())
+        {
+            ShowToast(ToastDesc{ .severity = Severity::Info, .title = "No image to paste", .body = "The clipboard holds no image." });
+            return;
+        }
+        tachyon::Image* created = graphicsContext->CreateImage(const_cast<uint8_t*>(image.rgba.data()), uint2{ image.width, image.height },
+                                                               ImageFormat::R8G8B8A8, Sampler::LinearClampToEdge, true);
+        if (created == nullptr)
+        {
+            ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Image not pasted",
+                                 .body = std::format("A {} x {} image can't be made here.", image.width, image.height) });
+            return;
+        }
+        // The one pasted before goes once the GPU is done with it.
+        if (pastedImage != nullptr)
+        {
+            graphicsContext->UnregisterImage(pastedImageIndex);
+            graphicsContext->DestroyImageAtEnd(pastedImage, DeviceScope::Frame);
+        }
+        pastedImage      = created;
+        pastedImageIndex = graphicsContext->RegisterImage(created);
+        pastedImageSize  = uint2{ image.width, image.height };
+    }
 
     void Application::RenderMiscPanel()
     {
@@ -332,6 +365,15 @@ namespace tachyon
             VERIFY(fRes.status);
             VERIFY(windowRegistry.Add(fRes.ref));
             SetTooltip("Click to choose an image");
+
+            // The clipboard: the sample image copied to it, and the image on it (a screenshot,
+            // say) pasted here.
+            Button(idManager.AllocateDynamicID("copyImage"), "Copy image", [this] { CopyDemoImage(); });
+            SetTooltip("Puts the sample image on the clipboard");
+            Button(idManager.AllocateDynamicID("pasteImage"), "Paste image", [this] { PasteImage(); });
+            SetTooltip("Shows the image on the clipboard, such as a screenshot");
+            if (pastedImage != nullptr)
+                Image(pastedImageIndex, pastedImageSize, tachyon::LayoutOverride::FixedSize(160, 96));
         }
 
         // --- Demo: per-run font override via textStyleOverride ---

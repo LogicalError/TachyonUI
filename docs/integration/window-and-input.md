@@ -19,6 +19,48 @@ app.SetClipboard(std::make_unique<MyClipboard>());   // optional
   - the clipboard defaults to `LocalClipboard`
   - `Initialize` fails with `ErrorCode::Unsupported` unless you set a window backend
 
+## Images on the clipboard
+
+The clipboard (`app.clipboard`, an `IClipboard`) holds text or an image, such as a
+screenshot the user took.
+
+- An image is a `ClipboardImage`:
+  - `width` and `height`, in pixels
+  - `rgba`: 4 bytes a pixel (red, green, blue, alpha), alpha not premultiplied, rows from
+    the top
+  - `Empty()` is true when it has no size, or not as many bytes as its size needs
+- `HasImage()` says whether the clipboard holds one.
+- `GetImage()` returns it, or an empty image when there's none.
+- `SetImage(image)` puts one on the clipboard, in place of what was there.
+  - It returns false for an empty image, or a clipboard that can't hold images.
+- Setting text drops the image, and setting an image drops the text.
+
+Pasting an image as one your app can show: its pixels go to `CreateImage` as they are.
+
+```cpp
+const ClipboardImage pasted = app.clipboard->GetImage();
+if (!pasted.Empty())
+{
+    tachyon::Image* image = app.graphicsContext->CreateImage(const_cast<uint8_t*>(pasted.rgba.data()),
+                                                             uint2{ pasted.width, pasted.height },
+                                                             ImageFormat::R8G8B8A8, Sampler::LinearClampToEdge, true);
+    const ImageIndex index = app.graphicsContext->RegisterImage(image);
+    // Image(index, uint2{ pasted.width, pasted.height }) draws it
+}
+```
+
+The clipboards:
+
+- SDL's (`SDLClipboard`) is the system clipboard.
+  - It reads an image as PNG, else as BMP (on Windows, BMP is the system's own image
+    format: what Print Screen and most applications copy).
+  - It offers an image it's given as both, so another application takes the one it reads.
+- `LocalClipboard` keeps one image in the process.
+- Your own `IClipboard` holds images when it overrides `HasImage`, `GetImage` and
+  `SetImage`. Without them it has none, and takes none.
+- `EncodeClipboardImage` and `DecodeClipboardImage` (`gui_sdl_clipboard.h`) turn an image
+  into PNG or BMP bytes and back, for a clipboard of your own.
+
 ## Writing a window backend
 
 - A backend:

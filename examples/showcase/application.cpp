@@ -125,6 +125,12 @@ namespace tachyon
 
     void Application::Cleanup()
     {
+        if (pastedImage != nullptr && graphicsContext != nullptr)
+        {
+            graphicsContext->UnregisterImage(pastedImageIndex);
+            graphicsContext->DestroyImageAtEnd(std::exchange(pastedImage, nullptr), DeviceScope::Application);
+        }
+
         // Every static ID the showcase made goes back (the Hierarchy panels' with them).
         idManager.ReleaseStaticID(showcase.windowLayoutID1);
         idManager.ReleaseStaticID(showcase.windowLayoutID2);
@@ -1002,6 +1008,8 @@ namespace tachyon
                 }
                 demoImageIndex = graphicsContext->RegisterImage(gradient);
                 graphicsContext->DestroyImageAtEnd(gradient, tachyon::DeviceScope::Application);
+                const auto* bytes = reinterpret_cast<const uint8_t*>(pixels.data());
+                demoImagePixels.assign(bytes, bytes + sizeof(pixels));
             }
 
             // Register icons from SVG
