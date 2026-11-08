@@ -8,6 +8,7 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -23,18 +24,26 @@ namespace
         int switchAt = 4;
         int quitAt   = -1;                  // quit at this frame instead, mid-crossfade
         float fontScaleTo = 0.0f;           // above 0: switch only the font scale, not the palette
+        std::optional<AccentColors> accentTo;   // set: switch only the accent
+        ID barID = ID::Invalid();               // valid: a full ProgressBar in the window
+        uint32_t barColor = 0;                  // its middle at the end, 0x00RRGGBB
+        IntRect  barRect {};                    // where the last layout put it
         uint32_t before = 0, justAfter = 0, settled = 0;   // window background, 0x00RRGGBB
         bool crossfadingJustAfter = false, crossfadingAtEnd = true;
 
-        uint32_t Background()
+        // The pixel at `at` (window pixels) as last drawn, 0x00RRGGBB; the bottom-right corner
+        // when not given.
+        uint32_t Background(std::optional<int2> at = std::nullopt)
         {
             const IntRect rect = windowManager->GetWindowRect(windowID);
             std::vector<uint8_t> pixels(size_t(rect.w) * rect.h * 4);
             if (!ReadWindowPixels(windowID, pixels))
                 return 0xFFFFFFFF;
-            const size_t o = (size_t(rect.h - 4) * rect.w + size_t(rect.w - 4)) * 4;
+            const int2 p = at.value_or(int2{ rect.w - 4, rect.h - 4 });
+            const size_t o = (size_t(p.y) * rect.w + size_t(p.x)) * 4;
             return (uint32_t(pixels[o + 2]) << 16) | (uint32_t(pixels[o + 1]) << 8) | pixels[o];
         }
+
 
         void OnGUI() override
         {
@@ -42,7 +51,9 @@ namespace
             if (frame == switchAt)
             {
                 before = Background();
-                if (fontScaleTo > 0.0f)
+                if (accentTo)
+                    SetAccent(accentTo);
+                else if (fontScaleTo > 0.0f)
                     RequestReloadTheme(GetThemePath(), fontScaleTo);
                 else
                     RequestReloadTheme("themes/light.css", 1.0f);
@@ -58,12 +69,21 @@ namespace
             if (frame == switchAt + 5)
             {
                 settled = Background();
+                if (barID != ID::Invalid())
+                    barColor = Background(int2{ barRect.x + barRect.w / 2, barRect.y + barRect.h / 2 });
                 crossfadingAtEnd = IsThemeCrossfading();
                 applicationQuit = true;
             }
             if (BeginWindow(windowID, "Crossfade", theme.windowStyleRef, LayoutOverride{}.Size(200, 120),
                             ElementFlags::WindowRenderToImage))
             {
+                if (barID != ID::Invalid())
+                {
+                    ProgressBar(barID, 1.0f, false, theme.progressBarStyleRef, LayoutOverride{}.Width(Pixels{ 160 }));
+                    // Laid out once the frame is built; noted then.
+                    VERIFY(elementStorage.AddPostLayout(elementStorage.FindElementRefByID(barID),
+                                                        [this](PostLayoutContext& ctx) { barRect = ctx.ElementRect(); }));
+                }
                 BeginVertical(LayoutOverride{}.FlexGrow(1));
                 EndVertical();
             }
@@ -113,6 +133,44 @@ namespace
     TEST(GpuThemeCrossfade, AFontSizeChangeDoesNotCrossfade)
     {
         CrossfadeApp app;
+        if (!app.Initialize())
+        {
+            app.Cleanup();
+            GTEST_SKIP() << "no Vulkan device available";
+        }
+        app.fontScaleTo = 1.5f;
+        app.windowID = app.idManager.CreateStaticID();
+        ASSERT_TRUE(app.Run());
+        EXPECT_FALSE(app.crossfadingJustAfter);
+        app.Cleanup();
+    }
+
+    // Another accent crossfades as another palette does, and what's drawn in the accent is
+    // drawn in the new one.
+    TEST(GpuThemeCrossfade, AnAccentChangeCrossfadesToTheNewAccent)
+    {
+        CrossfadeApp app;
+        if (!app.Initialize())
+        {
+            app.Cleanup();
+            GTEST_SKIP() << "no Vulkan device available";
+        }
+        app.accentTo = kAccentPresets[3].colors;   // orange: #F59E4B in the dark palette
+        app.windowID = app.idManager.CreateStaticID();
+        app.barID    = app.idManager.CreateStaticID();
+        ASSERT_TRUE(app.Run());
+        EXPECT_TRUE(app.crossfadingJustAfter);
+        EXPECT_FALSE(app.crossfadingAtEnd);
+        EXPECT_LT(Distance(app.barColor, 0xF59E4B), 6) << std::hex << app.barColor;
+        app.Cleanup();
+    }
+
+    // With an accent set, only another accent or palette crossfades: a font size change still
+    // shows at once.
+    TEST(GpuThemeCrossfade, WithAnAccentAFontSizeChangeDoesNotCrossfade)
+    {
+        CrossfadeApp app;
+        app.SetAccent(kAccentPresets[1].colors);   // loaded with the theme
         if (!app.Initialize())
         {
             app.Cleanup();

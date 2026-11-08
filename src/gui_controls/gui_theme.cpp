@@ -26,6 +26,60 @@ namespace tachyon
     namespace
     {
         constexpr Diagnostics::LogCategory kLogTheme = Diagnostics::MakeLogCategory("theme");
+
+        // `color` laid at `amount` (0 to 1) over the opaque `base`: the result is opaque.
+        color4b Over(color4b base, color4b color, float amount)
+        {
+            auto mix = [amount](byte from, byte to) {
+                return byte(std::lround(float(from) + (float(to) - float(from)) * amount));
+            };
+            return { mix(base.r, color.r), mix(base.g, color.g), mix(base.b, color.b), 255 };
+        }
+
+        // "#RRGGBB", or "#RRGGBBAA" with `alpha` (0 to 1).
+        std::string Hex(color4b color, std::optional<float> alpha = std::nullopt)
+        {
+            if (!alpha)
+                return std::format("#{:02X}{:02X}{:02X}", color.r, color.g, color.b);
+            return std::format("#{:02X}{:02X}{:02X}{:02X}", color.r, color.g, color.b, int(std::lround(*alpha * 255.0f)));
+        }
+
+        color4b PaletteColor(const StyleSheet& palette, const char* name, color4b fallback)
+        {
+            const CustomProperty* prop = palette.GetCustomProperty(name);
+            return prop && prop->hasColor ? prop->color : fallback;
+        }
+
+        bool IsLightColor(color4b color)
+        {
+            // Rec. 709 luma, on the 0 to 255 values: near enough to tell light from dark.
+            return 0.2126f * float(color.r) + 0.7152f * float(color.g) + 0.0722f * float(color.b) > 127.5f;
+        }
+
+        // The palette's accent and the colors derived from it, for `accent`, as a :root block
+        // that comes after the palette. The amounts are the palettes' own: a dark palette lays
+        // its accent on more strongly than a light one.
+        std::string AccentOverride(color4b accent, bool light, const StyleSheet& palette)
+        {
+            const color4b panel = PaletteColor(palette, "--bg-panel", light ? color4b{ 251, 251, 252, 255 } : color4b{ 18, 20, 24, 255 });
+            const color4b popup = PaletteColor(palette, "--bg-popup", light ? color4b{ 255, 255, 255, 255 } : color4b{ 26, 29, 35, 255 });
+            const float soft      = light ? 0.12f : 0.16f;   // selected rows, menu highlight
+            const float selection = light ? 0.25f : 0.35f;   // selected text
+            const float focus     = light ? 0.25f : 0.30f;   // the focus ring
+            const std::string a = Hex(accent);
+            return std::format(":root {{\n"
+                               "    --accent: {0};\n"
+                               "    --caret: {0};\n"
+                               "    --divider-hover: {0};\n"
+                               "    --selection: {1};\n"
+                               "    --accent-soft: {2};\n"
+                               "    --bg-menu-hover: {3};\n"
+                               "    --focus-ring: 0 0 0 3px {4};\n"
+                               "    --selected-ring: 0 0 0 3px {5};\n"
+                               "}}\n",
+                               a, Hex(accent, selection), Hex(Over(panel, accent, soft)), Hex(Over(popup, accent, soft)),
+                               Hex(accent, focus), Hex(accent, 0.16f));
+        }
     }
 
     IconID GUITheme::SpinnerIcon(float timeSecs) const
@@ -207,7 +261,8 @@ namespace tachyon
     }
 
     bool GUITheme::LoadTheme(StyleManager& styleManager, ITextSystem* textSystem, const std::string& themePath,
-                             std::span<const std::string> styleFiles, float fontScale)
+                             std::span<const std::string> styleFiles, float fontScale,
+                             std::optional<AccentColors> accent)
     {
         // -------------------------------------------------------------------------
         // Theme = palette file (dark.css / light.css, only `:root` vars) + a
@@ -237,6 +292,15 @@ namespace tachyon
             line += int(std::count(text.begin(), text.end(), '\n')) + 1;
         };
         append(themePath, *palette);
+
+        // Light or dark, from the palette alone; an accent set in code goes after it, so the
+        // style files see it in place of the palette's.
+        {
+            const StyleSheet paletteSheet = ParseStyleSheet(*palette);
+            m_isLight = IsLightColor(PaletteColor(paletteSheet, "--bg-panel", color4b{ 0, 0, 0, 255 }));
+            if (accent)
+                append("(accent)", AccentOverride(m_isLight ? accent->light : accent->dark, m_isLight, paletteSheet));
+        }
         for (const std::string& styleFile : styleFiles)
         {
             const std::filesystem::path path = std::filesystem::path(styleFile).is_absolute()

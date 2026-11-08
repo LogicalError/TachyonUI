@@ -483,6 +483,7 @@ namespace tachyon
             // Appearance page bound values, kept in the saved UI state
             std::string settingsThemePath;            // the palette loaded
             int     settingsMotionIndex = 0; // 0 = as the OS, 1 = reduced, 2 = full
+            int     settingsAccentIndex = 0; // into kAccentPresets; 0 = the palette's own blue
             float   settingsFontScalePct = 100.0f; // percent; 100 = unscaled
 
             // Misc dummy page values
@@ -550,6 +551,8 @@ namespace tachyon
         void RenderSettingsShortcuts();
         /// Reduced motion as settingsMotionIndex says.
         void ApplyMotionSetting();
+        /// The accent settingsAccentIndex picks: none for the palette's own.
+        void ApplyAccentSetting();
         /// The Appearance settings read from the saved UI state, applied (--theme wins).
         void ApplySavedAppearance();
 

@@ -7,6 +7,7 @@
 #include <gui_core/text/gui_text_system.h>
 
 #include <map>
+#include <optional>
 #include <set>
 #include <span>
 #include <string>
@@ -20,6 +21,33 @@ namespace tachyon
 
     class StyleManager;
     class ITextSystem;
+
+    /// An accent color, one for dark palettes and one for light ones: the theme takes the one
+    /// that suits the palette it loads. The colors derived from the accent follow it: the soft
+    /// fill of selected rows, the menu highlight, the text selection, the caret, the focus
+    /// and selection rings, and a hovered divider.
+    struct AccentColors
+    {
+        color4b dark;    ///< for a dark palette
+        color4b light;   ///< for a light palette
+
+        bool operator==(const AccentColors&) const = default;
+    };
+
+    /// A named accent, for a settings page.
+    struct AccentPreset
+    {
+        std::string_view name;
+        AccentColors     colors;
+    };
+
+    /// The accents of the Graphite design: the palettes' own blue, and teal, violet and orange.
+    inline constexpr AccentPreset kAccentPresets[] = {
+        { "Blue",   { { 0x6B, 0x9B, 0xFF, 0xFF }, { 0x2F, 0x6F, 0xEB, 0xFF } } },
+        { "Teal",   { { 0x34, 0xD1, 0xBF, 0xFF }, { 0x0E, 0x82, 0x77, 0xFF } } },
+        { "Violet", { { 0xA9, 0x8B, 0xFF, 0xFF }, { 0x6D, 0x4F, 0xD6, 0xFF } } },
+        { "Orange", { { 0xF5, 0x9E, 0x4B, 0xFF }, { 0xB8, 0x5C, 0x10, 0xFF } } },
+    };
 
     /// Default control styles. GUITheme::controls points at the active bundle;
     /// BeginToolbar/EndToolbar swap in the toolbar variants.
@@ -642,9 +670,16 @@ namespace tachyon
         /// Parses the palette file `themePath` followed by `styleFiles` (in order; relative
         /// paths are next to the palette file) and registers every class, the palette colors
         /// and, when `textSystem` is given, the `@font-face` families. `fontScale` scales every
-        /// font size. Parse errors are logged and skipped; false when a file can't be opened.
+        /// font size. `accent`, when given, replaces the palette's accent and the colors derived
+        /// from it (its dark or light color, as the palette is). Parse errors are logged and
+        /// skipped; false when a file can't be opened.
         bool LoadTheme(StyleManager& styleManager, ITextSystem* textSystem, const std::string& themePath,
-                       std::span<const std::string> styleFiles, float fontScale);
+                       std::span<const std::string> styleFiles, float fontScale,
+                       std::optional<AccentColors> accent = std::nullopt);
+
+        /// Whether the loaded palette is a light one: its --bg-panel is closer to white than
+        /// to black.
+        bool IsLight() const { return m_isLight; }
 
         /// The style of a CSS class from the loaded style files (library or app); an invalid
         /// style, with a warning once per class, when no file defines it.
@@ -660,6 +695,7 @@ namespace tachyon
         void ComputeRowMetrics(StyleManager& styleManager, ITextSystem& textSystem);
     private:
         std::unordered_map<std::string, color4f> m_paletteColors;
+        bool m_isLight = false;
         std::map<std::string, StyleRef, std::less<>> m_classStyles;  ///< every class in the style files
         mutable std::set<std::string, std::less<>>   m_missingWarned;
     };

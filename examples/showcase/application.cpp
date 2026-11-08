@@ -49,6 +49,7 @@ namespace tachyon
         PersistValue("theme", showcase.settingsThemePath);
         PersistValue("fontSize", showcase.settingsFontScalePct);
         PersistValue("motion", showcase.settingsMotionIndex);
+        PersistValue("accent", showcase.settingsAccentIndex);
         PersistShortcuts("shortcuts", commandManager);
         AddBuiltInLayouts();
         PersistLayoutPresets("layouts", showcase.layoutPresets);
@@ -78,9 +79,17 @@ namespace tachyon
             showcase.settingsThemePath = m_startTheme;
         showcase.settingsFontScalePct = std::clamp(std::round(showcase.settingsFontScalePct / 10.0f) * 10.0f, 100.0f, 300.0f);
         showcase.settingsMotionIndex  = std::clamp(showcase.settingsMotionIndex, 0, 2);
+        showcase.settingsAccentIndex  = std::clamp(showcase.settingsAccentIndex, 0, int(std::size(kAccentPresets)) - 1);
         // Loaded before the first frame; one that won't load leaves the theme as it is.
         RequestReloadTheme(showcase.settingsThemePath, showcase.settingsFontScalePct / 100.0f);
         ApplyMotionSetting();
+        ApplyAccentSetting();
+    }
+
+    void Application::ApplyAccentSetting()
+    {
+        SetAccent(showcase.settingsAccentIndex == 0 ? std::nullopt
+                                                     : std::optional<AccentColors>(kAccentPresets[showcase.settingsAccentIndex].colors));
     }
 
     void Application::SetFontScale(float percent)

@@ -397,6 +397,15 @@ namespace tachyon
         const Result<void>& ThemeReloadResult() const { return m_themeReload; }
         const std::string& GetThemePath() const { return m_themePath; }
 
+        /// Replaces the palette's accent with `accent` (its dark color in a dark palette, its
+        /// light one in a light palette), and the colors derived from it along with it; none
+        /// goes back to the palette's own. Applied, like RequestReloadTheme, at the start of
+        /// the next frame, and kept through theme changes. kAccentPresets has the design's.
+        ///     SetAccent(kAccentPresets[1].colors);   // teal
+        void SetAccent(std::optional<AccentColors> accent);
+        /// SetAccent's accent; none while the palette's own is used.
+        const std::optional<AccentColors>& GetAccent() const { return m_accent; }
+
         /// The folder the resources load from: compiled shaders, default fonts and
         /// relative theme paths. Empty (the default) is the working directory; a
         /// package user passes TACHYON_RESOURCE_DIR, which the package defines.
@@ -2903,6 +2912,8 @@ namespace tachyon
         /// The theme that last loaded, for a reload that fails to fall back to.
         std::string m_loadedThemePath;
         float       m_loadedFontScale { 1.0f };
+        std::optional<AccentColors> m_accent;         ///< SetAccent's; none: the palette's own
+        std::optional<AccentColors> m_loadedAccent;   ///< the one the loaded theme has
         std::vector<std::string> m_styleFiles { "styles.css" };
         float       m_globalFontScale { 1.0f };
         float       m_uiScale { 1.0f };
