@@ -302,9 +302,12 @@ The bar can also go in the title bar, with the menus under it, so the menus sit 
 document they act on:
 
 - `DocumentBar(id, set, theme.titleBarDocumentsStyleRef)` draws only the bar: the tabs,
-  "+", "N open" and the line in the active document's color.
+  "+" and "N open".
   - Put it in the title bar, after its other items.
   - The bar's empty space still drags the window.
+- `DocumentLine(set)` draws the line in the active document's color. Call it right after
+  `EndTitleBar`, so it runs under the whole title bar, not only under the tabs.
+  - In its own style, `DocumentBar` draws the line itself, under its tabs.
 - `DocumentPanels(set)` draws the active document's panels, after the bar.
 - `Documents(id, set)` is the two together, the bar on top.
 
@@ -313,6 +316,7 @@ BeginTitleBar(titleBarID);
 Text(appIconID, "T", appIconStyle);
 DocumentBar(documentsID, documents, theme.titleBarDocumentsStyleRef);
 EndTitleBar();
+DocumentLine(documents);
 
 BeginMenuBar(menuBarID);
 // ... File, Edit, View ...
@@ -363,6 +367,7 @@ Document& CreateDocument(DocumentSet& set, std::string name, std::string extensi
 void      CloseDocument(DocumentSet& set, int index);
 void      Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
 void      DocumentBar(ID id, DocumentSet& set, StyleRef style, LayoutOverride&& constraints = LayoutOverride::Auto());
+void      DocumentLine(const DocumentSet& set, LayoutOverride&& constraints = LayoutOverride::Auto());
 void      DocumentPanels(DocumentSet& set, LayoutOverride&& constraints = LayoutOverride::Auto());
 void      EmitFloatingDockWindows(const DocumentSet& documents);
 ```

@@ -1183,6 +1183,7 @@ namespace tachyon
         Text(idManager.AllocateDynamicID("appIcon"), "T", appIconStyleRef);
         DocumentBar(documentsID, documents, theme.titleBarDocumentsStyleRef);
         EndTitleBar();
+        DocumentLine(documents);   // across the window, in the active document's color
 
         // Under it, the menus, the command search and the layouts: they act on the active
         // document.
