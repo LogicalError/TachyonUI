@@ -176,6 +176,144 @@ Classes:
 - `skeleton`: the bar, in `--skeleton`
 - `skeleton-shine`: the shine, in `--skeleton-shine`
 
+### ProgressTask
+
+The controls below show a piece of work described by a `ProgressTask`. You fill one in
+every frame from your own state.
+
+| Field | What it's for |
+| --- | --- |
+| `name` | What the work is: "Importing character.fbx" |
+| `value` | How much is done, 0 to 1. Below 0 when you can't tell: the bar slides instead |
+| `state` | `TaskState::Pending`, `Running` (the default), `Paused`, `Failed` or `Done` |
+| `note` | A short text beside the name: "2.1 s", "1,240 / 3,800". Empty shows the percent while running |
+| `detail` | A line under the bar: "12.4 MB of 19.3 MB". Once failed, why it failed |
+| `onCancel` | Set it to get a cancel button while the work runs or is paused |
+| `onRetry` | Set it to get a Retry button once the work failed |
+
+- The texts are only read during the call, so they can point at temporary strings.
+- `Paused` draws the bar in the warning color and says "paused".
+
+```cpp
+ProgressTask task{ .name = "Exporting level", .value = exportDone, .detail = exportDetail,
+                   .onCancel = [this] { exporter.Cancel(); } };
+```
+
+### TaskProgress
+
+A piece of work in full, for a panel or a dialog.
+
+```cpp
+void TaskProgress(ID id, const ProgressTask& task, LayoutOverride&& constraints = {});
+```
+
+- Running or paused:
+  - a row with the name, the percent (or the note) and a cancel button
+  - the 6px bar under it
+  - the detail under the bar
+- Failed:
+  - an error icon before the name
+  - the bar in the error color
+  - the reason in error text
+  - a Retry button in place of the percent
+- Done: one line with a check, the name and the note, such as how long it took. No bar.
+
+```cpp
+TaskProgress(ProgressTask{ .name = "Importing character.fbx", .value = importDone,
+                           .detail = "12.4 MB of 19.3 MB", .onCancel = [this] { CancelImport(); } });
+```
+
+```cpp
+TaskProgress(ProgressTask{ .name = "Bake failed at 73%", .value = 0.73f, .state = TaskState::Failed,
+                           .detail = bakeError, .onRetry = [this] { StartBake(); } });
+```
+
+```cpp
+TaskProgress(ProgressTask{ .name = "Import complete", .state = TaskState::Done, .note = "2.1 s" });
+```
+
+Classes:
+
+- the whole: `task-progress`; its top row: `task-progress-header`
+- the name: `task-progress-name`, or `task-progress-failed` / `task-progress-done` with
+  their icon
+- beside it: `task-progress-percent`, or `task-progress-note`
+- the buttons: `task-progress-cancel`, `task-progress-retry`
+- under the bar: `task-progress-detail`, or `task-progress-error` once failed
+
+### ProgressSteps
+
+The steps of a longer job, one per row.
+
+```cpp
+void ProgressSteps(ID id, std::span<const ProgressTask> steps, LayoutOverride&& constraints = {});
+```
+
+- Each row starts with a 16px glyph for the step's state:
+  - done: a check on a green disc
+  - running: a spinner
+  - pending: a dashed ring (in the warning color when paused)
+  - failed: a cross on a red disc
+- A pending step's name is dimmed.
+- The running step has a 4px bar under its name.
+- The note (or the running step's percent) is at the end of the row.
+
+```cpp
+const ProgressTask steps[] = {
+    { .name = "Compile scripts", .state = TaskState::Done, .note = "4.2 s" },
+    { .name = "Bake lighting",   .value = 0.42f, .state = TaskState::Running },
+    { .name = "Package assets",  .state = TaskState::Pending },
+};
+ProgressSteps(steps);
+```
+
+Classes: `progress-steps`, `progress-step`, `progress-step-body`, `progress-step-name`,
+`progress-step-pending`, and the glyphs `progress-step-done`, `progress-step-failed`,
+`progress-step-waiting`, `progress-step-paused`.
+
+### StatusProgress
+
+A piece of work in a [status bar](#status-bar): a 12px spinner while it runs, its name, a
+120px bar and its note or percent.
+
+```cpp
+void StatusProgress(ID id, const ProgressTask& task, LayoutOverride&& constraints = {});
+```
+
+```cpp
+BeginStatusBar();
+StatusProgress(ProgressTask{ .name = "Indexing assets", .value = indexed, .note = indexCount });
+EndStatusBar();
+```
+
+Classes: `status-progress`, `status-text` (the name), `status-text-mono` (the note).
+
+### BackgroundTasks
+
+A pill such as "3 tasks", for a status bar, that opens a popover listing the work running
+in the background.
+
+```cpp
+bool BackgroundTasks(ID id, std::span<const ProgressTask> tasks, LayoutOverride&& constraints = {});
+```
+
+- A click on the pill opens the popover above it, and another click closes it.
+  - So does a click anywhere else, or Escape.
+- Each row shows the task's name, a 4px bar, its percent or state, and a cancel button
+  when `onCancel` is set.
+- It shows nothing while `tasks` is empty.
+- It returns whether the popover is open.
+
+```cpp
+BeginStatusBar();
+StatusText("Ready", LayoutOverride::Auto().FlexGrow(1));
+BackgroundTasks(backgroundTasksID, backgroundTasks);   // member: std::vector<ProgressTask>
+EndStatusBar();
+```
+
+Classes: `tasks-pill`, `tasks-popover`, `tasks-popover-header`, `tasks-popover-title`,
+`tasks-popover-count`, `tasks-row`, `tasks-row-body`, `tasks-row-state`.
+
 ### Moving parts in your own controls
 
 A control you write that moves every frame needs `ElementFlags::Animated` on its element.

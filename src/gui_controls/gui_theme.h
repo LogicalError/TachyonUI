@@ -446,6 +446,37 @@ namespace tachyon
         StyleRef skeletonShineStyleRef {};       ///< the shine sweeping across it
         tachyon::VisualColorStyleIndex progressTrackColor {};   ///< --line-subtle: a spinner's ring
         tachyon::VisualColorStyleIndex progressArcColor {};     ///< --accent: a spinner's arc
+        StyleRef progressFillPausedStyleRef {};  ///< the part done of a paused one, in the warning color
+        StyleRef taskProgressStyleRef {};        ///< TaskProgress: name row, bar, detail
+        StyleRef taskProgressHeaderStyleRef {};  ///< its name row
+        StyleRef taskProgressNameStyleRef {};    ///< the name
+        StyleRef taskProgressFailedStyleRef {};  ///< the name with the error icon
+        StyleRef taskProgressDoneStyleRef {};    ///< the name with the check
+        StyleRef taskProgressPercentStyleRef {}; ///< the percent, monospace
+        StyleRef taskProgressNoteStyleRef {};    ///< a note such as the time taken, monospace
+        StyleRef taskProgressCancelStyleRef {};  ///< the cancel button
+        StyleRef taskProgressRetryStyleRef {};   ///< the Retry button
+        StyleRef taskProgressDetailStyleRef {};  ///< the line under the bar
+        StyleRef taskProgressErrorStyleRef {};   ///< the line under the bar once failed: why
+        StyleRef progressStepsStyleRef {};       ///< ProgressSteps: the rows
+        StyleRef progressStepStyleRef {};        ///< a step's row
+        StyleRef progressStepDoneStyleRef {};    ///< a done step's glyph: a check on an --ok disc
+        StyleRef progressStepFailedStyleRef {};  ///< a failed step's: a cross on an --error disc
+        StyleRef progressStepWaitingStyleRef {}; ///< a pending step's: a dashed ring
+        StyleRef progressStepPausedStyleRef {};  ///< a paused step's: a dashed ring in --warn
+        StyleRef progressStepBodyStyleRef {};    ///< its name and bar
+        StyleRef progressStepNameStyleRef {};    ///< the name of a step started or done
+        StyleRef progressStepPendingStyleRef {}; ///< the name of a step to come
+        StyleRef statusProgressStyleRef {};      ///< StatusProgress: spinner, name, bar, count
+        StyleRef statusTextMonoStyleRef {};      ///< a status bar's count, monospace
+        StyleRef tasksPillStyleRef {};           ///< BackgroundTasks' "3 tasks" pill
+        StyleRef tasksPopoverStyleRef {};        ///< its popover
+        StyleRef tasksPopoverHeaderStyleRef {};  ///< "Background tasks" and the count running
+        StyleRef tasksPopoverTitleStyleRef {};   ///< "Background tasks"
+        StyleRef tasksPopoverCountStyleRef {};   ///< the count running
+        StyleRef tasksRowStyleRef {};            ///< a task's row
+        StyleRef tasksRowBodyStyleRef {};        ///< its name and bar
+        StyleRef tasksRowStateStyleRef {};       ///< its percent or state, monospace
         static constexpr int kSpinnerFrames = 24;
         /// A 90-degree arc, one frame per 15 degrees round: a spinner that goes where an icon
         /// goes, in the color of the icon it stands in for (BusyButton).
@@ -525,6 +556,8 @@ namespace tachyon
 
         IconID tabCloseIcon = IconID::Invalid; ///< a tab's close button
         IconID menuCheckIcon = IconID::Invalid; ///< marks the current/checked item in a menu
+        IconID boldCheckIcon = IconID::Invalid; ///< a heavier check, small on a filled disc: a done step
+        IconID boldCrossIcon = IconID::Invalid; ///< a heavier cross, small on a filled disc: a failed step
         IconID dropdownArrowIcon = IconID::Invalid; ///< after a dropdown's text (menu triggers outside a menu bar)
         IconID dropdownArrowUpIcon = IconID::Invalid; ///< the same while its menu is open
         IconID chevronLeftIcon   = IconID::Invalid; ///< previous

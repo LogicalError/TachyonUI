@@ -56,6 +56,8 @@
     --warn: #E5B454;          /* also NaN values, over-budget frames */
     --warn-text: #E5B454;
     --error: #EF6A6A;
+    --error-text: #F28B8B;    /* error messages in running text */
+    --on-ok: #0B0C0F;         /* a mark on an --ok fill */
     --invalid-halo: 0 0 0 3px #EF6A6A2B;  /* around an invalid control: the error color at 17% */
     --danger: #EF6A6A;      /* destructive buttons */
     --on-danger: #0B0C0F;
