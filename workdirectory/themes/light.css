@@ -18,6 +18,9 @@
     --bg-keycap: #FFFFFF;
     --row-stripe: #F6F7F9;
     --canvas-dot: #B5BCC7;
+    --frame-fill: #5F66730F;   /* a node frame's box: --text-3 at 6% */
+    --frame-band: #5F66731F;   /* its title bar: --text-3 at 12% */
+    --frame-border: #5F667342; /* its edge: --text-3 at 26% */
     /* ---- Lines ------------------------------------------------------------ */
     --panel-border: #DADDE3;
     --line-subtle: #E3E6EB;

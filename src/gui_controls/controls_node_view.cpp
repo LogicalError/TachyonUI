@@ -128,14 +128,17 @@ namespace tachyon
         const ID wireMenuID   = idManager.AllocateDynamicID("wire-menu");     // owns the wire context menu
         const ID canvasMenuID = idManager.AllocateDynamicID("canvas-menu");   // the canvas's (onCanvasContextMenu)
         const ID nodeMenuID   = idManager.AllocateDynamicID("node-menu");     // a node's (onNodeContextMenu)
+        const ID frameMenuID  = idManager.AllocateDynamicID("frame-menu");    // a frame's (onFrameContextMenu)
 
         // Opens one of the view's context menus at `screen`; the others close.
         auto openMenu = [this, &view](ID menuID, int2 screen, std::optional<uint32_t> wire,
-                                      std::optional<float2> canvasPos, std::optional<ID> node)
+                                      std::optional<float2> canvasPos, std::optional<ID> node,
+                                      std::optional<ID> frame = std::nullopt)
         {
-            view.wireMenuWire  = wire;
-            view.canvasMenuPos = canvasPos;
-            view.nodeMenuNode  = node;
+            view.wireMenuWire   = wire;
+            view.canvasMenuPos  = canvasPos;
+            view.nodeMenuNode   = node;
+            view.frameMenuFrame = frame;
             OpenContextMenu(menuID, screen);
         };
 
@@ -192,6 +195,20 @@ namespace tachyon
             if (!open)
                 view.nodeMenuNode.reset();
         }
+        if (view.frameMenuFrame)
+        {
+            // By its stableID, as a node's.
+            const auto it = std::find_if(view.frames.begin(), view.frames.end(),
+                                         [&](const NodeFrame& frame) { return frame.stableID == *view.frameMenuFrame; });
+            const bool there = it != view.frames.end();
+            const bool open  = there && BeginContextMenu(frameMenuID);
+            if (open && view.onFrameContextMenu)
+                view.onFrameContextMenu(int(it - view.frames.begin()));
+            if (there)
+                EndContextMenu();
+            if (!open)
+                view.frameMenuFrame.reset();
+        }
 
         // Edit-mode wiring: while this canvas has focus, set the command
         // manager to the view's mode; restore Default when focus leaves.
@@ -208,7 +225,7 @@ namespace tachyon
         tachyon::Element canvas
         {
             .id = canvasID,
-            .eventHandler = [this, &view, canvasID, wireMenuID, canvasMenuID, nodeMenuID, openMenu](ElementEvent&& event)->bool
+            .eventHandler = [this, &view, canvasID, wireMenuID, canvasMenuID, nodeMenuID, frameMenuID, openMenu](ElementEvent&& event)->bool
             {
                 switch (event.type)
                 {
@@ -233,6 +250,7 @@ namespace tachyon
                             // rect each MouseMove (see screenToCanvasLay below).
                             view.marqueeCurrentScreen = event.state.screenPos;
                             view.marqueeBaseSelection = view.selectedNodeIDs;
+                            view.marqueeBaseFrames    = view.selectedFrameIDs;
                             view.marqueeShift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                             view.marqueeCtrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
                         }
@@ -256,32 +274,47 @@ namespace tachyon
                             {
                                 // Select nodes fully inside the marquee (CANVAS_LAY), using the
                                 // live canvas rect in case the panel moved since MouseDown.
-                                const std::unordered_set<ID> hit = ComputeNodesInMarquee(
+                                std::unordered_set<ID> hit = ComputeNodesInMarquee(
                                     view.nodes,
                                     event.rect->innerRect,
                                     view.transform,
                                     view.marquee.pressScreen,
                                     view.marqueeCurrentScreen);
-
-                                if (view.marqueeShift)
+                                std::erase_if(hit, [&view](ID id) {   // not what a collapsed frame hides
+                                    return std::any_of(view.nodes.begin(), view.nodes.end(),
+                                                       [id](const NodeModel& node) { return node.hidden && node.stableID == id; });
+                                });
+                                // The frames wholly inside it too, compared the same way, as they're
+                                // drawn: a collapsed one by its box, a hidden one not at all.
+                                std::unordered_set<ID> framesHit;
                                 {
-                                    view.selectedNodeIDs = view.marqueeBaseSelection;
-                                    for (ID id : hit) view.selectedNodeIDs.insert(id);
-                                }
-                                else if (view.marqueeCtrl)
-                                {
-                                    view.selectedNodeIDs = view.marqueeBaseSelection;
-                                    for (ID id : hit)
+                                    const float2 a = NodeViewScreenToCanvas(view.transform, event.rect->innerRect, view.marquee.pressScreen);
+                                    const float2 b = NodeViewScreenToCanvas(view.transform, event.rect->innerRect, view.marqueeCurrentScreen);
+                                    const float2 lo{ std::min(a.x, b.x), std::min(a.y, b.y) }, hi{ std::max(a.x, b.x), std::max(a.y, b.y) };
+                                    for (size_t f = 0; f < view.frames.size() && f < view.frameBoxes.size(); ++f)
                                     {
-                                        auto it = view.selectedNodeIDs.find(id);
-                                        if (it != view.selectedNodeIDs.end()) view.selectedNodeIDs.erase(it);
-                                        else                                  view.selectedNodeIDs.insert(id);
+                                        const IntRect box = view.frameBoxes[f];
+                                        if (box.w > 0 && float(box.x) >= lo.x && float(box.y) >= lo.y
+                                            && float(box.x + box.w) <= hi.x && float(box.y + box.h) <= hi.y)
+                                            framesHit.insert(view.frames[f].stableID);
                                     }
                                 }
-                                else
+
+                                // Shift adds what it holds, Ctrl toggles it; else it's the selection.
+                                auto apply = [&](std::unordered_set<ID>& selection, const std::unordered_set<ID>& base,
+                                                 const std::unordered_set<ID>& inside)
                                 {
-                                    view.selectedNodeIDs = std::move(hit);
-                                }
+                                    if (view.marqueeShift || view.marqueeCtrl)
+                                    {
+                                        selection = base;
+                                        for (ID id : inside)
+                                            if (!view.marqueeCtrl || !selection.erase(id)) selection.insert(id);
+                                    }
+                                    else
+                                        selection = inside;
+                                };
+                                apply(view.selectedNodeIDs, view.marqueeBaseSelection, hit);
+                                apply(view.selectedFrameIDs, view.marqueeBaseFrames, framesHit);
                             }
                             return true;
                         }
@@ -317,6 +350,18 @@ namespace tachyon
                                 openMenu(nodeMenuID, event.state.screenPos, std::nullopt, std::nullopt, id);
                                 return true;
                             }
+                            // On a frame's title, its menu, the frame selected as a node is.
+                            if (const int f = FrameTitleAtCanvasPos(view, at); f >= 0 && view.onFrameContextMenu)
+                            {
+                                const ID id = view.frames[size_t(f)].stableID;
+                                if (!view.selectedFrameIDs.contains(id))
+                                {
+                                    view.selectedNodeIDs.clear();
+                                    view.selectedFrameIDs = { id };
+                                }
+                                openMenu(frameMenuID, event.state.screenPos, std::nullopt, std::nullopt, std::nullopt, id);
+                                return true;
+                            }
                             if (view.onCanvasContextMenu)
                             {
                                 openMenu(canvasMenuID, event.state.screenPos, std::nullopt, at, std::nullopt);
@@ -327,7 +372,10 @@ namespace tachyon
                         {
                             // Bare click on empty background - clear selection.
                             if (ended == PointerDrag::Ended::Click && !view.marqueeShift && !view.marqueeCtrl)
+                            {
                                 view.selectedNodeIDs.clear();
+                                view.selectedFrameIDs.clear();
+                            }
                             return true;
                         }
                         return false;
@@ -372,7 +420,8 @@ namespace tachyon
                         {
                             if (view.marquee.Cancel(event.id))
                             {
-                                view.selectedNodeIDs = view.marqueeBaseSelection;
+                                view.selectedNodeIDs  = view.marqueeBaseSelection;
+                                view.selectedFrameIDs = view.marqueeBaseFrames;
                                 return true;
                             }
                             if (view.pan.Cancel(event.id))
@@ -406,6 +455,16 @@ namespace tachyon
                                 openMenu(nodeMenuID, int2{ int32_t(below.x), int32_t(below.y) }, std::nullopt, std::nullopt, node.stableID);
                                 return true;
                             }
+                            // No node selected but a frame: the frame's, under its title bar.
+                            if (selected < 0 && view.onFrameContextMenu)
+                                for (const NodeFrame& frame : view.frames)
+                                    if (view.selectedFrameIDs.contains(frame.stableID))
+                                    {
+                                        const int32_t bar = 2 * std::max(1, view.gridSize);
+                                        const float2 below = NodeViewCanvasToScreen(view, float2{ float(frame.pos.x), float(frame.pos.y + bar) });
+                                        openMenu(frameMenuID, int2{ int32_t(below.x), int32_t(below.y) }, std::nullopt, std::nullopt, std::nullopt, frame.stableID);
+                                        return true;
+                                    }
                             if (selected < 0 && view.onCanvasContextMenu)
                             {
                                 const int2 centre = view.lastCanvasRect.position + int2{ view.lastCanvasRect.w / 2, view.lastCanvasRect.h / 2 };
@@ -453,15 +512,21 @@ namespace tachyon
                                 ZoomNodeView(view, 1.0f / 1.1f);
                                 return true;
                             case KeyCode::Escape:
-                                if (view.selectedNodeIDs.empty())
+                                if (view.selectedNodeIDs.empty() && view.selectedFrameIDs.empty())
                                     return false;
                                 view.selectedNodeIDs.clear();
+                                view.selectedFrameIDs.clear();
                                 return true;
                             case KeyCode::KeyA:
                                 if (!ctrl)
                                     return false;
+                                // All that shows: what a collapsed frame hides leaves the
+                                // selection again as the frame is built.
                                 for (const NodeModel& node : view.nodes)
                                     view.selectedNodeIDs.insert(node.stableID);
+                                for (size_t f = 0; f < view.frames.size(); ++f)
+                                    if (f >= view.frameBoxes.size() || view.frameBoxes[f].w > 0)
+                                        view.selectedFrameIDs.insert(view.frames[f].stableID);
                                 return true;
                             case KeyCode::Return: case KeyCode::Return2: case KeyCode::KeyPadEnter:
                             {
@@ -469,7 +534,12 @@ namespace tachyon
                                 for (int i = 0; i < (int)view.nodes.size(); ++i)
                                     if (view.selectedNodeIDs.count(view.nodes[i].stableID) && !view.nodes[i].reroute)   // a dot doesn't collapse
                                         edit.collapses.push_back({ i, view.nodes[i].collapsed, !view.nodes[i].collapsed });
-                                if (edit.collapses.empty())
+                                // And the selected frames.
+                                for (int f = 0; f < (int)view.frames.size(); ++f)
+                                    if (view.selectedFrameIDs.contains(view.frames[size_t(f)].stableID))
+                                        for (const auto& change : CollapseFrameEdit(view, f, !view.frames[size_t(f)].collapsed).frameChanges)
+                                            edit.frameChanges.push_back(change);
+                                if (edit.collapses.empty() && edit.frameChanges.empty())
                                     return false;
                                 CommitNodeViewEdit(view, edit);
                                 return true;
@@ -530,10 +600,10 @@ namespace tachyon
         // Per-frame socket refs for the wire pass. Index: [nodeIdx][propIdx * 2 + isOutput]
         std::vector<std::vector<ElementRef>> socketRefs(nodeCount);
         for (int n = 0; n < nodeCount; ++n)
-            socketRefs[n].assign(view.nodes[n].properties.size() * 2, ElementRef{});
+            socketRefs[n].assign(view.nodes[n].properties.size() * 2, ElementRef::Invalid());   // not ElementRef{}: that's the root
 
         // Per-frame node refs; the wire pass routes around the node bodies.
-        std::vector<ElementRef> nodeRefs(nodeCount);
+        std::vector<ElementRef> nodeRefs(static_cast<size_t>(nodeCount), ElementRef::Invalid());
 
         // Outputs that drive at least one input, by WireKey of the output's endpoint.
         std::unordered_set<uint32_t> drivenOutputs;
@@ -769,6 +839,497 @@ namespace tachyon
             socketInsetR  += nodeLS->borderWidths.right + nodeLS->padding.right;
         }
 
+        // ---- Frames: behind the wires and the nodes ----
+        // Their boxes are drawn in the canvas's own pass, before the wires; here are the parts
+        // that take the mouse, emitted first so wires and nodes win the hits: the title (a
+        // drag moves the frame and what's inside it, a double-click renames it) and the right
+        // and bottom edges and the corner between (a drag resizes it). The rest of the box
+        // takes no input, so a marquee or a pan starts inside it as anywhere on the canvas.
+        view.gridSize = theme.nodeGridSize;
+        const int32_t frameGrid = std::max(1, theme.nodeGridSize);
+        const int32_t frameBar  = 2 * frameGrid;   // the title bar: one row pitch, as a node's header
+        struct DrawnFrame { ElementRef title; int2 size; ElementState state; tachyon::VisualColorStyleIndex fill, band; };
+        std::vector<DrawnFrame> drawnFrames;
+        // Nodes inside a collapsed frame: which frame (-1: none), and, for those with wires
+        // crossing its edge, the box and their sockets on it (property, output, row).
+        struct HiddenPort { int prop; bool output; int row; };
+        std::vector<int>                     nodeHiddenBy(size_t(nodeCount), -1);
+        std::vector<IntRect>                 hiddenBox(static_cast<size_t>(nodeCount));
+        std::vector<std::vector<HiddenPort>> hiddenPorts(static_cast<size_t>(nodeCount));
+        {
+            // Frames gone (the app's own edit, an undo) drop out of the selection and the drag.
+            std::erase_if(view.selectedFrameIDs, [&view](ID id) {
+                return std::none_of(view.frames.begin(), view.frames.end(), [id](const NodeFrame& f) { return f.stableID == id; });
+            });
+            auto frameIndex = [&view](ID id) {
+                for (int f = 0; f < (int)view.frames.size(); ++f)
+                    if (view.frames[size_t(f)].stableID == id) return f;
+                return -1;
+            };
+            if (view.frameDrag.press.IsHeld() && frameIndex(view.frameDrag.frameID) < 0)
+                view.frameDrag = {};
+            if (view.renamingFrame && frameIndex(*view.renamingFrame) < 0)
+                view.renamingFrame.reset();
+
+            const int32_t minWidth = 6 * frameGrid, minHeight = 2 * frameBar;
+            const int32_t grip = styleManager.Px(6);
+            const bool    snap = theme.nodeGridSize > 0 && view.snapToGrid;
+            const int     frameCount = (int)view.frames.size();
+            for (NodeFrame& frame : view.frames)
+            {
+                // On the grid when nodes are, whole cells big, and never smaller than a title
+                // bar over a row.
+                if (snap)
+                {
+                    frame.pos  = { SnapToGrid(frame.pos.x, frameGrid), SnapToGrid(frame.pos.y, frameGrid) };
+                    frame.size = { SnapToGrid(frame.size.x, frameGrid), SnapToGrid(frame.size.y, frameGrid) };
+                }
+                frame.size = { std::max(frame.size.x, minWidth), std::max(frame.size.y, minHeight) };
+            }
+            // What a collapsed frame holds is fixed as it collapses; one the app collapsed by
+            // setting the flag notes it now. Expanded, it goes by what lies inside it again.
+            for (int f = 0; f < frameCount; ++f)
+            {
+                NodeFrame& frame = view.frames[size_t(f)];
+                if (!frame.collapsed)
+                    frame.members.reset();
+                else if (!frame.members)
+                {
+                    frame.collapsed = false;
+                    frame.members = CollapseFrameEdit(view, f, true).frameChanges[0].to.members;
+                    frame.collapsed = true;
+                }
+            }
+
+            // What the collapsed frames hide: the frames and nodes each holds, the outermost
+            // one standing for them (the largest first).
+            auto isMember = [](const NodeFrame& outer, ID id) {
+                return outer.members && std::find(outer.members->begin(), outer.members->end(), id) != outer.members->end();
+            };
+            std::vector<int> byArea(static_cast<size_t>(frameCount));
+            for (int f = 0; f < frameCount; ++f) byArea[size_t(f)] = f;
+            std::stable_sort(byArea.begin(), byArea.end(), [&view](int a, int b) {
+                const int2 sa = view.frames[size_t(a)].size, sb = view.frames[size_t(b)].size;
+                return int64_t(sa.x) * sa.y > int64_t(sb.x) * sb.y;
+            });
+            std::vector<int> frameHiddenBy(size_t(frameCount), -1);
+            for (const int f : byArea)
+            {
+                const NodeFrame& outer = view.frames[size_t(f)];
+                if (!outer.collapsed || frameHiddenBy[size_t(f)] >= 0) continue;
+                for (int other = 0; other < frameCount; ++other)
+                    if (other != f && frameHiddenBy[size_t(other)] < 0 && isMember(outer, view.frames[size_t(other)].stableID))
+                        frameHiddenBy[size_t(other)] = f;
+                for (int n = 0; n < nodeCount; ++n)
+                    if (nodeHiddenBy[size_t(n)] < 0 && isMember(outer, view.nodes[size_t(n)].stableID))
+                        nodeHiddenBy[size_t(n)] = f;
+            }
+            for (int n = 0; n < nodeCount; ++n)
+            {
+                NodeModel& node = view.nodes[size_t(n)];
+                node.hidden = nodeHiddenBy[size_t(n)] >= 0;
+                if (node.hidden)
+                    view.selectedNodeIDs.erase(node.stableID);   // what can't be seen isn't selected
+            }
+
+            // A collapsed frame's rows: an input for each wire coming in from outside it, an
+            // output for each output inside it feeding a node outside, in node order.
+            std::vector<std::vector<PropertyEndpoint>> portsIn(static_cast<size_t>(frameCount)), portsOut(static_cast<size_t>(frameCount));
+            for (int n = 0; n < nodeCount; ++n)
+            {
+                const int inside = nodeHiddenBy[size_t(n)];
+                const auto& props = view.nodes[size_t(n)].properties;
+                for (int p = 0; p < (int)props.size(); ++p)
+                {
+                    const auto& source = props[size_t(p)].input;
+                    if (!source || !source->valid() || source->nodeIdx >= nodeCount) continue;
+                    const int from = nodeHiddenBy[size_t(source->nodeIdx)];
+                    if (inside >= 0 && from != inside)
+                        portsIn[size_t(inside)].push_back({ n, p });
+                    if (from >= 0 && from != inside)
+                    {
+                        auto& outs = portsOut[size_t(from)];
+                        if (std::find(outs.begin(), outs.end(), *source) == outs.end())
+                            outs.push_back(*source);
+                    }
+                }
+            }
+            for (auto& outs : portsOut)
+                std::sort(outs.begin(), outs.end(), [](PropertyEndpoint a, PropertyEndpoint b) {
+                    return a.nodeIdx != b.nodeIdx ? a.nodeIdx < b.nodeIdx : a.propIdx < b.propIdx;
+                });
+
+            view.frameBoxes.assign(size_t(frameCount), IntRect{});
+            for (int f = 0; f < frameCount; ++f)
+            {
+                NodeFrame& frame = view.frames[size_t(f)];
+                if (frameHiddenBy[size_t(f)] >= 0)
+                    continue;   // inside a collapsed frame: not shown
+
+                // Collapsed: a node-like box, no wider than a wide node, a row per port.
+                const int rows = int(std::max(portsIn[size_t(f)].size(), portsOut[size_t(f)].size()));
+                const IntRect box = frame.collapsed
+                    ? IntRect{ frame.pos.x, frame.pos.y, std::min(frame.size.x, 16 * frameGrid), frameBar + rows * frameBar + (rows > 0 ? frameGrid : 0) }
+                    : IntRect{ frame.pos.x, frame.pos.y, frame.size.x, frame.size.y };
+                view.frameBoxes[size_t(f)] = box;
+                if (frame.collapsed)
+                {
+                    // Where each hidden node's crossing sockets go: on the box's edges, by row.
+                    for (int r = 0; r < (int)portsIn[size_t(f)].size(); ++r)
+                    {
+                        const PropertyEndpoint e = portsIn[size_t(f)][size_t(r)];
+                        hiddenBox[size_t(e.nodeIdx)] = box;
+                        hiddenPorts[size_t(e.nodeIdx)].push_back({ e.propIdx, false, r });
+                    }
+                    for (int r = 0; r < (int)portsOut[size_t(f)].size(); ++r)
+                    {
+                        const PropertyEndpoint e = portsOut[size_t(f)][size_t(r)];
+                        hiddenBox[size_t(e.nodeIdx)] = box;
+                        hiddenPorts[size_t(e.nodeIdx)].push_back({ e.propIdx, true, r });
+                    }
+                }
+
+                const ID frameID = frame.stableID;
+                [[maybe_unused]] const bool pushed = idManager.PushParent(frameID);
+                const ID titleID = idManager.AllocateDynamicID("frame-title");
+                const ID gripIDs[3] = { idManager.AllocateDynamicID("frame-right"), idManager.AllocateDynamicID("frame-bottom"),
+                                        idManager.AllocateDynamicID("frame-corner") };
+
+                // The box shows the title's and the grips' hover, and its selection.
+                ElementState state = guiStateManager.GetCurrentState(titleID) & (ElementState::Hover | ElementState::Active);
+                for (const ID g : gripIDs)
+                    state |= guiStateManager.GetCurrentState(g) & ElementState::Hover;
+                if (view.selectedFrameIDs.contains(frameID))
+                    state |= ElementState::Selected;
+
+                // A press on the title or a grip: what it moves, as it is now.
+                auto press = [this, &view, frameID, frameIndex](const ElementEvent& event, FrameEdges edges)
+                {
+                    const int index = frameIndex(frameID);
+                    if (index < 0) return;
+                    FrameDrag& drag = view.frameDrag;
+                    drag = FrameDrag{ .frameID = frameID, .edges = edges };
+                    drag.press.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ edges != FrameEdges::None);
+                    drag.frames.push_back({ index, view.frames[size_t(index)] });
+                    if (edges == FrameEdges::None)
+                    {
+                        // A move takes the frames it holds along (wholly inside it, or, collapsed,
+                        // the ones it held then), and the nodes any of them holds.
+                        const NodeFrame& outer = view.frames[size_t(index)];
+                        for (int other = 0; other < (int)view.frames.size(); ++other)
+                        {
+                            const NodeFrame& inner = view.frames[size_t(other)];
+                            const bool held = outer.collapsed && outer.members
+                                ? std::find(outer.members->begin(), outer.members->end(), inner.stableID) != outer.members->end()
+                                : inner.pos.x >= outer.pos.x && inner.pos.y >= outer.pos.y
+                                  && inner.pos.x + inner.size.x <= outer.pos.x + outer.size.x
+                                  && inner.pos.y + inner.size.y <= outer.pos.y + outer.size.y;
+                            if (other != index && held)
+                                drag.frames.push_back({ other, inner });
+                        }
+                        std::unordered_set<int> nodes;
+                        for (const auto& [moved, before] : drag.frames)
+                            for (const int n : NodesInFrame(view, moved))
+                                if (nodes.insert(n).second)
+                                    drag.nodes.push_back({ n, view.nodes[size_t(n)].pos });
+                    }
+                    guiStateManager.Interaction().SetCaptureID(event.id);
+                };
+                // The frames and nodes as they were at the press: Escape, or before a move.
+                auto restore = [&view]
+                {
+                    for (const auto& [index, before] : view.frameDrag.frames)
+                        if (index < (int)view.frames.size()) view.frames[size_t(index)] = before;
+                    for (const auto& [index, pos] : view.frameDrag.nodes)
+                        if (index < (int)view.nodes.size()) view.nodes[size_t(index)].pos = pos;
+                };
+                // The drag let go: one edit, from the frames and nodes as they were to as they are.
+                auto finish = [&view]
+                {
+                    NodeViewEdit edit;
+                    for (const auto& [index, before] : view.frameDrag.frames)
+                        if (index < (int)view.frames.size() && !(view.frames[size_t(index)] == before))
+                            edit.frameChanges.push_back({ index, before, view.frames[size_t(index)] });
+                    for (const auto& [index, pos] : view.frameDrag.nodes)
+                        if (index < (int)view.nodes.size() && !(view.nodes[size_t(index)].pos == pos))
+                            edit.moves.push_back({ index, pos, view.nodes[size_t(index)].pos });
+                    view.frameDrag = {};
+                    CommitNodeViewEdit(view, edit);
+                };
+
+                // Collapsed, a node's box under the title: its header in the frame's tint, and a
+                // row per port, the input's name at the left, the output's at the right.
+                if (frame.collapsed)
+                {
+                    const ID boxID = idManager.AllocateDynamicID("frame-box");
+                    auto boxRes = elementStorage.Add(Element{ .id = boxID, .styleRef = theme.nodeStyleRef, .flags = ElementFlags::NoInput, .state = state },
+                                                     LayoutOverride{}.FixedSize(Pixels{ box.w }, Pixels{ box.h }).Absolute(box.x, box.y));
+                    VERIFY(boxRes.status);
+                    VERIFY(windowRegistry.Add(boxRes.ref));
+                    VERIFY(elementStorage.BeginChildren());
+                    tachyon::VisualColorStyleIndex tint{};
+                    if (frame.color.a > 0.0f)
+                        tint = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
+                            tachyon::color4f{ frame.color.r, frame.color.g, frame.color.b, frame.color.a * 0.32f }));
+                    auto headerRes = elementStorage.Add(Element{ .id = idManager.AllocateDynamicID("frame-box-header"),
+                                                                 .styleRef = theme.nodeHeaderStyleRef, .flags = ElementFlags::NoInput,
+                                                                 .state = state, .colorStyleIndex = tint },
+                                                        LayoutOverride{}.Height(Pixels{ std::max(1, frameBar - nodeTopChromeV) }));
+                    VERIFY(headerRes.status);
+                    VERIFY(windowRegistry.Add(headerRes.ref));
+                    // A port's name: its node's title, and its pin's name when it has one.
+                    auto portName = [&view](PropertyEndpoint e) {
+                        const NodeModel& node = view.nodes[size_t(e.nodeIdx)];
+                        const std::string& pin = node.properties[size_t(e.propIdx)].name;
+                        return pin.empty() ? node.title : node.title + "." + pin;
+                    };
+                    for (int r = 0; r < rows; ++r)
+                    {
+                        const ID rowID = idManager.AllocateDynamicID("frame-port-row");
+                        auto rowRes = elementStorage.Add(Element{ .id = rowID, .styleRef = theme.nodeFramePortsStyleRef, .flags = ElementFlags::NoInput },
+                                                         LayoutOverride{}.Height(Pixels{ frameBar }));
+                        VERIFY(rowRes.status);
+                        VERIFY(windowRegistry.Add(rowRes.ref));
+                        VERIFY(elementStorage.BeginChildren());
+                        const std::string in  = r < (int)portsIn[size_t(f)].size()  ? portName(portsIn[size_t(f)][size_t(r)])  : std::string();
+                        const std::string out = r < (int)portsOut[size_t(f)].size() ? portName(portsOut[size_t(f)][size_t(r)]) : std::string();
+                        Text(idManager.AllocateDynamicID("frame-port-in"), in, theme.nodeFramePortStyleRef, LayoutOverride{}.FlexGrow(1));
+                        Text(idManager.AllocateDynamicID("frame-port-out"), out, theme.nodeFramePortOutStyleRef, LayoutOverride{}.FlexGrow(1));
+                        VERIFY(elementStorage.EndChildren());
+                    }
+                    VERIFY(elementStorage.EndChildren());
+                }
+
+                Element title
+                {
+                    .id = titleID,
+                    .eventHandler = [this, &view, canvasID, frameID, titleID, frameIndex, press, restore, finish,
+                                     frameGrid, snap, chevron = styleManager.Px(28)](ElementEvent&& event) -> bool
+                    {
+                        FrameDrag& drag = view.frameDrag;
+                        switch (event.type)
+                        {
+                            case EventType::MouseDown:
+                            {
+                                // A right press is the canvas's: a pan, or this frame's menu.
+                                if (!event.state.LeftPressed()) return false;
+                                guiStateManager.Interaction().SetFocusID(canvasID);
+                                const int index = frameIndex(frameID);
+                                if (index < 0) return false;
+                                // The chevron at the title's left collapses or expands it.
+                                if (NodeViewScreenToCanvas(view, event.state.screenPos).x < float(view.frames[size_t(index)].pos.x + chevron))
+                                {
+                                    CommitNodeViewEdit(view, CollapseFrameEdit(view, index, !view.frames[size_t(index)].collapsed));
+                                    return true;
+                                }
+                                if (view.frameDoubleClick.IsDoubleClick(frameID))
+                                {
+                                    view.renamingFrame = frameID;
+                                    view.renameText    = view.frames[size_t(index)].title;
+                                    view.renameFocused = false;
+                                    return true;
+                                }
+                                // Selected as a node is: Shift adds it, Ctrl toggles it, a plain
+                                // click on one not selected selects it alone.
+                                const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
+                                const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
+                                if (shift)
+                                    view.selectedFrameIDs.insert(frameID);
+                                else if (ctrl)
+                                {
+                                    if (!view.selectedFrameIDs.erase(frameID)) view.selectedFrameIDs.insert(frameID);
+                                }
+                                else if (!view.selectedFrameIDs.contains(frameID))
+                                {
+                                    view.selectedNodeIDs.clear();
+                                    view.selectedFrameIDs = { frameID };
+                                }
+                                press(event, FrameEdges::None);
+                                return true;
+                            }
+                            case EventType::MouseMove:
+                            {
+                                if (!drag.press.IsPressed(titleID) || drag.frames.empty()) return false;
+                                if (!drag.press.Move(event, styleManager.Px(kDragStartDistance))) return true;
+                                // Everything moves by the frame's own step, so what's inside keeps
+                                // its place in it, on the grid when the frame is.
+                                const int2 raw   = drag.press.LocalDelta(event, elementStorage);
+                                const int2 start = drag.frames[0].second.pos;
+                                const int2 to    = snap ? int2{ SnapToGrid(start.x + raw.x, frameGrid), SnapToGrid(start.y + raw.y, frameGrid) }
+                                                        : int2{ start.x + raw.x, start.y + raw.y };
+                                const int2 delta { to.x - start.x, to.y - start.y };
+                                for (const auto& [index, before] : drag.frames)
+                                    if (index < (int)view.frames.size())
+                                        view.frames[size_t(index)].pos = { before.pos.x + delta.x, before.pos.y + delta.y };
+                                for (const auto& [index, pos] : drag.nodes)
+                                    if (index < (int)view.nodes.size())
+                                        view.nodes[size_t(index)].pos = { pos.x + delta.x, pos.y + delta.y };
+                                return true;
+                            }
+                            case EventType::MouseUp:
+                            {
+                                if (!drag.press.IsPressed(titleID)) return false;
+                                if (drag.press.Release(event) == PointerDrag::Ended::Drag)
+                                    finish();
+                                else
+                                    view.frameDrag = {};
+                                return true;
+                            }
+                            case EventType::KeyDown:
+                                if (!IsDragCancelKey(event.state) || !drag.press.Cancel(titleID)) return false;
+                                restore();
+                                view.frameDrag = {};
+                                return true;
+                            default: break;
+                        }
+                        return false;
+                    },
+                    .styleRef = theme.nodeFrameTitleStyleRef,
+                    .state    = state,
+                };
+                // The chevron before the title: down while expanded, right while collapsed.
+                if (view.renamingFrame != frameID)
+                    title.textID = textSystem->RegisterText(titleID, frame.collapsed ? theme.treeArrowRight : theme.treeArrowDown,
+                                                            frame.title, theme.nodeFrameTitleStyleRef, state);
+                auto titleRes = elementStorage.Add(std::move(title),
+                    LayoutOverride{}.FixedSize(Pixels{ box.w }, Pixels{ frameBar }).Absolute(frame.pos.x, frame.pos.y));
+                VERIFY(titleRes.status);
+                VERIFY(windowRegistry.Add(titleRes.ref));
+
+                if (view.renamingFrame == frameID)
+                {
+                    // Renaming: a field over the title bar, the focus in it. Enter keeps the new
+                    // title, as does going elsewhere; Escape keeps the old one.
+                    const ID fieldID = idManager.AllocateDynamicID("frame-rename");
+                    const ID focused = guiStateManager.Interaction().GetFocusedID();
+                    bool keep = view.renameFocused && focused != fieldID, cancel = false;
+                    // The key is taken: the focus goes back to the canvas, where Enter would
+                    // otherwise collapse the frame and Escape clear the selection.
+                    if (inputManager && view.renameFocused && focused == fieldID)
+                    {
+                        const auto& events = inputManager->GetRecordedEvents();
+                        for (size_t e = 0; e < events.size(); ++e)
+                        {
+                            if (events[e].type != EventType::KeyDown || events[e].consumed) continue;
+                            switch (events[e].state.lastKey)
+                            {
+                                case KeyCode::Return: case KeyCode::Return2: case KeyCode::KeyPadEnter:
+                                    keep = true; inputManager->ConsumeEvent(e); break;
+                                case KeyCode::Escape:
+                                    cancel = true; inputManager->ConsumeEvent(e); break;
+                                default: break;
+                            }
+                        }
+                    }
+                    if (cancel || keep)
+                    {
+                        if (keep && !cancel && view.renameText != frame.title)
+                        {
+                            NodeFrame renamed = frame;
+                            renamed.title = view.renameText;
+                            CommitNodeViewEdit(view, NodeViewEdit{ .frameChanges = { { f, frame, renamed } } });
+                        }
+                        view.renamingFrame.reset();
+                        if (focused == fieldID)
+                            guiStateManager.Interaction().SetFocusID(canvasID);
+                    }
+                    else
+                    {
+                        if (!view.renameFocused)
+                        {
+                            guiStateManager.Interaction().SetFocusID(fieldID);
+                            view.renameFocused = true;
+                        }
+                        Field(fieldID, view.renameText, TextEditBehavior::ContinuousUpdate, theme.nodeFrameRenameStyleRef,
+                              LayoutOverride{}.FixedSize(Pixels{ box.w }, Pixels{ frameBar }).Absolute(frame.pos.x, frame.pos.y));
+                    }
+                }
+
+                // The edges: the right one below the title bar, the bottom one, and the corner.
+                const IntRect gripRects[3] = {
+                    { frame.pos.x + frame.size.x - grip, frame.pos.y + frameBar, grip, frame.size.y - frameBar - 2 * grip },
+                    { frame.pos.x, frame.pos.y + frame.size.y - grip, frame.size.x - 2 * grip, grip },
+                    { frame.pos.x + frame.size.x - 2 * grip, frame.pos.y + frame.size.y - 2 * grip, 2 * grip, 2 * grip },
+                };
+                const FrameEdges gripEdges[3] = { FrameEdges::Right, FrameEdges::Bottom, FrameEdges::Corner };
+                const MouseCursor gripCursors[3] = { MouseCursor::EwResize, MouseCursor::NsResize, MouseCursor::NwseResize };
+                for (int g = 0; g < (frame.collapsed ? 0 : 3); ++g)   // collapsed, it keeps its size for when it opens
+                {
+                    const IntRect r = gripRects[g];
+                    if (r.w <= 0 || r.h <= 0) continue;
+                    const ID gripID = gripIDs[g];
+                    const FrameEdges edges = gripEdges[g];
+                    Element gripElement
+                    {
+                        .id = gripID,
+                        .eventHandler = [this, &view, canvasID, frameID, gripID, edges, press, restore, finish,
+                                         frameGrid, snap, minWidth, minHeight](ElementEvent&& event) -> bool
+                        {
+                            FrameDrag& drag = view.frameDrag;
+                            switch (event.type)
+                            {
+                                case EventType::MouseDown:
+                                    if (!event.state.LeftPressed()) return false;
+                                    guiStateManager.Interaction().SetFocusID(canvasID);
+                                    press(event, edges);
+                                    return true;
+                                case EventType::MouseMove:
+                                {
+                                    if (!drag.press.IsPressed(gripID) || drag.frames.empty() || !drag.press.Move(event, 0)) return false;
+                                    const int2 d = drag.press.LocalDelta(event, elementStorage);
+                                    const NodeFrame& start = drag.frames[0].second;
+                                    int2 size = start.size;
+                                    if ((uint8_t(edges) & uint8_t(FrameEdges::Right))  != 0) size.x += d.x;
+                                    if ((uint8_t(edges) & uint8_t(FrameEdges::Bottom)) != 0) size.y += d.y;
+                                    if (snap)
+                                        size = { SnapToGrid(size.x, frameGrid), SnapToGrid(size.y, frameGrid) };
+                                    const int index = drag.frames[0].first;
+                                    if (index < (int)view.frames.size())
+                                        view.frames[size_t(index)].size = { std::max(size.x, minWidth), std::max(size.y, minHeight) };
+                                    return true;
+                                }
+                                case EventType::MouseUp:
+                                    if (!drag.press.IsPressed(gripID)) return false;
+                                    if (drag.press.Release(event) != PointerDrag::Ended::No)
+                                        finish();
+                                    return true;
+                                case EventType::KeyDown:
+                                    if (!IsDragCancelKey(event.state) || !drag.press.Cancel(gripID)) return false;
+                                    restore();
+                                    view.frameDrag = {};
+                                    return true;
+                                default: break;
+                            }
+                            return false;
+                        },
+                        .styleRef = theme.emptyHorzStyleRef,
+                        .state    = guiStateManager.GetCurrentState(gripID),
+                    };
+                    auto gripRes = elementStorage.Add(std::move(gripElement), LayoutOverride{}.FixedSize(Pixels{ r.w }, Pixels{ r.h }).Absolute(r.x, r.y));
+                    VERIFY(gripRes.status);
+                    VERIFY(windowRegistry.Add(gripRes.ref));
+                    // The resize cursor while hovered or dragged.
+                    if ((guiStateManager.GetCurrentState(gripID) & ElementState::Hover) != ElementState::None || view.frameDrag.press.IsPressed(gripID))
+                        guiStateManager.Cursor().Request(gripCursors[g]);
+                }
+                if (pushed)
+                    (void)idManager.PopParent();
+
+                // Its tint, when it has one: faint over the box, stronger over the title bar.
+                // Collapsed, its box is an element of its own, over the wires as a node is.
+                if (frame.collapsed)
+                    continue;
+                tachyon::VisualColorStyleIndex fill{}, band{};
+                if (frame.color.a > 0.0f)
+                {
+                    const tachyon::color4f c = frame.color;
+                    fill = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4f{ c.r, c.g, c.b, c.a * 0.14f }));
+                    band = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4f{ c.r, c.g, c.b, c.a * 0.32f }));
+                }
+                drawnFrames.push_back({ titleRes.ref, frame.size, state, fill, band });
+            }
+        }
+
         std::optional<uint32_t> handleHoveredWire;   // the wire whose lane handle is under the mouse
 
         // ---- Interior wire-segment drag handles ----
@@ -932,6 +1493,33 @@ namespace tachyon
             const int n = view.ordering[orderIdx];
             NodeModel& node = view.nodes[n];
 
+            // Inside a collapsed frame: not shown. One with wires crossing the frame's edge
+            // stands in as the frame's box, taking no input, its crossing sockets on the box's
+            // edges, so those wires end there; the others aren't drawn. Its size stays as it was.
+            if (node.hidden)
+            {
+                if (hiddenPorts[size_t(n)].empty())
+                    continue;
+                const IntRect box = hiddenBox[size_t(n)];
+                auto res = elementStorage.Add(Element{ .id = node.stableID, .styleRef = theme.emptyHorzStyleRef, .flags = ElementFlags::NoInput },
+                                              LayoutOverride{}.FixedSize(Pixels{ box.w }, Pixels{ box.h }).Absolute(box.x, box.y));
+                VERIFY(res.status);
+                VERIFY(windowRegistry.Add(res.ref));
+                nodeRefs[n] = res.ref;
+                VERIFY(elementStorage.BeginChildren());
+                [[maybe_unused]] const bool pushedHidden = idManager.PushParent(node.stableID);
+                const int32_t pitch = 2 * std::max(1, theme.nodeGridSize);
+                for (const HiddenPort& port : hiddenPorts[size_t(n)])
+                    socketRefs[n][port.prop * 2 + (port.output ? 1 : 0)] = emitSocket(n, port.prop, port.output, /*readonly=*/true,
+                        LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize })
+                                       .Absolute(port.output ? box.w - kSocketSize / 2 : -kSocketSize / 2,
+                                                 pitch + port.row * pitch + pitch / 2 - kSocketSize / 2));
+                if (pushedHidden)
+                    (void)idManager.PopParent();
+                VERIFY(elementStorage.EndChildren());
+                continue;
+            }
+
             // Snap the node's top-left onto the grid.
             const int32_t grid = theme.nodeGridSize;
             if (grid > 0 && view.snapToGrid)
@@ -991,6 +1579,7 @@ namespace tachyon
                             else if (!alreadySelected)
                             {
                                 view.selectedNodeIDs.clear();
+                                view.selectedFrameIDs.clear();
                                 view.selectedNodeIDs.insert(outerID);
                             }
                             view.lastClickedNodeID = outerID;
@@ -1380,7 +1969,7 @@ namespace tachyon
         // of the frontmost node - and is skipped with that node when it leaves view.
         // Endpoints are CANVAS_LAY, so they pan/zoom with the sockets and clip to the viewport.
         VERIFY(elementStorage.AddCustomDraw(canvasRes.ref,
-            [this, &view, socketRefs = std::move(socketRefs), nodeRefs = std::move(nodeRefs),
+            [this, &view, socketRefs = std::move(socketRefs), nodeRefs = std::move(nodeRefs), drawnFrames = std::move(drawnFrames),
              canvasHovered = guiStateManager.Interaction().GetHoveredID() == canvasID,
              handleHoveredWire, mouseScreen = windowManager->GetScreenMousePos()](tachyon::CustomDrawContext& ctx)
             {
@@ -1414,6 +2003,16 @@ namespace tachyon
 
                 RenderCanvasGrid(ctx, theme.nodeGridSize, theme.GetColor("--canvas-dot"),
                                  styleManager.Px(2.0f), gridOrigin, content);
+
+                // The frames, back to front, under the wires: the box, then the title bar over
+                // its top, where the title element lies.
+                for (const DrawnFrame& frame : drawnFrames)
+                {
+                    const tachyon::IntRect title = ctx.GetElementRect(frame.title);
+                    ctx.RenderBox(tachyon::IntRect{ title.x, title.y, frame.size.x, frame.size.y },
+                                  theme.nodeFrameStyleRef.visualBoxStyleIndex, frame.state, frame.fill);
+                    ctx.RenderBox(title, theme.nodeFrameBandStyleRef.visualBoxStyleIndex, frame.state, frame.band);
+                }
 
                 // Socket rects are laid out even for culled nodes. Local space = CANVAS_LAY.
                 auto socketCenter = [&](const ElementRef& ref) -> tachyon::int2
@@ -1653,9 +2252,10 @@ namespace tachyon
 
         // The selection, however it changed since the view last looked (a click, the marquee,
         // a key, a removed node, the app): once, with the frame's other changes made.
-        if (view.selectedNodeIDs != view.reportedSelection)
+        if (view.selectedNodeIDs != view.reportedSelection || view.selectedFrameIDs != view.reportedFrameSelection)
         {
-            view.reportedSelection = view.selectedNodeIDs;
+            view.reportedSelection      = view.selectedNodeIDs;
+            view.reportedFrameSelection = view.selectedFrameIDs;
             ++view.selectionGeneration;
             if (view.onSelectionChanged)
                 view.onSelectionChanged();
@@ -1740,6 +2340,7 @@ namespace tachyon
             VERIFY(windowRegistry.Add(res.ref));
             VERIFY(elementStorage.AddCustomDraw(res.ref,
                 [this, &view, nodeColor = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--line-strong"))),
+                 frameColor = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--frame-band"))),
                  pad = float(styleManager.Px(6))](CustomDrawContext& ctx)
                 {
                     // Bounds of the nodes and the visible area, in canvas coordinates.
@@ -1753,6 +2354,11 @@ namespace tachyon
                     {
                         bmin = { std::min(bmin.x, float(node.pos.x)), std::min(bmin.y, float(node.pos.y)) };
                         bmax = { std::max(bmax.x, float(node.pos.x + node.lastSize.x)), std::max(bmax.y, float(node.pos.y + node.lastSize.y)) };
+                    }
+                    for (const auto& frame : view.frames)
+                    {
+                        bmin = { std::min(bmin.x, float(frame.pos.x)), std::min(bmin.y, float(frame.pos.y)) };
+                        bmax = { std::max(bmax.x, float(frame.pos.x + frame.size.x)), std::max(bmax.y, float(frame.pos.y + frame.size.y)) };
                     }
 
                     const IntRect inner = ctx.ElementInnerRect();
@@ -1769,8 +2375,17 @@ namespace tachyon
                                      int(std::lround((y - view.minimapOrigin.y) * scale)) };
                     };
 
+                    // The frames under the nodes, faint, as drawn: a collapsed one as its box.
+                    for (const IntRect& box : view.frameBoxes)
+                    {
+                        if (box.w <= 0) continue;
+                        const int2 a = toMap(float(box.x), float(box.y));
+                        const int2 b = toMap(float(box.x + box.w), float(box.y + box.h));
+                        ctx.RenderQuad(IntRect{ a.x, a.y, std::max(1, b.x - a.x), std::max(1, b.y - a.y) }, frameColor, 2.0f);
+                    }
                     for (const auto& node : view.nodes)
                     {
+                        if (node.hidden) continue;
                         const int2 a = toMap(float(node.pos.x), float(node.pos.y));
                         const int2 b = toMap(float(node.pos.x + node.lastSize.x), float(node.pos.y + node.lastSize.y));
                         const bool selected = view.selectedNodeIDs.count(node.stableID) != 0;

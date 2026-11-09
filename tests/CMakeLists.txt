@@ -19,6 +19,7 @@ list(APPEND GUI_CORE_TEST_FILES
   library_allocator_test.cpp
   progress_test.cpp
   progress_composites_test.cpp
+  node_view_frame_test.cpp
   accent_test.cpp
   null_backends_test.cpp
   breadcrumb_test.cpp

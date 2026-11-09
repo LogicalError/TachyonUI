@@ -19,6 +19,9 @@
     --bg-keycap: #1A1D23;
     --row-stripe: #14161B;  /* odd rows in large tables */
     --canvas-dot: #39404D;  /* node view dot grid; brighter than the mockup's #252A33, whose soft CSS dots read stronger */
+    --frame-fill: #8E96A714;   /* a node frame's box: --text-3 at 8%, so the canvas shows through */
+    --frame-band: #8E96A729;   /* its title bar: --text-3 at 16% */
+    --frame-border: #8E96A747; /* its edge: --text-3 at 28% */
     /* ---- Lines ------------------------------------------------------------ */
     --panel-border: #1C1F25; /* outline around each panel */
     --line-subtle: #23272F;  /* dividers, header bottom border, input border, progress tracks */

@@ -159,6 +159,34 @@ namespace tachyon
     /// through it: every input it fed then takes from the output that fed it (or nothing,
     /// when nothing did). The lanes of its wires go. Empty when `node` isn't a reroute.
     NodeViewEdit RemoveRerouteEdit(const NodeView& view, int node);
+    /// An edit that adds `frame` at `index` (-1, or past the end: last, in front of the other
+    /// frames, still behind every node). The frames from `index` on move up one.
+    NodeViewEdit AddFrameEdit(const NodeView& view, NodeFrame frame, int index = -1);
+    /// An edit that removes the frames at `indices` (in any order; ones out of range and
+    /// repeats are skipped). The nodes in them stay. A removed frame's stableID is the host's
+    /// to keep while the edit can be undone.
+    NodeViewEdit RemoveFramesEdit(const NodeView& view, std::span<const int> indices);
+    /// A frame round the nodes at `indices`, as the view last laid them out: a grid cell of
+    /// room on each side, and the title bar above them. On the grid when snapToGrid is. Its
+    /// stableID, title and color are the caller's to set. Empty (zero size) without nodes.
+    ///
+    ///     NodeFrame frame = FrameAroundNodes(view, selected);
+    ///     frame.stableID = idManager.CreateStaticID();
+    ///     frame.title    = "Lighting";
+    ///     CommitNodeViewEdit(view, AddFrameEdit(view, std::move(frame)));
+    NodeFrame FrameAroundNodes(const NodeView& view, std::span<const int> indices);
+    /// The nodes (indices) frame `frame` holds, which move with it: those lying wholly inside
+    /// it as the view last laid them out, or, collapsed, those it held when it collapsed.
+    std::vector<int> NodesInFrame(const NodeView& view, int frame);
+    /// An edit that collapses frame `frame` (or expands it), noting what it holds as it
+    /// collapses (NodeFrame::members). Empty when it's that already, or there's no such frame.
+    NodeViewEdit CollapseFrameEdit(const NodeView& view, int frame, bool collapse);
+    /// The frame whose title bar holds `canvasPos` (node.pos space), the frontmost when
+    /// several do; -1 when none does.
+    int FrameTitleAtCanvasPos(const NodeView& view, float2 canvasPos);
+    /// Starts renaming frame `frame` as a double-click on its title does: a field over the
+    /// title bar, with the focus in it, from the next RenderNodeView. For a "Rename" menu item.
+    void RenameFrame(NodeView& view, int frame);
 
     /// Default lane offsets (grid steps) for wires between the same two nodes, so their
     /// lanes don't coincide: k wires, in input order, get (k-1)/2 counting down by one
