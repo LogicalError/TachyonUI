@@ -512,6 +512,58 @@ namespace tachyon
         StyleRef tasksRowStyleRef {};            ///< a task's row
         StyleRef tasksRowBodyStyleRef {};        ///< its name and bar
         StyleRef tasksRowStateStyleRef {};       ///< its percent or state, monospace
+        StyleRef timelineStyleRef {};            ///< Timeline: the row
+        StyleRef timelineTransportStyleRef {};   ///< its buttons
+        StyleRef timelineButtonStyleRef {};      ///< a transport button: start, step, end
+        StyleRef timelinePlayStyleRef {};        ///< play / pause, in the accent
+        StyleRef timelineLoopStyleRef {};        ///< the loop toggle; selected while looping
+        StyleRef timelineTimeStyleRef {};        ///< the time's well
+        StyleRef timelineTimeCurrentStyleRef {}; ///< the time now, monospace
+        StyleRef timelineTimeTotalStyleRef {};   ///< "/ " and the length
+        StyleRef timelineFrameStyleRef {};       ///< the frame chip
+        StyleRef timelineScrubberStyleRef {};    ///< the scrubber
+        StyleRef timelineReadyStyleRef {};       ///< drawn: the progress fill
+        StyleRef timelineTickStyleRef {};        ///< drawn: a tick every quarter second (or the like)
+        StyleRef timelineTickMajorStyleRef {};   ///< drawn: a tick every second (or the like)
+        StyleRef timelineMarkerStyleRef {};      ///< drawn: a marker's line
+        StyleRef timelinePlayheadStyleRef {};    ///< drawn: the playhead's line and its head
+        StyleRef timelineEditorStyleRef {};         ///< TimelineEditor: the whole
+        StyleRef timelineToolbarStyleRef {};        ///< its toolbar: transport, time, fps, snap, zoom
+        StyleRef timelineDividerStyleRef {};        ///< a line between the toolbar's groups
+        StyleRef timelineFpsStyleRef {};            ///< the fps dropdown
+        StyleRef timelineSnapStyleRef {};           ///< the Snap toggle; selected while snapping
+        StyleRef timelineZoomStyleRef {};           ///< the zoom slider and its icons
+        StyleRef timelineHeaderStyleRef {};         ///< the row over the track list and the ruler
+        StyleRef timelineListHeaderStyleRef {};     ///< "Tracks", the filter and the add button
+        StyleRef timelineListTitleStyleRef {};      ///< "Tracks"
+        StyleRef timelineFilterStyleRef {};         ///< the filter field
+        StyleRef timelineAddTrackStyleRef {};       ///< the add-track button
+        StyleRef timelineBodyStyleRef {};           ///< the track list and lanes, scrolled together
+        StyleRef timelineListStyleRef {};           ///< the track list
+        StyleRef timelineRowStyleRef {};            ///< a track's row; selected while it's the selected track
+        StyleRef timelineChevronStyleRef {};        ///< a group's expand / collapse
+        StyleRef timelineChipStyleRef {};           ///< a group's color chip
+        StyleRef timelineGroupNameStyleRef {};      ///< a group's name
+        StyleRef timelineTrackNameStyleRef {};      ///< another track's name, with its icon
+        StyleRef timelineRowButtonStyleRef {};      ///< eye, lock and add-key buttons
+        StyleRef timelineMuteStyleRef {};           ///< an audio track's M; selected while muted
+        StyleRef timelineSoloStyleRef {};           ///< an audio track's S; selected while solo
+        StyleRef timelineRulerStyleRef {};          ///< the ruler over the lanes
+        StyleRef timelineRulerLabelStyleRef {};     ///< drawn: a second's label on the ruler
+        StyleRef timelinePlayheadLabelStyleRef {};  ///< drawn: the playhead's time on the ruler
+        StyleRef timelineLanesStyleRef {};          ///< the lanes
+        StyleRef timelineLaneSelectedStyleRef {};   ///< drawn: the selected track's lane
+        StyleRef timelineRowLineStyleRef {};        ///< drawn: the line under a row
+        StyleRef timelineOutsideStyleRef {};        ///< drawn: the lanes outside the loop range
+        StyleRef timelineLoopRangeStyleRef {};      ///< drawn: the loop range on the ruler
+        StyleRef timelineLoopEdgeStyleRef {};       ///< drawn: its ends
+        StyleRef timelineClipStyleRef {};           ///< drawn: an audio clip
+        StyleRef timelineEventStyleRef {};          ///< drawn: an event's line
+        StyleRef timelineEventChipStyleRef {};      ///< drawn: the chip under an event's name
+        StyleRef timelineEventLabelStyleRef {};     ///< drawn: an event's name
+        StyleRef timelineBoxSelectStyleRef {};      ///< drawn: the box being dragged to select keys
+        StyleRef timelineScrollStyleRef {};         ///< the scroll bar under the lanes
+        StyleRef timelineScrollThumbStyleRef {};    ///< drawn: its thumb
         static constexpr int kSpinnerFrames = 24;
         /// A 90-degree arc, one frame per 15 degrees round: a spinner that goes where an icon
         /// goes, in the color of the icon it stands in for (BusyButton).
@@ -618,6 +670,25 @@ namespace tachyon
         IconID windowMinimizeIcon = IconID::Invalid; ///< title bar: minimize
         IconID windowMaximizeIcon = IconID::Invalid; ///< title bar: maximize
         IconID windowRestoreIcon  = IconID::Invalid; ///< title bar: restore
+        IconID timelineStartIcon    = IconID::Invalid; ///< Timeline: go to the start
+        IconID timelineStepBackIcon = IconID::Invalid; ///< Timeline: a frame back
+        IconID timelinePlayIcon     = IconID::Invalid; ///< Timeline: play (filled)
+        IconID timelinePauseIcon    = IconID::Invalid; ///< Timeline: pause (filled)
+        IconID timelineStepIcon     = IconID::Invalid; ///< Timeline: a frame on
+        IconID timelineEndIcon      = IconID::Invalid; ///< Timeline: go to the end
+        IconID timelineLoopIcon     = IconID::Invalid; ///< Timeline: loop
+        IconID timelinePrevKeyIcon  = IconID::Invalid; ///< TimelineEditor: the previous key
+        IconID timelineNextKeyIcon  = IconID::Invalid; ///< TimelineEditor: the next key
+        IconID timelineSnapIcon     = IconID::Invalid; ///< TimelineEditor: snap (a magnet)
+        IconID timelineZoomInIcon   = IconID::Invalid; ///< TimelineEditor: zoom in
+        IconID timelineZoomOutIcon  = IconID::Invalid; ///< TimelineEditor: zoom out
+        IconID timelineEyeIcon      = IconID::Invalid; ///< TimelineEditor: a group shown
+        IconID timelineEyeOffIcon   = IconID::Invalid; ///< TimelineEditor: a group hidden
+        IconID timelineLockIcon     = IconID::Invalid; ///< TimelineEditor: a group locked
+        IconID timelineUnlockIcon   = IconID::Invalid; ///< TimelineEditor: a group unlocked
+        IconID timelineKeyIcon      = IconID::Invalid; ///< TimelineEditor: add a key (a diamond)
+        IconID timelineAudioIcon    = IconID::Invalid; ///< TimelineEditor: an audio track
+        IconID timelineEventsIcon   = IconID::Invalid; ///< TimelineEditor: an events track (a flag)
         ///@}
 
         // Line colors, from the palette's custom properties.
@@ -628,6 +699,10 @@ namespace tachyon
         tachyon::VisualColorStyleIndex treeGuideLineStyle;     ///< --line-node: tree guide lines
         tachyon::VisualColorStyleIndex dividerHoverLineStyle; ///< a hovered divider drawn as a line (label sizer)
         tachyon::VisualColorStyleIndex nanTextColor;          ///< a number field's NaN
+        /// TimelineEditor's keys: a key, its edge, a selected key and its edge, a group's
+        /// summary key, and an audio clip's waveform.
+        tachyon::VisualColorStyleIndex timelineKeyColor, timelineKeyEdgeColor, timelineKeySelectedColor,
+                                       timelineKeySelectedEdgeColor, timelineSummaryKeyColor, timelineWaveColor;
         tachyon::color4b               scrim {};              ///< dims a window under its modal dialog (fading in and out)
         /// --disabled-opacity: a disabled control, with all its parts, is drawn this opaque,
         /// unless its style sets an opacity for :disabled.

@@ -31,7 +31,7 @@ namespace tachyon
                 for (ID* id : { &buttonID, &toggleID, &checkboxID, &switchID, &textID, &numberID,
                                 &sliderFieldID, &intSliderFieldID, &sliderID, &colorID, &gradientID, &listID, &disabledID,
                                 &toolbarButtonID, &toolbarToggleID, &toolbarMenuID, &breadcrumbID, &typedID,
-                                &listViewID, &tableID, &dropdownID })
+                                &listViewID, &tableID, &dropdownID, &timelineID, &editorID })
                     *id = app.idManager.CreateStaticID();
                 tableColumns.push_back({
                     .column = { .header = "Name", .initialWidth = 120, .minWidth = 60, .maxWidth = 300 },
@@ -72,6 +72,8 @@ namespace tachyon
                     app.VirtualTable(tableID, tableState, std::span<VirtualTableColumn>(tableColumns), 2, 0,
                                      app.theme.tableStyleRef, LayoutOverride{}.Size(200, 80));
                     app.Dropdown(dropdownID, quality, { "Low", "High" });
+                    app.Timeline(timelineID, playback, TimelineOptions{ .duration = 4.0f });
+                    app.TimelineEditor(editorID, animation, LayoutOverride{}.Height(240));
                     app.BeginDisabled();
                     app.Button(disabledID, "Disabled", [] {});
                     app.EndDisabled();
@@ -107,7 +109,8 @@ namespace tachyon
                     { intSliderFieldID, "SliderField(int)" }, { sliderID, "Slider" }, { colorID, "ColorField" },
                     { gradientID, "GradientField" }, { listID, "Field(list)" }, { toolbarButtonID, "toolbar Button" },
                     { toolbarToggleID, "toolbar Toggle" }, { toolbarMenuID, "toolbar BeginMenu" }, { breadcrumbID, "Breadcrumb" },
-                    { typedID, "TypedField" }, { listViewID, "ListView" }, { tableID, "VirtualTable" }, { dropdownID, "Dropdown" } };
+                    { typedID, "TypedField" }, { listViewID, "ListView" }, { tableID, "VirtualTable" }, { dropdownID, "Dropdown" },
+                    { timelineID, "Timeline" }, { editorID, "TimelineEditor" } };
                 const auto& storage = app.elementStorage;
                 std::string name = "an unnamed control";
                 for (ElementRef ref = storage.FindElementRefByID(id); ref.IsValid(); ref = storage.GetParentRef(ref))
@@ -125,7 +128,9 @@ namespace tachyon
             HeadlessGUIApp app;
             ID buttonID, toggleID, checkboxID, switchID, textID, numberID, sliderFieldID, intSliderFieldID,
                sliderID, colorID, gradientID, listID, disabledID, toolbarButtonID, toolbarToggleID, toolbarMenuID,
-               breadcrumbID, typedID, listViewID, tableID, dropdownID;
+               breadcrumbID, typedID, listViewID, tableID, dropdownID, timelineID, editorID;
+            TimelineState playback;
+            TimelineView animation;
             bool toolbarToggle = false;
             std::vector<std::string> crumbs { "Graphs", "Terrain" };
             int typed = 7, listSelection = 0, quality = 0;
@@ -145,7 +150,7 @@ namespace tachyon
             Frame();
             Frame();
             std::vector<ID> visited;
-            for (int i = 0; i < 80; ++i)
+            for (int i = 0; i < 160; ++i)
             {
                 app.InjectKey(KeyCode::Tab, KeyAction::KeyDown);
                 Frame();
@@ -163,6 +168,12 @@ namespace tachyon
                                  sliderFieldID, intSliderFieldID, sliderID, toolbarButtonID, toolbarToggleID,
                                  toolbarMenuID, typedID, listViewID, tableID, dropdownID })
                 EXPECT_TRUE(reached.contains(id)) << "Tab skips a control: " << Describe(id);
+            // The Timeline's buttons and scrubber: its six buttons and the scrubber.
+            EXPECT_EQ(std::count_if(visited.begin(), visited.end(),
+                                    [this](ID id) { return Describe(id).starts_with("a part of Timeline ") || Describe(id) == "a part of Timeline"; }), 7);
+            // The editor's: its toolbar, its filter and its lanes at least.
+            EXPECT_GE(std::count_if(visited.begin(), visited.end(),
+                                    [this](ID id) { return Describe(id).starts_with("a part of TimelineEditor"); }), 10);
 
             for (const ID id : visited)
             {

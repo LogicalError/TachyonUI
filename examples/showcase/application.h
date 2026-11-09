@@ -147,6 +147,9 @@ namespace tachyon
         float            bakeRetryUntil = -1.0f;
         // The background tasks demo: which were cancelled.
         bool             backgroundCancelled[3] = {};
+        // The timeline editor demo: its tracks, set up the first time it's drawn.
+        TimelineView     animation;
+        bool             animationSeeded = false;
 
         // ---- Showcase state ----
         // State used by the showcase panels for testing and prototyping GUI features.
@@ -569,6 +572,9 @@ namespace tachyon
         // Dock-panel body renderers (one per panel_*.cpp), called each frame
         // while the panel is the active tab.
         void RenderReorderablePanel();
+        void RenderTimelinePanel();
+        /// The timeline editor demo's tracks, keys, sound and events, and its callbacks.
+        void SeedAnimation();
         void RenderHierarchyPanel(HierarchyPanel& panel);
         void RenderNodeViewPanel();
         /// A reroute (NodeModel::reroute) in `color`, unwired, its dot on the grid point
