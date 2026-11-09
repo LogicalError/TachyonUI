@@ -404,8 +404,11 @@ list(APPEND GUI_CONTROLS_FILES
   gui_controls/controls_notifications.cpp
   gui_controls/controls_progress.cpp
   gui_controls/controls_timeline.cpp
+  gui_controls/controls_timeline_editor.cpp
+  gui_controls/gui_timeline_helpers.cpp
   gui_controls/gui_progress_types.h
   gui_controls/gui_timeline_types.h
+  gui_controls/gui_timeline_internal.h
   gui_controls/controls_docking.cpp
   gui_controls/controls_settings.cpp
   gui_controls/gui_ui_state.cpp

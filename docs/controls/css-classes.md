@@ -72,7 +72,8 @@ Button("Delete", onDelete, theme.GetStyle("my-danger-button"));  // your own cla
 | `CommandSearch` | `command-search` |
 | `RenderSettingsPanel` | `settings-page` |
 | `RenderNodeView` | `node-view`; frames `node-frame`, `node-frame-title` |
-| `Timeline` | `timeline`; see [Timeline](timeline.md#classes) |
+| `Timeline` | `timeline`; see [Timeline](timeline.md) |
+| `TimelineEditor` | `timeline-editor`; see [Timeline](timeline.md) |
 | Links in rich text (`theme.linkStyle`) | `link` (`color`, `:hover` `color`, `cursor`) |
 
 ## Tooltip classes

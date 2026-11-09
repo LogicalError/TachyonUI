@@ -129,6 +129,14 @@
     --timeline-ready: #2F6FEB24;  /* the progress fill: the accent at 14% */
     --timeline-tick: #C9CED6;     /* a minor tick; major ones are --text-3 */
     --timeline-marker: #D9771A;   /* a marker's line */
+    --timeline-key: #5F6673;          /* the editor's keys; a selected one is --accent */
+    --timeline-summary: #9AA1AD;      /* a group's summary keys */
+    --timeline-row-line: #EEF0F3;     /* the line under a row */
+    --timeline-outside: #1018280D;    /* the lanes outside the loop range: navy at 5% */
+    --timeline-clip: #0FA5961A;       /* an audio clip: teal at 10% */
+    --timeline-clip-border: #0FA5968C; /* its edge: teal at 55% */
+    --timeline-wave: #0FA596B3;       /* its waveform: teal at 70% */
+    --timeline-event-soft: #D9771A24; /* an event's name chip: --timeline-marker at 14% */
 }
 
 /* ---- Shadows and focus rings (box-shadow values) -------------------------- */

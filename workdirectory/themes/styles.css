@@ -5622,6 +5622,400 @@
 .timeline-tick-major { border-width: 0px; background-color: var(--text-3); border-color: transparent; }
 .timeline-marker    { border-width: 0px; border-radius: 1px; background-color: var(--timeline-marker); border-color: transparent; }
 .timeline-playhead  { border-width: 0px; border-radius: 1px; background-color: var(--accent); border-color: transparent; }
+/* TimelineEditor: a toolbar, the track list beside the ruler and lanes, and a scroll bar. */
+.timeline-editor {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 1px;
+    border-radius: 6px;
+    background-color: var(--bg-panel);
+    border-color: var(--panel-border);
+    overflow: hidden;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.timeline-toolbar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    margin: 0px;
+    padding: 0px 8px;
+    border-width: 0px 0px 1px 0px;
+    background-color: transparent;
+    border-color: var(--line-subtle);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-divider {
+    width: 1px;
+    height: 18px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: var(--line-subtle);
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-fps {
+    -tachyon-state-layer: content;
+    height: 26px;
+    margin: 0px;
+    padding: 0px 6px 0px 8px;
+    border-width: 1px;
+    border-radius: 4px;
+    background-color: var(--bg-control);
+    border-color: var(--line-strong);
+    color: var(--text-1);
+    font-size: var(--font-size);
+    -tachyon-icon-size: 12px;
+    -tachyon-icon-color: var(--text-3);
+    -tachyon-icon-side: right;
+    -tachyon-icon-text-gap: 6px;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-snap {
+    -tachyon-state-layer: content;
+    height: 26px;
+    margin: 0px;
+    padding: 0px 8px;
+    border-width: 0px;
+    border-radius: 4px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    -tachyon-icon-size: 13px;
+    -tachyon-icon-text-gap: 6px;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-snap:hover { color: var(--text-1); }
+.timeline-snap::highlight(selected) { background-color: var(--bg-active); color: var(--text-1); -tachyon-icon-color: var(--accent); }
+.timeline-zoom {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-3);
+    -tachyon-icon-size: 13px;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.timeline-header {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    height: 28px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px 0px 1px 0px;
+    background-color: var(--bg-header);
+    border-color: var(--line-subtle);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-list-header {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    width: 240px;
+    margin: 0px;
+    padding: 0px 6px 0px 10px;
+    border-width: 0px 1px 0px 0px;
+    background-color: transparent;
+    border-color: var(--line-subtle);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-list-title {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 500;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.timeline-filter {
+    width: 120px;
+    height: 20px;
+    margin: 0px;
+    padding: 0px 6px;
+    border-width: 1px;
+    border-radius: 4px;
+    background-color: var(--bg-input);
+    border-color: var(--line-subtle);
+    color: var(--text-1);
+    font-size: 11px;
+    -tachyon-icon-size: 11px;
+    -tachyon-icon-color: var(--text-3);
+    -tachyon-icon-text-gap: 4px;
+    -tachyon-vertical-text-align: middle;
+    cursor: text;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-filter:hover { border-color: var(--line-strong); }
+.timeline-filter:focus { border-color: var(--accent); }
+.timeline-add-track {
+    -tachyon-state-layer: content;
+    width: 22px;
+    height: 22px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 4px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-2);
+    -tachyon-icon-size: 13px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-add-track:hover { color: var(--text-1); }
+.timeline-body {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    overflow-x: hidden;
+    overflow-y: auto;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.timeline-list {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: 240px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px 1px 0px 0px;
+    background-color: transparent;
+    border-color: var(--line-subtle);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    margin: 0px;
+    padding: 0px 8px 0px 10px;
+    border-width: 0px 0px 1px 0px;
+    background-color: transparent;
+    border-color: var(--timeline-row-line);
+    color: var(--text-2);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-row::highlight(selected) { background-color: var(--accent-soft); color: var(--text-1); }
+.timeline-chevron {
+    width: 14px;
+    height: 14px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-3);
+    -tachyon-icon-size: 12px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-chevron:hover { color: var(--text-1); }
+.timeline-chip {
+    width: 8px;
+    height: 8px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 2px;
+    background-color: var(--accent);
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-group-name, .timeline-track-name {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    -tachyon-icon-size: 13px;
+    -tachyon-icon-color: var(--text-3);
+    -tachyon-icon-text-gap: 6px;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.timeline-group-name { color: var(--text-1); font-weight: 600; }
+.timeline-row-button {
+    -tachyon-state-layer: content;
+    width: 18px;
+    height: 18px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 3px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-3);
+    -tachyon-icon-size: 13px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-row-button:hover { color: var(--text-1); }
+.timeline-mute, .timeline-solo {
+    -tachyon-state-layer: content;
+    width: 18px;
+    height: 16px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 3px;
+    background-color: var(--bg-hover);
+    border-color: transparent;
+    color: var(--text-3);
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-mute::highlight(selected) { background-color: var(--bg-active); color: var(--text-1); }
+.timeline-solo::highlight(selected) { background-color: var(--warn-soft); color: var(--warn-text); }
+.timeline-ruler {
+    margin: 0px;
+    padding: 0px 12px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    cursor: pointer;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.timeline-ruler-label {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-family: monospace;
+    font-size: 10.5px;
+    text-wrap: nowrap;
+}
+/* The playhead's time: a pill in the accent, its text on it. */
+.timeline-playhead-label {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 4px;
+    background-color: var(--accent);
+    border-color: transparent;
+    color: var(--on-accent);
+    font-family: monospace;
+    font-size: 10.5px;
+    font-weight: 500;
+    text-wrap: nowrap;
+}
+.timeline-lanes {
+    margin: 0px;
+    padding: 0px 12px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.timeline-lane-selected { border-width: 0px; background-color: var(--accent-soft); border-color: transparent; }
+.timeline-row-line      { border-width: 0px; background-color: var(--timeline-row-line); border-color: transparent; }
+.timeline-outside       { border-width: 0px; background-color: var(--timeline-outside); border-color: transparent; }
+.timeline-loop-range    { border-width: 0px; background-color: var(--accent-soft); border-color: transparent; }
+.timeline-loop-edge     { border-width: 0px; background-color: var(--accent); border-color: transparent; }
+.timeline-clip          { border-width: 1px; border-radius: 4px; background-color: var(--timeline-clip); border-color: var(--timeline-clip-border); }
+.timeline-event         { border-width: 0px; background-color: var(--timeline-marker); border-color: transparent; }
+.timeline-event-chip    { border-width: 0px; border-radius: 3px; background-color: var(--timeline-event-soft); border-color: transparent; }
+.timeline-event-label {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: 11px;
+    text-wrap: nowrap;
+}
+.timeline-box-select {
+    border-width: 1px;
+    border-radius: 2px;
+    border-style: dashed;
+    background-color: var(--accent-soft);
+    border-color: var(--accent);
+}
+.timeline-scroll {
+    height: 16px;
+    margin: 0px;
+    padding: 0px 8px 0px 248px;
+    border-width: 1px 0px 0px 0px;
+    background-color: transparent;
+    border-color: var(--line-subtle);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-scroll-thumb  { border-width: 0px; border-radius: 3px; background-color: var(--line-strong); border-color: transparent; }
 .toast-actions {
     display: flex;
     flex-direction: row;
@@ -6533,6 +6927,8 @@
 .collection-remove:focus-visible, .collection-add:focus-visible, .collection-add-entry:focus-visible,
 .toolbar-button:focus-visible, .toolbar-toggle:focus-visible, .toolbar-menu-trigger:focus-visible,
 .timeline-button:focus-visible, .timeline-play:focus-visible, .timeline-loop:focus-visible, .timeline-scrubber:focus-visible,
+.timeline-fps:focus-visible, .timeline-snap:focus-visible, .timeline-add-track:focus-visible, .timeline-chevron:focus-visible,
+.timeline-row-button:focus-visible, .timeline-mute:focus-visible, .timeline-solo:focus-visible,
 .breadcrumb-segment:focus-visible, .message-box-close:focus-visible, .message-box-details-toggle:focus-visible,
 .dialog-close:focus-visible, .dialog-small-button:focus-visible, .dialog-icon-button:focus-visible,
 .dialog-square-button:focus-visible, .dialog-delete-button:focus-visible, .gradient-editor-preset:focus-visible,
@@ -6551,6 +6947,6 @@
 .list-item:focus-visible, .list-item-row:focus-visible,
 .menu-item:focus-visible, .menu-item-row:focus-visible, .menu-bar-trigger:focus-visible,
 .title-bar-button:focus-visible, .title-bar-close-button:focus-visible,
-.color-picker-square:focus-visible, .gradient-editor-bar:focus-visible {
+.color-picker-square:focus-visible, .gradient-editor-bar:focus-visible, .timeline-lanes:focus-visible {
     box-shadow: inset 0 0 0 1px var(--accent);
 }

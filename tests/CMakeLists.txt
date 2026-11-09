@@ -21,6 +21,7 @@ list(APPEND GUI_CORE_TEST_FILES
   progress_composites_test.cpp
   node_view_frame_test.cpp
   timeline_test.cpp
+  timeline_editor_test.cpp
   accent_test.cpp
   null_backends_test.cpp
   breadcrumb_test.cpp

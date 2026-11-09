@@ -172,6 +172,20 @@ namespace tachyon
             timelineEndIcon      = registerIcon("timeline-end", R"(<path d="M5 4l10 8-10 8ZM19 5v14"/>)");
             timelineLoopIcon     = registerIcon("timeline-loop",
                 R"(<path d="m17 2 4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3"/>)");
+            timelinePrevKeyIcon  = registerIcon("timeline-prev-key", R"(<path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>)");
+            timelineNextKeyIcon  = registerIcon("timeline-next-key", R"(<path d="m13 17 5-5-5-5M6 17l5-5-5-5"/>)");
+            timelineSnapIcon     = registerIcon("timeline-snap",
+                R"(<path d="m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15M5 8l4 4M12 15l4 4"/>)");
+            timelineZoomOutIcon  = registerIcon("timeline-zoom-out", R"(<path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-3.5-3.5M8 11h6"/>)");
+            timelineZoomInIcon   = registerIcon("timeline-zoom-in", R"(<path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-3.5-3.5M8 11h6M11 8v6"/>)");
+            timelineEyeIcon      = registerIcon("timeline-eye", R"(<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12ZM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/>)");
+            timelineEyeOffIcon   = registerIcon("timeline-eye-off",
+                R"(<path d="M10.7 5.1A10 10 0 0 1 22 12a17 17 0 0 1-2.2 3.2M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2M2 2l20 20"/>)");
+            timelineLockIcon     = registerIcon("timeline-lock", R"(<path d="M5 11h14v10H5ZM7 11V7a5 5 0 0 1 10 0v4"/>)");
+            timelineUnlockIcon   = registerIcon("timeline-unlock", R"(<path d="M5 11h14v10H5ZM7 11V7a5 5 0 0 1 9.9-1"/>)");
+            timelineKeyIcon      = registerIcon("timeline-key", R"(<path d="m12 4 8 8-8 8-8-8Z"/>)");
+            timelineAudioIcon    = registerIcon("timeline-audio", R"(<path d="M11 5 6 9H2v6h4l5 4ZM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>)");
+            timelineEventsIcon   = registerIcon("timeline-events", R"(<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>)");
 
             // The spinner: a quarter of a circle of radius 9, a frame every 15 degrees.
             for (int frame = 0; frame < kSpinnerFrames; ++frame)
@@ -367,6 +381,12 @@ namespace tachyon
         if (textSystem)
             textSystem->SetCaretColor(lineColorFromCSS("--caret", color4f{ 0.42f, 0.61f, 1.0f, 1.0f }));
         nanTextColor          = lineColorFromCSS("--warn-text", color4f{ 0.9f, 0.7f, 0.33f, 1.0f });
+        timelineKeyColor             = lineColorFromCSS("--timeline-key", color4f{ 0.79f, 0.81f, 0.85f, 1.0f });
+        timelineKeyEdgeColor         = lineColorFromCSS("--bg-panel", color4f{ 0.07f, 0.08f, 0.09f, 1.0f });
+        timelineKeySelectedColor     = lineColorFromCSS("--accent", color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
+        timelineKeySelectedEdgeColor = lineColorFromCSS("--text-1", color4f{ 0.91f, 0.92f, 0.94f, 1.0f });
+        timelineSummaryKeyColor      = lineColorFromCSS("--timeline-summary", color4f{ 0.42f, 0.45f, 0.5f, 1.0f });
+        timelineWaveColor            = lineColorFromCSS("--timeline-wave", color4f{ 0.2f, 0.82f, 0.75f, 0.65f });
         if (const auto* prop = sheet.GetCustomProperty("--scrim"); prop && prop->hasColor) scrim = prop->color;
         else                                                                                  scrim = color4b{ 0, 0, 0, 140 };
         if (const auto* prop = sheet.GetCustomProperty("--error"); prop && prop->hasColor) invalidColor = prop->color;
@@ -802,6 +822,43 @@ namespace tachyon
         timelineTickMajorStyleRef         = registerCSS("timeline-tick-major");
         timelineMarkerStyleRef            = registerCSS("timeline-marker");
         timelinePlayheadStyleRef          = registerCSS("timeline-playhead");
+        timelineEditorStyleRef            = registerCSS("timeline-editor");
+        timelineToolbarStyleRef           = registerCSS("timeline-toolbar");
+        timelineDividerStyleRef           = registerCSS("timeline-divider");
+        timelineFpsStyleRef               = registerCSS("timeline-fps");
+        timelineSnapStyleRef              = registerCSS("timeline-snap");
+        timelineZoomStyleRef              = registerCSS("timeline-zoom");
+        timelineHeaderStyleRef            = registerCSS("timeline-header");
+        timelineListHeaderStyleRef        = registerCSS("timeline-list-header");
+        timelineListTitleStyleRef         = registerCSS("timeline-list-title");
+        timelineFilterStyleRef            = registerCSS("timeline-filter");
+        timelineAddTrackStyleRef          = registerCSS("timeline-add-track");
+        timelineBodyStyleRef              = registerCSS("timeline-body");
+        timelineListStyleRef              = registerCSS("timeline-list");
+        timelineRowStyleRef               = registerCSS("timeline-row");
+        timelineChevronStyleRef           = registerCSS("timeline-chevron");
+        timelineChipStyleRef              = registerCSS("timeline-chip");
+        timelineGroupNameStyleRef         = registerCSS("timeline-group-name");
+        timelineTrackNameStyleRef         = registerCSS("timeline-track-name");
+        timelineRowButtonStyleRef         = registerCSS("timeline-row-button");
+        timelineMuteStyleRef              = registerCSS("timeline-mute");
+        timelineSoloStyleRef              = registerCSS("timeline-solo");
+        timelineRulerStyleRef             = registerCSS("timeline-ruler");
+        timelineRulerLabelStyleRef        = registerCSS("timeline-ruler-label");
+        timelinePlayheadLabelStyleRef     = registerCSS("timeline-playhead-label");
+        timelineLanesStyleRef             = registerCSS("timeline-lanes");
+        timelineLaneSelectedStyleRef      = registerCSS("timeline-lane-selected");
+        timelineRowLineStyleRef           = registerCSS("timeline-row-line");
+        timelineOutsideStyleRef           = registerCSS("timeline-outside");
+        timelineLoopRangeStyleRef         = registerCSS("timeline-loop-range");
+        timelineLoopEdgeStyleRef          = registerCSS("timeline-loop-edge");
+        timelineClipStyleRef              = registerCSS("timeline-clip");
+        timelineEventStyleRef             = registerCSS("timeline-event");
+        timelineEventChipStyleRef         = registerCSS("timeline-event-chip");
+        timelineEventLabelStyleRef        = registerCSS("timeline-event-label");
+        timelineBoxSelectStyleRef         = registerCSS("timeline-box-select");
+        timelineScrollStyleRef            = registerCSS("timeline-scroll");
+        timelineScrollThumbStyleRef       = registerCSS("timeline-scroll-thumb");
 
         toastStackStyleRef                = registerCSS("toast-stack");
         toastStyleRef                     = registerCSS("toast");

@@ -1,4 +1,5 @@
 #include <gui_controls/gui_application_internal.h>
+#include <gui_controls/gui_timeline_internal.h>
 
 #include <gui_core/graphics/gui_custom_draw_context.h>
 #include <gui_core/input/gui_pointer_drag.h>
@@ -17,6 +18,8 @@ namespace tachyon
     // scrubber whose padding box is the time from 0 to the length.
     // ---------------------------------------------------------------------------
 
+    using namespace timeline_internal;
+
     namespace
     {
         // Per-scrubber state of a press on it (element data store).
@@ -26,15 +29,20 @@ namespace tachyon
             float       startTime = 0.0f;   // put back by Escape
         };
 
-        float Finite(float value, float fallback)
-        {
-            return std::isfinite(value) ? value : fallback;
-        }
-
         // The length, 0 when it isn't a length.
         float LengthOf(const TimelineOptions& options)
         {
             return std::max(0.0f, Finite(options.duration, 0.0f));
+        }
+
+        // Where looping goes round: the loop range within the length, or the whole length
+        // when it's empty.
+        TimelineRange LoopRangeOf(const TimelineOptions& options)
+        {
+            const float length = LengthOf(options);
+            const TimelineRange given{ std::clamp(Finite(options.loopRange.start, 0.0f), 0.0f, length),
+                                       std::clamp(Finite(options.loopRange.end, 0.0f), 0.0f, length) };
+            return given.empty() ? TimelineRange{ 0.0f, length } : given;
         }
 
         // A frame's length, 0 without frames.
@@ -50,55 +58,6 @@ namespace tachyon
             const float frame = FrameOf(options);
             return frame > 0.0f ? frame : LengthOf(options) / 100.0f;
         }
-
-        // `time` on the nearest frame (unchanged without frames), within the length.
-        float SnapToFrame(float time, float frame, float length)
-        {
-            if (frame > 0.0f)
-                time = std::round(time / frame) * frame;
-            return std::clamp(time, 0.0f, length);
-        }
-
-        // The frame `time` is in, counted from 0.
-        int FrameNumber(float time, float frame)
-        {
-            return frame > 0.0f ? int(std::floor(time / frame + 1e-3f)) : 0;
-        }
-
-        // "f 7", padded to as many digits as the last frame has ("f   7" of 300 frames): the
-        // chip keeps its width while the playhead moves, and the scrubber after it its place.
-        std::string FrameText(float time, float frame, float length)
-        {
-            const int digits = int(std::to_string(FrameNumber(length, frame)).size());
-            return std::format("f {:>{}}", FrameNumber(time, frame), digits);
-        }
-
-        // "01:04.47": minutes, seconds and hundredths.
-        std::string ClockText(float secs)
-        {
-            const long long hundredths = std::llround(double(std::max(0.0f, secs)) * 100.0);
-            return std::format("{:02}:{:02}.{:02}", hundredths / 6000, (hundredths / 100) % 60, hundredths % 100);
-        }
-
-        // Plays or pauses; played from the end, it starts over.
-        void TogglePlay(TimelineState& state, float length)
-        {
-            if (!state.playing && state.time >= length)
-                state.time = 0.0f;
-            state.playing = !state.playing;
-        }
-
-        // The seconds between major ticks: the shortest of the usual steps at least `minPixels`
-        // apart at `pixelsPerSecond`.
-        float MajorTickStep(float pixelsPerSecond, float minPixels)
-        {
-            static constexpr float kSteps[] = { 0.1f, 0.25f, 0.5f, 1.0f, 2.0f, 5.0f, 10.0f, 15.0f, 30.0f,
-                                                60.0f, 120.0f, 300.0f, 600.0f, 1800.0f, 3600.0f };
-            for (const float step : kSteps)
-                if (step * pixelsPerSecond >= minPixels)
-                    return step;
-            return 0.0f;   // not even an hour apart: none
-        }
     }
 
     bool AdvanceTimeline(TimelineState& state, const TimelineOptions& options, float deltaSecs)
@@ -106,12 +65,17 @@ namespace tachyon
         const float length = LengthOf(options);
         if (!state.playing || !(deltaSecs > 0.0f) || !std::isfinite(deltaSecs))
             return false;
-        const float before = state.time;
-        float time = Finite(state.time, 0.0f) + deltaSecs;
-        if (time >= length)
+        const float before = Finite(state.time, 0.0f);
+        float time = before + deltaSecs;
+        // Looping goes round the loop range (the whole length without one): from its end
+        // back to its start. Played past it, the end of the timeline goes back to its start.
+        const TimelineRange loop = LoopRangeOf(options);
+        if (state.loop && !loop.empty() && before < loop.end && time >= loop.end)
+            time = loop.start + std::fmod(time - loop.start, loop.end - loop.start);
+        else if (time >= length)
         {
-            if (state.loop && length > 0.0f)
-                time = std::fmod(time, length);
+            if (state.loop && !loop.empty())
+                time = loop.start;
             else
             {
                 time = length;

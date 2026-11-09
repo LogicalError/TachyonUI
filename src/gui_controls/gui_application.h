@@ -743,6 +743,30 @@ namespace tachyon
         /// As above, with the call site as the ID.
         inline bool Timeline(       TimelineState& state, const TimelineOptions& options, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Timeline(idManager.AllocateDynamicID(site), state, options, std::move(constraints)); }
 
+        /// A timeline editor over `view`: a toolbar (the transport, with the previous and next
+        /// key in place of the frame steps; the time; the frame rate; Snap; zoom), the track
+        /// list beside the ruler and the lanes, and a scroll bar under them.
+        /// - The track list: groups (a chevron, a color chip, eye and lock), properties (a
+        ///   button to key them at the playhead), audio (mute, solo) and events; a filter and
+        ///   an add button (`onAddTrack`) over it; a right click opens `onTrackContextMenu`.
+        /// - The ruler: a press or drag moves the playhead; Shift + drag sets the loop range,
+        ///   its ends drag, Ctrl + click clears it.
+        /// - The lanes: keys (a group's summed up), audio clips with their waveform, events.
+        ///   A click selects a key (Shift adds, Ctrl toggles), a drag on the empty lanes
+        ///   selects those in a box, and a drag on a selected key moves them all, onto frames
+        ///   while Snap is on; Escape puts them back.
+        /// - Over the ruler and the lanes, the wheel zooms round the pointer and Shift + the
+        ///   wheel pans; a drag with the right button pans along the time and scrolls the
+        ///   rows.
+        /// - Keys on the focused lanes: Delete removes the selected keys, Left / Right move
+        ///   them a frame, Ctrl+A selects them all, K keys the selected track at the playhead,
+        ///   Space plays or pauses, Home / End go to the ends, Escape clears the selection.
+        /// Every change to the tracks or the loop range is a TimelineEdit, handed to
+        /// `view.onEdit` for undo; the playhead and selection change in `view` directly.
+        void        TimelineEditor(ID id, TimelineView& view, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline void TimelineEditor(       TimelineView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { TimelineEditor(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
+
         ///@}
 
         /// @name Menus and message dialogs

@@ -498,6 +498,26 @@ namespace tachyon
             EXPECT_TRUE(AdvanceTimeline(state, options, 4.5f));
             EXPECT_FLOAT_EQ(state.time, 0.75f) << "round as often as it takes";
 
+            // Looping round a loop range: from its end back to its start, once the playhead is
+            // in it; played past it, the timeline's end goes back to its start.
+            const TimelineOptions ranged{ .duration = 8.0f, .loopRange = { 2.0f, 4.0f } };
+            state = { .time = 3.5f, .playing = true, .loop = true };
+            EXPECT_TRUE(AdvanceTimeline(state, ranged, 1.0f));
+            EXPECT_FLOAT_EQ(state.time, 2.5f);
+            state = { .time = 1.0f, .playing = true, .loop = true };
+            AdvanceTimeline(state, ranged, 2.0f);
+            EXPECT_FLOAT_EQ(state.time, 3.0f) << "into it from before";
+            state = { .time = 7.5f, .playing = true, .loop = true };
+            AdvanceTimeline(state, ranged, 1.0f);
+            EXPECT_FLOAT_EQ(state.time, 2.0f) << "past it: at the end, back to its start";
+            state = { .time = 3.5f, .playing = true, .loop = false };
+            AdvanceTimeline(state, ranged, 1.0f);
+            EXPECT_FLOAT_EQ(state.time, 4.5f) << "not looping: the range doesn't matter";
+            const TimelineOptions outside{ .duration = 8.0f, .loopRange = { 9.0f, 12.0f } };
+            state = { .time = 7.5f, .playing = true, .loop = true };
+            AdvanceTimeline(state, outside, 1.0f);
+            EXPECT_FLOAT_EQ(state.time, 0.5f) << "a range outside the length: the whole length";
+
             // No length: it stops at 0, looping or not.
             state = { .time = 0.0f, .playing = true, .loop = true };
             EXPECT_FALSE(AdvanceTimeline(state, TimelineOptions{}, 0.5f));
