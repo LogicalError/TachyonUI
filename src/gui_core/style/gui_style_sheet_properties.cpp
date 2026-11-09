@@ -518,73 +518,88 @@ bool Parser::ParseDeclValue(StyleDecl& d)
 // Parser::ApplyDecl  (out-of-class definition)
 // ============================================================================
 
-void Parser::ApplyDecl(Style& s, int si, const StyleDecl& d)
+void Parser::ApplyDecl(Style& s, uint64_t slots, const StyleDecl& d)
 {
-    if (si < 0 || si >= Style::kStateCount) si = 0;
+    slots &= (uint64_t(1) << Style::kStateCount) - 1;
+    if (slots == 0)
+        return;
     const std::string& p = d.prop;
 
+    // Per-state: the property is found once, then set in each of the slots.
+    auto each = [&](auto&& set)
+    {
+        for (int si = 0; si < Style::kStateCount; ++si)
+            if ((slots >> si) & 1)
+                set(s.states[si]);
+    };
+
     // Per-state visual
-    if (ICEq(p,"background-color"))    { s.states[si].backgroundColor = d.colorStyleVal; return; }
-    if (ICEq(p,"border-color"))        { s.states[si].SetBorderColor(d.colorStyleVal); return; }
-    if (ICEq(p,"border-top-color"))    { s.states[si].borderColors[0] = d.colorStyleVal; return; }
-    if (ICEq(p,"border-right-color"))  { s.states[si].borderColors[1] = d.colorStyleVal; return; }
-    if (ICEq(p,"border-bottom-color")) { s.states[si].borderColors[2] = d.colorStyleVal; return; }
-    if (ICEq(p,"border-left-color"))   { s.states[si].borderColors[3] = d.colorStyleVal; return; }
-    if (ICEq(p,"-tachyon-icon-color")) { s.states[si].iconColor = d.colorStyleVal; return; }
-    if (ICEq(p,"opacity"))             { s.states[si].opacity = d.fVal; return; }
+    if (ICEq(p,"background-color"))    { each([&](StyleState& st) { st.backgroundColor = d.colorStyleVal; }); return; }
+    if (ICEq(p,"border-color"))        { each([&](StyleState& st) { st.SetBorderColor(d.colorStyleVal); }); return; }
+    if (ICEq(p,"border-top-color"))    { each([&](StyleState& st) { st.borderColors[0] = d.colorStyleVal; }); return; }
+    if (ICEq(p,"border-right-color"))  { each([&](StyleState& st) { st.borderColors[1] = d.colorStyleVal; }); return; }
+    if (ICEq(p,"border-bottom-color")) { each([&](StyleState& st) { st.borderColors[2] = d.colorStyleVal; }); return; }
+    if (ICEq(p,"border-left-color"))   { each([&](StyleState& st) { st.borderColors[3] = d.colorStyleVal; }); return; }
+    if (ICEq(p,"-tachyon-icon-color")) { each([&](StyleState& st) { st.iconColor = d.colorStyleVal; }); return; }
+    if (ICEq(p,"opacity"))             { each([&](StyleState& st) { st.opacity = d.fVal; }); return; }
     if (ICEq(p,"box-shadow"))
     {
-        for (int i = 0; i < kMaxBoxShadows; ++i)
-            s.states[si].boxShadow[i] = d.shadowVal[i];
+        each([&](StyleState& st) {
+            for (int i = 0; i < kMaxBoxShadows; ++i)
+                st.boxShadow[i] = d.shadowVal[i];
+        });
         return;
     }
     if (ICEq(p,"text-shadow"))
     {
-        for (int i = 0; i < kMaxTextShadows; ++i)
-            s.states[si].textShadow[i] = d.shadowVal[i];
+        each([&](StyleState& st) {
+            for (int i = 0; i < kMaxTextShadows; ++i)
+                st.textShadow[i] = d.shadowVal[i];
+        });
         return;
     }
-    if (ICEq(p,"color"))
-    {
-        s.states[si].textColor = d.colorStyleVal;
-        return;
-    }
+    if (ICEq(p,"color"))               { each([&](StyleState& st) { st.textColor = d.colorStyleVal; }); return; }
 
     // Per-state text style
-    if (ICEq(p,"font-size"))       { s.states[si].textStyle.fontSize      = d.fVal;                return; }
-    if (ICEq(p,"font-weight"))     { s.states[si].textStyle.weight        = (FontWeight)d.enumVal; return; }
-    if (ICEq(p,"font-style"))      { s.states[si].textStyle.style         = (FontStyle)d.enumVal;  return; }
-    if (ICEq(p,"font-family"))     { s.states[si].textStyle.family        = (FontFamily)d.enumVal;
-                                     s.states[si].textStyle.fontId        = d.fontIdVal;           return; }
-    if (ICEq(p,"-tachyon-language")){ s.states[si].textStyle.language      = d.languageVal;         return; }
-    if (ICEq(p,"font-stretch"))    { s.states[si].textStyle.stretch       = (FontStretch)d.enumVal;return; }
-    if (ICEq(p,"line-height"))     { s.states[si].textStyle.lineHeight    = d.fVal;
-                                     s.states[si].textStyle.lineHeightType = (LineHeight)d.enumVal; return; }
-    if (ICEq(p,"letter-spacing"))  { s.states[si].textStyle.letterSpacing = d.fVal;                return; }
-    if (ICEq(p,"word-spacing"))    { s.states[si].textStyle.wordSpacing   = d.fVal;                return; }
+    if (ICEq(p,"font-size"))       { each([&](StyleState& st) { st.textStyle.fontSize      = d.fVal; });                return; }
+    if (ICEq(p,"font-weight"))     { each([&](StyleState& st) { st.textStyle.weight        = (FontWeight)d.enumVal; }); return; }
+    if (ICEq(p,"font-style"))      { each([&](StyleState& st) { st.textStyle.style         = (FontStyle)d.enumVal; });  return; }
+    if (ICEq(p,"font-family"))     { each([&](StyleState& st) { st.textStyle.family        = (FontFamily)d.enumVal;
+                                                                st.textStyle.fontId        = d.fontIdVal; });           return; }
+    if (ICEq(p,"-tachyon-language")){ each([&](StyleState& st) { st.textStyle.language     = d.languageVal; });         return; }
+    if (ICEq(p,"font-stretch"))    { each([&](StyleState& st) { st.textStyle.stretch       = (FontStretch)d.enumVal; }); return; }
+    if (ICEq(p,"line-height"))     { each([&](StyleState& st) { st.textStyle.lineHeight    = d.fVal;
+                                                                st.textStyle.lineHeightType = (LineHeight)d.enumVal; }); return; }
+    if (ICEq(p,"letter-spacing"))  { each([&](StyleState& st) { st.textStyle.letterSpacing = d.fVal; });                return; }
+    if (ICEq(p,"word-spacing"))    { each([&](StyleState& st) { st.textStyle.wordSpacing   = d.fVal; });                return; }
 
-    // Text decorations
-    auto setDecoC = [&](DecorationLine line){ s.states[si].decorationColors[size_t(line)] = ColorStyle::Create(d.color4bVal); };
+    // Text decorations: a line's color, or its thickness, offset or style.
+    auto setDecoC = [&](DecorationLine line) {
+        each([&](StyleState& st) { st.decorationColors[size_t(line)] = ColorStyle::Create(d.color4bVal); });
+    };
+    auto setDeco = [&](TextDecoration TextStyle::* line, auto&& set) {
+        each([&](StyleState& st) { set(st.textStyle.*line); });
+    };
     auto setDecoT = [&](TextDecoration& dec){ dec.thickness = (uint16_t)std::clamp((int)d.fVal,0,65535); };
     auto setDecoO = [&](TextDecoration& dec){ dec.offset    = (uint16_t)std::clamp((int)d.fVal,0,65535); };
     auto setDecoS = [&](TextDecoration& dec){ dec.style     = (DecorationStyle)d.enumVal; };
 
-    if (ICEq(p,"text-underline-color"))       { setDecoC(DecorationLine::Under);              return; }
-    if (ICEq(p,"text-underline-thickness"))   { setDecoT(s.states[si].textStyle.underLine);   return; }
-    if (ICEq(p,"text-underline-offset"))      { setDecoO(s.states[si].textStyle.underLine);   return; }
-    if (ICEq(p,"text-underline-style"))       { setDecoS(s.states[si].textStyle.underLine);   return; }
-    if (ICEq(p,"text-overline-color"))        { setDecoC(DecorationLine::Over);               return; }
-    if (ICEq(p,"text-overline-thickness"))    { setDecoT(s.states[si].textStyle.overLine);    return; }
-    if (ICEq(p,"text-overline-offset"))       { setDecoO(s.states[si].textStyle.overLine);    return; }
-    if (ICEq(p,"text-overline-style"))        { setDecoS(s.states[si].textStyle.overLine);    return; }
-    if (ICEq(p,"text-throughline-color"))     { setDecoC(DecorationLine::Through);            return; }
-    if (ICEq(p,"text-throughline-thickness")) { setDecoT(s.states[si].textStyle.throughLine); return; }
-    if (ICEq(p,"text-throughline-offset"))    { setDecoO(s.states[si].textStyle.throughLine); return; }
-    if (ICEq(p,"text-throughline-style"))     { setDecoS(s.states[si].textStyle.throughLine); return; }
-    if (ICEq(p,"text-bottomline-color"))      { setDecoC(DecorationLine::Bottom);             return; }
-    if (ICEq(p,"text-bottomline-thickness"))  { setDecoT(s.states[si].textStyle.bottomLine);  return; }
-    if (ICEq(p,"text-bottomline-offset"))     { setDecoO(s.states[si].textStyle.bottomLine);  return; }
-    if (ICEq(p,"text-bottomline-style"))      { setDecoS(s.states[si].textStyle.bottomLine);  return; }
+    if (ICEq(p,"text-underline-color"))       { setDecoC(DecorationLine::Under);                     return; }
+    if (ICEq(p,"text-underline-thickness"))   { setDeco(&TextStyle::underLine, setDecoT);   return; }
+    if (ICEq(p,"text-underline-offset"))      { setDeco(&TextStyle::underLine, setDecoO);   return; }
+    if (ICEq(p,"text-underline-style"))       { setDeco(&TextStyle::underLine, setDecoS);   return; }
+    if (ICEq(p,"text-overline-color"))        { setDecoC(DecorationLine::Over);                      return; }
+    if (ICEq(p,"text-overline-thickness"))    { setDeco(&TextStyle::overLine, setDecoT);    return; }
+    if (ICEq(p,"text-overline-offset"))       { setDeco(&TextStyle::overLine, setDecoO);    return; }
+    if (ICEq(p,"text-overline-style"))        { setDeco(&TextStyle::overLine, setDecoS);    return; }
+    if (ICEq(p,"text-throughline-color"))     { setDecoC(DecorationLine::Through);                   return; }
+    if (ICEq(p,"text-throughline-thickness")) { setDeco(&TextStyle::throughLine, setDecoT); return; }
+    if (ICEq(p,"text-throughline-offset"))    { setDeco(&TextStyle::throughLine, setDecoO); return; }
+    if (ICEq(p,"text-throughline-style"))     { setDeco(&TextStyle::throughLine, setDecoS); return; }
+    if (ICEq(p,"text-bottomline-color"))      { setDecoC(DecorationLine::Bottom);                    return; }
+    if (ICEq(p,"text-bottomline-thickness"))  { setDeco(&TextStyle::bottomLine, setDecoT);  return; }
+    if (ICEq(p,"text-bottomline-offset"))     { setDeco(&TextStyle::bottomLine, setDecoO);  return; }
+    if (ICEq(p,"text-bottomline-style"))      { setDeco(&TextStyle::bottomLine, setDecoS);  return; }
 
     // Layout (state-independent)
     if (ICEq(p,"margin"))        { s.margin       = d.edges;   return; }

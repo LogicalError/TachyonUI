@@ -127,24 +127,30 @@ namespace tachyon
                 return size;
             };
 
-            // Returns the combined main-axis size of element i plus all following elements
-            // glued to it via keepWithNext, including gaps between them.
+            // The combined main-axis size of in-flow element i plus all following elements
+            // glued to it via keepWithNext, including gaps between them. Filled once from the
+            // end on first use, so a long glued run (a row of labels) costs one pass, not one
+            // per element.
+            std::vector<int32_t> groupSizes;
             auto computeGroupSize = [&](size_t startIdx) -> int32_t
             {
-                int32_t total = 0;
-                int count = 0;
-                for (size_t j = startIdx; j < childRects.size(); ++j)
+                if (groupSizes.empty())
                 {
-                    const ElementRect& elem = childRects[j];
-                    if (!elem.constraints.IsInFlow())
-                        continue;
-                    int32_t sz = getAxisSize(elem, mainAxis);
-                    total = (count == 0) ? sz : total + gap + sz;
-                    count++;
-                    if (!elem.constraints.GetKeepWithNext(elem.layoutStyle))
-                        break;
+                    groupSizes.assign(childRects.size(), 0);
+                    bool    haveNext = false;   // an in-flow element follows
+                    int32_t next     = 0;       // the group size from it
+                    for (size_t j = childRects.size(); j-- > 0; )
+                    {
+                        const ElementRect& elem = childRects[j];
+                        if (!elem.constraints.IsInFlow())
+                            continue;
+                        const int32_t sz = getAxisSize(elem, mainAxis);
+                        next = (haveNext && elem.constraints.GetKeepWithNext(elem.layoutStyle)) ? sz + gap + next : sz;
+                        groupSizes[j] = next;
+                        haveNext = true;
+                    }
                 }
-                return total;
+                return groupSizes[startIdx];
             };
 
             int totalChildrenInFlow = 0;

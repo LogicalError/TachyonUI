@@ -1515,6 +1515,21 @@ namespace tachyon
         EXPECT_EQ(cah.r, 0); EXPECT_EQ(cah.g, 0); EXPECT_EQ(cah.b, 0);
     }
 
+    // A rule no state matches (:hover and :not(:hover) at once) sets nothing, not even the
+    // properties that don't depend on the state.
+    TEST(StyleSheet, ARuleNoStateMatchesSetsNothing)
+    {
+        auto s = ParseStyleSheet(R"(
+            .a                     { margin: 2px; color: #000000; }
+            .a:hover:not(:hover)   { margin: 7px; color: #00ff00; }
+        )");
+        EXPECT_FALSE(s.HasErrors());
+        ASSERT_NE(s.GetStyle("a"), nullptr);
+        EXPECT_EQ(s.GetStyle("a")->margin, BoxEdges(2));
+        for (int i = 0; i < Style::kStateCount; ++i)
+            EXPECT_EQ(s.GetStyle("a")->states[i].textColor.GetFirstColor().g, 0) << "slot " << i;
+    }
+
     // ============================================================================
     // line-height with units
     // ============================================================================

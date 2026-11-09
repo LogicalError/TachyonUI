@@ -1619,4 +1619,73 @@ namespace tachyon
             EXPECT_EQ(storage.GetElementRectUnsafe(b).rect.y, c.y1) << "case " << (&c - cases);
         }
     }
+
+    // Children kept with the next one wrap as a group: a group that doesn't fit after what's
+    // on the line starts the next line, whole. An out-of-flow child inside it takes no room.
+    TEST_F(LayoutFlexTest, AKeptGroupWrapsWhole)
+    {
+        Style parentStyle = CreateBasicStyle();
+        parentStyle.layoutData.flex.direction = FlexDirection::Row;
+        parentStyle.layoutData.flex.wrap = FlexWrap::Wrap;
+        StyleRef parentIdx = styleManager.Register(parentStyle);
+        StyleRef childIdx = styleManager.Register(CreateBasicStyle());
+
+        EXPECT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        (void)storage.Add(Element{ .styleRef = parentIdx }, LayoutOverride::FixedSize(100, 100));
+        EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        auto a = storage.Add(Element{ .styleRef = childIdx }, LayoutOverride::FixedSize(40, 20));
+        auto b = storage.Add(Element{ .styleRef = childIdx }, LayoutOverride::FixedSize(20, 20).KeepWithNext());
+        (void)storage.Add(Element{ .styleRef = childIdx }, LayoutOverride::FixedSize(500, 20).Absolute(0, 0, 0, 0));
+        auto c = storage.Add(Element{ .styleRef = childIdx }, LayoutOverride::FixedSize(20, 20).KeepWithNext());
+        auto d = storage.Add(Element{ .styleRef = childIdx }, LayoutOverride::FixedSize(30, 20));
+        auto e = storage.Add(Element{ .styleRef = childIdx }, LayoutOverride::FixedSize(30, 20));
+        EXPECT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        EXPECT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        layoutEngine.Layout(*osWindowManager, storage);
+
+        // b, c and d are 70 wide together: not after a's 40, so all three start the next line.
+        const IntRect ra = storage.GetElementRectUnsafe(a.ref).rect;
+        const IntRect rb = storage.GetElementRectUnsafe(b.ref).rect;
+        const IntRect rc = storage.GetElementRectUnsafe(c.ref).rect;
+        const IntRect rd = storage.GetElementRectUnsafe(d.ref).rect;
+        const IntRect re = storage.GetElementRectUnsafe(e.ref).rect;
+        EXPECT_GT(rb.y, ra.y);
+        EXPECT_EQ(rb.x, ra.x);
+        EXPECT_EQ(rc.y, rb.y);
+        EXPECT_EQ(rd.y, rb.y);
+        EXPECT_GT(rc.x, rb.x);
+        EXPECT_GT(rd.x, rc.x);
+        // e is on its own: it fits after them.
+        EXPECT_EQ(re.y, rb.y);
+    }
+
+    // A kept group wider than the line stays on one line, overflowing, from the line's start.
+    // A long one (a row of labels) costs a pass over the children, not one per child.
+    TEST_F(LayoutFlexTest, AKeptGroupWiderThanTheLineStaysTogether)
+    {
+        Style parentStyle = CreateBasicStyle();
+        parentStyle.layoutData.flex.direction = FlexDirection::Row;
+        parentStyle.layoutData.flex.wrap = FlexWrap::Wrap;
+        StyleRef parentIdx = styleManager.Register(parentStyle);
+        StyleRef childIdx = styleManager.Register(CreateBasicStyle());
+
+        constexpr int kCount = 3000;
+        EXPECT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        (void)storage.Add(Element{ .styleRef = parentIdx }, LayoutOverride::FixedSize(100, 100));
+        EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        auto first = storage.Add(Element{ .styleRef = childIdx }, LayoutOverride::FixedSize(10, 20).KeepWithNext());
+        for (int i = 1; i < kCount - 1; ++i)
+            (void)storage.Add(Element{ .styleRef = childIdx }, LayoutOverride::FixedSize(10, 20).KeepWithNext());
+        auto last = storage.Add(Element{ .styleRef = childIdx }, LayoutOverride::FixedSize(10, 20));
+        EXPECT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        EXPECT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        layoutEngine.Layout(*osWindowManager, storage);
+
+        const IntRect rf = storage.GetElementRectUnsafe(first.ref).rect;
+        const IntRect rl = storage.GetElementRectUnsafe(last.ref).rect;
+        EXPECT_EQ(rl.y, rf.y) << "one line";
+        EXPECT_GE(rl.x - rf.x, (kCount - 1) * 10);
+    }
 }
