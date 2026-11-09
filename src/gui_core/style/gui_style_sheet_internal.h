@@ -746,34 +746,31 @@ private:
 
     void ApplyDecls(Style& style, int stateIndex, int notMask, const std::vector<StyleDecl>& decls)
     {
-        for (const StyleDecl& d : decls)
+        static_assert(Style::kStateCount <= 64, "the slots go in a 64-bit mask");
+        uint64_t slots = 0;
+        if (stateIndex == int(ElementState::Disabled))
         {
-            if (stateIndex == int(ElementState::Disabled))
-            {
-                // Disabled cannot be combined with other states
-                ApplyDecl(style, int(ElementState::Disabled), d);
-            }
-            else
-            {
-                // Apply to every state slot whose bits are a superset of the selector.
-                // e.g. :hover         -> slots 2,3,6,7,10,11,14,15 (all with hover bit set)
-                //     :hover:selected -> slots 10,11,14,15
-                //     ::selection     -> slots 16..31 (all selection-modifier slots)
-                //     :focus::selection -> slots 20,21,22,23,28,29,30,31
-                // Ordering in the CSS file is what controls priority.
-                for (int i = 0; i < int(ElementState::Disabled); ++i)
-                {
-                    if ((i & stateIndex) == stateIndex && (i & notMask) == 0)
-                    {
-                        ApplyDecl(style, i, d);
-                    }
-                }
-                // The disabled slot has no other state bits: a rule without any
-                // (the base rule, or a :not(...)) applies to it as well.
-                if (stateIndex == 0)
-                    ApplyDecl(style, int(ElementState::Disabled), d);
-            }
+            // Disabled cannot be combined with other states
+            slots = uint64_t(1) << int(ElementState::Disabled);
         }
+        else
+        {
+            // Every state slot whose bits are a superset of the selector.
+            // e.g. :hover         -> slots 2,3,6,7,10,11,14,15 (all with hover bit set)
+            //     :hover:selected -> slots 10,11,14,15
+            //     ::selection     -> slots 16..31 (all selection-modifier slots)
+            //     :focus::selection -> slots 20,21,22,23,28,29,30,31
+            // Ordering in the CSS file is what controls priority.
+            for (int i = 0; i < int(ElementState::Disabled); ++i)
+                if ((i & stateIndex) == stateIndex && (i & notMask) == 0)
+                    slots |= uint64_t(1) << i;
+            // The disabled slot has no other state bits: a rule without any
+            // (the base rule, or a :not(...)) applies to it as well.
+            if (stateIndex == 0)
+                slots |= uint64_t(1) << int(ElementState::Disabled);
+        }
+        for (const StyleDecl& d : decls)
+            ApplyDecl(style, slots, d);
     }
 
     // :focus-visible holds one box-shadow, the focus ring.
@@ -1315,8 +1312,9 @@ private:
     bool ParseDeclValue(StyleDecl& d);
 
     // ---- ApplyDecl ---------------------------------------------------------
-    // Defined in gui_style_sheet_properties.cpp.
+    // Defined in gui_style_sheet_properties.cpp. Sets `d` in the state slots of `slots`
+    // (bit i: slot i); none, and nothing is set.
 
-    static void ApplyDecl(Style& s, int si, const StyleDecl& d);
+    static void ApplyDecl(Style& s, uint64_t slots, const StyleDecl& d);
 };
 }
