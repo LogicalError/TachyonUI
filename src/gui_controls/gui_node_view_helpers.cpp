@@ -456,6 +456,130 @@ namespace tachyon
         return edit;
     }
 
+    NodeViewEdit AddFrameEdit(const NodeView& view, NodeFrame frame, int index)
+    {
+        NodeViewEdit edit;
+        const int count = (int)view.frames.size();
+        edit.frames.push_back({ .index = (index < 0 || index > count) ? count : index, .added = true, .frame = std::move(frame) });
+        return edit;
+    }
+
+    NodeViewEdit RemoveFramesEdit(const NodeView& view, std::span<const int> indices)
+    {
+        // Last first, so each one's index is still its own when it goes.
+        std::vector<int> order;
+        for (const int f : indices)
+            if (f >= 0 && f < (int)view.frames.size()) order.push_back(f);
+        std::sort(order.begin(), order.end(), std::greater<int>());
+        order.erase(std::unique(order.begin(), order.end()), order.end());
+        NodeViewEdit edit;
+        for (const int f : order)
+            edit.frames.push_back({ .index = f, .added = false, .frame = view.frames[size_t(f)] });
+        return edit;
+    }
+
+    NodeFrame FrameAroundNodes(const NodeView& view, std::span<const int> indices)
+    {
+        const int32_t grid = view.gridSize > 0 ? view.gridSize : 12;
+        bool any = false;
+        int2 lo{}, hi{};
+        for (const int n : indices)
+        {
+            if (n < 0 || n >= (int)view.nodes.size()) continue;
+            const NodeModel& node = view.nodes[size_t(n)];
+            const int2 end{ node.pos.x + node.lastSize.x, node.pos.y + node.lastSize.y };
+            lo  = any ? int2{ std::min(lo.x, node.pos.x), std::min(lo.y, node.pos.y) } : node.pos;
+            hi  = any ? int2{ std::max(hi.x, end.x), std::max(hi.y, end.y) } : end;
+            any = true;
+        }
+        if (!any)
+            return {};
+        // A cell of room round them, the title bar (a row pitch) above that.
+        int2 from{ lo.x - grid, lo.y - grid - 2 * grid }, to{ hi.x + grid, hi.y + grid };
+        if (view.snapToGrid)
+        {
+            from = { GridLineLE(from.x, 0, grid), GridLineLE(from.y, 0, grid) };
+            to   = { GridLineGE(to.x, 0, grid), GridLineGE(to.y, 0, grid) };
+        }
+        return NodeFrame{ .pos = from, .size = { to.x - from.x, to.y - from.y } };
+    }
+
+    std::vector<int> NodesInFrame(const NodeView& view, int frame)
+    {
+        std::vector<int> inside;
+        if (frame < 0 || frame >= (int)view.frames.size())
+            return inside;
+        const NodeFrame& f = view.frames[size_t(frame)];
+        if (f.collapsed && f.members)
+        {
+            for (int n = 0; n < (int)view.nodes.size(); ++n)
+                if (std::find(f.members->begin(), f.members->end(), view.nodes[size_t(n)].stableID) != f.members->end())
+                    inside.push_back(n);
+            return inside;
+        }
+        for (int n = 0; n < (int)view.nodes.size(); ++n)
+        {
+            const NodeModel& node = view.nodes[size_t(n)];
+            if (node.pos.x >= f.pos.x && node.pos.y >= f.pos.y
+                && node.pos.x + node.lastSize.x <= f.pos.x + f.size.x
+                && node.pos.y + node.lastSize.y <= f.pos.y + f.size.y)
+                inside.push_back(n);
+        }
+        return inside;
+    }
+
+    NodeViewEdit CollapseFrameEdit(const NodeView& view, int frame, bool collapse)
+    {
+        if (frame < 0 || frame >= (int)view.frames.size() || view.frames[size_t(frame)].collapsed == collapse)
+            return {};
+        const NodeFrame& from = view.frames[size_t(frame)];
+        NodeFrame to = from;
+        to.collapsed = collapse;
+        to.members.reset();
+        if (collapse)
+        {
+            // What it holds now: the nodes inside it, and the frames wholly inside it.
+            std::vector<ID> members;
+            for (const int n : NodesInFrame(view, frame))
+                members.push_back(view.nodes[size_t(n)].stableID);
+            for (int other = 0; other < (int)view.frames.size(); ++other)
+            {
+                const NodeFrame& inner = view.frames[size_t(other)];
+                if (other != frame && inner.pos.x >= from.pos.x && inner.pos.y >= from.pos.y
+                    && inner.pos.x + inner.size.x <= from.pos.x + from.size.x
+                    && inner.pos.y + inner.size.y <= from.pos.y + from.size.y)
+                    members.push_back(inner.stableID);
+            }
+            to.members = std::move(members);
+        }
+        return NodeViewEdit{ .frameChanges = { { frame, from, std::move(to) } } };
+    }
+
+    int FrameTitleAtCanvasPos(const NodeView& view, float2 canvasPos)
+    {
+        const int32_t bar = 2 * (view.gridSize > 0 ? view.gridSize : 12);
+        for (int f = (int)view.frames.size() - 1; f >= 0; --f)
+        {
+            // As last drawn, when it was: a collapsed one by its box, a hidden one not at all.
+            const NodeFrame& frame = view.frames[size_t(f)];
+            const IntRect box = f < (int)view.frameBoxes.size() ? view.frameBoxes[size_t(f)]
+                                                                : IntRect{ frame.pos.x, frame.pos.y, frame.size.x, frame.size.y };
+            if (canvasPos.x >= float(box.x) && canvasPos.x < float(box.x + box.w)
+                && canvasPos.y >= float(box.y) && canvasPos.y < float(box.y + std::min(bar, box.h)))
+                return f;
+        }
+        return -1;
+    }
+
+    void RenameFrame(NodeView& view, int frame)
+    {
+        if (frame < 0 || frame >= (int)view.frames.size())
+            return;
+        view.renamingFrame = view.frames[size_t(frame)].stableID;
+        view.renameText    = view.frames[size_t(frame)].title;
+        view.renameFocused = false;
+    }
+
     void ApplyNodeViewEdit(NodeView& view, const NodeViewEdit& edit, bool undo)
     {
         // Undo walks the changes backwards, so one that builds on another is undone first.
@@ -474,8 +598,31 @@ namespace tachyon
             if (backwards) for (auto it = edit.nodes.rbegin(); it != edit.nodes.rend(); ++it) apply(*it);
             else           for (const auto& change : edit.nodes)                           apply(change);
         };
+        // Frames as nodes: added or taken out first, their changes after.
+        auto frames = [&](bool backwards)
+        {
+            auto apply = [&](const NodeViewEdit::Frame& change) {
+                const int count = (int)view.frames.size();
+                if (change.added != backwards)
+                    view.frames.insert(view.frames.begin() + std::clamp(change.index, 0, count), change.frame);
+                else if (change.index >= 0 && change.index < count)
+                {
+                    view.selectedFrameIDs.erase(view.frames[size_t(change.index)].stableID);
+                    view.frames.erase(view.frames.begin() + change.index);
+                }
+            };
+            if (backwards) for (auto it = edit.frames.rbegin(); it != edit.frames.rend(); ++it) apply(*it);
+            else           for (const auto& change : edit.frames)                            apply(change);
+        };
         if (!undo)
+        {
             nodes(false);
+            frames(false);
+        }
+        each(edit.frameChanges, [&](const NodeViewEdit::FrameChange& c, const NodeFrame& frame)
+        {
+            if (c.frame >= 0 && c.frame < (int)view.frames.size()) view.frames[size_t(c.frame)] = frame;
+        });
         const int nodeCount = (int)view.nodes.size();
         each(edit.moves, [&](const NodeViewEdit::Move& m, int2 pos)
         {
@@ -496,7 +643,10 @@ namespace tachyon
             else                               view.wireOverrides[l.wireKey] = lanes;
         });
         if (undo)
+        {
+            frames(true);
             nodes(true);
+        }
     }
 
     void CommitNodeViewEdit(NodeView& view, const NodeViewEdit& edit)
@@ -595,7 +745,7 @@ namespace tachyon
     {
         auto holds = [&](int n) {
             const NodeModel& node = view.nodes[size_t(n)];
-            return canvasPos.x >= float(node.pos.x) && canvasPos.x < float(node.pos.x + node.lastSize.x)
+            return !node.hidden && canvasPos.x >= float(node.pos.x) && canvasPos.x < float(node.pos.x + node.lastSize.x)
                 && canvasPos.y >= float(node.pos.y) && canvasPos.y < float(node.pos.y + node.lastSize.y);
         };
         for (auto it = view.ordering.rbegin(); it != view.ordering.rend(); ++it)
@@ -663,13 +813,25 @@ namespace tachyon
 
             int32_t laneY;
             const int32_t between = (first - index) * grid;   // spread across the gap, outer nearer the target
+            // A lane set by hand between bodies one above the other goes where it's put, as
+            // long as it clears both: in the gap between them, above them both or below them
+            // both. One put inside a body goes to that body's nearer edge.
+            auto clearOfBodies = [&](int32_t v, int32_t lo, int32_t hi) {
+                const int32_t minTop = std::min(srcRect.Min(1), tgtRect.Min(1));
+                const int32_t maxBot = std::max(srcRect.Max(1), tgtRect.Max(1));
+                if (v <= minTop || v >= maxBot || (v >= lo && v <= hi))
+                    return v;
+                if (v < lo)   // in the upper body
+                    return v - minTop <= lo - v ? minTop : lo;
+                return v - hi <= maxBot - v ? hi : maxBot;   // in the lower body
+            };
             if (srcRect.Max(1) < tgtRect.Min(1))        // source fully above target
             {
                 const int32_t lo = srcRect.Max(1), hi = tgtRect.Min(1);
                 if (!overrides.entryX) entryX -= (count - 1 - outer) * grid;
                 laneY = std::clamp(GridLineNearest((lo + hi) / 2, gridOrigin.y, grid) + between, lo, hi);
                 if (overrides.laneY)
-                    laneY = std::clamp(GridLineNearest(*overrides.laneY, gridOrigin.y, grid), lo, hi);
+                    laneY = clearOfBodies(GridLineNearest(*overrides.laneY, gridOrigin.y, grid), lo, hi);
             }
             else if (tgtRect.Max(1) < srcRect.Min(1))   // target fully above source
             {
@@ -677,7 +839,7 @@ namespace tachyon
                 if (!overrides.entryX) entryX -= (count - 1 - outer) * grid;
                 laneY = std::clamp(GridLineNearest((lo + hi) / 2, gridOrigin.y, grid) + between, lo, hi);
                 if (overrides.laneY)
-                    laneY = std::clamp(GridLineNearest(*overrides.laneY, gridOrigin.y, grid), lo, hi);
+                    laneY = clearOfBodies(GridLineNearest(*overrides.laneY, gridOrigin.y, grid), lo, hi);
             }
             else
             {

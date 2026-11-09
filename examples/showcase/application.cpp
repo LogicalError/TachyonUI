@@ -623,6 +623,15 @@ namespace tachyon
             // collapses or removes the selection (the node is in it).
             showcase.nodeView.onCanvasContextMenu = [this](float2 at)
             {
+                // A node of each kind, its top-left where the menu was opened.
+                if (BeginMenu("Add node"))
+                {
+                    MenuItem("Value",  [this, at] { AddGraphNode(GraphNodeKind::Value,  at); });
+                    MenuItem("Math",   [this, at] { AddGraphNode(GraphNodeKind::Math,   at); });
+                    MenuItem("Noise",  [this, at] { AddGraphNode(GraphNodeKind::Noise,  at); });
+                    MenuItem("Switch", [this, at] { AddGraphNode(GraphNodeKind::Switch, at); });
+                }
+                EndMenu();   // also while it's closed
                 MenuItem("Add Reroute here", [this, at] {
                     CommitNodeViewEdit(showcase.nodeView, AddNodeEdit(showcase.nodeView, RerouteNode(at, { 0.20f, 0.75f, 0.72f, 1.0f })));
                 });
@@ -632,6 +641,52 @@ namespace tachyon
                 const bool curved = showcase.nodeView.wireShape == NodeWireShape::Curved;
                 MenuItem(curved ? "Show grid aligned wires" : "Show curved wires", [this, curved] {
                     showcase.nodeView.wireShape = curved ? NodeWireShape::Orthogonal : NodeWireShape::Curved;
+                });
+                // An empty frame where it was clicked, its title bar's left end there.
+                MenuItem("Add frame here", [this, at] {
+                    const int g = std::max(1, theme.nodeGridSize);
+                    CommitNodeViewEdit(showcase.nodeView, AddFrameEdit(showcase.nodeView, NodeFrame{
+                        .stableID = idManager.CreateStaticID(), .title = "Frame",
+                        .pos = { int32_t(at.x), int32_t(at.y) }, .size = { 24 * g, 14 * g } }));
+                });
+            };
+            // A frame's menu: rename it, tint it, or take it away (its nodes stay).
+            showcase.nodeView.onFrameContextMenu = [this](int frame)
+            {
+                MenuItem("Rename", [this, frame] { RenameFrame(showcase.nodeView, frame); });
+                const bool collapsed = showcase.nodeView.frames[size_t(frame)].collapsed;
+                MenuItem(collapsed ? "Expand" : "Collapse", [this, frame, collapsed] {
+                    CommitNodeViewEdit(showcase.nodeView, CollapseFrameEdit(showcase.nodeView, frame, !collapsed));
+                });
+                if (BeginMenu("Color"))
+                {
+                    struct Tint { const char* name; color4f color; };
+                    static const Tint tints[] = {
+                        { "None",   {} },
+                        { "Blue",   { 0.42f, 0.61f, 1.00f, 1.0f } },
+                        { "Teal",   { 0.20f, 0.75f, 0.72f, 1.0f } },
+                        { "Orange", { 0.96f, 0.62f, 0.29f, 1.0f } },
+                        { "Violet", { 0.66f, 0.55f, 1.00f, 1.0f } },
+                        { "Pink",   { 0.96f, 0.45f, 0.71f, 1.0f } },
+                    };
+                    for (const Tint& tint : tints)
+                    {
+                        const bool current = showcase.nodeView.frames[size_t(frame)].color == tint.color;
+                        if (current) BeginSelected();
+                        MenuItem(tint.name, [this, frame, color = tint.color] {
+                            NodeView& view = showcase.nodeView;
+                            NodeFrame tinted = view.frames[size_t(frame)];
+                            tinted.color = color;
+                            CommitNodeViewEdit(view, NodeViewEdit{ .frameChanges = { { frame, view.frames[size_t(frame)], tinted } } });
+                        });
+                        if (current) EndSelected();
+                    }
+                }
+                EndMenu();   // also while it's closed
+                MenuSeparator();
+                MenuItem({ showcase.deleteIcon, "Delete frame" }, [this, frame] {
+                    const int only[] = { frame };
+                    CommitNodeViewEdit(showcase.nodeView, RemoveFramesEdit(showcase.nodeView, only));
                 });
             };
             showcase.nodeView.onNodeContextMenu = [this](int node)
@@ -647,6 +702,14 @@ namespace tachyon
                             view.selectedNodeIDs.contains(other.stableID) && !other.reroute && other.collapsed != collapse)
                             edit.collapses.push_back({ n, other.collapsed, collapse });
                     CommitNodeViewEdit(view, edit);
+                });
+                // A frame round the selection.
+                MenuItem("Put in a frame", [this] {
+                    std::vector<int> selected;
+                    for (int n = 0; n < int(showcase.nodeView.nodes.size()); ++n)
+                        if (showcase.nodeView.selectedNodeIDs.contains(showcase.nodeView.nodes[size_t(n)].stableID))
+                            selected.push_back(n);
+                    AddFrameAround(selected, "Frame");
                 });
                 const size_t count = showcase.nodeView.selectedNodeIDs.size();
                 const std::string deleteLabel = count > 1 ? std::format("Delete {} nodes", count) : std::string("Delete node");

@@ -292,6 +292,13 @@ namespace tachyon
         StyleRef viewBackgroundStyleRef {}; ///< solid backdrop (--bg-app) for the View panel's toolbar dock
         StyleRef nodeStyleRef {};       ///< single node container (vertical column with border + bg)
         StyleRef nodeRerouteStyleRef {};   ///< a reroute node's square (the dot is drawn on it)
+        StyleRef nodeFrameStyleRef {};       ///< a frame's box (drawn behind the wires)
+        StyleRef nodeFrameBandStyleRef {};   ///< its title bar's band, over the top of the box
+        StyleRef nodeFrameTitleStyleRef {};  ///< the title on it
+        StyleRef nodeFrameRenameStyleRef {}; ///< the field over the title bar while renaming
+        StyleRef nodeFramePortsStyleRef {};  ///< a collapsed frame's row, a wire in and one out
+        StyleRef nodeFramePortStyleRef {};   ///< the name of the input on it
+        StyleRef nodeFramePortOutStyleRef {};///< the name of the output on it
         StyleRef nodeHeaderStyleRef {}; ///< node title bar (distinct background, sits at top of node)
         StyleRef nodeCategoryStyleRef {}; ///< the category square in a node header
         StyleRef nodeTitleStyleRef {};    ///< a node header's title

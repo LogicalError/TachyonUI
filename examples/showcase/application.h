@@ -245,6 +245,16 @@ namespace tachyon
 
             // Each NodeView is an independent graph with its own pan/zoom and drag state.
             NodeView nodeView;
+            bool     nodeFramesSeeded = false;   // the "Inputs" frame, put round its nodes once they're laid out
+            // The values of the nodes added from the canvas menu, by their stableID.
+            struct GraphNodeValues
+            {
+                float value = 0.5f;   // Value
+                int   op    = 0;      // Math: Add, Multiply, Min, Max
+                float scale = 4.0f;   // Noise
+                int   seed  = 1;      // Noise
+            };
+            std::unordered_map<tachyon::ID, GraphNodeValues> graphNodeValues;
             // The node view's edits, for Undo / Redo (the showcase's only undoable changes).
             bool exitRequested = false;   // Exit with unsaved documents: asking
             ID   exitWindow    = ID::Invalid();   // the window asking
@@ -564,8 +574,15 @@ namespace tachyon
         /// A reroute (NodeModel::reroute) in `color`, unwired, its dot on the grid point
         /// nearest `at` (node.pos space).
         NodeModel RerouteNode(float2 at, color4f color);
-        /// Removes the node view's selected nodes, their wires with them, as one edit.
+        /// Removes the node view's selected nodes, their wires with them, and its selected
+        /// frames, as one edit.
         void DeleteSelectedNodes();
+        /// Puts a frame titled `title` round the node view's nodes at `indices`, as one edit.
+        void AddFrameAround(std::span<const int> indices, std::string title, color4f color = {});
+        /// The kinds of node the canvas menu adds.
+        enum class GraphNodeKind { Value, Math, Noise, Switch };
+        /// Adds a node of `kind` with its top-left at `at` (node.pos space), as one edit.
+        void AddGraphNode(GraphNodeKind kind, float2 at);
 
         void RenderBoxTestPanel();
         void RenderInspectorPanel(InspectorPanel& panel);

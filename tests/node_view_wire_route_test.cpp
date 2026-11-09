@@ -271,28 +271,52 @@ namespace tachyon
         ExpectClearOfBodies(r2.points, src, tgt);
     }
 
-    TEST(NodeViewWireRouteTest, Override_ReturnLaneClampedToGapStaysClear)
+    // Source above target with a vertical gap [80,160]: the return lane, dragged, goes where
+    // it's put as long as it clears both bodies - in the gap, below them both or above them
+    // both - and one put inside a body goes to that body's nearer edge.
+    TEST(NodeViewWireRouteTest, Override_ReturnLaneGoesRoundOrBetweenTheBodies)
     {
-        // Source above target with a vertical gap [80,160]. Dragging the return
-        // lane far down (past the target) clamps back into the gap.
         const IntRect src{ 0,    0, 180, 80 };
         const IntRect tgt{ -100, 160, 180, 80 };
         const int2 outPt{ src.Max(0) - 6,  30 };
         const int2 inPt { tgt.Min(0) + 6, 200 };
+        auto laneFor = [&](int32_t y) {
+            WireRouteOverrides ov; ov.laneY = y;
+            const auto route = BuildWireRoute(outPt, inPt, src, tgt, kGrid, kOrigin, ov);
+            ExpectClearOfBodies(route.points, src, tgt);
+            for (const auto& h : route.handles)
+                if (h.role == WireHandle::LaneY)
+                    return h.a.y;
+            ADD_FAILURE() << "no return lane for " << y;
+            return 0;
+        };
+        EXPECT_EQ(laneFor(120), 120) << "in the gap";
+        EXPECT_EQ(laneFor(400), 400) << "below them both";
+        EXPECT_EQ(laneFor(-200), -200) << "above them both";
+        EXPECT_EQ(laneFor(200), 160) << "in the target, nearer its top: the gap";
+        EXPECT_EQ(laneFor(220), 240) << "in the target, nearer its bottom: below it";
+        EXPECT_EQ(laneFor(20), 0) << "in the source, nearer its top: above it";
+        EXPECT_EQ(laneFor(60), 80) << "in the source, nearer its bottom: the gap";
+    }
 
-        WireRouteOverrides ov; ov.laneY = 10000;   // far below the target
+    // The same with the target above the source, as a wire back up to a node above has it.
+    TEST(NodeViewWireRouteTest, Override_ReturnLaneGoesBelowASourceUnderTheTarget)
+    {
+        const IntRect tgt{ -100, 0, 180, 80 };
+        const IntRect src{ 0,  160, 180, 80 };
+        const int2 outPt{ src.Max(0) - 6, 200 };
+        const int2 inPt { tgt.Min(0) + 6,  30 };
+        WireRouteOverrides ov; ov.laneY = 400;
         const auto route = BuildWireRoute(outPt, inPt, src, tgt, kGrid, kOrigin, ov);
         ExpectClearOfBodies(route.points, src, tgt);
-
-        bool foundReturnLane = false;
+        bool found = false;
         for (const auto& h : route.handles)
             if (h.role == WireHandle::LaneY)
             {
-                foundReturnLane = true;
-                EXPECT_GE(h.a.y, src.Max(1));
-                EXPECT_LE(h.a.y, tgt.Min(1));
+                found = true;
+                EXPECT_EQ(h.a.y, 400) << "below the source, as it was put";
             }
-        EXPECT_TRUE(foundReturnLane);
+        EXPECT_TRUE(found);
     }
 
     // A wire dragged over an input that accepts it has exactly the route of the

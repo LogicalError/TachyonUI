@@ -84,6 +84,34 @@ namespace tachyon
         /// the dot sits on a grid point. See RerouteWireEdit.
         bool                       reroute      = false;
         std::vector<NodeProperty>  properties;              ///< the rows, top to bottom
+        /// Internal: inside a collapsed frame, as last drawn: not shown, clicked or selected.
+        bool                       hidden       = false;
+    };
+
+    /// A frame (a comment box): a titled, colored box behind a group of nodes. Dragging its
+    /// title moves it and what lies inside it; its right and bottom edges resize it.
+    struct NodeFrame
+    {
+        /// Assigned once on creation, as a node's: the ID of its elements and of its
+        /// selection.
+        tachyon::ID      stableID = tachyon::ID::Invalid();
+        std::string      title;          ///< shown in its title bar; double-click to rename
+        /// Its tint; alpha 0 uses the theme's neutral one. The box is it, faint, and the title
+        /// bar it, stronger.
+        tachyon::color4f color    = {};
+        tachyon::int2    pos      = {};  ///< top-left, in node.pos space
+        tachyon::int2    size     = {};  ///< width and height, the title bar included, while expanded
+        /// Shown as one node: its title bar, and a row for each wire crossing its edge, an
+        /// input on the left for each wire in, an output on the right for each wire out. The
+        /// nodes and frames inside it are hidden, and so are the wires between them.
+        bool             collapsed = false;
+        /// While collapsed: the nodes and frames it held when it collapsed, by stableID. Those
+        /// are what it hides and moves; a node dragged over it later stays out. Filled in by
+        /// CollapseFrameEdit, or by the view the first time it draws it collapsed; none
+        /// while expanded, when what lies inside it is what it holds.
+        std::optional<std::vector<tachyon::ID>> members;
+
+        bool operator==(const NodeFrame&) const = default;
     };
 
     /// A wire being dragged. Committed wires are the reciprocal endpoints on NodeProperty.
@@ -189,15 +217,28 @@ namespace tachyon
             std::vector<std::pair<uint32_t, WireRouteOverrides>> lanes;   ///< WireKey -> overrides
         };
 
+        /// A frame (index) moved, resized, renamed or recolored: all of it before and after.
+        struct FrameChange { int frame = -1; NodeFrame from, to; };
+        /// A frame added at `index` (or, when !added, taken from there); the frames after it
+        /// move up or down one.
+        struct Frame       { int index = -1; bool added = true; NodeFrame frame; };
+
         std::vector<Move>     moves;
         std::vector<Rewire>   rewires;
         std::vector<Collapse> collapses;
         std::vector<Lanes>    lanes;
         /// Applied before the others (so a rewire may name an added node) and undone after.
         std::vector<Node>     nodes;
+        std::vector<FrameChange> frameChanges;
+        /// Applied before frameChanges, as nodes are, and undone after.
+        std::vector<Frame>       frames;
 
         /// True when nothing changed.
-        bool empty() const { return moves.empty() && rewires.empty() && collapses.empty() && lanes.empty() && nodes.empty(); }
+        bool empty() const
+        {
+            return moves.empty() && rewires.empty() && collapses.empty() && lanes.empty() && nodes.empty()
+                && frameChanges.empty() && frames.empty();
+        }
     };
 
     /// A wire as drawn this frame, for hit-testing; points in node.pos space.
@@ -220,11 +261,34 @@ namespace tachyon
     };
 
 
+    /// Which edges of a frame a resize moves.
+    enum class FrameEdges : uint8_t { None = 0, Right = 1, Bottom = 2, Corner = Right | Bottom };
+
+    /// A press on a frame's title or one of its edges, and what it moves.
+    struct FrameDrag
+    {
+        tachyon::PointerDrag press;
+        tachyon::ID          frameID = tachyon::ID::Invalid();
+        FrameEdges           edges   = FrameEdges::None;   ///< None: a move, by the title
+        /// At the press: the frames it moves (it, and those inside it) and the nodes inside
+        /// them, by index, as they were.
+        std::vector<std::pair<int, NodeFrame>>     frames;
+        std::vector<std::pair<int, tachyon::int2>> nodes;
+    };
+
     /// All state of one node-view widget; no global state.
     /// commandMode is active while the view has focus, for per-view shortcuts.
     struct NodeView
     {
         std::vector<NodeModel>  nodes;   ///< the graph; endpoints and edits refer to nodes by index
+        /// Frames, drawn behind the nodes and wires, the first at the back.
+        std::vector<NodeFrame>  frames;
+        /// Selected frame stableIDs. A click on a frame's title selects it as one on a node
+        /// does; selecting is all it does to it.
+        std::unordered_set<tachyon::ID> selectedFrameIDs;
+        /// As onNodeContextMenu, for frame `frame` (an index into frames): a right click on
+        /// its title opens it and selects the frame.
+        std::function<void(int frame)>  onFrameContextMenu;
 
         /// Breadcrumb overlay at the canvas top-left, shown when non-empty.
         std::vector<std::string>        breadcrumb;
@@ -275,6 +339,7 @@ namespace tachyon
         /// would rather compare it than be called.
         uint32_t                            selectionGeneration = 0;
         std::unordered_set<tachyon::ID>     reportedSelection;   ///< internal: the selection last reported
+        std::unordered_set<tachyon::ID>     reportedFrameSelection;   ///< internal: the frames selected last reported
         /// StableID of the last clicked node.
         tachyon::ID                         lastClickedNodeID = tachyon::ID::Invalid();
 
@@ -286,6 +351,7 @@ namespace tachyon
         tachyon::PointerDrag                marquee;
         tachyon::int2                       marqueeCurrentScreen {};
         std::unordered_set<tachyon::ID>     marqueeBaseSelection;     ///< selection snapshot before the drag
+        std::unordered_set<tachyon::ID>     marqueeBaseFrames;        ///< the frames selected before the drag
         bool                            marqueeShift = false;     ///< modifier snapshot at start
         bool                            marqueeCtrl  = false;
 
@@ -318,6 +384,16 @@ namespace tachyon
         std::function<void(int node)>         onNodeContextMenu;
         std::optional<float2>      canvasMenuPos;      ///< internal: where the open canvas menu is for
         std::optional<tachyon::ID> nodeMenuNode;       ///< internal: the stableID the open node menu is for
+        std::optional<tachyon::ID> frameMenuFrame;     ///< internal: the stableID the open frame menu is for
+        FrameDrag                  frameDrag;          ///< internal: a frame being moved or resized
+        DoubleClickTracker         frameDoubleClick;   ///< internal: a double-click on a title renames
+        std::optional<tachyon::ID> renamingFrame;      ///< internal: the frame whose title is being edited
+        std::string                renameText;         ///< internal: its title as edited so far
+        bool                       renameFocused = false;   ///< internal: the field has had the focus
+        int32_t                    gridSize = 0;       ///< internal: the grid the view was last drawn with
+        /// Internal: each frame's box as last drawn, by index (node.pos space): a collapsed one's
+        /// node-like box, an empty rect for one hidden in a collapsed frame.
+        std::vector<tachyon::IntRect> frameBoxes;
         tachyon::PointerDrag pan;                 ///< internal: a right press; once dragged, not a click
         tachyon::float3x2    panStart {};         ///< internal: the transform before it; put back by Escape
         tachyon::PointerDrag nodeDrag;            ///< internal: the press on a node; moves the selection once dragged

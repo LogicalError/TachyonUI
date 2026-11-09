@@ -215,6 +215,98 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
   view.wireShape = NodeWireShape::Curved;
   ```
 
+**Frames.** A frame (a comment box) is a titled, colored box behind a group of nodes, to
+organize a large graph. They're in `view.frames`, behind every wire and node, the first at
+the back.
+
+**`NodeFrame`** describes one:
+
+- `stableID`: its ID, set once, as a node's
+- `title`
+- `color`: its tint, faint over the box and stronger over the title bar
+  - alpha 0 (the default) uses the theme's neutral grey
+- `pos` and `size`: its top-left and its size, in the same space as `NodeModel::pos`
+- `collapsed`: shown as one node instead (see below)
+
+```cpp
+view.frames.push_back(NodeFrame{ .stableID = idManager.CreateStaticID(), .title = "Lighting",
+                                 .color = { 0.42f, 0.61f, 1.0f, 1.0f }, .pos = { 0, -48 }, .size = { 480, 288 } });
+```
+
+What it does:
+
+- **Moving:** dragging its title moves it, the frames inside it, and the nodes inside any of
+  them.
+- **Resizing:** dragging its right edge, bottom edge or corner resizes it.
+- **The grid:** while `snapToGrid` is on, it stays on the grid, whole grid cells big. It's
+  never smaller than a title bar over one row.
+- **The rest of the box:** it takes no clicks, so a marquee or a pan starts inside it as
+  anywhere on the canvas.
+- **Selecting:** a click on its title selects it as one on a node does: Shift adds, Ctrl
+  toggles. The marquee and Ctrl+A select frames too, and Escape or a click on the background
+  clears them.
+  - `selectedFrameIDs` has the selected ones.
+  - A change calls `onSelectionChanged`, as one to the nodes does.
+- **Renaming:** a double-click on its title puts a field there. Enter keeps the new title,
+  as does clicking elsewhere; Escape keeps the old one.
+  - `RenameFrame(view, frame)` starts the same, for a "Rename" menu item.
+- **Its menu:** `onFrameContextMenu(frame)` builds it, as `onNodeContextMenu` does a node's.
+  A right click on the title opens it and selects the frame. So does the Menu key with only
+  frames selected.
+- **Undo:** each change is an edit, so it undoes.
+
+```cpp
+view.onFrameContextMenu = [this](int frame)
+{
+    MenuItem("Rename", [this, frame] { RenameFrame(view, frame); });
+    MenuItem("Delete frame", [this, frame] {
+        const int only[] = { frame };
+        CommitNodeViewEdit(view, RemoveFramesEdit(view, only));   // its nodes stay
+    });
+};
+```
+
+**Collapsed.** A collapsed frame is shown as one node:
+
+- **The box:** its title bar, with a row for each wire crossing its edge.
+  - On the left, an input for each wire coming in from outside.
+  - On the right, an output for each output inside that feeds a node outside.
+  - Each row is named after its node and pin, for example "Mix.Strength".
+- **What's hidden:** the nodes and frames it holds, and the wires between them. They can't
+  be clicked or selected, and don't show on the minimap.
+- **What it holds:** what was inside it when it collapsed (`NodeFrame::members`). A node
+  dragged over it afterwards stays outside it; expanded, it holds what lies inside it again.
+- **Moving and size:** dragging its title still moves what it holds. It has no edges to
+  resize, and keeps its size for when it expands.
+- **Toggling:** the chevron at the left of its title collapses or expands it, as does Enter
+  with it selected.
+  - `CollapseFrameEdit(view, frame, collapse)` makes the same edit, noting what it holds.
+
+```cpp
+CommitNodeViewEdit(view, CollapseFrameEdit(view, frame, true));
+```
+
+In `gui_node_view_helpers.h`:
+
+- `AddFrameEdit(view, frame, index)` adds one, in front of the others when `index` is -1.
+- `RemoveFramesEdit(view, indices)` removes some. The nodes in them stay.
+- `FrameAroundNodes(view, indices)` is a frame round nodes as they're laid out: a grid cell
+  of room on each side and the title bar above. Give it a `stableID` and a title.
+- `NodesInFrame(view, frame)` is the nodes a frame holds, which move with it.
+- `FrameTitleAtCanvasPos(view, canvasPos)` is the frame whose title is at a point.
+
+```cpp
+NodeFrame frame = FrameAroundNodes(view, selected);   // std::vector<int> of node indices
+frame.stableID = idManager.CreateStaticID();
+frame.title    = "Lighting";
+CommitNodeViewEdit(view, AddFrameEdit(view, std::move(frame)));
+```
+
+Frame classes: `node-frame` and `node-frame-band` (the box and its title bar, drawn behind
+the wires), `node-frame-title`, `node-frame-rename`, and, collapsed, `node-frame-ports`,
+`node-frame-port` and `node-frame-port-out`. Palette colors: `--frame-fill`,
+`--frame-band`, `--frame-border`.
+
 **Focus.**
 
 - Tab reaches the controls in every node, visible or not.
@@ -244,8 +336,8 @@ MenuItem(view.selectedNodeIDs.empty() ? "Frame all" : "Frame selection",
 | Home | Frame the selected nodes, or all of them |
 | Arrows | Move selected nodes one grid step (four with Shift) as one edit; pan if nothing is selected |
 | + / - | Zoom in / out |
-| Ctrl+A / Escape | Select all / clear selection |
-| Enter | Collapse or expand selected nodes |
+| Ctrl+A / Escape | Select all nodes and frames / clear selection |
+| Enter | Collapse or expand selected nodes and frames |
 
 Wires are made and removed with the mouse only.
 
@@ -257,6 +349,9 @@ Wires are made and removed with the mouse only.
 - Drag from a wired input to take its wire off: let go over another input to move it, or
   over the empty canvas to remove it.
 - A middle click on a wire removes it; a right click offers to, or to add a reroute on it.
+- A wire's middle segments can be dragged to move its lanes. A lane goes where it's put as
+  long as it clears the two nodes: between them, or round them (above or below them both).
+  One let go inside a node goes to that node's nearer edge.
 
 **Large graphs.**
 
@@ -279,6 +374,7 @@ Wires are made and removed with the mouse only.
 - Less than that counts as a click, which only selects.
 - Escape in the middle of a drag undoes it. This works for:
   - moving nodes
+  - moving or resizing a frame
   - moving a wire lane
   - box selection
   - panning with the right button

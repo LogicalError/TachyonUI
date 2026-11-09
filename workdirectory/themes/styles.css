@@ -1702,6 +1702,83 @@
     overflow: visible;
 }
 
+/* ---- node-frame: a titled box behind a group of nodes ----------------------- */
+/* The box and its title band are drawn behind the wires; a frame's own color,   */
+/* from C++, replaces their backgrounds. The title over the band takes the mouse. */
+.node-frame {
+    border-width: var(--border);
+    border-radius: var(--radius-lg);
+    border-color: var(--frame-border);
+    background-color: var(--frame-fill);
+}
+.node-frame:hover  { border-color: var(--text-3); }
+.node-frame:active { border-color: var(--accent); }
+.node-frame::highlight(selected) { border-color: var(--accent); }
+.node-frame-band {
+    border-width: 0px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0px 0px;
+    background-color: var(--frame-band);
+}
+.node-frame-title {
+    -tachyon-icon-size: 12px;   /* the chevron: a click on it collapses or expands the frame */
+    border-width: 0px;
+    margin: 0px;
+    padding: 0px 10px;
+    overflow: hidden;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    text-align: start;
+    vertical-align: middle;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    font-weight: 600;
+}
+/* A collapsed frame is a .node box: under its header, a row per wire crossing its edge,
+   the input's name at the left and the output's at the right, as a node's rows have them. */
+.node-frame-ports {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0px;
+    padding: 0px 10px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+.node-frame-port, .node-frame-port-out {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    vertical-align: middle;
+    text-align: start;
+    flex-shrink: 1;
+}
+.node-frame-port-out { text-align: end; }
+.node-frame-rename {
+    border-width: var(--border);
+    border-radius: var(--radius-lg) var(--radius-lg) 0px 0px;
+    border-color: var(--accent);
+    background-color: var(--bg-input);
+    margin: 0px;
+    padding: 0px 9px;
+    overflow: hidden;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    font-weight: 600;
+    cursor: text;
+}
+
 .node-socket {
     width: 12px;
     height: 12px;
