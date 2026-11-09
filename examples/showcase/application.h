@@ -147,6 +147,12 @@ namespace tachyon
         float            bakeRetryUntil = -1.0f;
         // The background tasks demo: which were cancelled.
         bool             backgroundCancelled[3] = {};
+        // The timeline demo: where playback is, and how far the simulation it plays has got
+        // (seconds of it computed), starting over with Restart.
+        TimelineState    playback{ .loop = true };
+        float            simulated = 0.0f;
+        // The clip in the timeline demo: where its playback is.
+        TimelineState    clipPlayback;
 
         // ---- Showcase state ----
         // State used by the showcase panels for testing and prototyping GUI features.
@@ -569,6 +575,7 @@ namespace tachyon
         // Dock-panel body renderers (one per panel_*.cpp), called each frame
         // while the panel is the active tab.
         void RenderReorderablePanel();
+        void RenderTimelinePanel();
         void RenderHierarchyPanel(HierarchyPanel& panel);
         void RenderNodeViewPanel();
         /// A reroute (NodeModel::reroute) in `color`, unwired, its dot on the grid point

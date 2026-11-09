@@ -64,6 +64,7 @@
 #include <gui_controls/gui_theme.h>
 #include <gui_controls/gui_content.h>
 #include <gui_controls/gui_progress_types.h>
+#include <gui_controls/gui_timeline_types.h>
 #include <gui_controls/controls_toolbar_dock.h>
 #include <gui_core/gui_result.h>
 
@@ -722,6 +723,25 @@ namespace tachyon
         bool        BackgroundTasks(ID id, std::span<const ProgressTask> tasks, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
         inline bool BackgroundTasks(       std::span<const ProgressTask> tasks, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return BackgroundTasks(idManager.AllocateDynamicID(site), tasks, std::move(constraints)); }
+
+        ///@}
+
+        /// @name Timeline
+        ///@{
+
+        /// Playback on one row: go to the start, step back a frame, play or pause, step on a
+        /// frame, go to the end and loop; the time and frame; and a scrubber with ticks (every
+        /// second when there's room), the `progress` fill, a line per marker and the playhead.
+        /// A press or drag on the scrubber moves the playhead there, onto a frame. Keys on the
+        /// focused scrubber: Space plays or pauses, Left / Right step a frame, Page Down /
+        /// Page Up go to the previous / next marker, Home / End to the ends; Escape during a
+        /// drag puts the playhead back. A step is a frame, or a hundredth of the length
+        /// without frames; stepping pauses.
+        /// Edits `state`; the app moves it on while it plays (AdvanceTimeline). Returns true
+        /// on the frame the user changed it.
+        bool        Timeline(ID id, TimelineState& state, const TimelineOptions& options, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline bool Timeline(       TimelineState& state, const TimelineOptions& options, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Timeline(idManager.AllocateDynamicID(site), state, options, std::move(constraints)); }
 
         ///@}
 

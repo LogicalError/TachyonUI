@@ -125,6 +125,10 @@
     --frame-bar: #59B88A;
     --frame-bar-over: #E0A23A;
     --budget-line: #9AA1AD;
+    /* ---- Timeline --------------------------------------------------------- */
+    --timeline-ready: #2F6FEB24;  /* the progress fill: the accent at 14% */
+    --timeline-tick: #C9CED6;     /* a minor tick; major ones are --text-3 */
+    --timeline-marker: #D9771A;   /* a marker's line */
 }
 
 /* ---- Shadows and focus rings (box-shadow values) -------------------------- */

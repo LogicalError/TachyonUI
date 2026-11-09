@@ -5520,6 +5520,108 @@
     flex-grow: 0;
     flex-shrink: 0;
 }
+/* Timeline: the transport buttons, the time in a well, and the scrubber. */
+.timeline {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    min-height: 34px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+.timeline-transport {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 2px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-button, .timeline-play, .timeline-loop {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
+    width: 26px;
+    height: 26px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 4px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-2);
+    -tachyon-icon-size: 14px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-button:hover, .timeline-loop:hover { color: var(--text-1); }
+.timeline-play { background-color: var(--accent); color: var(--on-accent); }
+.timeline-play:hover { color: var(--on-accent); }
+.timeline-loop::highlight(selected)       { background-color: var(--bg-active); color: var(--accent); }
+.timeline-loop:hover::highlight(selected) { color: var(--accent); }
+.timeline-time {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    height: 26px;
+    margin: 0px;
+    padding: 0px 10px;
+    border-width: 1px;
+    border-radius: 4px;
+    background-color: var(--bg-input);
+    border-color: var(--line-subtle);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-time-current, .timeline-time-total, .timeline-frame {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    font-family: monospace;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.timeline-time-current { color: var(--text-1); font-size: 13px; font-weight: 500; }
+.timeline-time-total   { color: var(--text-3); font-size: 12px; }
+.timeline-frame        { padding: 0px 5px; border-radius: 3px; background-color: var(--bg-hover); color: var(--text-2); font-size: 11px; }
+/* The scrubber: its padding box runs from the start to the length, so the playhead at either
+   end stays whole. */
+.timeline-scrubber {
+    height: 26px;
+    min-width: 120px;
+    margin: 0px;
+    padding: 0px 8px;
+    border-width: 1px;
+    border-radius: 4px;
+    background-color: var(--bg-input);
+    border-color: var(--line-subtle);
+    cursor: pointer;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.timeline-scrubber:hover { border-color: var(--line-strong); }
+.timeline-ready     { border-width: 0px; border-radius: 3px; background-color: var(--timeline-ready); border-color: transparent; }
+.timeline-tick      { border-width: 0px; background-color: var(--timeline-tick); border-color: transparent; }
+.timeline-tick-major { border-width: 0px; background-color: var(--text-3); border-color: transparent; }
+.timeline-marker    { border-width: 0px; border-radius: 1px; background-color: var(--timeline-marker); border-color: transparent; }
+.timeline-playhead  { border-width: 0px; border-radius: 1px; background-color: var(--accent); border-color: transparent; }
 .toast-actions {
     display: flex;
     flex-direction: row;
@@ -6430,6 +6532,7 @@
 .color-hex:focus-visible, .typed-field:focus-visible, .color-picker-hdr:focus-visible, .gradient-editor-location:focus-visible,
 .collection-remove:focus-visible, .collection-add:focus-visible, .collection-add-entry:focus-visible,
 .toolbar-button:focus-visible, .toolbar-toggle:focus-visible, .toolbar-menu-trigger:focus-visible,
+.timeline-button:focus-visible, .timeline-play:focus-visible, .timeline-loop:focus-visible, .timeline-scrubber:focus-visible,
 .breadcrumb-segment:focus-visible, .message-box-close:focus-visible, .message-box-details-toggle:focus-visible,
 .dialog-close:focus-visible, .dialog-small-button:focus-visible, .dialog-icon-button:focus-visible,
 .dialog-square-button:focus-visible, .dialog-delete-button:focus-visible, .gradient-editor-preset:focus-visible,

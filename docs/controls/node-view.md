@@ -398,4 +398,4 @@ RenderNodeView(view);
 
 ---
 
-[Previous: Tabs, docking and toolbars](tabs-docking-toolbars.md) | [Controls](../controls.md) | [Next: Other controls](other-controls.md)
+[Previous: Tabs, docking and toolbars](tabs-docking-toolbars.md) | [Controls](../controls.md) | [Next: Timeline](timeline.md)

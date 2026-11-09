@@ -512,6 +512,21 @@ namespace tachyon
         StyleRef tasksRowStyleRef {};            ///< a task's row
         StyleRef tasksRowBodyStyleRef {};        ///< its name and bar
         StyleRef tasksRowStateStyleRef {};       ///< its percent or state, monospace
+        StyleRef timelineStyleRef {};            ///< Timeline: the row
+        StyleRef timelineTransportStyleRef {};   ///< its buttons
+        StyleRef timelineButtonStyleRef {};      ///< a transport button: start, step, end
+        StyleRef timelinePlayStyleRef {};        ///< play / pause, in the accent
+        StyleRef timelineLoopStyleRef {};        ///< the loop toggle; selected while looping
+        StyleRef timelineTimeStyleRef {};        ///< the time's well
+        StyleRef timelineTimeCurrentStyleRef {}; ///< the time now, monospace
+        StyleRef timelineTimeTotalStyleRef {};   ///< "/ " and the length
+        StyleRef timelineFrameStyleRef {};       ///< the frame chip
+        StyleRef timelineScrubberStyleRef {};    ///< the scrubber
+        StyleRef timelineReadyStyleRef {};       ///< drawn: the progress fill
+        StyleRef timelineTickStyleRef {};        ///< drawn: a tick every quarter second (or the like)
+        StyleRef timelineTickMajorStyleRef {};   ///< drawn: a tick every second (or the like)
+        StyleRef timelineMarkerStyleRef {};      ///< drawn: a marker's line
+        StyleRef timelinePlayheadStyleRef {};    ///< drawn: the playhead's line and its head
         static constexpr int kSpinnerFrames = 24;
         /// A 90-degree arc, one frame per 15 degrees round: a spinner that goes where an icon
         /// goes, in the color of the icon it stands in for (BusyButton).
@@ -618,6 +633,13 @@ namespace tachyon
         IconID windowMinimizeIcon = IconID::Invalid; ///< title bar: minimize
         IconID windowMaximizeIcon = IconID::Invalid; ///< title bar: maximize
         IconID windowRestoreIcon  = IconID::Invalid; ///< title bar: restore
+        IconID timelineStartIcon    = IconID::Invalid; ///< Timeline: go to the start
+        IconID timelineStepBackIcon = IconID::Invalid; ///< Timeline: a frame back
+        IconID timelinePlayIcon     = IconID::Invalid; ///< Timeline: play (filled)
+        IconID timelinePauseIcon    = IconID::Invalid; ///< Timeline: pause (filled)
+        IconID timelineStepIcon     = IconID::Invalid; ///< Timeline: a frame on
+        IconID timelineEndIcon      = IconID::Invalid; ///< Timeline: go to the end
+        IconID timelineLoopIcon     = IconID::Invalid; ///< Timeline: loop
         ///@}
 
         // Line colors, from the palette's custom properties.

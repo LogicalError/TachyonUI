@@ -1477,6 +1477,13 @@ namespace tachyon
         if (title == "Table")       return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderTablePanel(); });
         if (title == "FrozenTable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderSplitScrollPanel(); });
         if (title == "Reorderable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderReorderablePanel(); });
+        if (title == "Timeline")
+        {
+            // The simulation's fill grows every frame, playing or not: never cached.
+            const ID id = CreatePanel(panels, name, theme.timelinePlayIcon, [this] { RenderTimelinePanel(); });
+            panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
+            return id;
+        }
         // Pages are registered once in InitSettingsPages.
         if (title == "Settings")    return CreatePanel(panels, name, showcase.panelSettingsIcon, [this] { RenderSettingsPanel(showcase.settings); });
         if (title == "Profiler")
@@ -1531,7 +1538,7 @@ namespace tachyon
                     Split("RightPinned", 540,
                         Tabs({ "NodeView", "Viewport", "Settings" }),
                         Tabs({ "Profiler", "Inspector", "Reorderable", "Misc", "BoxTest", "TreeTable", "Table", "FrozenTable" }))),
-                Split("LeftPinned", 500, Tabs({ "Files" }), Tabs({ "Log" })),
+                Split("LeftPinned", 500, Tabs({ "Files" }), Tabs({ "Log", "Timeline" })),
                 120, 160));
         presets.AddBuiltIn("Scene",
             Split("LeftPinned", 280,
@@ -1542,6 +1549,7 @@ namespace tachyon
         presets.AddBuiltIn("Graph", Split("RightPinned", 420, Tabs({ "NodeView" }), Tabs({ "Inspector" })));
         presets.AddBuiltIn("Tables", Split("RightPinned", 420, Tabs({ "Table", "TreeTable", "FrozenTable" }), Tabs({ "Inspector" })));
         presets.AddBuiltIn("Viewport", Tabs({ "Viewport" }));
+        presets.AddBuiltIn("Animation", Split("BottomPinned", 160, Tabs({ "Viewport" }), Tabs({ "Timeline" })));
         // A file of these types opens with its layout (from the Files panel, or "+" for a level).
         presets.SetForFileType(".level", "Scene");
         presets.SetForFileType(".mat", "Graph");

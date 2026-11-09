@@ -162,6 +162,16 @@ namespace tachyon
             windowMaximizeIcon = registerIcon("window-maximize", R"(<rect x="4" y="4" width="16" height="16" rx="2"/>)");
             windowRestoreIcon  = registerIcon("window-restore",
                 R"(<rect x="4" y="8" width="12" height="12" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2"/>)");
+            // Playback, as the Graphite timeline draws it; play and pause are filled.
+            timelineStartIcon    = registerIcon("timeline-start", R"(<path d="M19 20 9 12l10-8ZM5 19V5"/>)");
+            timelineStepBackIcon = registerIcon("timeline-step-back", R"(<path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>)");
+            timelinePlayIcon     = registerIcon("timeline-play", R"(<path fill="#909090" d="M7 4v16l13-8Z"/>)");
+            timelinePauseIcon    = registerIcon("timeline-pause",
+                R"(<rect fill="#909090" x="6" y="4" width="4" height="16" rx="1"/><rect fill="#909090" x="14" y="4" width="4" height="16" rx="1"/>)");
+            timelineStepIcon     = registerIcon("timeline-step", R"(<path d="m13 17 5-5-5-5M6 17l5-5-5-5"/>)");
+            timelineEndIcon      = registerIcon("timeline-end", R"(<path d="M5 4l10 8-10 8ZM19 5v14"/>)");
+            timelineLoopIcon     = registerIcon("timeline-loop",
+                R"(<path d="m17 2 4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3"/>)");
 
             // The spinner: a quarter of a circle of radius 9, a frame every 15 degrees.
             for (int frame = 0; frame < kSpinnerFrames; ++frame)
@@ -777,6 +787,21 @@ namespace tachyon
         tasksRowStyleRef                  = registerCSS("tasks-row");
         tasksRowBodyStyleRef              = registerCSS("tasks-row-body");
         tasksRowStateStyleRef             = registerCSS("tasks-row-state");
+        timelineStyleRef                  = registerCSS("timeline");
+        timelineTransportStyleRef         = registerCSS("timeline-transport");
+        timelineButtonStyleRef            = registerCSS("timeline-button");
+        timelinePlayStyleRef              = registerCSS("timeline-play");
+        timelineLoopStyleRef              = registerCSS("timeline-loop");
+        timelineTimeStyleRef              = registerCSS("timeline-time");
+        timelineTimeCurrentStyleRef       = registerCSS("timeline-time-current");
+        timelineTimeTotalStyleRef         = registerCSS("timeline-time-total");
+        timelineFrameStyleRef             = registerCSS("timeline-frame");
+        timelineScrubberStyleRef          = registerCSS("timeline-scrubber");
+        timelineReadyStyleRef             = registerCSS("timeline-ready");
+        timelineTickStyleRef              = registerCSS("timeline-tick");
+        timelineTickMajorStyleRef         = registerCSS("timeline-tick-major");
+        timelineMarkerStyleRef            = registerCSS("timeline-marker");
+        timelinePlayheadStyleRef          = registerCSS("timeline-playhead");
 
         toastStackStyleRef                = registerCSS("toast-stack");
         toastStyleRef                     = registerCSS("toast");

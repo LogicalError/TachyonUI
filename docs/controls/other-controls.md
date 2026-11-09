@@ -385,4 +385,4 @@ Classes: `settings-page`, `settings-page-selection`.
 
 ---
 
-[Previous: Node view](node-view.md) | [Controls](../controls.md) | [Next: Custom drawing](custom-drawing.md)
+[Previous: Timeline](timeline.md) | [Controls](../controls.md) | [Next: Custom drawing](custom-drawing.md)

@@ -39,6 +39,7 @@ results all controls share.
 | [Tree and grid views](controls/trees-and-grids.md) | `VirtualTreeView`, grid views, virtual grid views |
 | [Tabs, docking and toolbars](controls/tabs-docking-toolbars.md) | Tab bars, docking containers, toolbars, toolbar dock |
 | [Node view](controls/node-view.md) | `RenderNodeView` node graph editor |
+| [Timeline](controls/timeline.md) | `Timeline` playback row, `AdvanceTimeline` |
 | [Other controls](controls/other-controls.md) | Breadcrumb, status bar, progress bars, spinners and skeletons, task progress and background tasks, command search, settings panel |
 | [Custom drawing](controls/custom-drawing.md) | Drawing shapes and text inside an element |
 | [Default CSS classes](controls/css-classes.md) | Each control's class when you pass no style |
@@ -59,6 +60,7 @@ results all controls share.
 \subpage md_docs_2controls_2trees-and-grids
 \subpage md_docs_2controls_2tabs-docking-toolbars
 \subpage md_docs_2controls_2node-view
+\subpage md_docs_2controls_2timeline
 \subpage md_docs_2controls_2other-controls
 \subpage md_docs_2controls_2custom-drawing
 \subpage md_docs_2controls_2css-classes
