@@ -104,16 +104,19 @@ namespace tachyon
         CommitNodeViewEdit(showcase.nodeView, AddNodeEdit(showcase.nodeView, std::move(node)));
     }
 
-    void Application::AddFrameAround(std::span<const int> indices, std::string title, color4f color)
+    void Application::GroupSelection()
     {
         NodeView& view = showcase.nodeView;
-        NodeFrame frame = FrameAroundNodes(view, indices);
-        if (frame.size.x <= 0)
+        if (view.selectedNodeIDs.empty() && view.selectedFrameIDs.empty())
             return;
-        frame.stableID = idManager.CreateStaticID();
-        frame.title    = std::move(title);
-        frame.color    = color;
-        CommitNodeViewEdit(view, AddFrameEdit(view, std::move(frame)));
+        const ID group = idManager.CreateStaticID();
+        const NodeViewEdit edit = GroupSelectionEdit(view, NodeFrame{ .stableID = group, .title = "Group" });
+        if (edit.frames.empty())
+            return;
+        CommitNodeViewEdit(view, edit);
+        // The new frame selected, so Ctrl+G again puts it in another.
+        view.selectedNodeIDs.clear();
+        view.selectedFrameIDs = { group };
     }
 
     NodeModel Application::RerouteNode(float2 at, color4f color)

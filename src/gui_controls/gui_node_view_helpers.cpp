@@ -478,30 +478,72 @@ namespace tachyon
         return edit;
     }
 
+    namespace
+    {
+        // The box round rects added one by one, in node.pos space.
+        struct Bounds
+        {
+            int2 lo{}, hi{};
+            bool any = false;
+
+            void Add(int2 pos, int2 size)
+            {
+                const int2 end{ pos.x + size.x, pos.y + size.y };
+                lo  = any ? int2{ std::min(lo.x, pos.x), std::min(lo.y, pos.y) } : pos;
+                hi  = any ? int2{ std::max(hi.x, end.x), std::max(hi.y, end.y) } : end;
+                any = true;
+            }
+        };
+
+        // A frame round `bounds`: a cell of room on each side, the title bar above, on the
+        // grid when snapping. Zero size for empty bounds.
+        NodeFrame FrameAround(const NodeView& view, const Bounds& bounds)
+        {
+            if (!bounds.any)
+                return {};
+            const int32_t grid = view.gridSize > 0 ? view.gridSize : 12;
+            const int2 lo = bounds.lo, hi = bounds.hi;
+            // A cell of room round them, the title bar (a row pitch) above that.
+            int2 from{ lo.x - grid, lo.y - grid - 2 * grid }, to{ hi.x + grid, hi.y + grid };
+            if (view.snapToGrid)
+            {
+                from = { GridLineLE(from.x, 0, grid), GridLineLE(from.y, 0, grid) };
+                to   = { GridLineGE(to.x, 0, grid), GridLineGE(to.y, 0, grid) };
+            }
+            return NodeFrame{ .pos = from, .size = { to.x - from.x, to.y - from.y } };
+        }
+    }
+
     NodeFrame FrameAroundNodes(const NodeView& view, std::span<const int> indices)
     {
-        const int32_t grid = view.gridSize > 0 ? view.gridSize : 12;
-        bool any = false;
-        int2 lo{}, hi{};
+        Bounds bounds;
         for (const int n : indices)
+            if (n >= 0 && n < (int)view.nodes.size())
+                bounds.Add(view.nodes[size_t(n)].pos, view.nodes[size_t(n)].lastSize);
+        return FrameAround(view, bounds);
+    }
+
+    NodeViewEdit GroupSelectionEdit(const NodeView& view, NodeFrame frame)
+    {
+        Bounds bounds;
+        for (const NodeModel& node : view.nodes)
+            if (view.selectedNodeIDs.contains(node.stableID))
+                bounds.Add(node.pos, node.lastSize);
+        // Behind the first selected frame, so the frames it holds stay in front of it.
+        int index = -1;
+        for (int f = 0; f < (int)view.frames.size(); ++f)
         {
-            if (n < 0 || n >= (int)view.nodes.size()) continue;
-            const NodeModel& node = view.nodes[size_t(n)];
-            const int2 end{ node.pos.x + node.lastSize.x, node.pos.y + node.lastSize.y };
-            lo  = any ? int2{ std::min(lo.x, node.pos.x), std::min(lo.y, node.pos.y) } : node.pos;
-            hi  = any ? int2{ std::max(hi.x, end.x), std::max(hi.y, end.y) } : end;
-            any = true;
+            const NodeFrame& held = view.frames[size_t(f)];
+            if (!view.selectedFrameIDs.contains(held.stableID)) continue;
+            bounds.Add(held.pos, held.size);   // a collapsed one at its open size
+            if (index < 0) index = f;
         }
-        if (!any)
+        const NodeFrame around = FrameAround(view, bounds);
+        if (around.size.x <= 0)
             return {};
-        // A cell of room round them, the title bar (a row pitch) above that.
-        int2 from{ lo.x - grid, lo.y - grid - 2 * grid }, to{ hi.x + grid, hi.y + grid };
-        if (view.snapToGrid)
-        {
-            from = { GridLineLE(from.x, 0, grid), GridLineLE(from.y, 0, grid) };
-            to   = { GridLineGE(to.x, 0, grid), GridLineGE(to.y, 0, grid) };
-        }
-        return NodeFrame{ .pos = from, .size = { to.x - from.x, to.y - from.y } };
+        frame.pos  = around.pos;
+        frame.size = around.size;
+        return AddFrameEdit(view, std::move(frame), index);
     }
 
     std::vector<int> NodesInFrame(const NodeView& view, int frame)

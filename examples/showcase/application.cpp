@@ -451,7 +451,7 @@ namespace tachyon
         commandManager.RegisterCommand(nodeViewMode, showcase.frameSelectedIcon, tachyon::KeyCode::KeyF,  tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Frame Selected"); }, "Frame Selected");
         commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::KeyA,  tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Frame All"); }, "Frame All");
         commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::Space, tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Search Nodes"); }, "Search Nodes");
-        commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::KeyG,  tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Group Selection"); }, "Group Selection");
+        commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::KeyG,  tachyon::KeyModifier::Control, [this]() { GroupSelection(); }, "Group Selection");
 
         // Sculpt - brush operations.
         commandManager.RegisterCommand(sculptMode,                  tachyon::KeyCode::LeftBracket,  tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Decrease Brush Size"); }, "Decrease Brush Size");
@@ -707,14 +707,8 @@ namespace tachyon
                             edit.collapses.push_back({ n, other.collapsed, collapse });
                     CommitNodeViewEdit(view, edit);
                 });
-                // A frame round the selection.
-                MenuItem("Put in a frame", [this] {
-                    std::vector<int> selected;
-                    for (int n = 0; n < int(showcase.nodeView.nodes.size()); ++n)
-                        if (showcase.nodeView.selectedNodeIDs.contains(showcase.nodeView.nodes[size_t(n)].stableID))
-                            selected.push_back(n);
-                    AddFrameAround(selected, "Frame");
-                });
+                // A frame round the selection, the selected frames in it too.
+                MenuItem("Group selection", "Ctrl+G", [this] { GroupSelection(); });
                 const size_t count = showcase.nodeView.selectedNodeIDs.size();
                 const std::string deleteLabel = count > 1 ? std::format("Delete {} nodes", count) : std::string("Delete node");
                 MenuItem({ showcase.deleteIcon, deleteLabel }, "Delete", [this] { DeleteSelectedNodes(); });

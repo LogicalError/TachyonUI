@@ -618,7 +618,8 @@ namespace tachyon
         /// frames, as one edit.
         void DeleteSelectedNodes();
         /// Puts a frame titled `title` round the node view's nodes at `indices`, as one edit.
-        void AddFrameAround(std::span<const int> indices, std::string title, color4f color = {});
+        /// A frame round the node view's selected nodes and frames, then selected itself.
+        void GroupSelection();
         /// The kinds of node the canvas menu adds.
         enum class GraphNodeKind { Value, Math, Noise, Switch };
         /// Adds a node of `kind` with its top-left at `at` (node.pos space), as one edit.

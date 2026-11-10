@@ -292,6 +292,11 @@ In `gui_node_view_helpers.h`:
 - `RemoveFramesEdit(view, indices)` removes some. The nodes in them stay.
 - `FrameAroundNodes(view, indices)` is a frame round nodes as they're laid out: a grid cell
   of room on each side and the title bar above. Give it a `stableID` and a title.
+- `GroupSelectionEdit(view, frame)` puts the selected nodes and frames in a new frame.
+  - it's sized round them as `FrameAroundNodes` sizes a frame
+  - it goes behind the selected frames, so they stay in front of it
+  - a collapsed frame counts at its open size, so it still fits when opened
+  - nothing selected: an empty edit
 - `NodesInFrame(view, frame)` is the nodes a frame holds, which move with it.
 - `FrameTitleAtCanvasPos(view, canvasPos)` is the frame whose title is at a point.
 
@@ -300,6 +305,13 @@ NodeFrame frame = FrameAroundNodes(view, selected);   // std::vector<int> of nod
 frame.stableID = idManager.CreateStaticID();
 frame.title    = "Lighting";
 CommitNodeViewEdit(view, AddFrameEdit(view, std::move(frame)));
+```
+
+A "Group selection" command (the showcase's Ctrl+G) is one call:
+
+```cpp
+CommitNodeViewEdit(view, GroupSelectionEdit(view, NodeFrame{
+    .stableID = idManager.CreateStaticID(), .title = "Group" }));
 ```
 
 Frame classes: `node-frame` and `node-frame-band` (the box and its title bar, drawn behind
