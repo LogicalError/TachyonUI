@@ -26,6 +26,7 @@ list(APPEND GUI_CORE_TEST_FILES
   box_fields_test.cpp
   curve_test.cpp
   curve_field_test.cpp
+  curve_editor_test.cpp
   accent_test.cpp
   null_backends_test.cpp
   breadcrumb_test.cpp

@@ -548,6 +548,19 @@ namespace tachyon
         StyleRef curveReadoutStyleRef {};           ///< drawn: the selected key's time and value beside it
         StyleRef curveBoxSelectStyleRef {};         ///< drawn: the box a drag on the plot selects with
         StyleRef curvePresetStyleRef {};            ///< a preset's thumbnail button
+        StyleRef curvePlotFramesStyleRef {};        ///< the plot with fps set: no time labels under it
+        StyleRef curveToolbarLabelStyleRef {};      ///< "Interpolation", "Tangents" in the toolbar
+        StyleRef curveTreeStyleRef {};              ///< the channel list down the left
+        StyleRef curveTreeHeaderStyleRef {};        ///< its header: Channel, and the playhead's frame
+        StyleRef curveTreeGroupStyleRef {};         ///< a group's row, its chevron before its name
+        StyleRef curveTreeRowStyleRef {};           ///< a channel's row; selected for the active one
+        StyleRef curveTreeRowHiddenStyleRef {};     ///< a hidden channel's row, faded
+        StyleRef curveTreeSwatchStyleRef {};        ///< a channel's color square
+        StyleRef curveTreeNameStyleRef {};          ///< a channel's name
+        StyleRef curveTreeValueStyleRef {};         ///< its value at the playhead
+        StyleRef curveRulerStyleRef {};             ///< the frame ruler over the plot
+        StyleRef curveRulerLabelStyleRef {};        ///< drawn: a frame number on it
+        StyleRef curvePlayheadStyleRef {};          ///< drawn: the playhead's frame, in its pill
         StyleRef plotToolbarStyleRef {};            ///< Plot: the row of series chips over it
         StyleRef plotChannelStyleRef {};            ///< a series' chip; selected for the one shown
         StyleRef plotStyleRef {};                   ///< the plot; its padding holds the labels and the handles
@@ -716,6 +729,9 @@ namespace tachyon
         IconID timelineEventsIcon   = IconID::Invalid; ///< TimelineEditor: an events track (a flag)
         IconID linkIcon             = IconID::Invalid; ///< EdgesField / CornersField: the sides are linked (a chain)
         IconID curveFrameAllIcon    = IconID::Invalid; ///< CurveField's editor: show all the keys (four corners)
+        IconID curveConstantIcon    = IconID::Invalid; ///< its interpolations: a step
+        IconID curveLinearIcon      = IconID::Invalid; ///< straight lines
+        IconID curveBezierIcon      = IconID::Invalid; ///< a smooth curve
         IconID viewportSelectIcon   = IconID::Invalid; ///< Viewport's tools: select (a pointer)
         IconID viewportMoveIcon     = IconID::Invalid; ///< move (four arrows)
         IconID viewportRotateIcon   = IconID::Invalid; ///< rotate (a turning arrow)

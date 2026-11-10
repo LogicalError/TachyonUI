@@ -5,7 +5,8 @@ easing over time, a color's channels in a Curves node.
 
 - `CurveField`: the curve in a small box. A click opens the curve editor in a window under
   it.
-- `CurveEditor`: that editor, as a control of its own.
+- `CurveEditor`: that editor, as a control of its own. Give it `fps` and it becomes an
+  animation curve editor, for a panel beside a timeline.
 - `EvaluateCurve`: a curve's value at a time, for your app to use.
 
 ## CurveField
@@ -40,6 +41,9 @@ if (CurveField(idManager.AllocateDynamicID("falloff"), falloff))
 | `activeChannel` | The channel whose keys are added to |
 | `selectedKeys` | The selected keys, by `stableID` |
 | `presets` | The shapes under the plot; empty: the built-in ones |
+| `fps` | Frames a second, for animation curves; 0 (the default): plain times |
+| `playhead` | With `fps`: the time the ruler and the tree show, in seconds |
+| `onPlayheadChanged` | With `fps`: the user moved the playhead (already set) |
 | `onEdit` | A change was made (already applied): put it on your undo history |
 
 Each `CurveChannel` has:
@@ -48,6 +52,8 @@ Each `CurveChannel` has:
 - a `color`: `Value` (the warning color), `Red`, `Green`, `Blue` or `Alpha` (the axis colors
   and the primary text color)
 - `visible`: drawn; a hidden channel's keys can't be picked or added to
+- a `path`: the groups it's in, split by `/`, such as "Sphere/Position". With paths, the
+  editor lists the channels as a tree.
 - its `curve`
 
 ```cpp
@@ -78,30 +84,45 @@ as an animation curve does.
 const float strength = EvaluateCurve(falloff.channels[0].curve, distance / radius);
 ```
 
-- `MakeCurve(points, mode)` makes a curve from (time, value) points, in time order, with its
-  slopes worked out.
+- `MakeCurve(points, tangents, interpolation)` makes a curve from (time, value) points, in
+  time order, with its slopes worked out. The last two are optional: `Auto` and `Bezier`.
+
+```cpp
+const float2 points[] = { { 0.0f, 0.0f }, { 1.0f, 1.0f } };
+Curve steps = MakeCurve(points, CurveTangentMode::Auto, CurveInterpolation::Constant);
+```
+
+### Interpolation
+
+A key's `interpolation` says how the curve gets from it to the next key:
+
+| Interpolation | From the key to the next |
+| --- | --- |
+| `Bezier` (the default) | A smooth curve that takes both keys' slopes |
+| `Linear` | A straight line |
+| `Constant` | A step: the key's value holds, then jumps to the next key's |
+
+- For example, keys at 0 (value 0) and 1 (value 1):
+  - `Bezier` with level slopes: 0.5 at 0.5, easing in and out
+  - `Linear`: 0.25 at 0.25
+  - `Constant`: 0 all the way to 1
+- Tangent handles show only where a `Bezier` segment uses them: a key's left handle when the
+  key before it is `Bezier`, its right handle when the key itself is.
 
 ### Tangent modes
 
-A key's `mode` says how its slopes are set:
+A key's `tangents` says how its slopes are set:
 
 | Mode | The slopes |
 | --- | --- |
-| `ClampedAuto` (the default) | Smooth through the key, without overshooting its neighbors: level at a peak or a trough |
-| `Auto` | Smooth through the key, the slope between its neighbors; may overshoot |
-| `FreeSmooth` | One slope you set, the same on both sides |
+| `Auto` (the default) | Smooth through the key, without overshooting its neighbors: level at a peak or a trough |
+| `Aligned` | One slope you set, the same on both sides |
+| `Free` | Each side its own slope |
 | `Flat` | Level on both sides |
-| `Broken` | Each side its own, as `inMode` and `outMode` say |
-
-A `Broken` key's sides:
-
-| Side mode | That side |
-| --- | --- |
-| `Free` | The slope you set |
-| `Linear` | Straight to the neighbor |
-| `Constant` | A step: the value holds up to the next key |
 
 - An end key's automatic slope is level.
+- For example, a bouncing ball: `Auto` keys at the top of each bounce, and `Free` keys where
+  it hits the ground, so it leaves at a different angle than it arrived.
 - `UpdateCurveTangents(curve)` works the slopes out again; the edits call it. Call it after
   changing keys yourself.
 
@@ -130,15 +151,52 @@ For example, keys at 1 and 2 going from 0 to 1, with `postWrap = Loop`: at 2.25 
   - the keys; a selected one larger, with its tangent handles and its time and value beside it
 - Under the plot: the presets, and Before / After for the wrap modes.
 
+### As an animation curve editor
+
+Set `fps` and the editor lays out for animation, as a graph editor beside a timeline:
+
+- Over the plot:
+  - Interpolation: Constant, Linear and Bezier, for the selected keys
+  - Tangents: Auto, Aligned, Free and Flat, for the selected keys
+  - the first selected key's interpolation and tangents are lit
+  - Frame all
+  - with one key selected, its Frame and Value
+- A ruler over the plot with the frame numbers and the playhead.
+  - A press or drag on it moves the playhead to the frame under the pointer.
+  - The playhead also runs as a line through the plot.
+- Keys land on frames: dragged, added, or typed.
+- No presets or wrap modes under the plot.
+
+With channel `path`s, a tree down the left takes the place of the chips:
+
+- a row for each group, which closes and opens it
+- a row for each channel: its color, name, value at the playhead, and an eye that hides it
+- a click on a channel's row makes it the active one
+
+The playhead is the editor's own: copy your timeline's into it each frame, and copy it back
+when the user moves it.
+
+```cpp
+curves.fps = 30.0f;
+curves.channels = {
+    CurveChannel{ .name = "X", .path = "Sphere/Position", .color = CurveChannelColor::Red,   .curve = x },
+    CurveChannel{ .name = "Y", .path = "Sphere/Position", .color = CurveChannelColor::Green, .curve = y } };
+curves.onPlayheadChanged = [this](float time) { timeline.playback.time = time; };
+
+// Each frame:
+curves.playhead = timeline.playback.time;
+CurveEditor(idManager.AllocateDynamicID("curves"), curves, LayoutOverride{}.FlexGrow(1));
+```
+
 ### Mouse
 
 - On a key:
   - a click selects it; Shift adds it, Ctrl toggles it
   - a drag moves the selected keys; Escape during it puts them back
   - a right click: its menu
-- On a selected key's handle: a drag sets that side's slope.
-  - A key that isn't `Broken` becomes `FreeSmooth`, the same slope both sides.
-  - A `Broken` key's side becomes `Free`.
+- On a selected key's handle: a drag sets the slope.
+  - A `Free` key: that side only.
+  - Any other key becomes `Aligned`, the same slope both sides.
 - On the empty plot:
   - a click clears the selection
   - a drag selects the keys in a box; Shift adds them, Ctrl toggles them
@@ -153,9 +211,9 @@ For example, keys at 1 and 2 going from 0 to 1, with `postWrap = Loop`: at 2.25 
 
 The key's menu:
 
+- Constant, Linear, Bezier: the key's interpolation checked
+- Auto, Aligned, Free, Flat: the key's tangents checked
 - Delete key
-- Clamped auto, Auto, Free smooth, Flat, Broken; the key's mode checked
-- Left tangent, Right tangent, Both tangents: Free, Linear or Constant (making it Broken)
 
 ### Keys
 
@@ -182,14 +240,17 @@ To change the curves from your own code as one undo step, make an edit and commi
 | --- | --- |
 | `AddCurveKeyEdit(view, channel, time, value, keyID)` | A key, kept in the range; none on a hidden channel or where there's one already |
 | `DeleteSelectedCurveKeysEdit(view)` | The selected keys gone |
-| `SetCurveTangentModeEdit(view, mode)` | The selected keys' mode |
-| `SetCurveSideModeEdit(view, side, in, out)` | The selected keys broken, and a side or both set |
+| `SetCurveTangentModeEdit(view, mode)` | The selected keys' tangents |
+| `SetCurveInterpolationEdit(view, interpolation)` | The selected keys' interpolation |
 | `ApplyCurvePresetEdit(view, channel, preset, makeID)` | A preset stretched over the range |
 | `SetCurveWrapEdit(view, channel, pre, post)` | A channel's wrap modes |
 
 ```cpp
 CommitCurveEdit(falloff, AddCurveKeyEdit(falloff, 0, 0.5f, 0.8f, idManager.CreateStaticID()));
 ```
+
+- With `fps` set, `AddCurveKeyEdit` puts the key on the nearest frame.
+- `SnapToFrame(view, time)` does the same for your own times: 0.43 at 10 fps is 0.4.
 
 ## Presets
 
@@ -213,6 +274,16 @@ falloff.presets = { CurvePreset{ .name = "Sharp", .curve = MakeCurve(sharpPoints
 - drawn on it: `curve-label` (a grid number), `curve-readout` (the selected key's time and
   value), `curve-box-select`
 - a preset: `curve-preset`
+- with `fps`:
+  - the plot: `curve-plot-frames` (no numbers under it); "Interpolation" and "Tangents":
+    `curve-toolbar-label`
+  - the ruler: `curve-ruler`; drawn on it, `curve-ruler-label` (a frame number) and
+    `curve-playhead` (the playhead's pill)
+- the tree: `curve-tree`, its header `curve-tree-header`
+  - a group's row: `curve-tree-group`
+  - a channel's row: `curve-tree-row`, selected for the active one; `curve-tree-row-hidden`
+    when hidden
+  - in a row: `curve-tree-swatch`, `curve-tree-name`, `curve-tree-value`
 
 The palette sets:
 

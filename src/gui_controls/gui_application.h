@@ -3069,6 +3069,9 @@ namespace tachyon
         std::map<std::string, ThemeVariableOverrides, std::less<>> m_themeVariables;
         /// The theme loaded's, made when there are none.
         ThemeVariableOverrides& ThemeVariables();
+        /// CurveEditor's channel tree and frame ruler, for views with paths and fps.
+        void CurveTree(CurveView& view);
+        void CurveRuler(CurveView& view);
         /// A theme's path as m_themeVariables keys it: backslashes as forward slashes, then
         /// lexically normal, so one theme written two ways is one key on every platform.
         static std::string ThemePathKey(std::string_view themePath);
