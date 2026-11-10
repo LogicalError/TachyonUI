@@ -563,7 +563,7 @@ namespace tachyon
             {
                 if (!set.IsObject())
                     continue;
-                ThemeVariableOverrides& variables = m_themeVariables[std::filesystem::path(path).lexically_normal().generic_string()];
+                ThemeVariableOverrides& variables = m_themeVariables[ThemePathKey(path)];
                 for (const auto& [name, value] : set.Members())
                     if (value.IsString())
                         variables[name] = value.AsString();

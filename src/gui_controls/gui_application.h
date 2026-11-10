@@ -3029,6 +3029,9 @@ namespace tachyon
         std::map<std::string, ThemeVariableOverrides, std::less<>> m_themeVariables;
         /// The theme loaded's, made when there are none.
         ThemeVariableOverrides& ThemeVariables();
+        /// A theme's path as m_themeVariables keys it: backslashes as forward slashes, then
+        /// lexically normal, so one theme written two ways is one key on every platform.
+        static std::string ThemePathKey(std::string_view themePath);
         /// When to load the theme again after a color was shown at once; negative for never.
         double                      m_themeReloadAt = -1.0;
         /// How long a color must stay unchanged before the theme loads again.
