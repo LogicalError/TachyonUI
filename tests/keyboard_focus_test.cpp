@@ -31,7 +31,7 @@ namespace tachyon
                 for (ID* id : { &buttonID, &toggleID, &checkboxID, &switchID, &textID, &numberID,
                                 &sliderFieldID, &intSliderFieldID, &sliderID, &colorID, &gradientID, &listID, &disabledID,
                                 &toolbarButtonID, &toolbarToggleID, &toolbarMenuID, &breadcrumbID, &typedID,
-                                &listViewID, &tableID, &dropdownID, &timelineID, &editorID })
+                                &listViewID, &tableID, &dropdownID, &timelineID, &editorID, &edgesID, &cornersID, &shadowID })
                     *id = app.idManager.CreateStaticID();
                 tableColumns.push_back({
                     .column = { .header = "Name", .initialWidth = 120, .minWidth = 60, .maxWidth = 300 },
@@ -74,6 +74,9 @@ namespace tachyon
                     app.Dropdown(dropdownID, quality, { "Low", "High" });
                     app.Timeline(timelineID, playback, TimelineOptions{ .duration = 4.0f });
                     app.TimelineEditor(editorID, animation, LayoutOverride{}.Height(240));
+                    app.EdgesField(edgesID, edges);
+                    app.CornersField(cornersID, corners);
+                    app.ShadowField(shadowID, shadow);
                     app.BeginDisabled();
                     app.Button(disabledID, "Disabled", [] {});
                     app.EndDisabled();
@@ -110,7 +113,8 @@ namespace tachyon
                     { gradientID, "GradientField" }, { listID, "Field(list)" }, { toolbarButtonID, "toolbar Button" },
                     { toolbarToggleID, "toolbar Toggle" }, { toolbarMenuID, "toolbar BeginMenu" }, { breadcrumbID, "Breadcrumb" },
                     { typedID, "TypedField" }, { listViewID, "ListView" }, { tableID, "VirtualTable" }, { dropdownID, "Dropdown" },
-                    { timelineID, "Timeline" }, { editorID, "TimelineEditor" } };
+                    { timelineID, "Timeline" }, { editorID, "TimelineEditor" }, { edgesID, "EdgesField" },
+                    { cornersID, "CornersField" }, { shadowID, "ShadowField" } };
                 const auto& storage = app.elementStorage;
                 std::string name = "an unnamed control";
                 for (ElementRef ref = storage.FindElementRefByID(id); ref.IsValid(); ref = storage.GetParentRef(ref))
@@ -128,7 +132,7 @@ namespace tachyon
             HeadlessGUIApp app;
             ID buttonID, toggleID, checkboxID, switchID, textID, numberID, sliderFieldID, intSliderFieldID,
                sliderID, colorID, gradientID, listID, disabledID, toolbarButtonID, toolbarToggleID, toolbarMenuID,
-               breadcrumbID, typedID, listViewID, tableID, dropdownID, timelineID, editorID;
+               breadcrumbID, typedID, listViewID, tableID, dropdownID, timelineID, editorID, edgesID, cornersID, shadowID;
             TimelineState playback;
             TimelineView animation;
             bool toolbarToggle = false;
@@ -143,6 +147,9 @@ namespace tachyon
             color4f color { 1.0f, 0.5f, 0.0f, 1.0f };
             Gradient gradient;
             std::vector<std::string> list { "one", "two" };
+            BoxEdges   edges   = BoxEdges(1, 2, 3, 4);   // four sides of their own
+            BoxCorners corners = BoxCorners(4);          // linked
+            BoxShadow  shadow  { .y = 4, .blur = 12, .color = { 0, 0, 0, 90 } };
         };
 
         TEST_F(KeyboardFocusTest, TabReachesEveryControlAndEachShowsTheFocus)
@@ -174,6 +181,15 @@ namespace tachyon
             // The editor's: its toolbar, its filter and its lanes at least.
             EXPECT_GE(std::count_if(visited.begin(), visited.end(),
                                     [this](ID id) { return Describe(id).starts_with("a part of TimelineEditor"); }), 10);
+            // The link toggle and a number a side; linked, the toggle and the one number.
+            auto partsOf = [&](const char* control) {
+                return std::count_if(visited.begin(), visited.end(),
+                                     [&](ID id) { return Describe(id).starts_with(std::string("a part of ") + control); });
+            };
+            EXPECT_EQ(partsOf("EdgesField"), 5);
+            EXPECT_EQ(partsOf("CornersField"), 2);
+            // The shadow's color field, and its four sizes.
+            EXPECT_GE(partsOf("ShadowField"), 5);
 
             for (const ID id : visited)
             {

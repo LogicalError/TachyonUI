@@ -279,15 +279,16 @@ namespace tachyon
             GradientHandle backgroundHandle;
             VisualColorStyle backgroundColor = styleState.backgroundColor.ToVisualStyle(m_gradientManager, style.textureIndex, backgroundHandle);
 
-            VisualColorStyleIndex textColorIndex       = RegisterVisualColorStyle(textColor, textColorHandle);
-            VisualColorStyleIndex backgroundColorIndex = RegisterVisualColorStyle(backgroundColor, backgroundHandle);
+            VisualColorStyleIndex textColorIndex       = RegisterVisualColorStyle(textColor, textColorHandle, textColorStyle.variable);
+            VisualColorStyleIndex backgroundColorIndex = RegisterVisualColorStyle(backgroundColor, backgroundHandle,
+                                                                                   styleState.backgroundColor.variable);
 
             VisualColorStyleIndex iconColorIndex = textColorIndex;
             if (styleState.iconColor.gradient.stopCount != 0)
             {
                 GradientHandle iconHandle;
                 VisualColorStyle iconColor = styleState.iconColor.ToVisualStyle(m_gradientManager, style.textureIndex, iconHandle);
-                iconColorIndex = RegisterVisualColorStyle(iconColor, iconHandle);
+                iconColorIndex = RegisterVisualColorStyle(iconColor, iconHandle, styleState.iconColor.variable);
             }
 
             VisualColorStyleIndex decorationColorIndices[4];
@@ -298,7 +299,7 @@ namespace tachyon
                     continue;
                 GradientHandle decorationHandle;
                 VisualColorStyle decorationColor = styleState.decorationColors[d].ToVisualStyle(m_gradientManager, style.textureIndex, decorationHandle);
-                decorationColorIndices[d] = RegisterVisualColorStyle(decorationColor, decorationHandle);
+                decorationColorIndices[d] = RegisterVisualColorStyle(decorationColor, decorationHandle, styleState.decorationColors[d].variable);
             }
 
             VisualColorStyleIndex borderColorIndices[4];
@@ -306,7 +307,7 @@ namespace tachyon
             {
                 GradientHandle borderHandle;
                 VisualColorStyle borderColor = styleState.borderColors[e].ToVisualStyle(m_gradientManager, style.textureIndex, borderHandle);
-                borderColorIndices[e] = RegisterVisualColorStyle(borderColor, borderHandle);
+                borderColorIndices[e] = RegisterVisualColorStyle(borderColor, borderHandle, styleState.borderColors[e].variable);
             }
 
             visualBoxStyle[i] = VisualBoxStyle
@@ -555,8 +556,27 @@ namespace tachyon
     }
 
     VisualColorStyleIndex StyleManager::RegisterVisualColorStyle(const VisualColorStyle& visualColorStyle,
-                                                                 GradientHandle incomingHandle) noexcept
+                                                                 GradientHandle incomingHandle, uint16_t variable) noexcept
     {
+        if (variable != 0)
+        {
+            // A variable's fills are its own, so a new value can be written into them alone.
+            std::vector<VisualColorStyleIndex>& slots = m_variableColors[variable];
+            for (const VisualColorStyleIndex index : slots)
+                if (m_visualColorStyles[size_t(index) - 1] == visualColorStyle)
+                {
+                    if (incomingHandle.IsValid())
+                        m_gradientManager.Release(incomingHandle);
+                    return index;
+                }
+            m_visualColorStyles.push_back(visualColorStyle);
+            m_visualColorStyleHandles.push_back(incomingHandle);
+            visualColorStylesModified = true;
+            const auto index = static_cast<VisualColorStyleIndex>(m_visualColorStyles.size());
+            slots.push_back(index);
+            return index;
+        }
+
         auto visualColorHash = visualColorStyle.GetHashCode();
 
         VisualColorStyleIndex dedupIdx = TryDedupVisualColorStyle(visualColorStyle, visualColorHash);
@@ -582,7 +602,17 @@ namespace tachyon
     {
         GradientHandle handle;
         VisualColorStyle visual = s.ToVisualStyle(m_gradientManager, textureIndex, handle);
-        return RegisterVisualColorStyle(visual, handle);
+        return RegisterVisualColorStyle(visual, handle, s.variable);
+    }
+
+    bool StyleManager::SetVariableColor(uint16_t variable, const ColorStyle& s) noexcept
+    {
+        const auto it = m_variableColors.find(variable);
+        if (variable == 0 || it == m_variableColors.end() || it->second.empty())
+            return false;
+        for (const VisualColorStyleIndex index : it->second)
+            UpdateColorStyle(index, s);
+        return true;
     }
 
     VisualColorStyleIndex StyleManager::CreateColorStyle(const ColorStyle& s, std::span<const color4b> row) noexcept
@@ -669,6 +699,7 @@ namespace tachyon
         m_visualColorStyleHandles.clear();
         m_visualColorStyles.clear();
         m_visualColorHashMap.clear();
+        m_variableColors.clear();
         m_freeColorStyleSlots.clear();
         m_childStyles.clear();
 

@@ -37,6 +37,7 @@ struct Token
     std::string text;
     int         line = 1;
     int         col  = 1;
+    size_t      pos  = 0;   // offset of its first character in the source
 };
 
 class Lexer
@@ -61,6 +62,15 @@ public:
     bool Check(TT t) { return Peek().type == t; }
     int  Line()      { return Peek().line; }
     int  Col()       { return Peek().col; }
+
+    // The source from `from` up to `to`, without the white space at its end.
+    std::string_view Slice(size_t from, size_t to) const
+    {
+        to = std::min(to, m_src.size());
+        from = std::min(from, to);
+        while (to > from && std::isspace((unsigned char)m_src[to - 1])) --to;
+        return m_src.substr(from, to - from);
+    }
 
 private:
     std::string_view m_src;
@@ -105,6 +115,14 @@ private:
     Token ReadNext()
     {
         SkipWS();
+        const size_t start = m_pos;
+        Token token = ReadToken();
+        token.pos = start;
+        return token;
+    }
+
+    Token ReadToken()
+    {
         if (m_pos >= m_src.size()) return { TT::Eof, "", m_line, m_col };
 
         int sl = m_line, sc = m_col;
@@ -253,12 +271,14 @@ public:
             }
         }
         BuildChildStyles();
+        CheckPropertyValues();
         return std::move(m_result);
     }
 
 private:
     Lexer&     m_lex;
     StyleSheet m_result;
+    std::unordered_map<std::string, uint16_t> m_colorVariables;   // colorVariables' numbers
 
     // ---- :first-child / :last-child / :only-child --------------------------
 
@@ -416,13 +436,32 @@ private:
             }
 
             if (!Expect(TT::Colon, "':'")) { SkipDecl(); continue; }
+            const size_t valueStart = m_lex.Peek().pos;
+
+            // The value ends at `;`, `}` or `!important`.
+            auto store = [&](CustomProperty prop) {
+                if (!AtValueEnd())
+                {
+                    Error("Unexpected '" + m_lex.Peek().text + "' in " + name);
+                    SkipDecl();
+                    return;
+                }
+                prop.text = std::string(m_lex.Slice(valueStart, m_lex.Peek().pos));
+                prop.line = propTok.line;
+                prop.important = ConsumeImportant();
+                m_lex.Consume(TT::Semicolon);
+                // An important value stays through later plain ones, wherever they are.
+                auto it = m_result.customProperties.find(name);
+                if (it != m_result.customProperties.end() && it->second.important && !prop.important)
+                    return;
+                m_result.customProperties[name] = std::move(prop);
+            };
 
             // `none` is a box-shadow value.
             if (m_lex.Check(TT::Ident) && ICEq(m_lex.Peek().text, "none"))
             {
                 m_lex.Consume();
-                m_lex.Consume(TT::Semicolon);
-                m_result.customProperties[name] = CustomProperty{ .hasShadow = true };
+                store(CustomProperty{ .hasShadow = true });
                 continue;
             }
 
@@ -440,19 +479,17 @@ private:
                     values[prop.dimCount] = val;
                     prop.dims[prop.dimCount++] = (uint16_t)std::clamp((int)val, 0, 65535);
                 }
-                if (!m_lex.Check(TT::Semicolon) && !m_lex.Check(TT::CloseBrace))
+                if (!AtValueEnd())
                 {
                     const int lengthCount = prop.dimCount;
                     prop = CustomProperty{ .hasShadow = true };
                     if (!ParseShadowList(prop.shadows, values, lengthCount)) { SkipDecl(); continue; }
-                    m_lex.Consume(TT::Semicolon);
-                    m_result.customProperties[name] = prop;
+                    store(prop);
                     continue;
                 }
-                m_lex.Consume(TT::Semicolon);
                 prop.number    = values[0];
                 prop.hasNumber = (prop.dimCount >= 1);
-                m_result.customProperties[name] = prop;
+                store(prop);
                 continue;
             }
 
@@ -460,16 +497,193 @@ private:
             StyleDecl d;
             d.prop = name;
             if (!ParseColorStyleValue(d)) { SkipDecl(); continue; }
-            m_lex.Consume(TT::Semicolon);
-
-            m_result.customProperties[name] = CustomProperty {
+            store(CustomProperty {
                 .color      = d.color4bVal,
                 .colorStyle = d.colorStyleVal,
                 .hasColor   = true
-            };
+            });
         }
         Expect(TT::CloseBrace, "'}'");
         return true;
+    }
+
+    // The number of a color variable, as ColorStyle::variable has it: its place in
+    // colorVariables, from 1, added on first use.
+    uint16_t ColorVariable(const std::string& name)
+    {
+        auto [it, added] = m_colorVariables.try_emplace(name, uint16_t(0));
+        if (added)
+        {
+            if (m_result.colorVariables.size() >= 0xFFFF)
+            {
+                m_colorVariables.erase(it);
+                return 0;
+            }
+            m_result.colorVariables.push_back(name);
+            it->second = uint16_t(m_result.colorVariables.size());
+        }
+        return it->second;
+    }
+
+    bool AtValueEnd()
+    {
+        return m_lex.Check(TT::Semicolon) || m_lex.Check(TT::CloseBrace) || m_lex.Check(TT::Eof)
+            || (m_lex.Check(TT::Unknown) && m_lex.Peek().text == "!");
+    }
+
+    // `!important` after a value; anything else after the `!` is reported.
+    bool ConsumeImportant()
+    {
+        if (!m_lex.Check(TT::Unknown) || m_lex.Peek().text != "!")
+            return false;
+        m_lex.Consume();
+        if (m_lex.Check(TT::Ident) && ICEq(m_lex.Peek().text, "important"))
+        {
+            m_lex.Consume();
+            return true;
+        }
+        Error("Expected 'important' after '!'");
+        return false;
+    }
+
+    // ---- @property -----------------------------------------------------------
+
+    // `@property --name { syntax: "<color>"; category: "..."; label: "..."; description: "..."; range: 0 1; }`
+    bool ParsePropertyRule(const Token& at)
+    {
+        if (!m_lex.Check(TT::Ident) || m_lex.Peek().text.size() < 3 || m_lex.Peek().text.compare(0, 2, "--") != 0)
+        {
+            Error("Expected a custom property name (--name) after '@property'");
+            return false;
+        }
+        CustomPropertyInfo info{ .name = m_lex.Consume().text, .line = at.line };
+        if (!Expect(TT::OpenBrace, "'{'")) return false;
+
+        while (!m_lex.Check(TT::CloseBrace) && !m_lex.Check(TT::Eof))
+        {
+            if (!m_lex.Check(TT::Ident)) { m_lex.Consume(); continue; }
+            const Token descTok = m_lex.Consume();
+            if (!Expect(TT::Colon, "':'")) { SkipDecl(); continue; }
+
+            bool ok = true;
+            if (ICEq(descTok.text, "syntax"))
+                ok = ParsePropertySyntax(info.type);
+            else if (ICEq(descTok.text, "category") || ICEq(descTok.text, "label") || ICEq(descTok.text, "description"))
+            {
+                std::string& text = ICEq(descTok.text, "category") ? info.category
+                                  : ICEq(descTok.text, "label")    ? info.label : info.description;
+                if (!m_lex.Check(TT::StringLit)) { Error("Expected a quoted string for '" + descTok.text + "'"); ok = false; }
+                else text = m_lex.Consume().text;
+            }
+            else if (ICEq(descTok.text, "range"))
+                ok = ParsePropertyRange(info);
+            else if (ICEq(descTok.text, "inherits") || ICEq(descTok.text, "initial-value"))
+            {
+                // Standard descriptors with no use here: custom properties aren't inherited
+                // per element, and the palette sets every value.
+                SkipDecl();
+                continue;
+            }
+            else
+            {
+                Error("Unsupported @property descriptor '" + descTok.text + "'", descTok.line, descTok.col);
+                ok = false;
+            }
+            if (!ok) { SkipDecl(); continue; }
+            if (!m_lex.Check(TT::CloseBrace) && !Expect(TT::Semicolon, "';'")) SkipDecl();
+        }
+        Expect(TT::CloseBrace, "'}'");
+
+        auto it = std::find_if(m_result.propertyInfos.begin(), m_result.propertyInfos.end(),
+                               [&](const CustomPropertyInfo& i) { return i.name == info.name; });
+        if (it != m_result.propertyInfos.end())
+            *it = std::move(info);
+        else
+            m_result.propertyInfos.push_back(std::move(info));
+        return true;
+    }
+
+    bool ParsePropertySyntax(CustomPropertyType& type)
+    {
+        if (!m_lex.Check(TT::StringLit)) { Error("Expected a quoted syntax, such as \"<color>\""); return false; }
+        const Token tok = m_lex.Consume();
+        static constexpr std::pair<const char*, CustomPropertyType> kSyntaxes[] = {
+            { "*",           CustomPropertyType::Any },
+            { "<color>",     CustomPropertyType::Color },
+            { "<number>",    CustomPropertyType::Number },
+            { "<length>",    CustomPropertyType::Length },
+            { "<length>+",   CustomPropertyType::Lengths },
+            { "<edges>",     CustomPropertyType::Edges },
+            { "<corners>",   CustomPropertyType::Corners },
+            { "<shadow>",    CustomPropertyType::Shadow },
+        };
+        for (const auto& [text, t] : kSyntaxes)
+            if (ICEq(tok.text, text)) { type = t; return true; }
+        Error("Unsupported @property syntax \"" + tok.text + "\"", tok.line, tok.col);
+        return false;
+    }
+
+    // `range: <min> <max>`, each with an optional px.
+    bool ParsePropertyRange(CustomPropertyInfo& info)
+    {
+        float bounds[2] {};
+        for (float& bound : bounds)
+        {
+            if (!m_lex.Check(TT::Number)) { Error("Expected 'range: <min> <max>'"); return false; }
+            bound = ConsumeFloat();
+            if (m_lex.Check(TT::Ident) && ICEq(m_lex.Peek().text, "px")) m_lex.Consume();
+        }
+        if (bounds[0] > bounds[1]) { Error("A range's min is above its max"); return false; }
+        info.hasRange = true;
+        info.min = bounds[0];
+        info.max = bounds[1];
+        return true;
+    }
+
+    // Each custom property with an @property rule has the kind of value it says, inside its
+    // range. Checked once the whole sheet is read, so the rule and the value can be in either
+    // order.
+    void CheckPropertyValues()
+    {
+        static constexpr const char* kSyntaxNames[] = { "*", "<color>", "<number>", "<length>", "<length>+", "<edges>", "<corners>", "<shadow>" };
+        for (const CustomPropertyInfo& info : m_result.propertyInfos)
+        {
+            const auto it = m_result.customProperties.find(info.name);
+            if (it == m_result.customProperties.end())
+                continue;
+            const CustomProperty& prop = it->second;
+            bool fits = true;
+            switch (info.type)
+            {
+            case CustomPropertyType::Any:     break;
+            case CustomPropertyType::Color:   fits = prop.hasColor; break;
+            case CustomPropertyType::Number:
+            case CustomPropertyType::Length:  fits = prop.hasNumber && prop.dimCount == 1; break;
+            case CustomPropertyType::Lengths:
+            case CustomPropertyType::Edges:
+            case CustomPropertyType::Corners: fits = prop.hasNumber; break;
+            case CustomPropertyType::Shadow:  fits = prop.hasShadow; break;
+            }
+            if (!fits)
+            {
+                Error(std::format("{} is \"{}\" by its @property rule, not '{}'", info.name,
+                                  kSyntaxNames[size_t(info.type)], prop.text), prop.line, 1);
+                continue;
+            }
+            if (!info.hasRange || !prop.hasNumber)
+                continue;
+            const bool single = info.type == CustomPropertyType::Number || info.type == CustomPropertyType::Length;
+            for (int i = 0; i < (single ? 1 : int(prop.dimCount)); ++i)
+            {
+                const float v = single ? prop.number : float(prop.dims[i]);
+                if (v < info.min || v > info.max)
+                {
+                    Error(std::format("{} is {}, outside its range of {} to {}", info.name, prop.text, info.min, info.max),
+                          prop.line, 1);
+                    break;
+                }
+            }
+        }
     }
 
     // ---- @font-face ---------------------------------------------------------
@@ -477,6 +691,8 @@ private:
     bool ParseAtRule()
     {
         const Token at = m_lex.Consume();
+        if (ICEq(at.text, "property"))
+            return ParsePropertyRule(at);
         if (!ICEq(at.text, "font-face"))
         {
             Error("Unknown at-rule '@" + at.text + "'", at.line, at.col);
@@ -1002,6 +1218,7 @@ private:
                 }
                 d.color4bVal    = it->second.color;
                 d.colorStyleVal = it->second.colorStyle;
+                d.colorStyleVal.variable = ColorVariable(varName);
                 d.isColorStyle  = true;
                 return true;
             }

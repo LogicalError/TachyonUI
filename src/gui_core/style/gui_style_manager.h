@@ -170,13 +170,21 @@ namespace tachyon
         std::span<const tachyon::VisualColorStyle> GetVisualColorStylesSpan() noexcept { return m_visualColorStyles; }
 
         /// Takes ownership of `incomingHandle`: released on a dedup hit, otherwise stored with the slot.
+        /// With a `variable` (ColorStyle::variable), it's shared only with that variable's.
         VisualColorStyleIndex RegisterVisualColorStyle(const VisualColorStyle& s,
-                                                       GradientHandle incomingHandle) noexcept;
+                                                       GradientHandle incomingHandle,
+                                                       uint16_t variable = 0) noexcept;
 
         /// Bakes `s` and registers it, reusing an identical entry; the usual way to register
         /// a color. The manager owns the atlas slot.
         VisualColorStyleIndex RegisterColorStyle(const ColorStyle& s,
                                                  ImageIndex textureIndex = ImageIndex::Invalid) noexcept;
+
+        /// Writes `s` into every registered fill of the theme variable `variable`
+        /// (ColorStyle::variable): what's drawn with it changes on the next frame, with no
+        /// registering again. Colors only made from it, such as a hover tint over it, stay
+        /// until the styles are registered again. False when nothing has that variable.
+        bool SetVariableColor(uint16_t variable, const ColorStyle& s) noexcept;
 
         // ---- On-demand (runtime-mutable) color style management ----
 
@@ -250,6 +258,8 @@ namespace tachyon
         std::unordered_map<uint64_t, std::vector<VisualBoxStyleIndex>>   m_visualBoxHashMap;
         std::unordered_map<uint64_t, std::vector<VisualTextStyleIndex>>  m_visualTextHashMap;
         std::unordered_map<uint64_t, std::vector<VisualColorStyleIndex>> m_visualColorHashMap;
+        /// A theme variable's fills (ColorStyle::variable), kept apart from the rest.
+        std::unordered_map<uint16_t, std::vector<VisualColorStyleIndex>> m_variableColors;
 
         /// Free list for on-demand (runtime-mutable) color style slots.
         std::vector<VisualColorStyleIndex> m_freeColorStyleSlots;

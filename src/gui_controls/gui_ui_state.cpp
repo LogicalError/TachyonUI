@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <optional>
 
 namespace tachyon
@@ -117,6 +118,11 @@ namespace tachyon
     }
     void GUIApplication::PersistShortcuts(std::string key, CommandManager& commands)     { Upsert(m_persistShortcuts, std::move(key), &commands); }
     void GUIApplication::PersistLayoutPresets(std::string key, LayoutPresets& presets)   { Upsert(m_persistPresets, std::move(key), &presets); }
+    void GUIApplication::PersistThemeVariables(std::string key)
+    {
+        if (std::find(m_persistThemeVariables.begin(), m_persistThemeVariables.end(), key) == m_persistThemeVariables.end())
+            m_persistThemeVariables.push_back(std::move(key));
+    }
 
     std::string GUIApplication::SaveDockLayout(const DockingLayout& layout) const
     {
@@ -328,6 +334,24 @@ namespace tachyon
                 presets.Set(key, std::move(*parsed));
         doc.Set("layoutPresets", std::move(presets));
 
+        // Each theme's variables, by its path: { "themes/dark.css": { "--bg-panel": "#202020" } }.
+        JsonValue themeVariables = JsonValue::MakeObject();
+        for (const std::string& key : m_persistThemeVariables)
+        {
+            JsonValue byTheme = JsonValue::MakeObject();
+            for (const auto& [path, variables] : m_themeVariables)
+            {
+                if (variables.empty())
+                    continue;
+                JsonValue set = JsonValue::MakeObject();
+                for (const auto& [name, value] : variables)
+                    set.Set(name, value);
+                byTheme.Set(path, std::move(set));
+            }
+            themeVariables.Set(key, std::move(byTheme));
+        }
+        doc.Set("themeVariables", std::move(themeVariables));
+
         JsonValue values = JsonValue::MakeObject();
         for (const auto& [key, target] : m_persistValues)
             std::visit([&](auto* v) { values.Set(key, JsonValue(*v)); }, target);
@@ -527,6 +551,25 @@ namespace tachyon
         for (const auto& [key, target] : m_persistPresets)
             if (const JsonValue* saved = section("layoutPresets", key))
                 (void)target->FromJson(saved->Write());
+
+        // Theme variables, in place of the ones set before; the theme loads again with them.
+        for (const std::string& key : m_persistThemeVariables)
+        {
+            const JsonValue* saved = section("themeVariables", key);
+            if (!saved || !saved->IsObject())
+                continue;
+            m_themeVariables.clear();
+            for (const auto& [path, set] : saved->Members())
+            {
+                if (!set.IsObject())
+                    continue;
+                ThemeVariableOverrides& variables = m_themeVariables[std::filesystem::path(path).lexically_normal().generic_string()];
+                for (const auto& [name, value] : set.Members())
+                    if (value.IsString())
+                        variables[name] = value.AsString();
+            }
+            m_themeReloadPending = true;
+        }
 
         // App values, by their own type; a value of another type is skipped.
         for (const auto& [key, target] : m_persistValues)

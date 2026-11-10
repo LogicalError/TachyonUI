@@ -5,29 +5,1070 @@
    are resolved at parse time against whatever has been defined so far.
    ============================================================================= */
 
-:root {
-    /* ---- Dimensions: shared across all palettes -------------------------- */
-    --border:            1px;
-    --border-first:      1px 1px 1px 1px;
-    --border-mid:        1px 1px 1px 0px;
-    --border-last:       1px 1px 1px 0px;
-    --border-thin:       1px;
-    --border-toolbar:    1px;
-    --radius-sm:         4px;
-    --radius-md:         4px;  /* controls */
-    --radius-lg:         6px;  /* panels, nodes */
-    --radius-dialog:     8px;  /* dialogs, menus */
-    --radius-toolbar:    0px;
-    --radius-md-first:   4px 0px 0px 4px;
-    --radius-md-mid:     0px 0px 0px 0px;
-    --radius-md-last:    0px 4px 4px 0px;
-    --radius-node-top:   5px 5px 0px 0px; /* --radius-md minus --border: follows the node border's inner curve */
-    --font-size:         12px;
-    --font-size-sm:      11px; /* captions, column headers */
-    --font-size-tooltip: 12px;
+/* ---- Theme variables -------------------------------------------------------
+   What each custom property is for, for a theme editor: its type (syntax), the
+   group it is shown in (category), a description and, for sizes, a range.
+   The palettes set the colors and shadows; the sizes are set below. */
+@property --bg-app {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Window";
+    description: "Window background and the gutters between panels";
+}
+@property --bg-panel {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Panel";
+    description: "Panel body";
+}
+@property --bg-header {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Header";
+    description: "Panel header, tab strip and table header row";
+}
+@property --bg-raised {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Raised";
+    description: "Nodes, tooltips and menus, raised above the panel";
+}
+@property --bg-control {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Control";
+    description: "Buttons and node headers";
+}
+@property --bg-active {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Active";
+    description: "The active tab, and a hovered control";
+}
+@property --bg-pressed {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Pressed";
+    description: "A pressed control, and the selected segment";
+}
+@property --bg-hover {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Hovered row";
+    description: "A hovered row";
+}
+@property --bg-input {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Input";
+    description: "Text and number fields, segmented-control wells and graph backgrounds";
+}
+@property --bg-list {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "List";
+    description: "List and dictionary containers";
+}
+@property --bg-well {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Well";
+    description: "Recessed lists and details in a dialog";
+}
+@property --bg-popup {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Menu";
+    description: "Menus";
+}
+@property --bg-menu-hover {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Hovered menu row";
+    description: "A hovered or keyboard-selected menu row";
+}
+@property --bg-keycap {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Keycap";
+    description: "A keyboard shortcut drawn as a key";
+}
+@property --row-stripe {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Row stripe";
+    description: "The odd rows of large tables";
+}
+@property --title-bar-tab {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Title bar tab";
+    description: "A torn-off window's active tab, in its title bar";
+}
+@property --panel-border {
+    syntax: "<color>";
+    category: "Lines";
+    label: "Panel outline";
+    description: "The outline around each panel";
+}
+@property --line-subtle {
+    syntax: "<color>";
+    category: "Lines";
+    label: "Subtle";
+    description: "Dividers, header bottom borders, input borders and progress tracks";
+}
+@property --line-node {
+    syntax: "<color>";
+    category: "Lines";
+    label: "Node";
+    description: "Node borders, node header dividers and tree guides";
+}
+@property --line-strong {
+    syntax: "<color>";
+    category: "Lines";
+    label: "Strong";
+    description: "Button borders and scroll bar thumbs";
+}
+@property --line-section {
+    syntax: "<color>";
+    category: "Lines";
+    label: "Section";
+    description: "Section dividers";
+}
+@property --divider-hover {
+    syntax: "<color>";
+    category: "Lines";
+    label: "Hovered divider";
+    description: "A hovered or dragged divider: panel splitters, column and label sizers";
+}
+@property --text-1 {
+    syntax: "<color>";
+    category: "Text";
+    label: "Primary";
+    description: "Values, active labels and titles";
+}
+@property --text-2 {
+    syntax: "<color>";
+    category: "Text";
+    label: "Secondary";
+    description: "Default text and property labels";
+}
+@property --text-3 {
+    syntax: "<color>";
+    category: "Text";
+    label: "Tertiary";
+    description: "Captions, placeholders and column headers";
+}
+@property --text-link {
+    syntax: "<color>";
+    category: "Text";
+    label: "Link";
+    description: "Links";
+}
+@property --text-link-hover {
+    syntax: "<color>";
+    category: "Text";
+    label: "Hovered link";
+    description: "A hovered link";
+}
+@property --selection {
+    syntax: "<color>";
+    category: "Text";
+    label: "Selection";
+    description: "Selected text, under text that stays --text-1";
+}
+@property --selection-inactive {
+    syntax: "<color>";
+    category: "Text";
+    label: "Inactive selection";
+    description: "Selected text in a field without focus";
+}
+@property --caret {
+    syntax: "<color>";
+    category: "Text";
+    label: "Text cursor";
+    description: "The text cursor";
+}
+@property --accent {
+    syntax: "<color>";
+    category: "Accent";
+    label: "Accent";
+    description: "The accent: selected, active and primary things";
+}
+@property --accent-soft {
+    syntax: "<color>";
+    category: "Accent";
+    label: "Soft accent";
+    description: "Selected rows and cells, opaque so stacked ones do not darken";
+}
+@property --on-accent {
+    syntax: "<color>";
+    category: "Accent";
+    label: "On accent";
+    description: "Text and icons on accent fills";
+}
+@property --on-accent-muted {
+    syntax: "<color>";
+    category: "Accent";
+    label: "Muted on accent";
+    description: "Secondary text on accent fills";
+}
+@property --info {
+    syntax: "<color>";
+    category: "Status";
+    label: "Information";
+    description: "Information icons";
+}
+@property --info-soft {
+    syntax: "<color>";
+    category: "Status";
+    label: "Soft information";
+    description: "An information toast's circle";
+}
+@property --ok {
+    syntax: "<color>";
+    category: "Status";
+    label: "Success";
+    description: "Success";
+}
+@property --ok-soft {
+    syntax: "<color>";
+    category: "Status";
+    label: "Soft success";
+    description: "A success toast's circle";
+}
+@property --on-ok {
+    syntax: "<color>";
+    category: "Status";
+    label: "On success";
+    description: "A mark on an --ok fill";
+}
+@property --warn {
+    syntax: "<color>";
+    category: "Status";
+    label: "Warning";
+    description: "Warnings, NaN values and over-budget frames";
+}
+@property --warn-soft {
+    syntax: "<color>";
+    category: "Status";
+    label: "Soft warning";
+    description: "A warning's circle, and a soloed track's button";
+}
+@property --warn-text {
+    syntax: "<color>";
+    category: "Status";
+    label: "Warning text";
+    description: "Warning text, and NaN values in number fields";
+}
+@property --error {
+    syntax: "<color>";
+    category: "Status";
+    label: "Error";
+    description: "Errors, and the outline of an invalid control";
+}
+@property --error-soft {
+    syntax: "<color>";
+    category: "Status";
+    label: "Soft error";
+    description: "A remove button's hover";
+}
+@property --error-circle {
+    syntax: "<color>";
+    category: "Status";
+    label: "Error circle";
+    description: "An error's circle";
+}
+@property --error-text {
+    syntax: "<color>";
+    category: "Status";
+    label: "Error text";
+    description: "Error messages in running text";
+}
+@property --danger {
+    syntax: "<color>";
+    category: "Status";
+    label: "Danger";
+    description: "Destructive buttons";
+}
+@property --on-danger {
+    syntax: "<color>";
+    category: "Status";
+    label: "On danger";
+    description: "Text on destructive buttons";
+}
+@property --info-banner {
+    syntax: "<color>";
+    category: "Status";
+    label: "Information banner";
+    description: "An information banner, under its message";
+}
+@property --info-banner-line {
+    syntax: "<color>";
+    category: "Status";
+    label: "Information banner line";
+    description: "The line along an information banner's bottom";
+}
+@property --ok-banner {
+    syntax: "<color>";
+    category: "Status";
+    label: "Success banner";
+    description: "A success banner, under its message";
+}
+@property --ok-banner-line {
+    syntax: "<color>";
+    category: "Status";
+    label: "Success banner line";
+    description: "The line along a success banner's bottom";
+}
+@property --warn-banner {
+    syntax: "<color>";
+    category: "Status";
+    label: "Warning banner";
+    description: "A warning banner, under its message";
+}
+@property --warn-banner-line {
+    syntax: "<color>";
+    category: "Status";
+    label: "Warning banner line";
+    description: "The line along a warning banner's bottom";
+}
+@property --error-banner {
+    syntax: "<color>";
+    category: "Status";
+    label: "Error banner";
+    description: "An error banner, under its message";
+}
+@property --error-banner-line {
+    syntax: "<color>";
+    category: "Status";
+    label: "Error banner line";
+    description: "The line along an error banner's bottom";
+}
+@property --slider-thumb {
+    syntax: "<color>";
+    category: "Controls";
+    label: "Slider thumb";
+    description: "A slider's thumb";
+}
+@property --checker-a {
+    syntax: "<color>";
+    category: "Controls";
+    label: "Checkerboard light";
+    description: "The light squares of the transparency checkerboard";
+}
+@property --checker-b {
+    syntax: "<color>";
+    category: "Controls";
+    label: "Checkerboard dark";
+    description: "Its dark squares";
+}
+@property --alpha-track {
+    syntax: "<color>";
+    category: "Controls";
+    label: "Alpha bar start";
+    description: "A color's alpha bar, at no alpha";
+}
+@property --alpha-fill {
+    syntax: "<color>";
+    category: "Controls";
+    label: "Alpha bar end";
+    description: "A color's alpha bar, at full alpha";
+}
+@property --skeleton {
+    syntax: "<color>";
+    category: "Controls";
+    label: "Loading bar";
+    description: "A placeholder bar while content loads";
+}
+@property --skeleton-shine {
+    syntax: "<color>";
+    category: "Controls";
+    label: "Loading shine";
+    description: "The shine sweeping across it";
+}
+@property --folder {
+    syntax: "<color>";
+    category: "Controls";
+    label: "Folder";
+    description: "Folder icons";
+}
+@property --tooltip-bg {
+    syntax: "<color>";
+    category: "Tooltips";
+    label: "Background";
+    description: "Tooltip background";
+}
+@property --tooltip-border {
+    syntax: "<color>";
+    category: "Tooltips";
+    label: "Border";
+    description: "Tooltip border";
+}
+@property --tooltip-text {
+    syntax: "<color>";
+    category: "Tooltips";
+    label: "Text";
+    description: "Tooltip text";
+}
+@property --tooltip-muted {
+    syntax: "<color>";
+    category: "Tooltips";
+    label: "Second line";
+    description: "A tooltip's second line";
+}
+@property --tooltip-chip {
+    syntax: "<color>";
+    category: "Tooltips";
+    label: "Shortcut chip";
+    description: "A shortcut chip in a tooltip";
+}
+@property --tooltip-chip-text {
+    syntax: "<color>";
+    category: "Tooltips";
+    label: "Shortcut chip text";
+    description: "Its text";
+}
+@property --dialog-bg {
+    syntax: "<color>";
+    category: "Dialogs";
+    label: "Background";
+    description: "Dialog background, a step lighter than the panels so it stands out";
+}
+@property --dialog-header {
+    syntax: "<color>";
+    category: "Dialogs";
+    label: "Header";
+    description: "A dialog's title bar and footer";
+}
+@property --dialog-border {
+    syntax: "<color>";
+    category: "Dialogs";
+    label: "Border";
+    description: "A dialog's border";
+}
+@property --dialog-divider {
+    syntax: "<color>";
+    category: "Dialogs";
+    label: "Divider";
+    description: "Dividers in a dialog";
+}
+@property --dialog-well {
+    syntax: "<color>";
+    category: "Dialogs";
+    label: "Well";
+    description: "Lists and details in a dialog";
+}
+@property --dialog-input {
+    syntax: "<color>";
+    category: "Dialogs";
+    label: "Input";
+    description: "Fields in a dialog";
+}
+@property --dialog-control {
+    syntax: "<color>";
+    category: "Dialogs";
+    label: "Button";
+    description: "Buttons in a dialog";
+}
+@property --dialog-control-border {
+    syntax: "<color>";
+    category: "Dialogs";
+    label: "Button border";
+    description: "Their borders";
+}
+@property --scrim {
+    syntax: "<color>";
+    category: "Dialogs";
+    label: "Dimming";
+    description: "Dims a window under its modal dialog";
+}
+@property --window-close {
+    syntax: "<color>";
+    category: "Windows";
+    label: "Close button";
+    description: "A title bar's close button, hovered";
+}
+@property --window-close-text {
+    syntax: "<color>";
+    category: "Windows";
+    label: "Close cross";
+    description: "Its cross";
+}
+@property --bg-document-bar {
+    syntax: "<color>";
+    category: "Windows";
+    label: "Document bar";
+    description: "The bar of document tabs";
+}
+@property --doc-level-rest {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Level tab";
+    description: "An inactive level tab";
+}
+@property --doc-level-hover {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Level tab hovered";
+    description: "A hovered level tab";
+}
+@property --doc-level-pressed {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Level tab pressed";
+    description: "A pressed level tab";
+}
+@property --doc-level-solid {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Level tab active";
+    description: "The active level tab";
+}
+@property --doc-material-rest {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Material tab";
+    description: "An inactive material tab";
+}
+@property --doc-material-hover {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Material tab hovered";
+    description: "A hovered material tab";
+}
+@property --doc-material-pressed {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Material tab pressed";
+    description: "A pressed material tab";
+}
+@property --doc-material-solid {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Material tab active";
+    description: "The active material tab";
+}
+@property --doc-layout-rest {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Layout tab";
+    description: "An inactive layout tab";
+}
+@property --doc-layout-hover {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Layout tab hovered";
+    description: "A hovered layout tab";
+}
+@property --doc-layout-pressed {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Layout tab pressed";
+    description: "A pressed layout tab";
+}
+@property --doc-layout-solid {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Layout tab active";
+    description: "The active layout tab";
+}
+@property --doc-prefab-rest {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Prefab tab";
+    description: "An inactive prefab tab";
+}
+@property --doc-prefab-hover {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Prefab tab hovered";
+    description: "A hovered prefab tab";
+}
+@property --doc-prefab-pressed {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Prefab tab pressed";
+    description: "A pressed prefab tab";
+}
+@property --doc-prefab-solid {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Prefab tab active";
+    description: "The active prefab tab";
+}
+@property --doc-animation-rest {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Animation tab";
+    description: "An inactive animation tab";
+}
+@property --doc-animation-hover {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Animation tab hovered";
+    description: "A hovered animation tab";
+}
+@property --doc-animation-pressed {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Animation tab pressed";
+    description: "A pressed animation tab";
+}
+@property --doc-animation-solid {
+    syntax: "<color>";
+    category: "Document tabs";
+    label: "Animation tab active";
+    description: "The active animation tab";
+}
+@property --bg-canvas {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Canvas";
+    description: "The node view canvas";
+}
+@property --canvas-dot {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Grid dots";
+    description: "The canvas's dot grid";
+}
+@property --frame-fill {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Frame";
+    description: "A node frame's box, so the canvas shows through";
+}
+@property --frame-band {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Frame title";
+    description: "A node frame's title bar";
+}
+@property --frame-border {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Frame edge";
+    description: "A node frame's edge";
+}
+@property --pin-float {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Float pin";
+    description: "Float pins and wires";
+}
+@property --pin-int {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Integer pin";
+    description: "Integer pins and wires";
+}
+@property --pin-bool {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Boolean pin";
+    description: "Boolean pins and wires";
+}
+@property --pin-color {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Color pin";
+    description: "Color pins and wires";
+}
+@property --node-generator {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Generator node";
+    description: "Generator nodes";
+}
+@property --node-input {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Input node";
+    description: "Input nodes";
+}
+@property --node-output {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Output node";
+    description: "Output nodes; operators use --accent";
+}
+@property --axis-x {
+    syntax: "<color>";
+    category: "Axes";
+    label: "X";
+    description: "The X axis";
+}
+@property --axis-y {
+    syntax: "<color>";
+    category: "Axes";
+    label: "Y";
+    description: "The Y axis";
+}
+@property --axis-z {
+    syntax: "<color>";
+    category: "Axes";
+    label: "Z";
+    description: "The Z axis";
+}
+@property --axis-x-text {
+    syntax: "<color>";
+    category: "Axes";
+    label: "X label";
+    description: "The X axis's label";
+}
+@property --axis-y-text {
+    syntax: "<color>";
+    category: "Axes";
+    label: "Y label";
+    description: "The Y axis's label";
+}
+@property --axis-z-text {
+    syntax: "<color>";
+    category: "Axes";
+    label: "Z label";
+    description: "The Z axis's label";
+}
+@property --axis-x-bg {
+    syntax: "<color>";
+    category: "Axes";
+    label: "X background";
+    description: "Behind the X axis's field";
+}
+@property --axis-y-bg {
+    syntax: "<color>";
+    category: "Axes";
+    label: "Y background";
+    description: "Behind the Y axis's field";
+}
+@property --axis-z-bg {
+    syntax: "<color>";
+    category: "Axes";
+    label: "Z background";
+    description: "Behind the Z axis's field";
+}
+@property --flame-frame {
+    syntax: "<color>";
+    category: "Profiler";
+    label: "Frame";
+    description: "A frame in the flame graph";
+}
+@property --flame-build {
+    syntax: "<color>";
+    category: "Profiler";
+    label: "Build";
+    description: "Build and Layout in the flame graph";
+}
+@property --flame-render {
+    syntax: "<color>";
+    category: "Profiler";
+    label: "Render";
+    description: "Render and Record in the flame graph";
+}
+@property --flame-frame-stage {
+    syntax: "<color>";
+    category: "Profiler";
+    label: "Frame stage";
+    description: "OnGUI, EndFrame and BeginFrame in the flame graph";
+}
+@property --flame-window {
+    syntax: "<color>";
+    category: "Profiler";
+    label: "Window";
+    description: "Window rendering in the flame graph";
+}
+@property --flame-text {
+    syntax: "<color>";
+    category: "Profiler";
+    label: "Text";
+    description: "Text in the flame graph";
+}
+@property --frame-bar {
+    syntax: "<color>";
+    category: "Profiler";
+    label: "Frame bar";
+    description: "A frame in the frame graph";
+}
+@property --frame-bar-over {
+    syntax: "<color>";
+    category: "Profiler";
+    label: "Frame over budget";
+    description: "A frame over budget";
+}
+@property --budget-line {
+    syntax: "<color>";
+    category: "Profiler";
+    label: "Budget line";
+    description: "The frame graph's budget line";
+}
+@property --timeline-ready {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Progress";
+    description: "The progress fill on a timeline's scrubber";
+}
+@property --timeline-tick {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Tick";
+    description: "A minor tick; major ones are --text-3";
+}
+@property --timeline-marker {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Marker";
+    description: "A marker's line";
+}
+@property --timeline-key {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Key";
+    description: "The editor's keys; a selected one is --accent";
+}
+@property --timeline-summary {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Group key";
+    description: "A group's summary keys";
+}
+@property --timeline-row-line {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Row line";
+    description: "The line under a row";
+}
+@property --timeline-outside {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Outside the loop";
+    description: "Over the lanes outside the loop range";
+}
+@property --timeline-clip {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Audio clip";
+    description: "An audio clip";
+}
+@property --timeline-clip-border {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Audio clip edge";
+    description: "An audio clip's edge";
+}
+@property --timeline-wave {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Waveform";
+    description: "An audio clip's waveform";
+}
+@property --timeline-event-soft {
+    syntax: "<color>";
+    category: "Timeline";
+    label: "Event chip";
+    description: "An event's name chip";
+}
+@property --shadow-node {
+    syntax: "<shadow>";
+    category: "Shadows";
+    label: "Node";
+    description: "Under a node";
+}
+@property --shadow-tooltip {
+    syntax: "<shadow>";
+    category: "Shadows";
+    label: "Tooltip";
+    description: "Under a tooltip";
+}
+@property --shadow-popup {
+    syntax: "<shadow>";
+    category: "Shadows";
+    label: "Menu";
+    description: "Under a menu or a rich tooltip";
+}
+@property --shadow-control {
+    syntax: "<shadow>";
+    category: "Shadows";
+    label: "Button";
+    description: "Under a button";
+}
+@property --shadow-chip {
+    syntax: "<shadow>";
+    category: "Shadows";
+    label: "Segment";
+    description: "Under the raised segment of a segmented control";
+}
+@property --focus-ring {
+    syntax: "<shadow>";
+    category: "Shadows";
+    label: "Focus ring";
+    description: "Around the control with keyboard focus";
+}
+@property --selected-ring {
+    syntax: "<shadow>";
+    category: "Shadows";
+    label: "Selection ring";
+    description: "Around a selected node";
+}
+@property --invalid-halo {
+    syntax: "<shadow>";
+    category: "Shadows";
+    label: "Invalid halo";
+    description: "Around an invalid control";
+}
+@property --border {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Border";
+    description: "Border width of controls, panels and nodes";
+    range: 0px 8px;
+}
+@property --border-thin {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Thin border";
+    description: "Border width of lists, menus and grid items";
+    range: 0px 8px;
+}
+@property --border-toolbar {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Toolbar border";
+    description: "Border width of toolbar buttons";
+    range: 0px 8px;
+}
+@property --border-first {
+    syntax: "<edges>";
+    category: "Sizes";
+    label: "First joined border";
+    description: "Border widths of the first of a row of joined controls";
+    range: 0px 8px;
+}
+@property --border-mid {
+    syntax: "<edges>";
+    category: "Sizes";
+    label: "Middle joined border";
+    description: "Border widths of the middle ones";
+    range: 0px 8px;
+}
+@property --border-last {
+    syntax: "<edges>";
+    category: "Sizes";
+    label: "Last joined border";
+    description: "Border widths of the last one";
+    range: 0px 8px;
+}
+@property --radius-sm {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Small corners";
+    description: "Corner radius of small parts: keycaps, menu bar items, list rows";
+    range: 0px 16px;
+}
+@property --radius-md {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Control corners";
+    description: "Corner radius of controls";
+    range: 0px 16px;
+}
+@property --radius-lg {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Panel corners";
+    description: "Corner radius of panels and nodes";
+    range: 0px 24px;
+}
+@property --radius-dialog {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Dialog corners";
+    description: "Corner radius of dialogs and menus";
+    range: 0px 24px;
+}
+@property --radius-toolbar {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Toolbar corners";
+    description: "Corner radius of toolbar buttons";
+    range: 0px 16px;
+}
+@property --radius-md-first {
+    syntax: "<corners>";
+    category: "Sizes";
+    label: "First joined corners";
+    description: "Corner radii of the first of a row of joined controls";
+    range: 0px 16px;
+}
+@property --radius-md-mid {
+    syntax: "<corners>";
+    category: "Sizes";
+    label: "Middle joined corners";
+    description: "Corner radii of the middle ones";
+    range: 0px 16px;
+}
+@property --radius-md-last {
+    syntax: "<corners>";
+    category: "Sizes";
+    label: "Last joined corners";
+    description: "Corner radii of the last one";
+    range: 0px 16px;
+}
+@property --radius-node-top {
+    syntax: "<corners>";
+    category: "Sizes";
+    label: "Node header corners";
+    description: "Corner radii of a node's header: --radius-md minus --border, so it follows the border's inner curve";
+    range: 0px 24px;
+}
+@property --font-size {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Text size";
+    description: "Text size";
+    range: 6px 32px;
+}
+@property --font-size-sm {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Small text size";
+    description: "Text size of captions and column headers";
+    range: 6px 32px;
+}
+@property --font-size-tooltip {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Tooltip text size";
+    description: "Text size of tooltips";
+    range: 6px 32px;
+}
+@property --disabled-opacity {
+    syntax: "<number>";
+    category: "Sizes";
+    label: "Disabled opacity";
+    description: "How opaque a disabled control is drawn, with all its parts";
+    range: 0 1;
+}
 
-    /* A disabled control, with all its parts, is drawn this opaque (GUITheme::disabledOpacity). */
-    --disabled-opacity:  0.4;
+:root {
+    --border: 1px;
+    --border-thin: 1px;
+    --border-toolbar: 1px;
+    --border-first: 1px 1px 1px 1px;
+    --border-mid: 1px 1px 1px 0px;
+    --border-last: 1px 1px 1px 0px;
+    --radius-sm: 4px;
+    --radius-md: 4px;
+    --radius-lg: 6px;
+    --radius-dialog: 8px;
+    --radius-toolbar: 0px;
+    --radius-md-first: 4px 0px 0px 4px;
+    --radius-md-mid: 0px 0px 0px 0px;
+    --radius-md-last: 0px 4px 4px 0px;
+    --radius-node-top: 5px 5px 0px 0px;
+    --font-size: 12px;
+    --font-size-sm: 11px;
+    --font-size-tooltip: 12px;
+    --disabled-opacity: 0.4;
 }
 
 /* ---- Fonts ------------------------------------------------------------------
@@ -5706,6 +6747,26 @@
     flex-shrink: 0;
 }
 .timeline-snap:hover { color: var(--text-1); }
+
+/* ---- EdgesField / CornersField: the link toggle before the four numbers ------ */
+.box-sides-link {
+    -tachyon-state-layer: content; /* hover and pressed: the text color over the background */
+    border-width: 0px;
+    border-radius: var(--radius-md);
+    background-color: transparent;
+    color: var(--text-3);
+    margin: 1px 2px 1px 0px;
+    padding: 0px 3px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    -tachyon-icon-size: 14px;
+    flex-grow: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.box-sides-link:hover { color: var(--text-1); }
+.box-sides-link::highlight(selected) { color: var(--accent); }
+.box-sides-link:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
 .timeline-snap::highlight(selected) { background-color: var(--bg-active); color: var(--text-1); -tachyon-icon-color: var(--accent); }
 .timeline-zoom {
     display: flex;

@@ -2,6 +2,7 @@
 
 #include <gui_core/style/gui_style_ref.h>
 #include <gui_core/style/gui_style.h>
+#include <gui_core/style/gui_style_sheet.h>
 
 #include <gui_core/gui_result.h>
 #include <gui_core/text/gui_text_system.h>
@@ -13,6 +14,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace tachyon
 {
@@ -48,6 +50,10 @@ namespace tachyon
         { "Violet", { { 0xA9, 0x8B, 0xFF, 0xFF }, { 0x6D, 0x4F, 0xD6, 0xFF } } },
         { "Orange", { { 0xF5, 0x9E, 0x4B, 0xFF }, { 0xB8, 0x5C, 0x10, 0xFF } } },
     };
+
+    /// Theme variables set in code, by name ("--bg-panel") to a CSS value ("#202020",
+    /// "6px", "0 4px 12px rgba(0, 0, 0, 0.4)"). They win over the palette and the style files.
+    using ThemeVariableOverrides = std::map<std::string, std::string, std::less<>>;
 
     /// Default control styles. GUITheme::controls points at the active bundle;
     /// BeginToolbar/EndToolbar swap in the toolbar variants.
@@ -532,6 +538,7 @@ namespace tachyon
         StyleRef timelineDividerStyleRef {};        ///< a line between the toolbar's groups
         StyleRef timelineFpsStyleRef {};            ///< the fps dropdown
         StyleRef timelineSnapStyleRef {};           ///< the Snap toggle; selected while snapping
+        StyleRef boxSidesLinkStyleRef {};           ///< EdgesField / CornersField: the link toggle; selected while linked
         StyleRef timelineZoomStyleRef {};           ///< the zoom slider and its icons
         StyleRef timelineHeaderStyleRef {};         ///< the row over the track list and the ruler
         StyleRef timelineListHeaderStyleRef {};     ///< "Tracks", the filter and the add button
@@ -689,6 +696,8 @@ namespace tachyon
         IconID timelineKeyIcon      = IconID::Invalid; ///< TimelineEditor: add a key (a diamond)
         IconID timelineAudioIcon    = IconID::Invalid; ///< TimelineEditor: an audio track
         IconID timelineEventsIcon   = IconID::Invalid; ///< TimelineEditor: an events track (a flag)
+        IconID linkIcon             = IconID::Invalid; ///< EdgesField / CornersField: the sides are linked (a chain)
+        IconID unlinkIcon           = IconID::Invalid; ///< and each is its own (a broken chain)
         ///@}
 
         // Line colors, from the palette's custom properties.
@@ -753,11 +762,13 @@ namespace tachyon
         /// paths are next to the palette file) and registers every class, the palette colors
         /// and, when `textSystem` is given, the `@font-face` families. `fontScale` scales every
         /// font size. `accent`, when given, replaces the palette's accent and the colors derived
-        /// from it (its dark or light color, as the palette is). Parse errors are logged and
-        /// skipped; false when a file can't be opened.
+        /// from it (its dark or light color, as the palette is). `overrides` replace those
+        /// variables wherever the files set them, the accent included. Parse errors are logged
+        /// and skipped; false when a file can't be opened.
         bool LoadTheme(StyleManager& styleManager, ITextSystem* textSystem, const std::string& themePath,
                        std::span<const std::string> styleFiles, float fontScale,
-                       std::optional<AccentColors> accent = std::nullopt);
+                       std::optional<AccentColors> accent = std::nullopt,
+                       const ThemeVariableOverrides& overrides = {});
 
         /// Whether the loaded palette is a light one: its --bg-panel is closer to white than
         /// to black.
@@ -773,10 +784,32 @@ namespace tachyon
         /// when the loaded theme doesn't define it.
         color4f GetColor(std::string_view varName, color4f fallback = {}) const;
 
+        /// The theme variables the loaded style files describe with `@property` rules, in
+        /// their order: each one's type, category, description and range, for a theme editor.
+        ///     for (const CustomPropertyInfo& info : theme.GetVariables())
+        ///         if (const CustomProperty* value = theme.GetVariable(info.name))
+        ///             Text(info.name + ": " + value->text);
+        std::span<const CustomPropertyInfo> GetVariables() const { return m_variables; }
+        /// A theme variable's loaded value, overrides included; nullptr when no file sets it.
+        const CustomProperty* GetVariable(std::string_view name) const;
+
+        /// Shows a new color for the color variable `name` at once, without loading the theme
+        /// again: what's drawn with it, GetColor and GetVariable have it on the next frame.
+        /// Colors only made from it (a hover tint over it, a shadow in it) stay until the
+        /// theme loads again. False, changing nothing, when `name` isn't a color variable or
+        /// `value` isn't a color.
+        bool ShowVariableColor(StyleManager& styleManager, std::string_view name, std::string_view value);
+
         /// Measures the font-dependent metrics above. Call after every LoadTheme.
         void ComputeRowMetrics(StyleManager& styleManager, ITextSystem& textSystem);
     private:
         std::unordered_map<std::string, color4f> m_paletteColors;
+        std::vector<CustomPropertyInfo>                 m_variables;
+        std::unordered_map<std::string, CustomProperty> m_variableValues;
+        std::unordered_map<std::string, uint16_t>       m_colorVariables;   ///< ColorStyle::variable of each
+        /// A variable's color, as registered: its fills are kept apart, so ShowVariableColor
+        /// can write a new one into them.
+        VisualColorStyleIndex VariableColor(StyleManager& styleManager, const char* name, color4f fallback);
         bool m_isLight = false;
         std::map<std::string, StyleRef, std::less<>> m_classStyles;  ///< every class in the style files
         mutable std::set<std::string, std::less<>>   m_missingWarned;

@@ -22,6 +22,8 @@ list(APPEND GUI_CORE_TEST_FILES
   node_view_frame_test.cpp
   timeline_test.cpp
   timeline_editor_test.cpp
+  theme_variables_test.cpp
+  box_fields_test.cpp
   accent_test.cpp
   null_backends_test.cpp
   breadcrumb_test.cpp

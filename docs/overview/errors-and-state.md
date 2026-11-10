@@ -49,6 +49,12 @@ PersistValue("zoom", zoom);                  // an app setting (bool, int, float
 There is also:
 
 - `PersistToolbars`
+- `PersistThemeVariables`, for the changes made to each palette with `SetThemeVariable`:
+
+  ```cpp
+  PersistThemeVariables("themeVariables");
+  ```
+
 - `PersistShortcuts`, for the shortcuts the user changed. Register the commands before
   `RestoreUIState`; the others keep the shortcuts the app gives them:
 

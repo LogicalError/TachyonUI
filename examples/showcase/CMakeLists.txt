@@ -17,6 +17,7 @@ tachyon_add_example(showcase
   panel_settings.cpp
   panel_split_scroll.cpp
   panel_table.cpp
+  settings_theme.cpp
   panel_timeline.cpp
   panel_tree_table.cpp
   panel_view.cpp

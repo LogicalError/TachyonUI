@@ -29,7 +29,7 @@ results all controls share.
 | [Windows and layout](controls/windows-and-layout.md) | Windows, horizontal and vertical groups, areas, scroll bars, caching, label and button groups |
 | [Text and images](controls/text-and-images.md) | `Text`, `Label`, `DragLabel`, `SelectableText`, `Image` |
 | [Buttons and toggles](controls/buttons-and-toggles.md) | `Button`, `CommandButton`, `Toggle`, `Switch`, `Checkbox` |
-| [Fields](controls/fields.md) | Text, search, numeric, vector and typed fields, dropdowns, lists, dictionaries |
+| [Fields](controls/fields.md) | Text, search, numeric, vector and typed fields, edge, corner and shadow fields, dropdowns, lists, dictionaries |
 | [Sliders](controls/sliders.md) | `SliderField`, `Slider` |
 | [Color and gradient fields](controls/color-and-gradient.md) | `ColorField`, `GradientField` and their pickers |
 | [Menus](controls/menus.md) | Menus, menu items, menu bar, title bar, context menus |

@@ -49,14 +49,12 @@ namespace tachyon
         // Labels have break-after: avoid, so each stays on one row with its field.
         Text(idManager.AllocateDynamicID("settingsTitle"), "Appearance", settingsTitleStyleRef);
 
+        // The rest scrolls under the title: the theme's variables run long.
+        BeginArea(idManager.AllocateDynamicID("settingsAppearanceBody"), settingsScrollStyleRef);
         BeginLabelGroup(140);
 
-        // Theme picker: the dropdown returns true on the frame a different palette is picked. It
-        // shows the theme loaded, however it was picked; none for a palette of another file.
-        Label("Theme");
-        int themeIndex = CurrentThemeIndex();
-        if (Dropdown(idManager.AllocateDynamicID("settingsThemeMenu"), themeIndex, kThemeNames))
-            RequestReloadTheme(kThemePaths[themeIndex], showcase.settingsFontScalePct / 100.0f);
+        // The theme: Dark, Light or one of the user's own, with New, its name and Delete.
+        RenderThemePicker();
 
         // The accent: the palette's own blue or another of the design's, in either theme.
         Label("Accent");
@@ -81,11 +79,15 @@ namespace tachyon
         // Reduced: changes of state, menus and tooltips show at once instead of fading or sliding.
         Label("Animations");
         SetTooltip("How changes of state, menus and tooltips animate. Reduced shows them at once.");
-        static constexpr std::string_view motionNames[] = { "As the system", "Reduced", "Full" };
+        static constexpr std::string_view motionNames[] = { "Use system preferences", "Reduced", "Full" };
         if (Dropdown(idManager.AllocateDynamicID("settingsMotionMenu"), showcase.settingsMotionIndex, motionNames))
             ApplyMotionSetting();
 
         EndLabelGroup();
+
+        // The theme's colors and sizes; a change to Dark or Light goes into a copy of it.
+        RenderThemeEditor();
+        EndArea();
     }
 
     void Application::RenderSettingsGeneral()

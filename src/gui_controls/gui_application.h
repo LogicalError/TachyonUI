@@ -407,6 +407,21 @@ namespace tachyon
         /// SetAccent's accent; none while the palette's own is used.
         const std::optional<AccentColors>& GetAccent() const { return m_accent; }
 
+        /// Sets a theme variable ("--bg-panel") to a CSS value ("#202020", "6px",
+        /// "0 4px 12px rgba(0, 0, 0, 0.4)") for the theme loaded, in place of what its palette
+        /// and the style files set, and of the accent. Each theme keeps its own: switch to
+        /// another and back, and they're back. A color shows on the next frame, anything else
+        /// as the theme loads again at the start of it. theme.GetVariables() lists the
+        /// variables a theme editor can offer; PersistThemeVariables keeps them.
+        ///     SetThemeVariable("--radius-md", "6px");
+        void SetThemeVariable(std::string_view name, std::string_view value);
+        /// Back to the theme's own value for `name`.
+        void ClearThemeVariable(std::string_view name);
+        /// Back to the theme's own values for all of them, for the theme loaded.
+        void ClearThemeVariables();
+        /// The variables set with SetThemeVariable for the theme loaded.
+        const ThemeVariableOverrides& GetThemeVariables() const;
+
         /// The folder the resources load from: compiled shaders, default fonts and
         /// relative theme paths. Empty (the default) is the working directory; a
         /// package user passes TACHYON_RESOURCE_DIR, which the package defines.
@@ -1949,6 +1964,27 @@ namespace tachyon
 
         ///@}
 
+        /// @name Edge and corner fields
+        ///@{
+
+        /// Border widths, padding or the like: a number field for each side, captioned T, R, B
+        /// and L, after a link toggle. Linked, one field sets all four; linking makes the others
+        /// the top's. It starts linked when the four are equal. True when the value changed.
+        ///     BoxEdges border = BoxEdges(1);
+        ///     EdgesField(idManager.AllocateDynamicID("border"), border);
+        bool EdgesField(ID id, BoxEdges& value, NumericFieldConfig<int32_t> config = { .stepPerPixel = 0.25, .minVal = 0, .maxVal = 64 },
+                        LayoutOverride&& constraints = {});
+        /// As EdgesField, for corner radii: top left, top right, bottom right and bottom left.
+        bool CornersField(ID id, BoxCorners& value, NumericFieldConfig<int32_t> config = { .stepPerPixel = 0.25, .minVal = 0, .maxVal = 64 },
+                          LayoutOverride&& constraints = {});
+        /// A shadow: its color over its offsets (X, Y), blur and spread. A transparent color
+        /// is no shadow. True when the value changed.
+        ///     BoxShadow shadow{ .y = 4, .blur = 12, .color = { 0, 0, 0, 90 } };
+        ///     ShadowField(idManager.AllocateDynamicID("shadow"), shadow);
+        bool ShadowField(ID id, BoxShadow& value, LayoutOverride&& constraints = {});
+
+        ///@}
+
 
         /// @name Color and gradient fields
         ///@{
@@ -2639,6 +2675,8 @@ namespace tachyon
         /// Keeps the layouts the user saved and the file types' layouts; the app adds its
         /// built-in ones itself, before or after RestoreUIState.
         void PersistLayoutPresets(std::string key, LayoutPresets& presets);
+        /// Keeps each theme's variables, set with SetThemeVariable.
+        void PersistThemeVariables(std::string key);
         /// The main windows of documents RestoreUIState read for `key`, in the order they were
         /// listed; empty when none were saved. Taking them clears them. Make each document with
         /// its panels, then RestoreDocumentLayout, and place each window with RestoreWindowPlace.
@@ -2864,6 +2902,9 @@ namespace tachyon
         /// Rebuilds the styles when a reload is pending or the main window's
         /// display scale changed. Runs before the managers begin their frame.
         void ApplyPendingStyleReload();
+        /// EdgesField and CornersField: four sides with their captions and names, in order.
+        bool BoxSidesField(ID id, uint16_t* const (&sides)[4], const std::string_view (&captions)[4],
+                           const std::string_view (&names)[4], NumericFieldConfig<int32_t> config, LayoutOverride&& constraints);
 
         /// Requests the cursor for the mouse at `mousePosition` over `hoverID`: a link's own
         /// cursor over a link, else the element's (CSS cursor), the arrow while dragging.
@@ -2939,6 +2980,7 @@ namespace tachyon
         std::vector<PersistedDocuments> m_persistDocuments;
         std::vector<PersistedShortcuts> m_persistShortcuts;
         std::vector<PersistedPresets>   m_persistPresets;
+        std::vector<std::string>        m_persistThemeVariables;   ///< PersistThemeVariables' keys
         /// Read by RestoreUIState, until the app takes them (TakeSavedDocuments).
         std::unordered_map<std::string, std::vector<SavedDocumentWindow>> m_savedDocuments;
         std::unordered_map<ID, RestoredWindow> m_restoredWindows;
@@ -2958,6 +3000,14 @@ namespace tachyon
         float       m_loadedFontScale { 1.0f };
         std::optional<AccentColors> m_accent;         ///< SetAccent's; none: the palette's own
         std::optional<AccentColors> m_loadedAccent;   ///< the one the loaded theme has
+        /// SetThemeVariable's, by the theme's path (lexically normal, with forward slashes).
+        std::map<std::string, ThemeVariableOverrides, std::less<>> m_themeVariables;
+        /// The theme loaded's, made when there are none.
+        ThemeVariableOverrides& ThemeVariables();
+        /// When to load the theme again after a color was shown at once; negative for never.
+        double                      m_themeReloadAt = -1.0;
+        /// How long a color must stay unchanged before the theme loads again.
+        static constexpr double     kThemeSettleSecs = 0.4;
         std::vector<std::string> m_styleFiles { "styles.css" };
         float       m_globalFontScale { 1.0f };
         float       m_uiScale { 1.0f };

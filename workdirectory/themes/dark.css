@@ -1,152 +1,174 @@
 /* =============================================================================
    Dark palette for TachyonUI: neutral cool greys, one accent, semantic
    colors only for state and data. light.css has the same names.
+   What each color is for is in its @property rule, at the top of styles.css.
+   A note beside a value says how it was made.
    ============================================================================= */
 
 :root {
-    /* ---- Surfaces, darkest to lightest ------------------------------------ */
-    --bg-app: #0B0C0F;      /* window background, gutters between panels */
-    --bg-input: #0D0F12;    /* text and number fields, segmented-control wells, graph backgrounds */
-    --bg-canvas: #0E1013;   /* node view canvas */
-    --bg-panel: #121418;    /* panel body */
-    --bg-header: #16191E;   /* panel header, tab strip, table header row */
-    --bg-raised: #181B20;   /* nodes, tooltips, menus */
-    --bg-control: #1E2128;  /* buttons, node header */
-    --bg-active: #23272F;   /* active tab, hovered control */
-    --title-bar-tab: #23272F; /* a torn-off window's active tab (in its title bar) */
-    --bg-pressed: #2A2F39;  /* pressed control, selected segment */
-    --bg-menu-hover: #273146; /* hovered or keyboard-selected menu row: the accent at 16% over the popup */
+    --bg-app: #0B0C0F;
+    --bg-panel: #121418;
+    --bg-header: #16191E;
+    --bg-raised: #181B20;
+    --bg-control: #1E2128;
+    --bg-active: #23272F;
+    --bg-pressed: #2A2F39;
+    --bg-hover: #232529;       /* --text-1 at 8% over --bg-panel, opaque */
+    --bg-input: #0D0F12;
+    --bg-list: #101216;
+    --bg-well: #0D0F12;
+    --bg-popup: #1A1D23;
+    --bg-menu-hover: #273146;  /* the accent at 16% over --bg-popup */
     --bg-keycap: #1A1D23;
-    --row-stripe: #14161B;  /* odd rows in large tables */
-    --canvas-dot: #39404D;  /* node view dot grid; brighter than the mockup's #252A33, whose soft CSS dots read stronger */
-    --frame-fill: #8E96A714;   /* a node frame's box: --text-3 at 8%, so the canvas shows through */
-    --frame-band: #8E96A729;   /* its title bar: --text-3 at 16% */
-    --frame-border: #8E96A747; /* its edge: --text-3 at 28% */
-    /* ---- Lines ------------------------------------------------------------ */
-    --panel-border: #1C1F25; /* outline around each panel */
-    --line-subtle: #23272F;  /* dividers, header bottom border, input border, progress tracks */
-    --skeleton: #1C1F25;       /* a placeholder bar while content loads */
-    --skeleton-shine: #262A32; /* the shine sweeping across it */
-    --line-node: #2A2F39;    /* node border, node header divider, tree guides */
-    --line-strong: #2E333D;  /* button border, scrollbar thumb */
-    --line-section: #1E2128; /* section divider */
-    /* ---- Text ------------------------------------------------------------- */
-    --text-1: #E8EAEF;      /* values, active labels, titles */
-    --text-2: #AEB4C0;      /* default UI text, property labels */
-    --text-3: #8E96A7;      /* captions, placeholders, column headers */
+    --row-stripe: #14161B;
+    --title-bar-tab: #23272F;
+
+    --panel-border: #1C1F25;
+    --line-subtle: #23272F;
+    --line-node: #2A2F39;
+    --line-strong: #2E333D;
+    --line-section: #1E2128;
+    --divider-hover: #6B9BFF;
+
+    --text-1: #E8EAEF;
+    --text-2: #AEB4C0;
+    --text-3: #8E96A7;
     --text-link: #8FB3FF;
     --text-link-hover: #B5CDFF;
-    /* ---- Accent ----------------------------------------------------------- */
-    --accent: #6B9BFF;
-    --selection: #6B9BFF59;          /* selected text: the accent at 35%, under text that stays --text-1 */
-    --selection-inactive: #3A3F4A;   /* selected text in an unfocused field */
+    --selection: #6B9BFF59;  /* the accent at 35% */
+    --selection-inactive: #3A3F4A;
     --caret: #6B9BFF;
-    --bg-list: #101216;     /* list and dictionary containers */
-    --bg-hover: #232529;    /* a hovered row: --text-1 at 8% over --bg-panel (the hover state layer), opaque */
-    --error-soft: #EF6A6A1F;   /* the error color at 12%: a remove button's hover */
-    --bg-popup: #1A1D23;    /* menus */
-    --checker-a: #2A2F39;   /* transparency checkerboard */
-    --checker-b: #1E2128;
-    --alpha-track: #0B0C0F; /* a color's alpha bar */
-    --alpha-fill: #E8EAEF;
-    --slider-thumb: #E8EAEF;
-    --divider-hover: #6B9BFF; /* a hovered or dragged divider: panel splitters, column and label sizers */
-    --accent-soft: #202A3D;   /* accent at 16% over --bg-panel, opaque so stacked rows and cells do not darken */
-    --on-accent: #0B0C0F;     /* text and icons on accent fills */
-    --on-accent-muted: #0B0C0F9E; /* secondary text on accent fills: --on-accent at 62% */
-    /* ---- Semantic --------------------------------------------------------- */
+
+    --accent: #6B9BFF;
+    --accent-soft: #202A3D;        /* the accent at 16% over --bg-panel */
+    --on-accent: #0B0C0F;
+    --on-accent-muted: #0B0C0F9E;  /* --on-accent at 62% */
+
+    --info: #6B9BFF;
+    --info-soft: #6B9BFF29;          /* the severity at 16% */
     --ok: #4FC48A;
-    --warn: #E5B454;          /* also NaN values, over-budget frames */
+    --ok-soft: #4FC48A29;            /* the severity at 16% */
+    --on-ok: #0B0C0F;
+    --warn: #E5B454;
+    --warn-soft: #E5B45424;          /* the severity at 14% */
     --warn-text: #E5B454;
     --error: #EF6A6A;
-    --error-text: #F28B8B;    /* error messages in running text */
-    --on-ok: #0B0C0F;         /* a mark on an --ok fill */
-    --invalid-halo: 0 0 0 3px #EF6A6A2B;  /* around an invalid control: the error color at 17% */
-    --danger: #EF6A6A;      /* destructive buttons */
+    --error-soft: #EF6A6A1F;         /* the error color at 12% */
+    --error-circle: #EF6A6A29;       /* the severity at 16% */
+    --error-text: #F28B8B;
+    --danger: #EF6A6A;
     --on-danger: #0B0C0F;
-    --warn-soft: #E5B45424; /* severity circles: the severity at 14-16% */
-    --info-soft: #6B9BFF29;
-    --error-circle: #EF6A6A29;
-    --ok-soft: #4FC48A29;
-    /* Tooltips: raised, with a border */
-    --tooltip-bg: #2A2F39;   --tooltip-border: #363C48;   --tooltip-text: #E8EAEF;
-    --tooltip-chip: #FFFFFF14;   --tooltip-chip-text: #AEB4C0;   /* white at 8% */
-    --tooltip-muted: #A3AAB7;   /* a tooltip's second line */
-    /* Banners: the severity at 12% under the message, at 32% along its bottom */
-    --info-banner: #6B9BFF1F;    --info-banner-line: #6B9BFF52;
-    --ok-banner: #4FC48A1F;      --ok-banner-line: #4FC48A52;
-    --warn-banner: #E5B4541F;    --warn-banner-line: #E5B45452;
-    --error-banner: #EF6A6A1F;   --error-banner-line: #EF6A6A52;
-    --bg-well: #0D0F12;     /* recessed lists and details in a dialog */
-    /* Dialogs: their own surface, a step lighter than the panels, so they stand out. */
+    --info-banner: #6B9BFF1F;        /* the severity at 12% */
+    --info-banner-line: #6B9BFF52;   /* the severity at 32% */
+    --ok-banner: #4FC48A1F;          /* the severity at 12% */
+    --ok-banner-line: #4FC48A52;     /* the severity at 32% */
+    --warn-banner: #E5B4541F;        /* the severity at 12% */
+    --warn-banner-line: #E5B45452;   /* the severity at 32% */
+    --error-banner: #EF6A6A1F;       /* the severity at 12% */
+    --error-banner-line: #EF6A6A52;  /* the severity at 32% */
+
+    --slider-thumb: #E8EAEF;
+    --checker-a: #2A2F39;
+    --checker-b: #1E2128;
+    --alpha-track: #0B0C0F;
+    --alpha-fill: #E8EAEF;
+    --skeleton: #1C1F25;
+    --skeleton-shine: #262A32;
+    --folder: #D9A443;
+
+    --tooltip-bg: #2A2F39;
+    --tooltip-border: #363C48;
+    --tooltip-text: #E8EAEF;
+    --tooltip-muted: #A3AAB7;
+    --tooltip-chip: #FFFFFF14;  /* white at 8% */
+    --tooltip-chip-text: #AEB4C0;
+
     --dialog-bg: #1B1E25;
-    --dialog-header: #20242C;   /* title bar and footer */
+    --dialog-header: #20242C;
     --dialog-border: #3A404C;
     --dialog-divider: #2A2F39;
-    --dialog-well: #13151A;     /* lists, details */
+    --dialog-well: #13151A;
     --dialog-input: #0F1115;
-    --dialog-control: #272B34;  /* buttons */
+    --dialog-control: #272B34;
     --dialog-control-border: #3A404C;
-    --scrim: #0000008C;         /* black at 55%: dims a window under its modal dialog */
-    --info: #6B9BFF;
-    --folder: #D9A443;
-    --window-close: #C42B1C;      /* a title bar's close button, hovered */
+    --scrim: #0000008C;  /* black at 55% */
+
+    --window-close: #C42B1C;
     --window-close-text: #FFFFFF;
-    /* ---- Data: pin types, axes, node categories --------------------------- */
+    --bg-document-bar: #08090B;
+
+    --doc-level-rest: #6B9BFF24;
+    --doc-level-hover: #6B9BFF38;
+    --doc-level-pressed: #6B9BFF4D;
+    --doc-level-solid: #6B9BFF;
+    --doc-material-rest: #34D1BF24;
+    --doc-material-hover: #34D1BF38;
+    --doc-material-pressed: #34D1BF4D;
+    --doc-material-solid: #34D1BF;
+    --doc-layout-rest: #F59E4B24;
+    --doc-layout-hover: #F59E4B38;
+    --doc-layout-pressed: #F59E4B4D;
+    --doc-layout-solid: #F59E4B;
+    --doc-prefab-rest: #A98BFF24;
+    --doc-prefab-hover: #A98BFF38;
+    --doc-prefab-pressed: #A98BFF4D;
+    --doc-prefab-solid: #A98BFF;
+    --doc-animation-rest: #F472B624;
+    --doc-animation-hover: #F472B638;
+    --doc-animation-pressed: #F472B64D;
+    --doc-animation-solid: #F472B6;
+
+    --bg-canvas: #0E1013;
+    --canvas-dot: #39404D;
+    --frame-fill: #8E96A714;    /* --text-3 at 8% */
+    --frame-band: #8E96A729;    /* --text-3 at 16% */
+    --frame-border: #8E96A747;  /* --text-3 at 28% */
     --pin-float: #34D1BF;
     --pin-int: #F59E4B;
     --pin-bool: #A98BFF;
     --pin-color: #F472B6;
+    --node-generator: #E0716B;
+    --node-input: #4FC48A;
+    --node-output: #A98BFF;
+
     --axis-x: #EF6A6A;
     --axis-y: #4FC48A;
     --axis-z: #6B9BFF;
     --axis-x-text: #F28B8B;
     --axis-y-text: #6FD3A1;
     --axis-z-text: #8FB3FF;
-    --axis-x-bg: #EF6A6A2E;   /* axis color at 18% */
-    --axis-y-bg: #4FC48A2E;
-    --axis-z-bg: #6B9BFF2E;
-    --node-generator: #E0716B;
-    --node-input: #4FC48A;
-    --node-output: #A98BFF;   /* operators use --accent */
-    /* ---- Document types: an inactive tab at 14% (hover 22%, pressed 30%), the active one solid */
-    --bg-document-bar: #08090B;
-    --doc-level-rest: #6B9BFF24;      --doc-level-hover: #6B9BFF38;      --doc-level-pressed: #6B9BFF4D;      --doc-level-solid: #6B9BFF;
-    --doc-material-rest: #34D1BF24;   --doc-material-hover: #34D1BF38;   --doc-material-pressed: #34D1BF4D;   --doc-material-solid: #34D1BF;
-    --doc-layout-rest: #F59E4B24;     --doc-layout-hover: #F59E4B38;     --doc-layout-pressed: #F59E4B4D;     --doc-layout-solid: #F59E4B;
-    --doc-prefab-rest: #A98BFF24;     --doc-prefab-hover: #A98BFF38;     --doc-prefab-pressed: #A98BFF4D;     --doc-prefab-solid: #A98BFF;
-    --doc-animation-rest: #F472B624;  --doc-animation-hover: #F472B638;  --doc-animation-pressed: #F472B64D;  --doc-animation-solid: #F472B6;
-    /* ---- Profiler --------------------------------------------------------- */
+    --axis-x-bg: #EF6A6A2E;  /* the axis color at 18% */
+    --axis-y-bg: #4FC48A2E;  /* the axis color at 18% */
+    --axis-z-bg: #6B9BFF2E;  /* the axis color at 18% */
+
     --flame-frame: #2B303B;
-    --flame-build: #5A3B2E;   /* Build, Layout */
-    --flame-render: #3E3560;  /* Render, Record */
-    --flame-frame-stage: #24505A; /* OnGUI, EndFrame, BeginFrame */
-    --flame-window: #2E4A3A;  /* window render */
+    --flame-build: #5A3B2E;
+    --flame-render: #3E3560;
+    --flame-frame-stage: #24505A;
+    --flame-window: #2E4A3A;
     --flame-text: #E8EAEF;
     --frame-bar: #3E8F6B;
     --frame-bar-over: #E5B454;
     --budget-line: #5A606C;
-    /* ---- Timeline --------------------------------------------------------- */
-    --timeline-ready: #6B9BFF33;  /* the progress fill: the accent at 20% */
-    --timeline-tick: #3A3F4A;     /* a minor tick; major ones are --text-3 */
-    --timeline-marker: #F59E4B;   /* a marker's line */
-    --timeline-key: #C9CED8;          /* the editor's keys; a selected one is --accent */
-    --timeline-summary: #6B7280;      /* a group's summary keys */
-    --timeline-row-line: #181B20;     /* the line under a row */
-    --timeline-outside: #00000047;    /* the lanes outside the loop range: black at 28% */
-    --timeline-clip: #34D1BF1A;       /* an audio clip: teal at 10% */
-    --timeline-clip-border: #34D1BF73; /* its edge: teal at 45% */
-    --timeline-wave: #34D1BFA6;       /* its waveform: teal at 65% */
-    --timeline-event-soft: #F59E4B29; /* an event's name chip: --timeline-marker at 16% */
-}
 
-/* ---- Shadows and focus rings (box-shadow values) -------------------------- */
-:root {
+    --timeline-ready: #6B9BFF33;        /* the accent at 20% */
+    --timeline-tick: #3A3F4A;
+    --timeline-marker: #F59E4B;
+    --timeline-key: #C9CED8;
+    --timeline-summary: #6B7280;
+    --timeline-row-line: #181B20;
+    --timeline-outside: #00000047;      /* black at 28% */
+    --timeline-clip: #34D1BF1A;         /* teal at 10% */
+    --timeline-clip-border: #34D1BF73;  /* teal at 45% */
+    --timeline-wave: #34D1BFA6;         /* teal at 65% */
+    --timeline-event-soft: #F59E4B29;   /* --timeline-marker at 16% */
+
     --shadow-node: 0 8px 20px rgba(0, 0, 0, 0.35);
     --shadow-tooltip: 0 6px 16px rgba(0, 0, 0, 0.45);
-    --shadow-popup: 0 16px 40px rgba(0, 0, 0, 0.55);   /* a rich tooltip */
-    --shadow-control: none;          /* buttons */
-    --shadow-chip: none;             /* the raised segment of a segmented control */
-    --focus-ring: 0 0 0 3px #6B9BFF4D;      /* keyboard focus: the accent at 30% */
-    --selected-ring: 0 0 0 3px #6B9BFF29;   /* a selected node: the accent at 16% */
+    --shadow-popup: 0 16px 40px rgba(0, 0, 0, 0.55);
+    --shadow-control: none;
+    --shadow-chip: none;
+    --focus-ring: 0 0 0 3px #6B9BFF4D;     /* the accent at 30% */
+    --selected-ring: 0 0 0 3px #6B9BFF29;  /* the accent at 16% */
+    --invalid-halo: 0 0 0 3px #EF6A6A2B;   /* the error color at 17% */
 }

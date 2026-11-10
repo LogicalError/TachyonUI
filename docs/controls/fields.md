@@ -177,6 +177,66 @@ Field(scale, NumericFieldConfig<float>{ .minVal = 0.0f });   // float3; no compo
 Classes: `vector-component`. The labels: `axis-label-x`, `axis-label-y`, `axis-label-z`,
 `axis-label-w`.
 
+## Edge, corner and shadow fields
+
+Fields for how a box looks: its border widths or padding, its corner radii, its shadow.
+Each returns true when the value changed.
+
+### EdgesField and CornersField
+
+Four numbers, one a side or a corner, after a link toggle.
+
+```cpp
+bool EdgesField(ID id, BoxEdges& value, NumericFieldConfig<int32_t> config = { .stepPerPixel = 0.25, .minVal = 0, .maxVal = 64 },
+                LayoutOverride&& constraints = {});
+bool CornersField(ID id, BoxCorners& value, NumericFieldConfig<int32_t> config = { .stepPerPixel = 0.25, .minVal = 0, .maxVal = 64 },
+                  LayoutOverride&& constraints = {});
+```
+
+- `EdgesField` captions its numbers T, R, B and L: top, right, bottom, left.
+- `CornersField` captions them TL, TR, BR and BL: top left, top right, bottom right,
+  bottom left.
+- Linked (the chain icon), one number sets all four.
+  - It starts linked when the four are equal.
+  - Linking four that differ makes the others the first's: the top, or the top left.
+- The numbers are held to the config's range, and to 0 to 65535.
+- Drag a caption to change its number, as on a vector field.
+
+```cpp
+BoxEdges border = BoxEdges(1);                  // a member
+Label("Border");
+EdgesField(idManager.AllocateDynamicID("border"), border);
+```
+
+```cpp
+BoxCorners corners = BoxCorners(4, 4, 0, 0);    // rounded at the top only
+Label("Corners");
+CornersField(idManager.AllocateDynamicID("corners"), corners, NumericFieldConfig<int32_t>{ .minVal = 0, .maxVal = 16 });
+```
+
+Classes: the link toggle is `box-sides-link`, selected while linked; the numbers are
+`vector-component` with `axis-label-w` captions, and the one linked number is the theme's
+number style.
+
+### ShadowField
+
+A shadow's color, and under it its offsets, blur and spread.
+
+```cpp
+bool ShadowField(ID id, BoxShadow& value, LayoutOverride&& constraints = {});
+```
+
+- The color is a `ColorField`. A transparent color is no shadow.
+- X and Y move it, Blur softens it, Spread grows it past the box (shrinks it when
+  negative).
+- The offsets and spread are held to -256 to 256, the blur to 0 to 256.
+
+```cpp
+BoxShadow shadow{ .y = 4, .blur = 12, .color = { 0, 0, 0, 90 } };   // a member
+Label("Shadow");
+ShadowField(idManager.AllocateDynamicID("shadow"), shadow);
+```
+
 ## TypedField
 
 A number field with its type after the value, for example "0.5  f32".
