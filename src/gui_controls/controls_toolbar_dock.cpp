@@ -53,6 +53,23 @@ namespace tachyon
         IntRect GetSideTargetRect(const ToolbarDockState& state, int sideIdx)
         {
             const IntRect& r = state.cachedSideRects[sideIdx];
+            if (state.overlay)
+            {
+                // Floating sides are only as big as their toolbars: a drop takes the whole
+                // edge, as deep as the side's toolbars or the edge strip.
+                const IntRect& d = state.cachedDockRect;
+                if (d.w <= 0 || d.h <= 0) return {};
+                const bool horizontal = IsHorizontalSide((ToolbarSide)sideIdx);
+                const int32_t deep = std::max(kEmptySideStripThickness, horizontal ? r.h : r.w);
+                switch ((ToolbarSide)sideIdx)
+                {
+                    case ToolbarSide::Top:    return { d.x, d.y, d.w, deep };
+                    case ToolbarSide::Bottom: return { d.x, d.y + d.h - deep, d.w, deep };
+                    case ToolbarSide::Left:   return { d.x, d.y, deep, d.h };
+                    case ToolbarSide::Right:  return { d.x + d.w - deep, d.y, deep, d.h };
+                }
+                return {};
+            }
             if (r.w > 0 && r.h > 0) return r;
             return ComputePhantomSideRect(state.cachedDockRect, sideIdx);
         }
@@ -120,7 +137,8 @@ namespace tachyon
                                ToolbarDockState&                state,
                                ToolbarSide                      side,
                                const std::vector<ToolbarItem>&  items,
-                               const ToolbarDockCallbacks&      callbacks)
+                               const ToolbarDockCallbacks&      callbacks,
+                               LayoutOverride                   constraints = {})
         {
             const int  sideIdx    = (int)side;
             const bool horizontal = IsHorizontalSide(side);
@@ -233,7 +251,7 @@ namespace tachyon
             }
 
             if (app.BeginReorderableGroup(state.groupIDs[sideIdx], dir, /*isWrapped=*/true,
-                                          std::move(onReorder), groupStyle, {},
+                                          std::move(onReorder), groupStyle, std::move(constraints),
                                           std::move(onDragOut), std::move(dragVisualizer)))
             {
                 // EmitToolbarThumb rather than EmitDragHandle, which only fits flex-row items.
@@ -494,6 +512,39 @@ namespace tachyon
     {
         // Registered so SyncToolbarDockRects can cache rects after layout.
         GUIApplicationInternals::ToolbarDocksThisFrame(app).push_back(&state);
+
+        if (state.overlay)
+        {
+            // The content fills the dock; each side floats over its edge, as big as its
+            // toolbars, the left and right ones under the top one (last frame's height).
+            app.BeginVertical(state.dockContainerID, app.theme.viewBackgroundStyleRef, LayoutOverride{}.FlexGrow(1));
+            app.BeginArea(app.theme.emptyVertStyleRef, LayoutOverride{}.FlexGrow(1));
+            if (renderContent) renderContent();
+            app.EndArea();
+            const auto& top = itemsPerSide[(int)ToolbarSide::Top];
+            const int32_t below = top.empty() ? 0 : state.cachedSideRects[(int)ToolbarSide::Top].h;
+            constexpr int32_t kAuto = PositionConstraintAxis::kAuto;
+            // While one of its own toolbars is dragged, a side runs the whole edge, so the
+            // toolbar has room to move along it.
+            const auto& drag = GUIApplicationInternals::Reorderable(app).Drag();
+            auto along = [&](ToolbarSide side, LayoutOverride constraints) {
+                if (!drag.IsDragging() || drag.groupID != state.groupIDs[(int)side])
+                    return constraints;
+                const IntRect dockRect = state.cachedDockRect;
+                if (IsHorizontalSide(side))
+                    return constraints.Width(Pixels{ dockRect.w });
+                return constraints.Height(Pixels{ std::max(0, dockRect.h - below) });
+            };
+            RenderToolbarSide(app, state, ToolbarSide::Top,    top, callbacks, along(ToolbarSide::Top, LayoutOverride{}.Absolute(0, kAuto, kAuto, 0)));
+            RenderToolbarSide(app, state, ToolbarSide::Left,   itemsPerSide[(int)ToolbarSide::Left], callbacks,
+                              along(ToolbarSide::Left, LayoutOverride{}.Absolute(below, kAuto, kAuto, 0)));
+            RenderToolbarSide(app, state, ToolbarSide::Right,  itemsPerSide[(int)ToolbarSide::Right], callbacks,
+                              along(ToolbarSide::Right, LayoutOverride{}.Absolute(below, 0, kAuto, kAuto)));
+            RenderToolbarSide(app, state, ToolbarSide::Bottom, itemsPerSide[(int)ToolbarSide::Bottom], callbacks,
+                              along(ToolbarSide::Bottom, LayoutOverride{}.Absolute(kAuto, kAuto, 0, 0)));
+            app.EndVertical();
+            return;
+        }
 
         // 5-zone scaffold: top / (left | content | right) / bottom. The container's
         // rect is cached for phantom-side hit-testing.

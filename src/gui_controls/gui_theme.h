@@ -553,6 +553,10 @@ namespace tachyon
         StyleRef plotStyleRef {};                   ///< the plot; its padding holds the labels and the handles
         StyleRef plotLabelStyleRef {};              ///< drawn: a grid line's number
         StyleRef plotReadoutStyleRef {};            ///< drawn: the values under the pointer
+        StyleRef viewportStyleRef {};               ///< Viewport: the view
+        StyleRef viewportToolsStyleRef {};          ///< the tools' strip down its left
+        StyleRef viewportToolStyleRef {};           ///< a tool's button; selected for the one in use
+        StyleRef viewportAxisLabelStyleRef {};      ///< drawn: an axis's letter at the top right
         StyleRef timelineZoomStyleRef {};           ///< the zoom slider and its icons
         StyleRef timelineHeaderStyleRef {};         ///< the row over the track list and the ruler
         StyleRef timelineListHeaderStyleRef {};     ///< "Tracks", the filter and the add button
@@ -712,6 +716,10 @@ namespace tachyon
         IconID timelineEventsIcon   = IconID::Invalid; ///< TimelineEditor: an events track (a flag)
         IconID linkIcon             = IconID::Invalid; ///< EdgesField / CornersField: the sides are linked (a chain)
         IconID curveFrameAllIcon    = IconID::Invalid; ///< CurveField's editor: show all the keys (four corners)
+        IconID viewportSelectIcon   = IconID::Invalid; ///< Viewport's tools: select (a pointer)
+        IconID viewportMoveIcon     = IconID::Invalid; ///< move (four arrows)
+        IconID viewportRotateIcon   = IconID::Invalid; ///< rotate (a turning arrow)
+        IconID viewportScaleIcon    = IconID::Invalid; ///< scale (a corner pulled out)
         IconID unlinkIcon           = IconID::Invalid; ///< and each is its own (a broken chain)
         ///@}
 

@@ -67,6 +67,8 @@ list(APPEND GUI_CORE_TEST_FILES
   pen_input_test.cpp
   plot_test.cpp
   navigation_test.cpp
+  math3d_test.cpp
+  viewport_test.cpp
   harness_self_test.cpp
   frame_pipeline_test.cpp
   frame_clock_test.cpp

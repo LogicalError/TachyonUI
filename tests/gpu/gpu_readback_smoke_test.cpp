@@ -1654,4 +1654,74 @@ namespace
         measure("clipped away (vertices)", 40000, tachyon::IntRect{ 0, 0, 0, 0 });
         measure("visible 6x6", 40000, kFullClip);
     }
+
+    // A scene the app draws (GraphicsContext::RenderScene, a viewport's): its drawing goes into
+    // the scene's own image before the UI's, which shows it where the UI puts it. Made again
+    // when its size changes; validation stays quiet throughout.
+    TEST_F(GpuReadbackTest, AnAppsSceneShowsWhereTheUIDrawsIt)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        const tachyon::VisualColorStyleIndex stretched = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
+            tachyon::color4b{ 255, 255, 255, 255 }, tachyon::color4b{ 255, 255, 255, 255 }, tachyon::ColorType::StretchedTexture));
+        tachyon::ID key;
+        key.value.dynamicParts.mode      = tachyon::IDMode::Static;
+        key.value.dynamicParts.hashValue = 0x5CE4E;
+        int recorded = 0;
+        VkExtent2D lastExtent{};
+
+        // The scene clears to blue; the app fills its left half green.
+        const auto frame = [&](tachyon::uint2 size) {
+            graphicsContext->BeginFrame();
+            const tachyon::ImageIndex index = graphicsContext->RenderScene(key, ctx->GetID(), size, tachyon::color4f{ 0, 0, 1, 1 },
+                [&](const void* native) {
+                    const auto& scene = *static_cast<const tachyon::vulkan::VulkanSceneRender*>(native);
+                    ++recorded;
+                    lastExtent = scene.extent;
+                    VkClearAttachment green{ .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .colorAttachment = 0 };
+                    green.clearValue.color = { { 0.0f, 1.0f, 0.0f, 1.0f } };
+                    const VkClearRect half{ { { 0, 0 }, { scene.extent.width / 2, scene.extent.height } }, 0, 1 };
+                    vkCmdClearAttachments(scene.commandBuffer, 1, &green, 1, &half);
+                });
+            EXPECT_NE(index, tachyon::ImageIndex::Invalid);
+            RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+                // The scene over the right half of the window.
+                r->RenderQuad(tachyon::IntRect{ kSize.x / 2, 0, kSize.x / 2, kSize.y }, kFullClip, stretched, 0.0f, index);
+            });
+            return index;
+        };
+        const auto rgb = [&](int x, int y) {
+            const uint32_t px = PixelAt(ctx, x, y);   // BGRA8
+            return std::array<int, 3>{ int((px >> 16) & 0xFF), int((px >> 8) & 0xFF), int(px & 0xFF) };
+        };
+
+        const tachyon::ImageIndex first = frame({ 64, 32 });
+        EXPECT_EQ(recorded, 1) << "drawn once a frame";
+        EXPECT_EQ(lastExtent.width, 64u);
+        EXPECT_EQ(lastExtent.height, 32u);
+        const auto left = rgb(kSize.x / 2 + 20, kSize.y / 2), right = rgb(kSize.x - 20, kSize.y / 2);
+        EXPECT_GT(left[1], 200) << "the app's green, in the scene's left half";
+        EXPECT_LT(left[2], 50);
+        EXPECT_GT(right[2], 200) << "the clear's blue in its right";
+        EXPECT_LT(right[1], 50);
+        EXPECT_LT(rgb(20, kSize.y / 2)[1], 50) << "nothing where the UI didn't draw it";
+
+        EXPECT_EQ(frame({ 64, 32 }), first) << "the same images while the size stays";
+        frame({ 80, 40 });
+        EXPECT_EQ(lastExtent.width, 80u) << "made again at the new size";
+        EXPECT_GT(rgb(kSize.x / 2 + 20, kSize.y / 2)[1], 200);
+
+        // Not asked for, it goes after a few frames; asked for again, it's made again.
+        for (int i = 0; i < 6; ++i)
+        {
+            graphicsContext->BeginFrame();
+            RenderFrame(ctx, [](tachyon::GUIRenderer*) {});
+        }
+        const int before = recorded;
+        frame({ 80, 40 });
+        EXPECT_EQ(recorded, before + 1);
+        EXPECT_GT(rgb(kSize.x / 2 + 20, kSize.y / 2)[1], 200);
+        EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+    }
 }

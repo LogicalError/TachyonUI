@@ -3,6 +3,8 @@ list(APPEND GUI_FILES
   # Core
   gui_core/gui_base_types.h
   gui_core/gui_base_types.cpp
+  gui_core/gui_math3d.h
+  gui_core/gui_math3d.cpp
 
   gui_core/gui_easing.h
   gui_core/gui_enum_operators.h
@@ -391,6 +393,9 @@ list(APPEND GUI_CONTROLS_FILES
   gui_controls/gui_plot_helpers.cpp
   gui_controls/gui_plot_types.h
   gui_controls/gui_plot_grid_internal.h
+  gui_controls/gui_viewport_types.h
+  gui_controls/gui_viewport_helpers.cpp
+  gui_controls/controls_viewport.cpp
   gui_controls/controls_color_internal.h
   gui_controls/controls_color.cpp
   gui_controls/controls_message_box.cpp

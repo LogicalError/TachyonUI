@@ -187,6 +187,12 @@ namespace tachyon
             timelineAudioIcon    = registerIcon("timeline-audio", R"(<path d="M11 5 6 9H2v6h4l5 4ZM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>)");
             timelineEventsIcon   = registerIcon("timeline-events", R"(<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>)");
             curveFrameAllIcon = registerIcon("curve-frame-all", R"(<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>)");
+            viewportSelectIcon = registerIcon("viewport-select",
+                R"(<path d="M4.04 4.69a.5.5 0 0 1 .65-.65l16 6.5a.5.5 0 0 1-.06.95l-6.13 1.58a2 2 0 0 0-1.43 1.43l-1.58 6.13a.5.5 0 0 1-.95.06Z"/>)");
+            viewportMoveIcon   = registerIcon("viewport-move", R"(<path d="M12 2v20M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M5 9l-3 3 3 3M9 5l3-3 3 3"/>)");
+            viewportRotateIcon = registerIcon("viewport-rotate", R"(<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8M21 3v5h-5"/>)");
+            viewportScaleIcon  = registerIcon("viewport-scale",
+                R"(<path d="M5 7v11a1 1 0 0 0 1 1h11M5.3 18.7 11 13"/><circle cx="19" cy="19" r="2"/><circle cx="5" cy="5" r="2"/>)");
             linkIcon   = registerIcon("link",
                 R"(<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>)");
             unlinkIcon = registerIcon("unlink",
@@ -928,6 +934,10 @@ namespace tachyon
         plotStyleRef                      = registerCSS("plot");
         plotLabelStyleRef                 = registerCSS("plot-label");
         plotReadoutStyleRef               = registerCSS("plot-readout");
+        viewportStyleRef                  = registerCSS("viewport");
+        viewportToolsStyleRef             = registerCSS("viewport-tools");
+        viewportToolStyleRef              = registerCSS("viewport-tool");
+        viewportAxisLabelStyleRef         = registerCSS("viewport-axis-label");
         timelineZoomStyleRef              = registerCSS("timeline-zoom");
         timelineHeaderStyleRef            = registerCSS("timeline-header");
         timelineListHeaderStyleRef        = registerCSS("timeline-list-header");

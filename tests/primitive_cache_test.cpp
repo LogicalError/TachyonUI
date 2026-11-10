@@ -40,7 +40,7 @@ namespace tachyon
             EXPECT_EQ(dst.renderPasses[1].kind, PrimitiveKind::Glyph);
 
             // Box: transform translation + screen clip shifted by delta; local coords unchanged.
-            const Box* b = reinterpret_cast<const Box*>(dst.streams[size_t(PrimitiveKind::Box)].cpu.data());
+            const BoxPrimitive* b = reinterpret_cast<const BoxPrimitive*>(dst.streams[size_t(PrimitiveKind::Box)].cpu.data());
             EXPECT_FLOAT_EQ(b->transform0.z, 110.0f); // 100 + 10
             EXPECT_FLOAT_EQ(b->transform1.z, 70.0f);  // 50 + 20
             EXPECT_EQ(b->clipMin.x, 10);  EXPECT_EQ(b->clipMin.y, 20);
@@ -49,7 +49,7 @@ namespace tachyon
             EXPECT_EQ(b->size.x, 30); EXPECT_EQ(b->size.y, 40);
 
             // Glyph: same translation applied.
-            const Glyph* g = reinterpret_cast<const Glyph*>(dst.streams[size_t(PrimitiveKind::Glyph)].cpu.data());
+            const GlyphPrimitive* g = reinterpret_cast<const GlyphPrimitive*>(dst.streams[size_t(PrimitiveKind::Glyph)].cpu.data());
             EXPECT_FLOAT_EQ(g->transform0.z, 110.0f);
             EXPECT_FLOAT_EQ(g->transform1.z, 70.0f);
         }
@@ -66,7 +66,7 @@ namespace tachyon
             t.RenderGlyph(tachyon::float2{ 5, 6 }, tachyon::float2{ 7, 8 }, tachyon::float2{ 0, 0 }, tachyon::float2{ 1, 1 },
                           1.0f, 1, 1, tachyon::VisualColorStyleIndex{}, clip, tachyon::ImageIndex::Invalid, 2.5f);
             t.FinishRenderPass();
-            const Glyph* g = reinterpret_cast<const Glyph*>(t.streams[size_t(PrimitiveKind::Glyph)].cpu.data());
+            const GlyphPrimitive* g = reinterpret_cast<const GlyphPrimitive*>(t.streams[size_t(PrimitiveKind::Glyph)].cpu.data());
             EXPECT_EQ(g[0].shadowBlur, -1);
             EXPECT_EQ(g[1].shadowBlur, 0);
             EXPECT_EQ(g[2].shadowBlur, 20);
@@ -125,7 +125,7 @@ namespace tachyon
 
             PrimitiveRenderTarget dst;
             dst.AppendCaptured(src, tachyon::int2{ 10, 20 });
-            const Box* b = reinterpret_cast<const Box*>(dst.streams[size_t(PrimitiveKind::Box)].cpu.data());
+            const BoxPrimitive* b = reinterpret_cast<const BoxPrimitive*>(dst.streams[size_t(PrimitiveKind::Box)].cpu.data());
             EXPECT_EQ(b->snappedPx[0], 13);
             EXPECT_EQ(b->snappedPx[1], 24);
             EXPECT_EQ(b->snappedPx[2], 28);
@@ -140,13 +140,13 @@ namespace tachyon
             src.RenderBox(tachyon::IntRect{ 211, 11, 4, 32768 }, tachyon::IntRect{ 0, 0, 800, 600 }, 1, 1, 1.0f, {},
                           tachyon::ImageIndex::Invalid, tachyon::IntRect{ 211, 11, 4, 32768 });
             src.FinishRenderPass();
-            const Box* b = reinterpret_cast<const Box*>(src.streams[size_t(PrimitiveKind::Box)].cpu.data());
+            const BoxPrimitive* b = reinterpret_cast<const BoxPrimitive*>(src.streams[size_t(PrimitiveKind::Box)].cpu.data());
             EXPECT_EQ(b->snappedPx[1], 11);
             EXPECT_EQ(b->snappedPx[3], INT16_MAX);
 
             PrimitiveRenderTarget dst;
             dst.AppendCaptured(src, tachyon::int2{ 0, 20 });
-            const Box* moved = reinterpret_cast<const Box*>(dst.streams[size_t(PrimitiveKind::Box)].cpu.data());
+            const BoxPrimitive* moved = reinterpret_cast<const BoxPrimitive*>(dst.streams[size_t(PrimitiveKind::Box)].cpu.data());
             EXPECT_EQ(moved->snappedPx[1], 31);
             EXPECT_EQ(moved->snappedPx[3], INT16_MAX) << "a moved cached box saturates too";
         }
@@ -168,9 +168,9 @@ namespace tachyon
             r.currentTarget->FinishRenderPass();
 
             const auto& stream = r.currentTarget->streams[size_t(PrimitiveKind::Line)].cpu;
-            const size_t count = stream.size() / sizeof(Line);
+            const size_t count = stream.size() / sizeof(LinePrimitive);
             ASSERT_EQ(count, 2u);
-            const Line* lines = reinterpret_cast<const Line*>(stream.data());
+            const LinePrimitive* lines = reinterpret_cast<const LinePrimitive*>(stream.data());
             EXPECT_EQ(lines[0].p0.x, 10);
             EXPECT_EQ(lines[0].p3.x, 100) << "the first run reaches the middle point";
             EXPECT_EQ(lines[1].p0.x, 100);
@@ -198,7 +198,7 @@ namespace tachyon
             ctx.RenderBox(tachyon::IntRect{ 1, 1, 58, 10 }, tachyon::VisualBoxStyleIndex::Invalid);
             r.currentTarget->FinishRenderPass();
 
-            const Box* b = reinterpret_cast<const Box*>(r.currentTarget->streams[size_t(PrimitiveKind::Box)].cpu.data());
+            const BoxPrimitive* b = reinterpret_cast<const BoxPrimitive*>(r.currentTarget->streams[size_t(PrimitiveKind::Box)].cpu.data());
             EXPECT_EQ(b->snappedPx[0] - ownerSnapped.x, 2) << "a 1-unit inset is 2 pixels";
             EXPECT_EQ(b->snappedPx[1] - ownerSnapped.y, 2);
             EXPECT_EQ((ownerSnapped.x + ownerSnapped.w) - b->snappedPx[2], 2);
@@ -222,14 +222,14 @@ namespace tachyon
             r.currentTarget->FinishRenderPass();
 
             const auto& boxes = r.currentTarget->streams[size_t(PrimitiveKind::Box)].cpu;
-            ASSERT_EQ(boxes.size() / sizeof(Box), 3u);
-            const Box* b = reinterpret_cast<const Box*>(boxes.data());
+            ASSERT_EQ(boxes.size() / sizeof(BoxPrimitive), 3u);
+            const BoxPrimitive* b = reinterpret_cast<const BoxPrimitive*>(boxes.data());
             EXPECT_FLOAT_EQ(b[0].transform1.w, 0.0f) << "opaque until set";
             EXPECT_FLOAT_EQ(b[1].transform1.w, 0.6f);
             EXPECT_FLOAT_EQ(b[2].transform1.w, 0.0f) << "clamped to 1";
-            const Quad* q = reinterpret_cast<const Quad*>(r.currentTarget->streams[size_t(PrimitiveKind::Quad)].cpu.data());
+            const QuadPrimitive* q = reinterpret_cast<const QuadPrimitive*>(r.currentTarget->streams[size_t(PrimitiveKind::Quad)].cpu.data());
             EXPECT_FLOAT_EQ(q->transform1.w, 0.6f);
-            EXPECT_EQ(r.currentTarget->streams[size_t(PrimitiveKind::Occluder)].cpu.size() / sizeof(Occluder), 1u)
+            EXPECT_EQ(r.currentTarget->streams[size_t(PrimitiveKind::Occluder)].cpu.size() / sizeof(OccluderPrimitive), 1u)
                 << "only the opaque one";
             r.EndWindow();
         }

@@ -41,6 +41,9 @@ namespace tachyon
         ID      ghostWindowID    = ID::Invalid();
         /// Outer dock container; its rect gives empty (invisible) sides a drop rect.
         ID      dockContainerID  = ID::Invalid();
+        /// The toolbars float over the content's edges (a 3D view) instead of taking room
+        /// beside it; between them the content still takes the mouse.
+        bool    overlay = false;
 
         /// Last frame's side rects (screen space), written by SyncToolbarDockRects at the end
         /// of the frame; drag visualization reads them during construction, before layout.

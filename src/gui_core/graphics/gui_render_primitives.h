@@ -29,7 +29,7 @@ namespace tachyon
     /// are at the nearest depth.
     inline constexpr float kPrimitiveDepthStep = 1.0f / float(1 << 22);
 
-    struct alignas(16) Box
+    struct alignas(16) BoxPrimitive
     {
         glsl_float4     transform0 = { 1, 0, 0 };
         glsl_float4     transform1 = { 0, 1, 0 };
@@ -50,11 +50,11 @@ namespace tachyon
         /// { x0, y0, x1, y1 }, all zero = snap absolutely.
         int16_t         snappedPx[4]  = { 0, 0, 0, 0 };
     };
-    static_assert(sizeof(Box) == 96, "Box struct size must be 96 bytes to match GLSL std430 layout");
-    static_assert(offsetof(Box, snappedPx) == 88, "Box::snappedPx offset mismatch with GLSL");
-    static_assert(sizeof(Box::textureIndex) == sizeof(uint32_t), "Box::textureIndex must be uint32_t for packing reasons");
+    static_assert(sizeof(BoxPrimitive) == 96, "BoxPrimitive struct size must be 96 bytes to match GLSL std430 layout");
+    static_assert(offsetof(BoxPrimitive, snappedPx) == 88, "BoxPrimitive::snappedPx offset mismatch with GLSL");
+    static_assert(sizeof(BoxPrimitive::textureIndex) == sizeof(uint32_t), "BoxPrimitive::textureIndex must be uint32_t for packing reasons");
 
-    struct alignas(16) Glyph
+    struct alignas(16) GlyphPrimitive
     {
         glsl_float4     transform0 = { 1, 0, 0 };
         glsl_float4     transform1 = { 0, 1, 0 };
@@ -76,10 +76,10 @@ namespace tachyon
         /// -1: the glyph itself; 0 and up: a text shadow blurred by this many 1/8 pixels
         int16_t         shadowBlur = -1;
     };
-    static_assert(sizeof(Glyph) == 96, "Glyph struct size must be 96 bytes to match GLSL std430 layout");
-    static_assert(sizeof(Glyph::textureIndex) == sizeof(uint32_t), "Glyph::textureIndex must be uint32_t for packing reasons");
+    static_assert(sizeof(GlyphPrimitive) == 96, "GlyphPrimitive struct size must be 96 bytes to match GLSL std430 layout");
+    static_assert(sizeof(GlyphPrimitive::textureIndex) == sizeof(uint32_t), "GlyphPrimitive::textureIndex must be uint32_t for packing reasons");
 
-    struct alignas(16) Dot
+    struct alignas(16) DotPrimitive
     {
         glsl_float4     transform0 = { 1, 0, 0 };
         glsl_float4     transform1 = { 0, 1, 0 };
@@ -95,7 +95,7 @@ namespace tachyon
         float           pos[2] = { 0, 0 };
     };
 
-    struct alignas(16) Line
+    struct alignas(16) LinePrimitive
     {
         glsl_float4     transform0 = { 1, 0, 0 };
         glsl_float4     transform1 = { 0, 1, 0 };
@@ -115,13 +115,13 @@ namespace tachyon
         tachyon::short2     p3 = { 0,0 };
     };
 
-    static_assert(sizeof(Line) == 96,                    "Line struct size mismatch with GLSL std430 layout");
-    static_assert(offsetof(Line, colorIndex)     == 48,  "Line::colorIndex offset mismatch");
-    static_assert(offsetof(Line, lineWidth)      == 52,  "Line::lineWidth offset mismatch");
-    static_assert(offsetof(Line, gradientOffset) == 64,  "Line::gradientOffset offset mismatch");
-    static_assert(offsetof(Line, p0)             == 72,  "Line::p0 offset mismatch");
+    static_assert(sizeof(LinePrimitive) == 96,                    "LinePrimitive struct size mismatch with GLSL std430 layout");
+    static_assert(offsetof(LinePrimitive, colorIndex)     == 48,  "LinePrimitive::colorIndex offset mismatch");
+    static_assert(offsetof(LinePrimitive, lineWidth)      == 52,  "LinePrimitive::lineWidth offset mismatch");
+    static_assert(offsetof(LinePrimitive, gradientOffset) == 64,  "LinePrimitive::gradientOffset offset mismatch");
+    static_assert(offsetof(LinePrimitive, p0)             == 72,  "LinePrimitive::p0 offset mismatch");
 
-    struct alignas(16) Triangle
+    struct alignas(16) TrianglePrimitive
     {
         glsl_float4     transform0 = { 1, 0, 0 };
         glsl_float4     transform1 = { 0, 1, 0 };
@@ -139,7 +139,7 @@ namespace tachyon
         int16_t         hardEdges = 0;   ///< TriangleEdges without a soft edge
     };
 
-    struct alignas(16) Quad
+    struct alignas(16) QuadPrimitive
     {
         glsl_float4     transform0 = { 1, 0, 0 };
         glsl_float4     transform1 = { 0, 1, 0 };
@@ -160,15 +160,15 @@ namespace tachyon
         glsl_float4     uvRect = { 0, 0, 1, 1 };
         glsl_float4     tint   = { 1, 1, 1, 1 };   ///< ImageDisplay::tint, multiplying the color
     };
-    static_assert(sizeof(Quad) == 112,               "Quad struct size mismatch with GLSL std430 layout");
-    static_assert(offsetof(Quad, cornerRadius) == 72, "Quad::cornerRadius offset mismatch");
-    static_assert(offsetof(Quad, displayFlags) == 76, "Quad::displayFlags offset mismatch");
-    static_assert(offsetof(Quad, uvRect) == 80,       "Quad::uvRect offset mismatch");
-    static_assert(offsetof(Quad, tint) == 96,         "Quad::tint offset mismatch");
+    static_assert(sizeof(QuadPrimitive) == 112,               "QuadPrimitive struct size mismatch with GLSL std430 layout");
+    static_assert(offsetof(QuadPrimitive, cornerRadius) == 72, "QuadPrimitive::cornerRadius offset mismatch");
+    static_assert(offsetof(QuadPrimitive, displayFlags) == 76, "QuadPrimitive::displayFlags offset mismatch");
+    static_assert(offsetof(QuadPrimitive, uvRect) == 80,       "QuadPrimitive::uvRect offset mismatch");
+    static_assert(offsetof(QuadPrimitive, tint) == 96,         "QuadPrimitive::tint offset mismatch");
 
     /// A circle outline: the ring `lineWidth` wide around `center` at `radius`, its color
     /// and dashes running clockwise from the right (+x towards +y), as LineStyle sets them.
-    struct alignas(16) Circle
+    struct alignas(16) CirclePrimitive
     {
         glsl_float4     transform0 = { 1, 0, 0 };
         glsl_float4     transform1 = { 0, 1, 0 };
@@ -184,13 +184,13 @@ namespace tachyon
         float           gradientOffset = 0;
         float           gradientScale  = 1;
     };
-    static_assert(sizeof(Circle) == 96,                  "Circle struct size mismatch with GLSL std430 layout");
-    static_assert(offsetof(Circle, center)     == 48,    "Circle::center offset mismatch");
-    static_assert(offsetof(Circle, colorIndex) == 64,    "Circle::colorIndex offset mismatch");
+    static_assert(sizeof(CirclePrimitive) == 96,                  "CirclePrimitive struct size mismatch with GLSL std430 layout");
+    static_assert(offsetof(CirclePrimitive, center)     == 48,    "CirclePrimitive::center offset mismatch");
+    static_assert(offsetof(CirclePrimitive, colorIndex) == 64,    "CirclePrimitive::colorIndex offset mismatch");
 
     /// Depth only: marks `pos`/`size` as covered by opaque content drawn after it, so what
     /// was drawn before under it is skipped (its fragments fail the depth test early).
-    struct alignas(16) Occluder
+    struct alignas(16) OccluderPrimitive
     {
         glsl_float4     transform0 = { 1, 0, 0 };
         glsl_float4     transform1 = { 0, 1, 0 };
@@ -200,7 +200,7 @@ namespace tachyon
         tachyon::int2       pos  = { 0,0 };
         tachyon::int2       size = { 0,0 };
     };
-    static_assert(sizeof(Occluder) == 64, "Occluder struct size mismatch with GLSL std430 layout");
+    static_assert(sizeof(OccluderPrimitive) == 64, "OccluderPrimitive struct size mismatch with GLSL std430 layout");
 
     /// Shader-visible buffer address. uint64_t on every modern API
     /// (VkDeviceAddress / D3D12_GPU_VIRTUAL_ADDRESS / MTLGPUAddress).
@@ -244,14 +244,14 @@ namespace tachyon
     /// the Box slot: each pass writes its own buffer address into its slot before
     /// drawing, and a draw call holds one kind.
     inline constexpr PrimitiveSpec kPrimitiveSpecs[kPrimitiveKindCount] = {
-        /* Box      */ { "box_shader",      sizeof(Box),      0 },
-        /* Glyph    */ { "glyph_shader",    sizeof(Glyph),    1 },
-        /* Dot      */ { "dot_shader",      sizeof(Dot),      2, PrimitiveShape::Triangle },
-        /* Line     */ { "line_shader",     sizeof(Line),     3 },
-        /* Triangle */ { "triangle_shader", sizeof(Triangle), 4 },
-        /* Quad     */ { "quad_shader",     sizeof(Quad),     4 },
-        /* Circle   */ { "circle_shader",   sizeof(Circle),   3 },
-        /* Occluder */ { "occluder_shader", sizeof(Occluder), 0, PrimitiveShape::Quad, true },
+        /* Box      */ { "box_shader",      sizeof(BoxPrimitive),      0 },
+        /* Glyph    */ { "glyph_shader",    sizeof(GlyphPrimitive),    1 },
+        /* Dot      */ { "dot_shader",      sizeof(DotPrimitive), 2, PrimitiveShape::Triangle },
+        /* Line     */ { "line_shader",     sizeof(LinePrimitive),     3 },
+        /* Triangle */ { "triangle_shader", sizeof(TrianglePrimitive), 4 },
+        /* Quad     */ { "quad_shader",     sizeof(QuadPrimitive),     4 },
+        /* Circle   */ { "circle_shader",   sizeof(CirclePrimitive),   3 },
+        /* Occluder */ { "occluder_shader", sizeof(OccluderPrimitive), 0, PrimitiveShape::Quad, true },
     };
 
     struct GPUDrawPushConstants
