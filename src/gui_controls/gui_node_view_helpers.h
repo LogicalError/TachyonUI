@@ -175,6 +175,14 @@ namespace tachyon
     ///     frame.title    = "Lighting";
     ///     CommitNodeViewEdit(view, AddFrameEdit(view, std::move(frame)));
     NodeFrame FrameAroundNodes(const NodeView& view, std::span<const int> indices);
+    /// An edit that puts the selected nodes and frames in `frame`: its place and size are set
+    /// round them as FrameAroundNodes sets them (a collapsed frame counts at its open size),
+    /// and it goes behind the selected frames so they stay in front of it. Its stableID,
+    /// title and color are the caller's. Empty when nothing is selected.
+    ///
+    ///     CommitNodeViewEdit(view, GroupSelectionEdit(view, NodeFrame{
+    ///         .stableID = idManager.CreateStaticID(), .title = "Group" }));
+    NodeViewEdit GroupSelectionEdit(const NodeView& view, NodeFrame frame);
     /// The nodes (indices) frame `frame` holds, which move with it: those lying wholly inside
     /// it as the view last laid them out, or, collapsed, those it held when it collapsed.
     std::vector<int> NodesInFrame(const NodeView& view, int frame);

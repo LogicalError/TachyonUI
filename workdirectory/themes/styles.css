@@ -2794,6 +2794,7 @@
     text-overflow: ellipsis;
     text-align: start;
     vertical-align: middle;
+    -tachyon-vertical-text-align: middle;   /* centred in the title bar's height */
     background-color: transparent;
     color: var(--text-1);
     font-size: var(--font-size);

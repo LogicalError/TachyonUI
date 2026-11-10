@@ -937,6 +937,53 @@ namespace tachyon
             EXPECT_TRUE(NodesInFrame(view, 3).empty());
         }
 
+        // Round the selected nodes and frames, behind the frames it holds so they stay on top.
+        TEST_F(NodeViewFrameTest, GroupingTheSelection)
+        {
+            Settle();
+            view.nodes[0].lastSize = { 6 * g, 4 * g };
+            view.nodes[1].lastSize = { 6 * g, 4 * g };
+            const ID group = app.idManager.CreateStaticID();
+            const NodeFrame named{ .stableID = group, .title = "Group", .color = { 0.9f, 0.5f, 0.2f, 1.0f } };
+            EXPECT_TRUE(GroupSelectionEdit(view, named).frames.empty()) << "nothing selected";
+
+            view.selectedNodeIDs  = { nodeB };
+            view.selectedFrameIDs = { frameInner };
+            const NodeViewEdit edit = GroupSelectionEdit(view, named);
+            ASSERT_EQ(edit.frames.size(), 1u);
+            EXPECT_EQ(edit.frames[0].index, 1) << "behind the inner frame";
+            ApplyNodeViewEdit(view, edit);
+            ASSERT_EQ(view.frames.size(), 3u);
+            const NodeFrame& made = view.frames[1];
+            EXPECT_EQ(made.stableID, group);
+            EXPECT_EQ(made.title, "Group");
+            EXPECT_EQ(made.color, named.color);
+            const NodeFrame& inner = view.frames[2];
+            const NodeModel& b = view.nodes[1];
+            EXPECT_EQ(made.pos, (int2{ inner.pos.x - g, inner.pos.y - 3 * g })) << "a cell round, the title bar above";
+            EXPECT_GE(made.pos.x + made.size.x, b.pos.x + b.lastSize.x + g);
+            EXPECT_GE(made.pos.y + made.size.y, b.pos.y + b.lastSize.y + g);
+            EXPECT_EQ(made.size.x % g, 0);
+            EXPECT_EQ(NodesInFrame(view, 1), (std::vector<int>{ 1 })) << "B moves with it";
+            ApplyNodeViewEdit(view, edit, /*undo=*/true);
+            EXPECT_EQ(view.frames.size(), 2u);
+
+            // Round both frames: behind the first of them.
+            view.selectedFrameIDs = { frameOuter, frameInner };
+            EXPECT_EQ(GroupSelectionEdit(view, named).frames[0].index, 0);
+
+            // Only nodes: in front of the other frames.
+            view.selectedFrameIDs.clear();
+            EXPECT_EQ(GroupSelectionEdit(view, named).frames[0].index, 2);
+
+            // A collapsed frame counts with its open size, so it fits when it opens again.
+            view.selectedNodeIDs.clear();
+            view.selectedFrameIDs = { frameInner };
+            view.frames[1].collapsed = true;
+            const NodeFrame around = GroupSelectionEdit(view, named).frames[0].frame;
+            EXPECT_GE(around.pos.x + around.size.x, view.frames[1].pos.x + view.frames[1].size.x + g);
+        }
+
         TEST_F(NodeViewFrameTest, TheNodesInAFrameAndItsTitle)
         {
             Settle();
