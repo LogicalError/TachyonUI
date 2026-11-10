@@ -50,6 +50,7 @@ namespace tachyon
         PersistValue("fontSize", showcase.settingsFontScalePct);
         PersistValue("motion", showcase.settingsMotionIndex);
         PersistValue("accent", showcase.settingsAccentIndex);
+        PersistValue("wheel", showcase.settingsWheelIndex);
         PersistThemeVariables("themeVariables");
         PersistShortcuts("shortcuts", commandManager);
         AddBuiltInLayouts();
@@ -84,10 +85,17 @@ namespace tachyon
         showcase.settingsFontScalePct = std::clamp(std::round(showcase.settingsFontScalePct / 10.0f) * 10.0f, 100.0f, 300.0f);
         showcase.settingsMotionIndex  = std::clamp(showcase.settingsMotionIndex, 0, 2);
         showcase.settingsAccentIndex  = std::clamp(showcase.settingsAccentIndex, 0, int(std::size(kAccentPresets)) - 1);
+        showcase.settingsWheelIndex   = std::clamp(showcase.settingsWheelIndex, 0, 1);
         // Loaded before the first frame; one that won't load leaves the theme as it is.
         RequestReloadTheme(showcase.settingsThemePath, showcase.settingsFontScalePct / 100.0f);
         ApplyMotionSetting();
         ApplyAccentSetting();
+        ApplyWheelSetting();
+    }
+
+    void Application::ApplyWheelSetting()
+    {
+        SetWheelMode(WheelMode(showcase.settingsWheelIndex));
     }
 
     void Application::ApplyAccentSetting()

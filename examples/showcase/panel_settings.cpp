@@ -102,6 +102,14 @@ namespace tachyon
         Field(showcase.settingsUserName, TextEditBehavior::None);
         if (noName) EndInvalid();
 
+        // Over the node view, the curve and timeline editors and plots. The middle button (or
+        // Alt + left) drags the view and a pinch zooms either way.
+        Label("Mouse wheel");
+        SetTooltip("Over the node view, curves, timelines and plots. Ctrl+wheel zooms when the wheel scrolls.");
+        static constexpr std::string_view wheelNames[] = { "Zooms", "Scrolls" };
+        if (Dropdown(idManager.AllocateDynamicID("settingsWheelMenu"), showcase.settingsWheelIndex, wheelNames))
+            ApplyWheelSetting();
+
         Label("Autosave");
         Switch(showcase.settingsAutosave, showcase.settingsAutosave ? "On" : "Off");
 

@@ -36,6 +36,7 @@
 #include <gui_core/style/gui_style_manager.h>
 
 #include <gui_core/input/gui_input_state.h>
+#include <gui_core/input/gui_navigation.h>
 #include <gui_core/input/gui_input_manager.h>
 #include <gui_core/input/gui_command_manager.h>
 #include <gui_core/input/gui_input_handler_func.h>
@@ -65,6 +66,7 @@
 #include <gui_controls/gui_content.h>
 #include <gui_controls/gui_progress_types.h>
 #include <gui_controls/gui_curve_types.h>
+#include <gui_controls/gui_plot_types.h>
 #include <gui_controls/gui_timeline_types.h>
 #include <gui_controls/controls_toolbar_dock.h>
 #include <gui_core/gui_result.h>
@@ -448,6 +450,8 @@ namespace tachyon
         void InjectMouseLeave(ID windowID);
         /// The pen, before the pointer events it goes with; a default PenState is the mouse.
         void InjectPen(ID windowID, const PenState& pen);
+        /// A trackpad pinch by `scale` where the pointer is.
+        void InjectPinch(ID windowID, float scale, KeyModifier mods = KeyModifier::None);
         /// Gives the window keyboard focus, or takes it away.
         void InjectFocus(ID windowID, bool focused);
         /// A key event; typed text goes through InjectText.
@@ -503,6 +507,13 @@ namespace tachyon
         bool IsThemeCrossfading() const { return !m_crossfades.empty(); }
         /// Whether changes of state show at once now.
         bool IsReducedMotion() const { return transitionManager.IsReducedMotion(); }
+
+        /// What the wheel and a trackpad's two-finger scroll do over the canvases that pan and
+        /// zoom (node view, curve and timeline editors, plots): zoom, or scroll the view. A pinch
+        /// zooms, and the middle button (or Alt + left) drags the view, either way. By default
+        /// DefaultWheelMode(): Pan on macOS, Zoom elsewhere.
+        void      SetWheelMode(WheelMode mode) { m_wheelMode = mode; }
+        WheelMode GetWheelMode() const { return m_wheelMode; }
 
         ///@}
 
@@ -806,6 +817,20 @@ namespace tachyon
         void        CurveEditor(ID id, CurveView& view, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
         inline void CurveEditor(       CurveView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { CurveEditor(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
+
+        /// Series of values as lines, bars or areas over `view`'s x range (a histogram's
+        /// channels), with a chip per series to show one on its own, the values under the
+        /// pointer, and handles dragged along x under the plot. True on the frame after a
+        /// handle moved.
+        ///
+        ///     PlotView levels;   // a member
+        ///     levels.series  = { PlotSeries{ .name = "Luma", .values = HistogramBins(lumas, 256) } };
+        ///     levels.handles = { { "Black", 0.0f }, { "White", 1.0f } };
+        ///     if (Plot(idManager.AllocateDynamicID("levels"), levels))
+        ///         ApplyLevels(levels.handles[0].x, levels.handles[1].x);
+        bool        Plot(ID id, PlotView& view, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline bool Plot(       PlotView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Plot(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
 
         ///@}
 
@@ -3040,6 +3065,7 @@ namespace tachyon
         float       m_globalFontScale { 1.0f };
         float       m_uiScale { 1.0f };
         std::optional<bool> m_reducedMotion;   ///< set by SetReducedMotion; else the OS's
+        WheelMode   m_wheelMode = DefaultWheelMode();
 
         /// A theme switch crossfades: each window's last frame in the old theme, drawn over the
         /// new one and fading out over kThemeCrossfadeSecs.

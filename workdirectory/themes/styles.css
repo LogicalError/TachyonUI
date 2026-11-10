@@ -6837,7 +6837,7 @@
     flex-shrink: 0;
 }
 
-.curve-channel {
+.curve-channel, .plot-channel {
     -tachyon-state-layer: content;
     border-width: 1px;
     border-radius: var(--radius-md);
@@ -6855,8 +6855,8 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.curve-channel:hover { color: var(--text-1); }
-.curve-channel::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); color: var(--text-1); }
+.curve-channel:hover, .plot-channel:hover { color: var(--text-1); }
+.curve-channel::highlight(selected), .plot-channel::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); color: var(--text-1); }
 
 .curve-plot {
     border-width: 0px;
@@ -6871,7 +6871,7 @@
     cursor: crosshair;
 }
 
-.curve-label {
+.curve-label, .plot-label {
     font-family: monospace;
     font-size: 10px;
     color: var(--text-3);
@@ -6881,7 +6881,7 @@
     text-wrap: nowrap;
 }
 
-.curve-readout {
+.curve-readout, .plot-readout {
     font-family: monospace;
     font-size: 10.5px;
     color: var(--tooltip-text);
@@ -6916,6 +6916,35 @@
     cursor: pointer;
 }
 .curve-preset:hover { border-color: var(--line-strong); color: var(--text-1); }
+
+/* ---- plot: series as lines, bars or areas, with handles along the x axis ---------- */
+/* Its chips and labels look as the curve editor's do (.plot-channel, .plot-label and   */
+/* .plot-readout share their rules).                                                     */
+.plot-toolbar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    padding: 0px 0px 4px 0px;
+    margin: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    flex-shrink: 0;
+}
+.plot {
+    border-width: 1px;
+    border-radius: var(--radius-md);
+    border-color: var(--line-subtle);
+    margin: 0px;
+    /* Room for the y numbers at the left; under the grid, the handles and the x numbers. */
+    padding: 8px 14px 34px 40px;
+    min-height: 120px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    background-color: var(--curve-plot);
+    overflow: hidden;
+}
 .timeline-snap::highlight(selected) { background-color: var(--bg-active); color: var(--text-1); -tachyon-icon-color: var(--accent); }
 .timeline-zoom {
     display: flex;
@@ -8159,6 +8188,7 @@
 .menu-item:focus-visible, .menu-item-row:focus-visible, .menu-bar-trigger:focus-visible,
 .title-bar-button:focus-visible, .title-bar-close-button:focus-visible,
 .color-picker-square:focus-visible, .gradient-editor-bar:focus-visible, .timeline-lanes:focus-visible,
-.box-sides-link:focus-visible, .curve-channel:focus-visible, .curve-plot:focus-visible {
+.box-sides-link:focus-visible, .curve-channel:focus-visible, .curve-plot:focus-visible,
+.plot-channel:focus-visible, .plot:focus-visible {
     box-shadow: inset 0 0 0 1px var(--accent);
 }

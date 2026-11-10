@@ -261,27 +261,31 @@ namespace tachyon
             ctx.RenderFilledPolygon(points, color);
         }
 
-        // The wheel over the ruler or the lanes: zooms round the time under the pointer; with
-        // Shift, pans along the time.
-        bool WheelOverTime(TimelineView& view, const ElementEvent& event, const Geometry& g, float x)
+        // The wheel over the ruler or the lanes, by `mode`: zooms round the time under the
+        // pointer, or scrolls along the time. A scroll up or down is left to the rows' scroll
+        // area. A pinch zooms.
+        bool WheelOverTime(TimelineView& view, const ElementEvent& event, const Geometry& g, float x, WheelMode mode)
         {
             const float length = LengthOf(view);
-            if (event.state.scroll.y == 0 || length <= 0.0f)
+            const WheelNavigation nav = NavigateByWheel(event.state, mode, kWheelZoom);
+            if (length <= 0.0f || (nav.zoom == 1.0f && nav.pan.x == 0.0f))
                 return false;
             const TimelineRange now = ViewRangeOf(view);
             const float span = now.end - now.start;
-            if ((event.state.modifiers & KeyModifier::Shift) != KeyModifier::None)
+            if (nav.zoom != 1.0f)
+                ZoomTo(view, span / nav.zoom, std::clamp(g.TimeAt(x), now.start, now.end));
+            if (nav.pan.x != 0.0f)
             {
-                view.viewStart = std::clamp(now.start - float(event.state.scroll.y) * span * 0.1f, 0.0f, length - span);
-                return true;
+                const TimelineRange after = ViewRangeOf(view);
+                const float shown = after.end - after.start;
+                view.viewStart = std::clamp(after.start + nav.pan.x * shown * 0.1f, 0.0f, std::max(0.0f, length - shown));
             }
-            ZoomTo(view, span * (event.state.scroll.y > 0 ? 1.0f / kWheelZoom : kWheelZoom), std::clamp(g.TimeAt(x), now.start, now.end));
             return true;
         }
 
-        // The right button held over the ruler or the lanes: the time follows the pointer
-        // across, and the rows (with `body`, the area they scroll in) up and down. A right
-        // click that doesn't move is left to whatever else wants it. Escape puts both back.
+        // The middle button (or Alt + left) held over the ruler or the lanes: the time follows
+        // the pointer across, and the rows (with `body`, the area they scroll in) up and down.
+        // Escape puts both back.
         bool DragScroll(TimelineView& view, const ElementEvent& event, const ElementStorage& es, GUIStateManager& gsm,
                         const Geometry& g, ID body, int32_t contentHeight, int32_t dragDistance)
         {
@@ -291,13 +295,16 @@ namespace tachyon
             switch (event.type)
             {
                 case EventType::MouseDown:
-                    if (!event.state.RightPressed())
+                {
+                    const MouseButtons button = PanDragButton(event.state);
+                    if (button == MouseButtons::None)
                         return false;
-                    view.dragScroll.Press(event, es, MouseButtons::Right);
+                    view.dragScroll.Press(event, es, button);
                     gsm.Interaction().SetCaptureID(event.id);
                     view.dragScrollStart  = ViewRangeOf(view).start;
                     view.dragScrollOffset = vertical ? scrolling.GetScrollOffset(handle).y : 0;
                     return true;
+                }
                 case EventType::MouseMove:
                 {
                     if (!view.dragScroll.IsPressed(event.id))
@@ -483,7 +490,7 @@ namespace tachyon
             const ElementStorage& es = elementStorage;
             const int32_t edgeReach = styleManager.Px(4);
             const int32_t dragDistance = styleManager.Px(kDragStartDistance);
-            rulerHandler = [&gsm, &es, v, lanesID, edgeReach, dragDistance, playbackChanged](ElementEvent&& event) -> bool
+            rulerHandler = [&gsm, &es, v, lanesID, edgeReach, dragDistance, playbackChanged, wheelMode = GetWheelMode()](ElementEvent&& event) -> bool
             {
                 if (event.rect == nullptr)
                     return false;
@@ -582,7 +589,7 @@ namespace tachyon
                         }
                         return false;
                     case EventType::MouseScroll:
-                        return WheelOverTime(*v, event, g, x);
+                        return WheelOverTime(*v, event, g, x, wheelMode);
                     default: return false;
                 }
             };
@@ -777,7 +784,7 @@ namespace tachyon
             const ElementStorage& es = elementStorage;
             const float reach = float(styleManager.Px(6));
             const int32_t dragDistance = styleManager.Px(kDragStartDistance);
-            lanesHandler = [this, &gsm, &es, v, rows, rowHeight, reach, dragDistance, bodyID, playbackChanged](ElementEvent&& event) -> bool
+            lanesHandler = [this, &gsm, &es, v, rows, rowHeight, reach, dragDistance, bodyID, playbackChanged, wheelMode = GetWheelMode()](ElementEvent&& event) -> bool
             {
                 if (event.rect == nullptr)
                     return false;
@@ -902,7 +909,7 @@ namespace tachyon
                         return false;
                     }
                     case EventType::MouseScroll:
-                        return WheelOverTime(*v, event, g, float(at.x));
+                        return WheelOverTime(*v, event, g, float(at.x), wheelMode);
                     case EventType::KeyDown:
                     {
                         if (IsDragCancelKey(event.state))

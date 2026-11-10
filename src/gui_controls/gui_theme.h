@@ -548,6 +548,11 @@ namespace tachyon
         StyleRef curveReadoutStyleRef {};           ///< drawn: the selected key's time and value beside it
         StyleRef curveBoxSelectStyleRef {};         ///< drawn: the box a drag on the plot selects with
         StyleRef curvePresetStyleRef {};            ///< a preset's thumbnail button
+        StyleRef plotToolbarStyleRef {};            ///< Plot: the row of series chips over it
+        StyleRef plotChannelStyleRef {};            ///< a series' chip; selected for the one shown
+        StyleRef plotStyleRef {};                   ///< the plot; its padding holds the labels and the handles
+        StyleRef plotLabelStyleRef {};              ///< drawn: a grid line's number
+        StyleRef plotReadoutStyleRef {};            ///< drawn: the values under the pointer
         StyleRef timelineZoomStyleRef {};           ///< the zoom slider and its icons
         StyleRef timelineHeaderStyleRef {};         ///< the row over the track list and the ruler
         StyleRef timelineListHeaderStyleRef {};     ///< "Tracks", the filter and the add button

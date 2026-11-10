@@ -210,6 +210,10 @@ namespace tachyon
             tachyon::CurveView demoCurve;
             tachyon::CurveView demoColorCurves;
             bool               curvesSeeded = false;
+            // Plot demo: the demo image's levels, its R, G and B counted into 64 bins.
+            tachyon::PlotView  demoLevels;
+            int                demoLevelsKind = 1;      // a PlotSeriesKind: bars, area or line
+            bool               demoLevelsLog = false;
             int listSelected = 0;
 
             // ListView
@@ -520,6 +524,7 @@ namespace tachyon
             std::string settingsThemePath;            // the palette loaded
             int     settingsMotionIndex = 0; // 0 = as the OS, 1 = reduced, 2 = full
             int     settingsAccentIndex = 0; // into kAccentPresets; 0 = the palette's own blue
+            int     settingsWheelIndex = int(DefaultWheelMode());   // a WheelMode: 0 zooms, 1 scrolls
             float   settingsFontScalePct = 100.0f; // percent; 100 = unscaled
 
             // Misc dummy page values
@@ -587,6 +592,8 @@ namespace tachyon
         void RenderSettingsShortcuts();
         /// Reduced motion as settingsMotionIndex says.
         void ApplyMotionSetting();
+        /// The wheel mode settingsWheelIndex says.
+        void ApplyWheelSetting();
         /// The accent settingsAccentIndex picks: none for the palette's own.
         void ApplyAccentSetting();
         /// The Appearance settings read from the saved UI state, applied (--theme wins).
@@ -609,6 +616,8 @@ namespace tachyon
         void SeedAnimation();
         /// The Inspector's curves: a falloff, and a color's channels; their edits on the undo history.
         void SeedCurves();
+        /// The Inspector's Levels plot: the demo image's histogram and black, gray and white handles.
+        void SeedLevels();
         void RenderHierarchyPanel(HierarchyPanel& panel);
         void RenderNodeViewPanel();
         /// A reroute (NodeModel::reroute) in `color`, unwired, its dot on the grid point

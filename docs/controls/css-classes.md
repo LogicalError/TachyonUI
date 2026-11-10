@@ -42,6 +42,7 @@ Button("Delete", onDelete, theme.GetStyle("my-danger-button"));  // your own cla
 | `ColorField` | `color-field` (picker: `color-picker`) |
 | `GradientField` | `gradient-swatch` (editor: `gradient-editor`) |
 | `CurveField` | `curve-field` (editor: `curve-window`); see [Curves](curves.md) |
+| `Plot` | `plot` (chips: `plot-toolbar`, `plot-channel`); see [Plots](plots.md) |
 | `BeginMenu` | `menu-trigger`, popup `menu` |
 | `MenuItem` | `menu-item-row` |
 | `MenuSeparator`, `MenuHeader` | `menu-separator`, `menu-header` |

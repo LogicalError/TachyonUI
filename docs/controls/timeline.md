@@ -300,9 +300,12 @@ TimelineEditor(animation);
   - a drag on a selected key moves all the selected keys, by whole frames while snapping
   - Escape during a drag puts them back
 - Over the ruler and the lanes:
-  - the wheel zooms round the pointer
-  - Shift + the wheel pans
-  - a drag with the right button pans along the time and scrolls the rows
+  - the wheel zooms round the pointer, or scrolls along the time, as `SetWheelMode` says;
+    a pinch zooms
+  - Shift + the wheel scrolls along the time
+  - with the wheel set to scroll, up and down scrolls the rows
+  - a drag with the middle button (or Alt + left) moves along the time and scrolls the rows
+  - see Panning and zooming in [Common conventions](conventions.md)
 - On the track list:
   - a click on a row selects its track
   - the wheel scrolls the rows

@@ -387,6 +387,10 @@ list(APPEND GUI_CONTROLS_FILES
   gui_controls/controls_curve.cpp
   gui_controls/gui_curve_helpers.cpp
   gui_controls/gui_curve_types.h
+  gui_controls/controls_plot.cpp
+  gui_controls/gui_plot_helpers.cpp
+  gui_controls/gui_plot_types.h
+  gui_controls/gui_plot_grid_internal.h
   gui_controls/controls_color_internal.h
   gui_controls/controls_color.cpp
   gui_controls/controls_message_box.cpp

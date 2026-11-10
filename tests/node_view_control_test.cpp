@@ -269,6 +269,29 @@ namespace tachyon
             EXPECT_EQ(edits[0].moves[0].to, view.nodes[1].pos);
         }
 
+        // A middle click on a wire removes it; a middle drag from it pans and leaves it.
+        TEST_F(NodeViewControlTest, AMiddleClickRemovesAWireAndAMiddleDragLeavesIt)
+        {
+            view.nodes.resize(2);
+            view.ordering.clear();
+            view.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
+            Settle();
+            auto wired = [&] { return view.nodes[1].properties[0].input && view.nodes[1].properties[0].input->valid(); };
+            const tachyon::int2 at = CanvasPoint() + tachyon::int2{ 3, 5 };
+            app.InjectMouseMove(at);
+            Frame();
+            view.hoveredWire = WireKey(1, 0);
+            app.DragFrom(at, { at.x + 40, at.y }, MouseButtons::Middle);
+            Frame();
+            EXPECT_TRUE(wired()) << "a drag pans";
+            app.InjectMouseMove(at);
+            Frame();
+            view.hoveredWire = WireKey(1, 0);
+            app.ClickAt(at, MouseButtons::Middle);
+            Frame();
+            EXPECT_FALSE(wired()) << "a click removes it";
+        }
+
         // "Add reroute here" puts the dot on the nearest grid point while snapping, and right
         // where the wire was clicked without.
         TEST_F(NodeViewControlTest, AddRerouteHereSnapsOnlyWhileSnapping)
@@ -627,8 +650,8 @@ namespace tachyon
             EXPECT_EQ(view.selectedNodeIDs.size(), 2u);
         }
 
-        // A right drag pans; it opens nothing.
-        TEST_F(NodeViewContextMenuTest, ARightDragPansAndOpensNoMenu)
+        // A right drag doesn't pan (the middle button does) and opens nothing.
+        TEST_F(NodeViewContextMenuTest, ARightDragNeitherPansNorOpensAMenu)
         {
             Settle();
             int menus = 0;
@@ -637,6 +660,22 @@ namespace tachyon
             const tachyon::float3x2 before = view.transform;
             const tachyon::int2 from = CanvasPoint();
             app.DragFrom(from, { from.x - 120, from.y + 60 }, MouseButtons::Right);
+            Frame();
+            Frame();
+            EXPECT_EQ(view.transform.TransformPoint(float2{}).x, before.TransformPoint(float2{}).x) << "it didn't pan";
+            EXPECT_EQ(menus, 0);
+            EXPECT_FALSE(app.menuManager.IsOpen());
+        }
+
+        // A middle drag pans, and opens nothing.
+        TEST_F(NodeViewContextMenuTest, AMiddleDragPansAndOpensNoMenu)
+        {
+            Settle();
+            int menus = 0;
+            view.onCanvasContextMenu = [&](float2) { menus++; };
+            const tachyon::float3x2 before = view.transform;
+            const tachyon::int2 from = CanvasPoint();
+            app.DragFrom(from, { from.x - 120, from.y + 60 }, MouseButtons::Middle);
             Frame();
             Frame();
             EXPECT_NE(view.transform.TransformPoint(float2{}).x, before.TransformPoint(float2{}).x) << "it panned";
@@ -1298,23 +1337,44 @@ namespace tachyon
                 << "dragging past the 4px threshold engages the marquee";
         }
 
-        TEST_F(NodeViewControlTest, RightDragPansTransform)
+        TEST_F(NodeViewControlTest, MiddleDragPansTransform)
         {
             Settle();
             const tachyon::int2 from = CanvasPoint();
             const tachyon::int2 to{ from.x + 60, from.y + 25 };
 
             app.InjectMouseMove(from);
-            app.InjectMouseDown(from, MouseButtons::Right);
+            app.InjectMouseDown(from, MouseButtons::Middle);
             Frame();
-            app.InjectMouseMove(to, MouseButtons::Right);
+            app.InjectMouseMove(to, MouseButtons::Middle);
             Frame();
-            app.InjectMouseUp(to, MouseButtons::Right);
+            app.InjectMouseUp(to, MouseButtons::Middle);
             Frame();
 
             // Pan accumulates into the transform's translation column.
-            EXPECT_NE(view.transform.r0.z, 0.0f);
-            EXPECT_NE(view.transform.r1.z, 0.0f);
+            EXPECT_NEAR(view.transform.r0.z, 60.0f, 0.5f);
+            EXPECT_NEAR(view.transform.r1.z, 25.0f, 0.5f);
+        }
+
+        // Without a middle button: Alt + left drags the view, over a node too, and moves no node.
+        TEST_F(NodeViewControlTest, AltLeftDragPans)
+        {
+            Settle();
+            const tachyon::int2 positionBefore = view.nodes[0].pos;
+            for (const tachyon::int2 from : { CanvasPoint(), HeaderOf(nodeA) })
+            {
+                const float startX = view.transform.r0.z;
+                app.InjectMouseMove(from, MouseButtons::None, KeyModifier::Alt);
+                app.InjectMouseDown(from, MouseButtons::Left, KeyModifier::Alt);
+                Frame();
+                app.InjectMouseMove({ from.x + 50, from.y }, MouseButtons::Left, KeyModifier::Alt);
+                Frame();
+                app.InjectMouseUp({ from.x + 50, from.y }, MouseButtons::Left, KeyModifier::Alt);
+                Frame();
+                EXPECT_NEAR(view.transform.r0.z, startX + 50.0f, 0.5f);
+            }
+            EXPECT_EQ(view.nodes[0].pos, positionBefore) << "the node stays put";
+            EXPECT_FALSE(view.marquee.dragging) << "no marquee either";
         }
 
         TEST_F(NodeViewControlTest, ScrollZoomsTransform)
@@ -1327,6 +1387,26 @@ namespace tachyon
             Frame();
 
             EXPECT_NE(view.transform.r0.x, 1.0f) << "scroll over the canvas must zoom";
+        }
+
+        // With the wheel set to scroll, it pans the view, Ctrl+wheel zooms; a pinch always zooms.
+        TEST_F(NodeViewControlTest, TheWheelScrollsInPanMode)
+        {
+            app.SetWheelMode(WheelMode::Pan);
+            Settle();
+            const tachyon::int2 p = CanvasPoint();
+            app.InjectMouseMove(p);
+            app.InjectMouseScroll(p, { 0, -1 });
+            Frame();
+            EXPECT_EQ(view.transform.r0.x, 1.0f) << "no zoom";
+            EXPECT_LT(view.transform.r1.z, 0.0f) << "toward the user scrolls down: the canvas moves up";
+            app.InjectMouseScroll(p, { 0, 1 }, KeyModifier::Control);
+            Frame();
+            EXPECT_GT(view.transform.r0.x, 1.0f) << "Ctrl+wheel zooms in";
+            const float zoom = view.transform.r0.x;
+            app.InjectPinch(0.8f);
+            Frame();
+            EXPECT_LT(view.transform.r0.x, zoom) << "a pinch zooms out";
         }
 
         TEST_F(NodeViewControlTest, EditModeFollowsCanvasFocus)
@@ -1541,9 +1621,9 @@ namespace tachyon
             const tachyon::float3x2 before = view.transform;
             const tachyon::int2 from = CanvasPoint();
             app.InjectMouseMove(from);
-            app.InjectMouseDown(from, MouseButtons::Right);
+            app.InjectMouseDown(from, MouseButtons::Middle);
             Frame();
-            app.InjectMouseMove({ from.x + 60, from.y + 25 }, MouseButtons::Right);
+            app.InjectMouseMove({ from.x + 60, from.y + 25 }, MouseButtons::Middle);
             Frame();
             ASSERT_NE(view.transform.r0.z, before.r0.z);
 
@@ -1551,8 +1631,8 @@ namespace tachyon
             Frame();
             EXPECT_EQ(view.transform.r0.z, before.r0.z);
             EXPECT_EQ(view.transform.r1.z, before.r1.z);
-            app.InjectMouseMove({ from.x + 90, from.y + 25 }, MouseButtons::Right);
-            app.InjectMouseUp({ from.x + 90, from.y + 25 }, MouseButtons::Right);
+            app.InjectMouseMove({ from.x + 90, from.y + 25 }, MouseButtons::Middle);
+            app.InjectMouseUp({ from.x + 90, from.y + 25 }, MouseButtons::Middle);
             Frame();
             EXPECT_EQ(view.transform.r0.z, before.r0.z) << "the moves after Escape don't pan";
         }

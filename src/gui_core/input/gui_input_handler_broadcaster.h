@@ -64,6 +64,12 @@ namespace tachyon
                 if (h) h->OnPen(id, pen);
         }
 
+        void OnPinch(tachyon::ID id, float scale, KeyModifier modifiers) override
+        {
+            for (IPlatformInputHandler* h : m_handlers)
+                if (h) h->OnPinch(id, scale, modifiers);
+        }
+
     private:
         std::vector<IPlatformInputHandler*> m_handlers;
     };

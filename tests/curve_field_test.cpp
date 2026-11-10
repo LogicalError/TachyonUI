@@ -425,16 +425,55 @@ namespace tachyon
             EXPECT_GT(view.shown.timeMax - view.shown.timeMin, 1.0f) << "out";
 
             const CurveRange before = view.shown;
-            app.InjectMouseScroll(center, { 0, 1 }, KeyModifier::Shift);
+            app.InjectMouseScroll(center, { 0, 1 }, KeyModifier::Alt);
             Frame();
-            EXPECT_EQ(view.shown.valueMin, before.valueMin) << "Shift: the time only";
+            EXPECT_EQ(view.shown.valueMin, before.valueMin) << "Alt: the time only";
             EXPECT_LT(view.shown.timeMax - view.shown.timeMin, before.timeMax - before.timeMin);
+
+            const CurveRange zoomed = view.shown;
+            app.InjectMouseScroll(center, { 0, -1 }, KeyModifier::Shift);
+            Frame();
+            EXPECT_GT(view.shown.timeMin, zoomed.timeMin) << "Shift scrolls along the time";
+            EXPECT_FLOAT_EQ(view.shown.timeMax - view.shown.timeMin, zoomed.timeMax - zoomed.timeMin) << "no zoom";
 
             const CurveRange panned = view.shown;
             Drag(center, { center.x - 50, center.y + 40 }, MouseButtons::Middle);
             EXPECT_GT(view.shown.timeMin, panned.timeMin) << "dragged left: later times";
             EXPECT_GT(view.shown.valueMin, panned.valueMin) << "dragged down: higher values";
             EXPECT_TRUE(edits.empty());
+
+            // Alt + left drags it too, and leaves the keys alone.
+            const CurveRange again = view.shown;
+            app.InjectMouseMove(center, MouseButtons::None, KeyModifier::Alt);
+            app.InjectMouseDown(center, MouseButtons::Left, KeyModifier::Alt);
+            Frame();
+            app.InjectMouseMove({ center.x - 50, center.y }, MouseButtons::Left, KeyModifier::Alt);
+            Frame();
+            app.InjectMouseUp({ center.x - 50, center.y }, MouseButtons::Left, KeyModifier::Alt);
+            Frame();
+            EXPECT_GT(view.shown.timeMin, again.timeMin) << "Alt + left";
+            EXPECT_TRUE(edits.empty());
+            EXPECT_TRUE(view.selectedKeys.empty());
+        }
+
+        // With the wheel set to scroll, it scrolls the view; Ctrl+wheel and a pinch zoom.
+        TEST_F(CurveFieldTest, TheWheelScrollsInPanMode)
+        {
+            app.SetWheelMode(WheelMode::Pan);
+            Open();
+            const int2 center = At(0.5f, 0.5f);
+            app.InjectMouseScroll(center, { 0, -1 });
+            Frame();
+            ASSERT_TRUE(view.shownSet);
+            EXPECT_FLOAT_EQ(view.shown.timeMax - view.shown.timeMin, 1.0f) << "no zoom";
+            EXPECT_LT(view.shown.valueMin, 0.0f) << "toward the user: lower values";
+            app.InjectMouseScroll(center, { 0, 1 }, KeyModifier::Control);
+            Frame();
+            EXPECT_LT(view.shown.timeMax - view.shown.timeMin, 1.0f) << "Ctrl zooms in";
+            const float span = view.shown.timeMax - view.shown.timeMin;
+            app.InjectPinch(0.5f);
+            Frame();
+            EXPECT_GT(view.shown.timeMax - view.shown.timeMin, span) << "a pinch together zooms out";
         }
 
         // ---------------------------------------------------------------------

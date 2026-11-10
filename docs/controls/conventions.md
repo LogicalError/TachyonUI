@@ -165,6 +165,48 @@ if (BeginMenu("File"))
 EndMenu();   // also when BeginMenu returned false
 ```
 
+**Panning and zooming.** The controls that show a canvas you move around in (the node view,
+the curve and timeline editors, a plot) all do it the same way:
+
+- **Dragging the view:** the middle button.
+  - For a mouse or trackpad without one: Alt + the left button. It drags the view over a
+    node, key or handle too, without moving it.
+  - The right button doesn't drag; a right click opens a menu.
+  - Escape during the drag puts the view back.
+- **The wheel**, and a trackpad's two-finger scroll, does what `SetWheelMode` says:
+
+  | `WheelMode` | The wheel | Shift + wheel | Ctrl + wheel |
+  | --- | --- | --- | --- |
+  | `Zoom` | zooms round the pointer | scrolls sideways | zooms |
+  | `Pan` | scrolls the view | scrolls sideways | zooms round the pointer |
+
+  - `DefaultWheelMode()` is `Pan` on macOS, where most pointers are trackpads, and `Zoom`
+    elsewhere.
+  - A trackpad's scroll reaches the app as wheel turns: with `Zoom` it zooms too.
+- **A pinch** on a trackpad zooms, whatever the mode.
+
+Let your users pick the mode, as a setting:
+
+```cpp
+SetWheelMode(settings.wheelScrolls ? WheelMode::Pan : WheelMode::Zoom);
+```
+
+For a canvas of your own, `gui_navigation.h` gives the same rules:
+
+- `PanDragButton(event.state)`: the button a press drags the view with, or `None`.
+- `NavigateByWheel(event.state, GetWheelMode(), zoomStep)`: how far a wheel or pinch event
+  zooms, and scrolls.
+
+```cpp
+case EventType::MouseScroll:
+{
+    const WheelNavigation nav = NavigateByWheel(event.state, wheelMode, 1.1f);
+    if (nav.zoom != 1.0f) ZoomAround(pointer, nav.zoom);
+    if (nav.pan.x != 0.0f || nav.pan.y != 0.0f) Scroll(nav.pan * notchPixels);
+    return nav.Any();
+}
+```
+
 ---
 
 [Controls](../controls.md) | [Next: Windows and layout](windows-and-layout.md)

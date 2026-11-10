@@ -231,18 +231,24 @@ namespace tachyon
                 {
                     case tachyon::EventType::MouseDown:
                     {
-                        // A middle click removes the wire under the mouse.
-                        if (event.state.MiddlePressed() && view.hoveredWire)
+                        // The middle button (or Alt + left) drags the view; a middle click
+                        // that doesn't move removes the wire under the mouse, at the release.
+                        if (const MouseButtons panButton = PanDragButton(event.state); panButton != MouseButtons::None)
                         {
-                            CommitNodeViewEdit(view, DisconnectEdit(view, WireInput(*view.hoveredWire)));
-                            view.hoveredWire.reset();
+                            this->guiStateManager.Interaction().SetFocusID(canvasID);
+                            view.pan.Press(event, elementStorage, panButton);
+                            view.panStart = view.transform;
                             return true;
                         }
-                        if (!event.state.LeftDown() && !event.state.RightDown())
+                        // A right click opens a menu, at the release.
+                        if (view.menuPress.Press(event, elementStorage, MouseButtons::Right))
+                        {
+                            this->guiStateManager.Interaction().SetFocusID(canvasID);
+                            return true;
+                        }
+                        if (!event.state.LeftDown())
                             return false;
                         this->guiStateManager.Interaction().SetFocusID(canvasID);
-                        if (view.pan.Press(event, elementStorage, MouseButtons::Right))
-                            view.panStart = view.transform;
                         if (view.marquee.Press(event, elementStorage))
                         {
                             // Begin marquee. Only SCREEN positions are captured here; the
@@ -258,7 +264,13 @@ namespace tachyon
                     }
                     case tachyon::EventType::MouseMove:
                     {
-                        if (view.pan.IsPressed(event.id) && event.state.RightDown())
+                        // A right press moved past the drag distance opens no menu at its release.
+                        if (view.menuPress.IsPressed(event.id))
+                        {
+                            view.menuPress.Move(event, styleManager.Px(kDragStartDistance));
+                            return true;
+                        }
+                        if (view.pan.IsPressed(event.id) && (event.state.buttons & view.pan.button) != MouseButtons::None)
                         {
                             // Pans from the first move; past the drag distance the release isn't a click.
                             view.pan.Move(event, styleManager.Px(kDragStartDistance));
@@ -322,10 +334,21 @@ namespace tachyon
                     }
                     case tachyon::EventType::MouseUp:
                     {
-                        // A right click (not a pan): on a wire it offers to delete it; on a node
-                        // or the empty canvas it opens the app's menu for it, if there is one.
-                        // A node passes its right presses here, for the pan.
-                        if (view.pan.Release(event) == PointerDrag::Ended::Click)
+                        // A middle click that didn't drag the view: the wire under the mouse goes.
+                        const MouseButtons panButton = view.pan.button;
+                        if (const PointerDrag::Ended panned = view.pan.Release(event); panned != PointerDrag::Ended::No)
+                        {
+                            if (panned == PointerDrag::Ended::Click && panButton == MouseButtons::Middle && view.hoveredWire)
+                            {
+                                CommitNodeViewEdit(view, DisconnectEdit(view, WireInput(*view.hoveredWire)));
+                                view.hoveredWire.reset();
+                            }
+                            return true;
+                        }
+                        // A right click: on a wire it offers to delete it; on a node or the
+                        // empty canvas it opens the app's menu for it, if there is one. A node
+                        // passes its right presses here.
+                        if (view.menuPress.Release(event) == PointerDrag::Ended::Click)
                         {
                             // A node under the pointer, a reroute too, comes before a wire: the
                             // wire hovered last can reach into it (a lane handle at a reroute).
@@ -382,14 +405,19 @@ namespace tachyon
                     }
                     case tachyon::EventType::MouseScroll:
                     {
-                        if (event.state.scroll.y == 0) return false;
+                        // The wheel zooms or scrolls the view, as GetWheelMode says; a pinch zooms.
+                        const WheelNavigation nav = NavigateByWheel(event.state, GetWheelMode(), 1.1f);
+                        if (!nav.Any()) return false;
                         this->guiStateManager.Interaction().SetFocusID(canvasID);
-
-                        constexpr float zoomStep = 1.1f;
-                        const int2 innerSize{ event.rect->innerRect.w, event.rect->innerRect.h };
-                        ZoomNodeView(view, (event.state.scroll.y > 0) ? zoomStep : (1.0f / zoomStep),
-                                     event.state.screenPos - event.rect->innerRect.position
-                                     - int2{ innerSize.x / 2, innerSize.y / 2 });
+                        if (nav.zoom != 1.0f)
+                        {
+                            const int2 innerSize{ event.rect->innerRect.w, event.rect->innerRect.h };
+                            ZoomNodeView(view, nav.zoom, event.state.screenPos - event.rect->innerRect.position
+                                                         - int2{ innerSize.x / 2, innerSize.y / 2 });
+                        }
+                        const float step = float(styleManager.Px(40));   // a notch scrolls this far
+                        if (nav.pan.x != 0.0f || nav.pan.y != 0.0f)
+                            view.transform = tachyon::float3x2::Translate(tachyon::float2{ -nav.pan.x * step, -nav.pan.y * step }) * view.transform;
                         return true;
                     }
                     // A new wire over the empty canvas, when the app takes it there
@@ -635,7 +663,7 @@ namespace tachyon
                         {
                             case EventType::MouseDown:
                             {
-                                if (!event.state.LeftPressed()) return false;
+                                if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
                                 // Arm the drag; pendingConnection activates only once it passes the threshold.
                                 guiStateManager.Drag().Begin(
                                     sockID, kSocketPayload, EncodeEndpoint(self),
@@ -692,7 +720,7 @@ namespace tachyon
                                 // elsewhere, or disconnect in empty space); an unwired one starts a
                                 // new wire towards an output. Either starts on the first real move,
                                 // so a plain click is harmless.
-                                if (!event.state.LeftPressed()) return false;
+                                if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
                                 auto& prop = view.nodes[self.nodeIdx].properties[self.propIdx];
                                 const bool wired = prop.input.has_value() && prop.input->valid();
                                 guiStateManager.Drag().Begin(
@@ -1112,7 +1140,7 @@ namespace tachyon
                             case EventType::MouseDown:
                             {
                                 // A right press is the canvas's: a pan, or this frame's menu.
-                                if (!event.state.LeftPressed()) return false;
+                                if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
                                 guiStateManager.Interaction().SetFocusID(canvasID);
                                 const int index = frameIndex(frameID);
                                 if (index < 0) return false;
@@ -1269,7 +1297,7 @@ namespace tachyon
                             switch (event.type)
                             {
                                 case EventType::MouseDown:
-                                    if (!event.state.LeftPressed()) return false;
+                                    if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
                                     guiStateManager.Interaction().SetFocusID(canvasID);
                                     press(event, edges);
                                     return true;
@@ -1381,7 +1409,7 @@ namespace tachyon
                         {
                             case EventType::MouseDown:
                             {
-                                if (!event.state.LeftPressed()) return false;
+                                if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
                                 guiStateManager.Interaction().SetFocusID(canvasID);
                                 const auto lanes = view.wireOverrides.find(wireKey);
                                 drag = WireSegmentDrag{
@@ -1553,7 +1581,7 @@ namespace tachyon
                     {
                         case EventType::MouseDown:
                         {
-                            if (!event.state.LeftPressed()) return false;
+                            if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
 
                             if (view.nodeDoubleClick.IsDoubleClick(outerID) && !view.nodes[n].reroute)
                             {

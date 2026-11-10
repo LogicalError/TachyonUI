@@ -93,6 +93,8 @@ tachyon::Result<void> HeadlessGUIApp::Initialize(const InitializeOptions& option
     // Visual-state transitions depend on the clock; disable them so tests see
     // settled visuals (re-enable with transitionManager.SetEnabled(true)).
     transitionManager.SetEnabled(false);
+    // The wheel zooms, as on Windows and Linux, so tests act the same on every platform.
+    SetWheelMode(tachyon::WheelMode::Zoom);
 
     // Parse the CSS theme and register every widget style (no graphics context).
     if (!options.loadStyles)
@@ -342,6 +344,11 @@ void HeadlessGUIApp::InjectMouseMove(tachyon::int2 pos, tachyon::MouseButtons bu
 void HeadlessGUIApp::InjectPen(const tachyon::PenState& pen)
 {
     inputManager->OnPen(m_rootWindowID, pen);
+}
+
+void HeadlessGUIApp::InjectPinch(float scale, tachyon::KeyModifier mods)
+{
+    inputManager->OnPinch(m_rootWindowID, scale, mods);
 }
 
 void HeadlessGUIApp::InjectMouseDown(tachyon::int2 pos, tachyon::MouseButtons button,

@@ -65,6 +65,8 @@ list(APPEND GUI_CORE_TEST_FILES
   drag_drop_test.cpp
   file_drop_test.cpp
   pen_input_test.cpp
+  plot_test.cpp
+  navigation_test.cpp
   harness_self_test.cpp
   frame_pipeline_test.cpp
   frame_clock_test.cpp

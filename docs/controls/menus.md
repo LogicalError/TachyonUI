@@ -278,4 +278,4 @@ EndContextMenu();
 
 ---
 
-[Previous: Curves](curves.md) | [Controls](../controls.md) | [Next: Tooltips and message dialogs](tooltips-and-dialogs.md)
+[Previous: Plots](plots.md) | [Controls](../controls.md) | [Next: Tooltips and message dialogs](tooltips-and-dialogs.md)

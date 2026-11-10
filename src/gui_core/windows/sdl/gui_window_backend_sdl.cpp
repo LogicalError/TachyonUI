@@ -1234,6 +1234,14 @@ namespace tachyon
                         inputHandler->OnMouseScroll(windowID, tachyon::int2{ int32_t(x), int32_t(y) }, tachyon::float2{ mx, my }, ToKeyModifier(SDL_GetModState()));
                         break;
                     }
+                    case SDL_EVENT_PINCH_UPDATE:
+                    {
+                        if (SDL_GetWindowFromID(event->pinch.windowID) != (SDL_Window*)data)
+                            break;
+                        if (tachyon::IPlatformInputHandler* inputHandler = GetInputContext(data))
+                            inputHandler->OnPinch(GetWindowID(data), event->pinch.scale, ToKeyModifier(SDL_GetModState()));
+                        break;
+                    }
                     case SDL_EVENT_WINDOW_EXPOSED:
                     {
                         if (SDL_GetWindowFromID(event->window.windowID) != (SDL_Window*)data)
@@ -1950,6 +1958,7 @@ namespace tachyon
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP:    return SDL_GetWindowFromID(event->button.windowID);
             case SDL_EVENT_MOUSE_WHEEL:        return SDL_GetWindowFromID(event->wheel.windowID);
+            case SDL_EVENT_PINCH_UPDATE:       return SDL_GetWindowFromID(event->pinch.windowID);
             case SDL_EVENT_PEN_PROXIMITY_IN:
             case SDL_EVENT_PEN_PROXIMITY_OUT:
             case SDL_EVENT_PEN_DOWN:

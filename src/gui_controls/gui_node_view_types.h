@@ -394,7 +394,8 @@ namespace tachyon
         /// Internal: each frame's box as last drawn, by index (node.pos space): a collapsed one's
         /// node-like box, an empty rect for one hidden in a collapsed frame.
         std::vector<tachyon::IntRect> frameBoxes;
-        tachyon::PointerDrag pan;                 ///< internal: a right press; once dragged, not a click
+        tachyon::PointerDrag pan;                 ///< internal: the view dragged (middle, or Alt + left); once dragged, not a click
+        tachyon::PointerDrag menuPress;           ///< internal: a right press; its release without a drag opens a menu
         tachyon::float3x2    panStart {};         ///< internal: the transform before it; put back by Escape
         tachyon::PointerDrag nodeDrag;            ///< internal: the press on a node; moves the selection once dragged
         tachyon::PointerDrag minimapDrag;         ///< internal: a press in the minimap

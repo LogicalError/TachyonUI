@@ -144,8 +144,12 @@ For example, keys at 1 and 2 going from 0 to 1, with `postWrap = Loop`: at 2.25 
   - a drag selects the keys in a box; Shift adds them, Ctrl toggles them
   - a double click adds a key to the active channel, on its curve when near it
   - a right click: Add key, Frame all
-- The wheel zooms round the pointer: Shift along the time only, Ctrl the values only.
-- A drag with the middle button pans.
+- The wheel zooms round the pointer, or scrolls the view, as `SetWheelMode` says; a pinch
+  zooms.
+  - Alt while zooming: along the time only.
+  - Shift + the wheel scrolls along the time.
+- A drag with the middle button (or Alt + left) drags the view.
+- See Panning and zooming in [Common conventions](conventions.md).
 
 The key's menu:
 
@@ -219,4 +223,4 @@ The palette sets:
 
 ---
 
-[Previous: Color and gradient fields](color-and-gradient.md) | [Controls](../controls.md) | [Next: Menus](menus.md)
+[Previous: Color and gradient fields](color-and-gradient.md) | [Controls](../controls.md) | [Next: Plots](plots.md)
