@@ -804,6 +804,21 @@
     flex-shrink: 0;
 }
 
+/* The Sketch panel's pad: the strokes are drawn in its padding box. */
+.sketch-pad {
+    border-width: 1px;
+    border-color: var(--line-strong);
+    border-radius: var(--radius-md);
+    padding: 0px;
+    margin: 4px;
+    min-height: 200px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    background-color: var(--curve-plot);
+    overflow: hidden;
+    cursor: crosshair;
+}
+
 /* Text shadow and glow samples in the misc panel; the padding leaves the glow room. */
 .text-shadow-sample, .text-glow-sample {
     padding: 8px;

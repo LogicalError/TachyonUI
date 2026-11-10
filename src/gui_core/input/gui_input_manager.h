@@ -43,7 +43,12 @@ namespace tachyon
         void OnMouseScroll(tachyon::ID windowId, tachyon::int2 screenPos, tachyon::float2 scrollOffset, KeyModifier modifiers) override;
         void OnTextComposition(tachyon::ID, std::string_view, int32_t) override {} // the text editor shows it
         void OnFileDrop(tachyon::ID windowId, tachyon::int2 screenPos, FileDropAction action, std::string_view data) override;
+        void OnPen(tachyon::ID /*windowId*/, const PenState& pen) override { m_pen = pen; }
         ///@}
+
+        /// The pen as of the latest OnPen; a default PenState while the mouse has the pointer.
+        /// A pressure change without a move reaches elements with the next pointer event.
+        const PenState& GetPen() const { return m_pen; }
 
         /// The drag from another application over one of the app's windows now; null when there's none.
         const FileDrag* GetFileDrag() const { return m_fileDrag.windowID != ID::Invalid() ? &m_fileDrag : nullptr; }
@@ -108,10 +113,15 @@ namespace tachyon
 
         void DispatchSingleEvent(RecordedInputEvent& recorded, GUIStateManager& guiStateManager, ElementStorage& storage);
 
+        /// The pen a pointer event carries with `buttons` held: the pen's own, or for the mouse,
+        /// pressure 1 while a button is held.
+        PenState PointerPen(MouseButtons buttons) const;
+
         /// Persists across frames for computing per-event position deltas and button states.
         int2          m_prevScreenPos  {};
         MouseButtons  m_currentButtons { MouseButtons::None };
         ID            m_prevFocusedID  = ID::Invalid();
+        PenState      m_pen;
 
         std::vector<RecordedInputEvent> m_recordedEvents;
         std::vector<EventHandler>       m_globalHandlers;

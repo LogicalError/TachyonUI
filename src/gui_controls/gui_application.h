@@ -446,6 +446,8 @@ namespace tachyon
         void InjectMouseScroll(ID windowID, int2 pos, float2 offset, KeyModifier mods = KeyModifier::None);
         /// The pointer left the window.
         void InjectMouseLeave(ID windowID);
+        /// The pen, before the pointer events it goes with; a default PenState is the mouse.
+        void InjectPen(ID windowID, const PenState& pen);
         /// Gives the window keyboard focus, or takes it away.
         void InjectFocus(ID windowID, bool focused);
         /// A key event; typed text goes through InjectText.

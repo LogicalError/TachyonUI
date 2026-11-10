@@ -452,6 +452,11 @@ namespace tachyon
         inputBroadcaster.OnMouseScroll(windowID, InjectedScreenPos(windowID, pos), offset, mods);
     }
 
+    void GUIApplication::InjectPen(ID windowID, const PenState& pen)
+    {
+        inputBroadcaster.OnPen(windowID, pen);
+    }
+
     void GUIApplication::InjectMouseLeave(ID windowID)
     {
         if (windowManager->GetWindowHandle(windowID) == windowBackend->GetWindowUnderMouse())

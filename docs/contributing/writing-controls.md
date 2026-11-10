@@ -799,6 +799,52 @@ app.SetFileDropHandler([&](const FileDrop& drop) {
 
 No built-in control accepts drops.
 
+## Pen input
+
+A pen on a tablet or pen display drives the pointer as a mouse does.
+
+- Its tip is the left button: a control that works with the mouse works with a pen.
+- Every pointer event (moves, presses, releases, the wheel) also carries the pen in
+  `event.state.pen`, a `PenState`.
+  - `IsPen()`: a pen moved the pointer, not the mouse
+  - `eraser`: the pen's eraser end is the one in use
+  - `inProximity`, `touching`: near the tablet, and on it
+  - `buttons`: the barrel buttons held, bit 0 the first
+
+  ```cpp
+  if (event.state.IsPen() && event.state.pen.eraser)
+      EraseAt(event.LocalCursor(storage));
+  ```
+
+- The pen's values, as far as the pen has them (others stay 0):
+
+  | Field | Range |
+  | --- | --- |
+  | `pressure` | 0 to 1 |
+  | `tilt` | degrees, -90 to 90: x leaning right, y leaning down |
+  | `rotation` | the barrel's, degrees -180 to 180, clockwise, 0 up |
+  | `distance` | to the tablet, 0 to 1 |
+  | `slider` | a finger wheel or slider (an airbrush pen), 0 to 1 |
+  | `tangentialPressure` | from squeezing the barrel, 0 to 1 |
+
+- With the mouse, `pressure` is 1 while a button is held and 0 otherwise, so a brush works
+  with either:
+
+  ```cpp
+  const float width = minWidth + (maxWidth - minWidth) * event.state.pen.pressure;
+  ```
+
+- A pressure change with no move reaches the handler with the next pointer event.
+  `InputManager::GetPen()` has the latest values at any time.
+- Tests give the pen with `InjectPen(pen)` before the pointer events it goes with; a default
+  `PenState` hands the pointer back to the mouse.
+
+  ```cpp
+  app.InjectPen(PenState{ .pointer = PointerType::Pen, .inProximity = true, .touching = true,
+                          .pressure = 0.6f });
+  app.InjectMouseDown(at);
+  ```
+
 ## Decide for each control
 
 Do it the same way as similar controls:

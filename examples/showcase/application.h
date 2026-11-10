@@ -2,6 +2,7 @@
 
 #include <gui_controls/gui_application.h>
 #include <gui_controls/controls_toolbar_dock.h>
+#include <gui_core/input/gui_pointer_drag.h>
 
 #include <filesystem>
 #include <memory>
@@ -118,7 +119,7 @@ namespace tachyon
         StyleRef profilerHeaderStyleRef, profilerRecordStyleRef, profilerPauseStyleRef, profilerMsStyleRef, profilerFpsStyleRef;
         StyleRef profilerPctCellStyleRef, profilerPctTrackStyleRef, profilerPctFillStyleRef, profilerPctTextStyleRef;
         StyleRef logDetailPaneStyleRef, logDetailTextStyleRef;
-        StyleRef shortcutCategoryStyleRef, shortcutTableStyleRef, shortcutCellStyleRef, settingsTitleStyleRef, settingsScrollStyleRef;
+        StyleRef shortcutCategoryStyleRef, shortcutTableStyleRef, shortcutCellStyleRef, settingsTitleStyleRef, settingsScrollStyleRef, sketchPadStyleRef;
         StyleRef dataTableCellStyleRef, dataTableNumberStyleRef;
         StyleRef textShadowSampleStyleRef, textGlowSampleStyleRef;
         StyleRef iconVAlignDemoStyleRefs[4][3];   // [IconSide L/R/T/B][top/mid/bot]
@@ -150,6 +151,14 @@ namespace tachyon
         // The timeline editor demo: its tracks, set up the first time it's drawn.
         TimelineView     animation;
         bool             animationSeeded = false;
+        // The sketch pad: strokes drawn with the pen (or the mouse), wider where it pressed harder.
+        struct SketchPoint  { float2 pos; float width; };
+        struct SketchStroke { std::vector<SketchPoint> points; };
+        std::vector<SketchStroke> sketchStrokes;
+        PointerDrag      sketchDrag;
+        PenState         sketchPen;          // as of the latest pointer event over the pad
+        float2           sketchCursor {};    // where the pointer is on the pad
+        bool             sketchHovered = false;
 
         // ---- Showcase state ----
         // State used by the showcase panels for testing and prototyping GUI features.
@@ -587,6 +596,8 @@ namespace tachyon
         // while the panel is the active tab.
         void RenderReorderablePanel();
         void RenderTimelinePanel();
+        void RenderSketchPanel();
+        void EraseSketchAt(float2 at, float radius);
         /// The Appearance page's theme editor: the theme's colors and sizes by category, each
         /// change kept for that theme (settings_theme.cpp).
         void RenderThemeEditor();
