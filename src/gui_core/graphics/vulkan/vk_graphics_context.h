@@ -20,6 +20,17 @@ namespace tachyon
 
 namespace tachyon::vulkan
 {
+    /// What GraphicsContext::RenderScene's `record` gets on Vulkan (cast its `native` to it):
+    /// the frame's command buffer with dynamic rendering begun on the scene's color and depth
+    /// images, the viewport and scissor set to all of it. Draw, and leave the rendering open.
+    struct VulkanSceneRender
+    {
+        VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+        VkFormat        colorFormat = VK_FORMAT_UNDEFINED;
+        VkFormat        depthFormat = VK_FORMAT_UNDEFINED;
+        VkExtent2D      extent {};
+    };
+
     /// @addtogroup graphics_vulkan
     /// @{
 
@@ -181,12 +192,41 @@ namespace tachyon::vulkan
         /// Library internal: records a window's primitives into `cmd`.
         bool RenderWindowFrame(VkCommandBuffer cmd, FrameData& currentFrame, tachyon::ID windowID, tachyon::uint2 extent);
 
+        /// GraphicsContext::RenderScene: a color image (R8G8B8A8_UNORM) and a depth one
+        /// (D32_SFLOAT); `record` gets a VulkanSceneRender.
+        tachyon::ImageIndex RenderScene(tachyon::ID key, tachyon::ID window, tachyon::uint2 size, tachyon::color4f clear,
+                                        std::function<void(const void* native)> record) override;
+        /// Library internal: records the scenes asked for in `window` this frame into `cmd`,
+        /// before the window's own rendering begins.
+        void RecordScenes(VkCommandBuffer cmd, tachyon::ID window);
+
         float GetLastFrameBuildSeconds() const override { return m_frameBuildSeconds; }
         /// Library internal: window contexts report their CPU seconds between presents
         /// (GetLastFrameBuildSeconds); the last one in a frame wins.
         void  SetFrameBuildSeconds(float seconds) { m_frameBuildSeconds = seconds; }
 
     private:
+        /// A scene's images: what RenderScene keeps for a key.
+        struct SceneTarget
+        {
+            VulkanImage*        color = nullptr;
+            VulkanImage*        depth = nullptr;
+            tachyon::ImageIndex index = tachyon::ImageIndex::Invalid;
+            VkExtent2D          extent {};
+            uint64_t            lastFrame = 0;   ///< the frame it was last asked for
+        };
+        struct SceneRequest
+        {
+            tachyon::ID      key;
+            tachyon::ID      window;
+            tachyon::color4f clear;
+            std::function<void(const void* native)> record;
+        };
+        std::unordered_map<tachyon::ID, SceneTarget> m_scenes;
+        std::vector<SceneRequest>                    m_sceneRequests;
+        uint64_t                                     m_sceneFrame = 0;
+        void ReleaseScene(SceneTarget& scene);
+
         tachyon::StyleManager*    m_lastStyleManager{ nullptr };
         tachyon::GradientManager* m_lastGradientManager{ nullptr };
         float                 m_lastElapsedTimeSecs{ 0.0f };

@@ -363,7 +363,7 @@ void VulkanWindowContext::FlushWindowContext()
 }
 
 
-VkCommandBuffer VulkanWindowContext::BeginWindowFrame(FrameData& currentFrame)
+VkCommandBuffer VulkanWindowContext::BeginWindowFrame(FrameData& currentFrame, VulkanGraphicsContext* graphics)
 {
     WaitForFence(deviceContext->device, currentFrame.renderFence);
     currentFrame.flushQueue.flush();
@@ -412,6 +412,9 @@ VkCommandBuffer VulkanWindowContext::BeginWindowFrame(FrameData& currentFrame)
 
     // Queued texture uploads (e.g. glyph atlas pages) run ahead of this frame's drawing.
     deviceContext->RecordPendingUploads(state.commandBuffer);
+    // So do the app's scenes this window shows (a 3D viewport), outside its rendering.
+    if (graphics != nullptr)
+        graphics->RecordScenes(state.commandBuffer, id);
 
     tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
@@ -892,7 +895,7 @@ void VulkanWindowContext::RecordFrame(tachyon::GraphicsContext* graphicsContext,
             VkCommandBuffer cmd;
             {
                 TACHYON_PROFILE_SCOPE("BeginWindowFrame");
-                cmd = BeginWindowFrame(*currentFrame);
+                cmd = BeginWindowFrame(*currentFrame, vulkanGraphicsContext);
             }
             // A zero-extent frame still begins the command buffer, so it must still be ended.
             if (cmd != nullptr)

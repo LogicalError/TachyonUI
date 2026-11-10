@@ -106,7 +106,9 @@ namespace tachyon
                 sideItems[(int)tgtSide].push_back(id);
             };
                         
-            app.BeginRootWindow();
+            // A root that stretches the dock, as an app's panel does: overlay sides take no
+            // room, so the dock would be no higher than nothing in the default root.
+            app.BeginRootWindow({ 1920, 1080 }, ElementFlags::None, app.theme.mainWindowStyleRef);
             RenderToolbarDock(app, dock, items, cb, [this]()
                 {
                     // Growing central area so the sides get their full width/height.
@@ -245,6 +247,138 @@ namespace tachyon
             EXPECT_GT(rp->rect.w, 0) << "side " << i << " has zero width";
             EXPECT_GT(rp->rect.h, 0) << "side " << i << " has zero height";
         }
+    }
+
+    // With overlay, the content fills the dock and the sides float over its edges, each
+    // as big as its toolbars, the left and right ones under the top one.
+    TEST_F(ToolbarDockTest, OverlaySidesFloatOverTheContent)
+    {
+        dock.overlay = true;
+        const ID contentID = app.idManager.CreateStaticID();
+        auto frame = [&] {
+            app.Frame([&] {
+                std::vector<ToolbarItem> items[kToolbarSideCount];
+                for (int s = 0; s < kToolbarSideCount; ++s)
+                    for (ID id : sideItems[s])
+                        items[s].push_back(ToolbarItem{ .id = id, .debugName = "item", .renderBody = [this] {
+                            app.Button("Item", [] {}, LayoutOverride{}.Size(40, 24)); } });
+                app.BeginRootWindow({ 1920, 1080 }, ElementFlags::None, app.theme.mainWindowStyleRef);
+                RenderToolbarDock(app, dock, items, ToolbarDockCallbacks{}, [&] {
+                    app.BeginVertical(contentID, LayoutOverride{}.FlexGrow(1));
+                    app.EndVertical();
+                });
+                app.EndRootWindow();
+            });
+        };
+        frame();
+        frame();
+        auto rectOf = [&](ID id) {
+            const auto* rp = app.elementStorage.GetElementRectPtr(app.elementStorage.FindElementRefByID(id));
+            return rp ? rp->rect : IntRect{};
+        };
+        const IntRect whole = rectOf(dock.dockContainerID);
+        ASSERT_GT(whole.h, 200) << "the dock fills the window";
+        const IntRect content = rectOf(contentID);
+        EXPECT_EQ(content.w, whole.w) << "the content takes all of the dock";
+        EXPECT_EQ(content.h, whole.h);
+        const IntRect top = rectOf(dock.groupIDs[(int)ToolbarSide::Top]);
+        const IntRect left = rectOf(dock.groupIDs[(int)ToolbarSide::Left]);
+        const IntRect right = rectOf(dock.groupIDs[(int)ToolbarSide::Right]);
+        const IntRect bottom = rectOf(dock.groupIDs[(int)ToolbarSide::Bottom]);
+        EXPECT_EQ(top.position, whole.position) << "the top side at the top left";
+        EXPECT_LT(top.w, whole.w) << "as wide as its toolbars, not the dock";
+        EXPECT_EQ(left.x, whole.x);
+        EXPECT_EQ(left.y, whole.y + top.h) << "under the top side";
+        EXPECT_EQ(right.x + right.w, whole.x + whole.w) << "against the right edge";
+        EXPECT_EQ(right.y, whole.y + top.h);
+        EXPECT_EQ(bottom.y + bottom.h, whole.y + whole.h) << "against the bottom";
+        EXPECT_EQ(bottom.x, whole.x);
+    }
+
+    // With overlay, a toolbar dropped on an empty side shows there, its full size.
+    TEST_F(ToolbarDockTest, OverlayDropOnAnEmptySideKeepsTheToolbar)
+    {
+        dock.overlay = true;
+        sideItems[(int)ToolbarSide::Right].clear();
+        app.Frame([&] { EmitDock(); });
+        app.Frame([&] { EmitDock(); });
+        auto rectOf = [&](ID id) {
+            const auto* rp = app.elementStorage.GetElementRectPtr(app.elementStorage.FindElementRefByID(id));
+            return rp ? rp->rect : IntRect{};
+        };
+        const int2 thumb = ThumbCenter(itemTop0);
+        const IntRect whole = dock.cachedDockRect;
+        const int2 rightEdge{ whole.x + whole.w - 5, whole.y + whole.h / 2 };   // the empty side's edge strip
+        app.InjectMouseMove(thumb);
+        app.InjectMouseDown(thumb);
+        app.Frame([&] { EmitDock(); });
+        app.InjectMouseMove(rightEdge, MouseButtons::Left);
+        app.Frame([&] { EmitDock(); });
+        app.InjectMouseUp(rightEdge);
+        app.Frame([&] { EmitDock(); });
+        app.Frame([&] { EmitDock(); });
+        ASSERT_EQ(crossDrops.size(), 1u);
+        const IntRect item = rectOf(itemTop0);
+        const IntRect side = rectOf(dock.groupIDs[(int)ToolbarSide::Right]);
+        EXPECT_GT(item.w, 0) << "it shows";
+        EXPECT_GT(item.h, 0);
+        EXPECT_GE(item.x, side.x) << "on the right side";
+        EXPECT_LE(item.x + item.w, whole.x + whole.w);
+    }
+
+    // With overlay, a side takes a drop anywhere along its edge, past its toolbars too.
+    TEST_F(ToolbarDockTest, OverlayTakesADropAlongTheWholeEdge)
+    {
+        dock.overlay = true;
+        app.Frame([&] { EmitDock(); });
+        app.Frame([&] { EmitDock(); });
+        const IntRect whole = dock.cachedDockRect;
+        const IntRect top = dock.cachedSideRects[(int)ToolbarSide::Top];
+        const int2 topRight{ whole.x + whole.w - 200, whole.y + top.h / 2 };
+        ASSERT_GT(topRight.x, top.x + top.w) << "past the top side's toolbars";
+        const int2 thumb = ThumbCenter(itemLeft0);
+        app.InjectMouseMove(thumb);
+        app.InjectMouseDown(thumb);
+        app.Frame([&] { EmitDock(); });
+        app.InjectMouseMove(topRight, MouseButtons::Left);
+        app.Frame([&] { EmitDock(); });
+        app.InjectMouseUp(topRight);
+        app.Frame([&] { EmitDock(); });
+        ASSERT_EQ(crossDrops.size(), 1u);
+        EXPECT_EQ(crossDrops[0].srcSide, ToolbarSide::Left);
+        EXPECT_EQ(crossDrops[0].tgtSide, ToolbarSide::Top);
+    }
+
+    // With overlay, a side runs its whole edge while its own toolbar is dragged along it,
+    // so the toolbar isn't cut off; it's as big as its toolbars again after.
+    TEST_F(ToolbarDockTest, OverlayGivesADraggedToolbarRoomAlongItsSide)
+    {
+        dock.overlay = true;
+        sideItems[(int)ToolbarSide::Left] = { itemLeft0, itemRight0 };
+        sideItems[(int)ToolbarSide::Right].clear();
+        app.Frame([&] { EmitDock(); });
+        app.Frame([&] { EmitDock(); });
+        auto leftRect = [&] {
+            const auto* rp = app.elementStorage.GetElementRectPtr(app.elementStorage.FindElementRefByID(dock.groupIDs[(int)ToolbarSide::Left]));
+            return rp ? rp->rect : IntRect{};
+        };
+        const IntRect resting = leftRect();
+        const IntRect whole = dock.cachedDockRect;
+        ASSERT_LT(resting.h, whole.h / 2) << "as tall as its toolbars";
+        const int2 thumb = ThumbCenter(itemLeft0);
+        app.InjectMouseMove(thumb);
+        app.InjectMouseDown(thumb);
+        app.Frame([&] { EmitDock(); });
+        app.InjectMouseMove({ thumb.x, thumb.y + 300 }, MouseButtons::Left);
+        app.Frame([&] { EmitDock(); });
+        app.InjectMouseMove({ thumb.x, thumb.y + 310 }, MouseButtons::Left);
+        app.Frame([&] { EmitDock(); });   // the drag began in the frame before
+        const IntRect dragging = leftRect();
+        EXPECT_EQ(dragging.y + dragging.h, whole.y + whole.h) << "down to the bottom while dragged";
+        app.InjectMouseUp({ thumb.x, thumb.y + 300 });
+        app.Frame([&] { EmitDock(); });
+        app.Frame([&] { EmitDock(); });
+        EXPECT_LT(leftRect().h, whole.h / 2) << "back to its toolbars' size";
     }
 
     // -------------------------------------------------------------------------

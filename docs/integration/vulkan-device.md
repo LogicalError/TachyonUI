@@ -142,6 +142,28 @@ std::lock_guard lock(hostQueueMutex);
 vkQueueSubmit2(hostGraphicsQueue, 1, &submit, fence);
 ```
 
+## Drawing a scene into a viewport
+
+The `Viewport` control is the easy way to show a 3D scene: it keeps the image, and calls
+your `onRender` with a command buffer, the rendering already begun. You only draw. See
+[Viewport](../controls/viewport.md).
+
+- Under it is `GraphicsContext::RenderScene(key, window, size, clear, record)`, for a
+  control of your own that shows a scene.
+  - It returns the image's `ImageIndex`, to draw with `RenderQuad` or `Image`.
+  - `record` gets a `VulkanSceneRender`, in the window's frame before the UI.
+  - The image is kept for `key` while it's asked for every frame.
+
+```cpp
+const ImageIndex scene = graphicsContext->RenderScene(myID, windowRegistry.GetCurrentWindowID(),
+    { 640, 360 }, { 0, 0, 0, 1 }, [this](const void* native) {
+        const auto& vk = *static_cast<const tachyon::vulkan::VulkanSceneRender*>(native);
+        DrawScene(vk.commandBuffer);
+    });
+```
+
+The rest of this page is for an image you render yourself, on your own schedule.
+
 ## Showing a host-rendered image
 
 To show an image you render, such as a 3D viewport, register its view and sampler. You get

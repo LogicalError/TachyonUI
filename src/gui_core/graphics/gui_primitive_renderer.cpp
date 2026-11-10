@@ -182,7 +182,7 @@ void PrimitiveRenderTarget::SetTransform(tachyon::float3x2 transform)
 
 void PrimitiveRenderTarget::RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, uint32_t fromStyleIndex, uint32_t toStyleIndex, float blendT, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex, tachyon::IntRect snappedPx)
 {
-    Append(PrimitiveKind::Box, Box
+    Append(PrimitiveKind::Box, BoxPrimitive
                     {
                         .transform0   = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
                         .transform1   = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 0 },
@@ -203,7 +203,7 @@ void PrimitiveRenderTarget::RenderBox(tachyon::IntRect rect, tachyon::IntRect cl
 
 void PrimitiveRenderTarget::RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex, tachyon::TriangleEdges hardEdges)
 {
-    Append(PrimitiveKind::Triangle, Triangle
+    Append(PrimitiveKind::Triangle, TrianglePrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
                         .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 0 },
@@ -223,7 +223,7 @@ void PrimitiveRenderTarget::RenderTriangle(tachyon::float2 p0, tachyon::float2 p
 
 void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex, const tachyon::UVRect& uv, const tachyon::ImageDisplay& display)
 {
-    Append(PrimitiveKind::Quad, Quad
+    Append(PrimitiveKind::Quad, QuadPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
                         .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 0 },
@@ -244,7 +244,7 @@ void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect c
 void PrimitiveRenderTarget::RenderShadow(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, int blur)
 {
     blur = std::clamp(blur, 0, 4096);
-    Append(PrimitiveKind::Quad, Quad
+    Append(PrimitiveKind::Quad, QuadPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
                         .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 0 },
@@ -263,7 +263,7 @@ void PrimitiveRenderTarget::RenderOccluder(tachyon::IntRect rect, tachyon::IntRe
 {
     if (rect.w <= 0 || rect.h <= 0 || currentOpacity < 1.0f)
         return;
-    Append(PrimitiveKind::Occluder, Occluder
+    Append(PrimitiveKind::Occluder, OccluderPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
                         .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 0 },
@@ -276,7 +276,7 @@ void PrimitiveRenderTarget::RenderOccluder(tachyon::IntRect rect, tachyon::IntRe
 
 void PrimitiveRenderTarget::RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int bpp, int mode, tachyon::VisualColorStyleIndex textColorIndex, tachyon::IntRect clipRect, tachyon::ImageIndex textureIndex, float shadowBlur)
 {
-    Append(PrimitiveKind::Glyph, Glyph
+    Append(PrimitiveKind::Glyph, GlyphPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
                         .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 0 },
@@ -301,7 +301,7 @@ void PrimitiveRenderTarget::RenderGlyph(tachyon::float2 pos, tachyon::float2 siz
 void PrimitiveRenderTarget::RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachyon::int2 p2, tachyon::int2 p3,
                                        tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle)
 {
-    Append(PrimitiveKind::Line, Line
+    Append(PrimitiveKind::Line, LinePrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
                         .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 0 },
@@ -324,7 +324,7 @@ void PrimitiveRenderTarget::RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachy
 
 void PrimitiveRenderTarget::RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle)
 {
-    Append(PrimitiveKind::Circle, Circle
+    Append(PrimitiveKind::Circle, CirclePrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
                         .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 0 },
@@ -344,7 +344,7 @@ void PrimitiveRenderTarget::RenderCircle(tachyon::float2 center, float radius, t
 
 void PrimitiveRenderTarget::RenderDot(tachyon::float2 pos, tachyon::IntRect clipRect, float size, tachyon::color4f color)
 {
-    Append(PrimitiveKind::Dot, Dot
+    Append(PrimitiveKind::Dot, DotPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
                         .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 0 },
@@ -401,10 +401,10 @@ void PrimitiveRenderTarget::AppendCaptured(const PrimitiveRenderTarget& src, tac
     // Every primitive kind starts with the same header, so the translate is
     // kind-agnostic: transform0 @0 (z @8), transform1 @16 (z @24), then the
     // screen-space clip rect clipMin @32 / clipMax @40 (two int2s).
-    static_assert(offsetof(Box, transform0) == 0,  "primitive header layout changed");
-    static_assert(offsetof(Box, transform1) == 16, "primitive header layout changed");
-    static_assert(offsetof(Box, clipMin)    == 32, "primitive header layout changed");
-    static_assert(offsetof(Box, clipMax)    == 40, "primitive header layout changed");
+    static_assert(offsetof(BoxPrimitive, transform0) == 0,  "primitive header layout changed");
+    static_assert(offsetof(BoxPrimitive, transform1) == 16, "primitive header layout changed");
+    static_assert(offsetof(BoxPrimitive, clipMin)    == 32, "primitive header layout changed");
+    static_assert(offsetof(BoxPrimitive, clipMax)    == 40, "primitive header layout changed");
 
     FinishRenderPass(); // close any open pass in the destination first
 
@@ -438,7 +438,7 @@ void PrimitiveRenderTarget::AppendCaptured(const PrimitiveRenderTarget& src, tac
                 clip[2] += delta.x; clip[3] += delta.y; // clipMax
                 if (pass.kind == PrimitiveKind::Box)
                 {
-                    Box* box = reinterpret_cast<Box*>(hdr);
+                    BoxPrimitive* box = reinterpret_cast<BoxPrimitive*>(hdr);
                     if (box->snappedPx[2] > box->snappedPx[0] || box->snappedPx[3] > box->snappedPx[1])
                     {
                         box->snappedPx[0] = SaturateInt16(box->snappedPx[0] + delta.x);

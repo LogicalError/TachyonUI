@@ -139,4 +139,4 @@ The palette sets:
 
 ---
 
-[Previous: Curves](curves.md) | [Controls](../controls.md) | [Next: Menus](menus.md)
+[Previous: Curves](curves.md) | [Controls](../controls.md) | [Next: Viewport](viewport.md)

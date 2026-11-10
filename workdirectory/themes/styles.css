@@ -6932,6 +6932,57 @@
     background-color: transparent;
     flex-shrink: 0;
 }
+/* ---- viewport: the app's 3D view, its tools and axes ----------------------------- */
+/* The scene fills the box; the tools float at its top left, the axes at its top right. */
+.viewport {
+    border-width: 0px;
+    margin: 0px;
+    padding: 0px;
+    min-width: 120px;
+    min-height: 120px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    background-color: var(--curve-plot);
+    overflow: hidden;
+}
+.viewport-tools {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 2px;
+    padding: 3px;
+    margin: 0px;
+    border-width: 1px;
+    border-color: var(--line-subtle);
+    border-radius: var(--radius-lg);
+    background-color: var(--bg-panel);
+}
+.viewport-tool {
+    -tachyon-state-layer: content;
+    -tachyon-icon-size: 14px;
+    width: 24px;
+    height: 24px;
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    border-radius: var(--radius-md);
+    background-color: transparent;
+    color: var(--text-2);
+    -tachyon-icon-color: var(--text-2);
+    cursor: pointer;
+}
+.viewport-tool:hover { background-color: var(--bg-hover); -tachyon-icon-color: var(--text-1); }
+.viewport-tool::highlight(selected) { background-color: var(--accent); -tachyon-icon-color: var(--on-accent); }
+.viewport-axis-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--on-accent);
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    text-wrap: nowrap;
+}
+
 .plot {
     border-width: 1px;
     border-radius: var(--radius-md);
@@ -8189,6 +8240,7 @@
 .title-bar-button:focus-visible, .title-bar-close-button:focus-visible,
 .color-picker-square:focus-visible, .gradient-editor-bar:focus-visible, .timeline-lanes:focus-visible,
 .box-sides-link:focus-visible, .curve-channel:focus-visible, .curve-plot:focus-visible,
-.plot-channel:focus-visible, .plot:focus-visible {
+.plot-channel:focus-visible, .plot:focus-visible,
+.viewport:focus-visible, .viewport-tool:focus-visible {
     box-shadow: inset 0 0 0 1px var(--accent);
 }

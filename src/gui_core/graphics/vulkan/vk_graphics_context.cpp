@@ -13,6 +13,7 @@
 #include <gui_core/graphics/gui_graphics_context.h>
 
 #include <gui_core/graphics/vulkan/vk_types.h>
+#include <gui_core/graphics/vulkan/vk_defaults.h>
 #include <gui_core/graphics/vulkan/vk_descriptors.h>
 #include <gui_core/graphics/gui_primitive_renderer.h>
 #include <gui_core/graphics/vulkan/vk_rhi.h>
@@ -232,6 +233,128 @@ VulkanGraphicsContext::VulkanGraphicsContext()
     guiRenderer = new tachyon::PrimitiveRenderer();
 }
 
+// ---- Scenes the app draws (RenderScene) ----------------------------------------
+
+namespace
+{
+    constexpr VkFormat kSceneColorFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    constexpr uint64_t kSceneKeepFrames  = 4;   // a scene not asked for this long goes
+
+    void SceneBarrier(VkCommandBuffer cmd, VkImage image, VkImageAspectFlags aspect, VkImageLayout from, VkImageLayout to,
+                      VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess)
+    {
+        VkImageMemoryBarrier2 barrier{ .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+        barrier.srcStageMask  = srcStage;
+        barrier.srcAccessMask = srcAccess;
+        barrier.dstStageMask  = dstStage;
+        barrier.dstAccessMask = dstAccess;
+        barrier.oldLayout = from;
+        barrier.newLayout = to;
+        barrier.image = image;
+        barrier.subresourceRange = { aspect, 0, 1, 0, 1 };
+        VkDependencyInfo dependency{ .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+        dependency.imageMemoryBarrierCount = 1;
+        dependency.pImageMemoryBarriers = &barrier;
+        vkCmdPipelineBarrier2(cmd, &dependency);
+    }
+}
+
+void VulkanGraphicsContext::ReleaseScene(SceneTarget& scene)
+{
+    if (scene.index != tachyon::ImageIndex::Invalid)
+        UnregisterImage(scene.index);
+    if (scene.color != nullptr)
+        deviceContext.DestroyImageAtEnd(scene.color, tachyon::DeviceScope::Frame);
+    if (scene.depth != nullptr)
+        deviceContext.DestroyImageAtEnd(scene.depth, tachyon::DeviceScope::Frame);
+    scene = {};
+}
+
+tachyon::ImageIndex VulkanGraphicsContext::RenderScene(tachyon::ID key, tachyon::ID window, tachyon::uint2 size, tachyon::color4f clear,
+                                                       std::function<void(const void* native)> record)
+{
+    if (!deviceContext.initialized || size.x == 0 || size.y == 0 || vulkanImageSet == nullptr)
+        return tachyon::ImageIndex::Invalid;
+    SceneTarget& scene = m_scenes[key];
+    scene.lastFrame = m_sceneFrame;
+    if (scene.color == nullptr || scene.extent.width != size.x || scene.extent.height != size.y)
+    {
+        // Made again at the new size; the old images go once the frames using them are done.
+        ReleaseScene(scene);
+        scene.lastFrame = m_sceneFrame;
+        const VkExtent3D extent{ size.x, size.y, 1 };
+        scene.color = new VulkanImage(deviceContext.CreateImage(extent, kSceneColorFormat,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, deviceContext.defaultSamplerLinearClampToEdge));
+        scene.depth = new VulkanImage(deviceContext.CreateImage(extent, depthImageFormat,
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, deviceContext.defaultSamplerNearest));
+        scene.extent = { size.x, size.y };
+        scene.index = RegisterImage(scene.color);
+    }
+    m_sceneRequests.push_back({ key, window, clear, std::move(record) });
+    return scene.index;
+}
+
+void VulkanGraphicsContext::RecordScenes(VkCommandBuffer cmd, tachyon::ID window)
+{
+    for (const SceneRequest& request : m_sceneRequests)
+    {
+        if (request.window != window)
+            continue;
+        const auto it = m_scenes.find(request.key);
+        if (it == m_scenes.end() || it->second.color == nullptr)
+            continue;
+        const SceneTarget& scene = it->second;
+
+        // Earlier frames' sampling of the image finishes before it's drawn again; its old
+        // contents are cleared anyway.
+        SceneBarrier(cmd, scene.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 0,
+                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+        SceneBarrier(cmd, scene.depth->image, VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+                     VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, 0,
+                     VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT);
+
+        VkClearValue clearColor{ .color = { { request.clear.r, request.clear.g, request.clear.b, request.clear.a } } };
+        VkClearValue clearDepth{ .depthStencil = { 1.0f, 0 } };
+        VkRenderingAttachmentInfo color{ .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+        color.imageView   = scene.color->imageView;
+        color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        color.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        color.storeOp     = VK_ATTACHMENT_STORE_OP_STORE;
+        color.clearValue  = clearColor;
+        VkRenderingAttachmentInfo depth{ .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO };
+        depth.imageView   = scene.depth->imageView;
+        depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        depth.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depth.storeOp     = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depth.clearValue  = clearDepth;
+        VkRenderingInfo rendering{ .sType = VK_STRUCTURE_TYPE_RENDERING_INFO };
+        rendering.renderArea = { { 0, 0 }, scene.extent };
+        rendering.layerCount = 1;
+        rendering.colorAttachmentCount = 1;
+        rendering.pColorAttachments = &color;
+        rendering.pDepthAttachment = &depth;
+        vkCmdBeginRendering(cmd, &rendering);
+
+        const VkViewport viewport{ 0.0f, 0.0f, float(scene.extent.width), float(scene.extent.height), 0.0f, 1.0f };
+        const VkRect2D scissor{ { 0, 0 }, scene.extent };
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+        if (request.record)
+        {
+            const VulkanSceneRender native{ cmd, kSceneColorFormat, depthImageFormat, scene.extent };
+            request.record(&native);
+        }
+        vkCmdEndRendering(cmd);
+
+        // Ready for the UI's fragment shader in this frame.
+        SceneBarrier(cmd, scene.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                     VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+    }
+}
+
 tachyon::Buffer* VulkanGraphicsContext::PrepareVisualColorStylesBuffer(tachyon::StyleManager& styleManager, tachyon::GradientManager& gradientManager)
 {
     // Styles store LOGICAL gradient pages (stable); the shader samples PHYSICAL
@@ -370,6 +493,11 @@ tachyon::Result<void> VulkanGraphicsContext::RecreateDevice(tachyon::IWindowBack
     // Everything made on the lost device goes; the image objects, their indices and the
     // renderer stay. Destroying is allowed on a lost device.
     deviceContext.WaitIdle();
+    // The scenes' images are made again when they're next asked for.
+    m_sceneRequests.clear();
+    for (auto& [key, scene] : m_scenes)
+        ReleaseScene(scene);
+    m_scenes.clear();
     deviceContext.frameWaits.Clear();
     static_cast<tachyon::PrimitiveRenderer*>(guiRenderer)->ReleaseAllTargets();
     if (colorStylesMesh != nullptr)
@@ -396,6 +524,12 @@ tachyon::Result<void> VulkanGraphicsContext::RecreateDevice(tachyon::IWindowBack
 
 void VulkanGraphicsContext::Cleanup()
 {
+    m_sceneRequests.clear();
+    if (deviceContext.initialized)
+        for (auto& [key, scene] : m_scenes)
+            ReleaseScene(scene);
+    m_scenes.clear();
+
     if (colorStylesMesh != nullptr)
     {
         deviceContext.DestroyVisualColorStylesAtEnd(colorStylesMesh, tachyon::DeviceScope::Application);
@@ -582,6 +716,20 @@ void VulkanGraphicsContext::BeginFrame()
     deviceContext.AdvanceFrameAndFlushDeletions();
     deviceContext.frameWaits.NextFrame();
     guiRenderer->Reset();
+
+    // Last frame's scenes are recorded; the ones no longer asked for go.
+    m_sceneRequests.clear();
+    ++m_sceneFrame;
+    for (auto it = m_scenes.begin(); it != m_scenes.end();)
+    {
+        if (m_sceneFrame - it->second.lastFrame > kSceneKeepFrames)
+        {
+            ReleaseScene(it->second);
+            it = m_scenes.erase(it);
+        }
+        else
+            ++it;
+    }
 }
 
 VkSurfaceKHR tachyon::vulkan::VulkanDeviceContext::CreateSurface(tachyon::OSWindowHandle windowHandle)

@@ -278,4 +278,4 @@ EndContextMenu();
 
 ---
 
-[Previous: Plots](plots.md) | [Controls](../controls.md) | [Next: Tooltips and message dialogs](tooltips-and-dialogs.md)
+[Previous: Viewport](viewport.md) | [Controls](../controls.md) | [Next: Tooltips and message dialogs](tooltips-and-dialogs.md)

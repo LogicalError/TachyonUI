@@ -67,6 +67,7 @@
 #include <gui_controls/gui_progress_types.h>
 #include <gui_controls/gui_curve_types.h>
 #include <gui_controls/gui_plot_types.h>
+#include <gui_controls/gui_viewport_types.h>
 #include <gui_controls/gui_timeline_types.h>
 #include <gui_controls/controls_toolbar_dock.h>
 #include <gui_core/gui_result.h>
@@ -831,6 +832,20 @@ namespace tachyon
         bool        Plot(ID id, PlotView& view, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
         inline bool Plot(       PlotView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Plot(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
+
+        /// A 3D view: the app's scene, drawn by `view.onRender` into an image the library keeps
+        /// at the view's size, a camera the mouse moves round it, the move, rotate and scale
+        /// gizmos over the selection, the tools down the left and the axes at the top right.
+        /// True on the frame after a gizmo's drag changed the selection.
+        ///
+        ///     ViewportView scene;   // a member
+        ///     scene.onRender = [this](const ViewportRenderContext& ctx) { DrawScene(ctx); };
+        ///     scene.onClick  = [this](const Ray& ray, KeyModifier) { Pick(ray); };
+        ///     if (Viewport(idManager.AllocateDynamicID("scene"), scene, LayoutOverride{}.FlexGrow(1)))
+        ///         MoveSelected(scene.selection);
+        bool        Viewport(ID id, ViewportView& view, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline bool Viewport(       ViewportView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Viewport(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
 
         ///@}
 

@@ -173,6 +173,8 @@ the curve and timeline editors, a plot) all do it the same way:
     node, key or handle too, without moving it.
   - The right button doesn't drag; a right click opens a menu.
   - Escape during the drag puts the view back.
+  - A 3D [Viewport](viewport.md) differs: Alt + left orbits there, Alt + Ctrl + left pans
+    without a middle button, and the right button looks round.
 - **The wheel**, and a trackpad's two-finger scroll, does what `SetWheelMode` says:
 
   | `WheelMode` | The wheel | Shift + wheel | Ctrl + wheel |

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <gui_core/gui_base_types.h>
+#include <gui_core/gui_id.h>
 #include <gui_core/gui_result.h>
 
 #include <gui_core/graphics/gui_image.h>
@@ -10,6 +11,7 @@
 
 #include <gui_core/windows/gui_window_backend.h>     // OSWindowHandle (used in pure-virtual signatures)
 
+#include <functional>
 #include <source_location>
 #include <span>
 #include <string_view>
@@ -127,6 +129,14 @@ namespace tachyon
         virtual ImageIndex RegisterImage(Image* image) = 0;
         /// Frees the index for reuse; the image stays (DestroyImageAtEnd destroys it).
         virtual void UnregisterImage(ImageIndex index) = 0;
+
+        /// An image the app draws a scene into (a 3D viewport), `size` pixels with a depth
+        /// buffer, kept for `key` while it's asked for every frame and made again when the size
+        /// changes. `record` draws it, in `window`'s frame before the UI: it gets the backend's
+        /// recording state (Vulkan: a VulkanSceneRender), the image cleared to `clear` and the
+        /// rendering begun. Call it while the UI is built. Invalid when the backend can't.
+        virtual ImageIndex RenderScene(ID /*key*/, ID /*window*/, uint2 /*size*/, color4f /*clear*/,
+                                       std::function<void(const void* native)> /*record*/) { return ImageIndex::Invalid; }
 
         /// Uploads the styles and gradient pages for this frame's draws, after the UI build and
         /// before the window contexts record. `elapsedTimeSecs`: the frame clock's time, for

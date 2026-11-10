@@ -4,6 +4,8 @@
 #include <gui_controls/controls_toolbar_dock.h>
 #include <gui_core/input/gui_pointer_drag.h>
 
+#include "scene_renderer.h"
+
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -103,8 +105,6 @@ namespace tachyon
 		ViewMode        viewMode         = ViewMode::Default;   // View mode toolbar buttons toggle these flags
         CommandMode     nodeViewMode = CommandMode::Default;   // the node view's shortcuts; copied into each NodeView's commandMode
         // The transform tool the left toolbar picks (the showcase's own, not a library mode).
-        enum class Tool { Select, Move, Rotate, Scale };
-        Tool            tool = Tool::Select;
 
         std::vector<StyleRef> boxStyleRefs;
         StyleRef borderTestStyleRef;
@@ -151,6 +151,11 @@ namespace tachyon
         // The timeline editor demo: its tracks, set up the first time it's drawn.
         TimelineView     animation;
         bool             animationSeeded = false;
+        // The Viewport panel's scene: its shapes, the view onto them, and what draws them.
+        std::vector<SceneObject> sceneObjects;
+        int              sceneSelected = -1;
+        ViewportView     scene;
+        SceneRenderer    sceneRenderer;
         // The sketch pad: strokes drawn with the pen (or the mouse), wider where it pressed harder.
         struct SketchPoint  { float2 pos; float width; };
         struct SketchStroke { std::vector<SketchPoint> points; };
@@ -646,6 +651,10 @@ namespace tachyon
         void RenderTreeTablePanel();
         void RenderSplitScrollPanel();
         void RenderViewportPanel();
+        /// The Viewport panel's shapes and the view onto them, the first time it's shown.
+        void SeedScene();
+        /// Picks scene object `index` (-1: none) for the viewport's gizmo.
+        void SelectSceneObject(int index);
         
         void EnableProfilerTreePanel();
         void RenderProfilerTreePanel();

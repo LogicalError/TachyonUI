@@ -1131,12 +1131,12 @@ namespace
         }
 
         // The occluders the window drew last frame, inside out from their rects.
-        std::vector<tachyon::Occluder> Occluders()
+        std::vector<tachyon::OccluderPrimitive> Occluders()
         {
             auto* renderer = static_cast<tachyon::PrimitiveRenderer*>(guiRenderer);
             const auto& bytes = renderer->GetTarget(windowID).streams[size_t(tachyon::PrimitiveKind::Occluder)].cpu;
-            std::vector<tachyon::Occluder> out(bytes.size() / sizeof(tachyon::Occluder));
-            std::memcpy(out.data(), bytes.data(), out.size() * sizeof(tachyon::Occluder));
+            std::vector<tachyon::OccluderPrimitive> out(bytes.size() / sizeof(tachyon::OccluderPrimitive));
+            std::memcpy(out.data(), bytes.data(), out.size() * sizeof(tachyon::OccluderPrimitive));
             return out;
         }
     };
@@ -1159,7 +1159,7 @@ namespace
         for (int i = 0; i < 2; ++i)
         {
             const tachyon::IntRect r = app.rects[i];
-            const tachyon::Occluder& o = occluders[size_t(i)];
+            const tachyon::OccluderPrimitive& o = occluders[size_t(i)];
             EXPECT_GE(o.pos.x, r.x + 4 + 6) << "inside the border and the corner radius";
             EXPECT_GE(o.pos.y, r.y + 4 + 6);
             EXPECT_LE(o.pos.x + o.size.x, r.x + r.w - 10);

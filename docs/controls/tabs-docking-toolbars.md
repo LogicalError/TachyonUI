@@ -578,6 +578,16 @@ RenderToolbarDock(*this, dockState, sides, callbacks, [this] { ViewportPanel(); 
   - `onCrossSideDrop`: a toolbar was dropped on another side
   - `onTearOff`: a toolbar was released outside every side
 - Show the torn-off toolbars with `EmitFloatingToolbarWindows(floatingItems, &options)`.
+- `state.overlay = true` floats the toolbars over the content's edges instead of beside it,
+  for a 3D view that should fill the panel.
+  - Each side is as big as its toolbars; the rest of the content still takes the mouse.
+  - A side takes a drop anywhere along its edge, and runs the whole edge while one of its
+    own toolbars is dragged along it.
+
+  ```cpp
+  dockState.overlay = true;
+  RenderToolbarDock(*this, dockState, sides, callbacks, [this] { Viewport(scene); });
+  ```
 - The CSS classes:
   - `toolbar-side-horz` and `toolbar-side-vert`
   - `toolbar-item-horz` and `toolbar-item-vert`

@@ -319,14 +319,16 @@ namespace tachyon
                 .id = idManager.CreateStaticID(), .debugName = "Tools",
                 .renderBody = [this]()
                 {
-                    Toggle(tool == Tool::Select, showcase.toolSelectIcon, [this](bool value) { if (value) tool = Tool::Select; });
-					SetTooltip("Select mode");
-                    Toggle(tool == Tool::Move,   showcase.toolMoveIcon,   [this](bool value) { if (value) tool = Tool::Move;   });
-					SetTooltip("Move mode");
-                    Toggle(tool == Tool::Rotate, showcase.toolRotateIcon, [this](bool value) { if (value) tool = Tool::Rotate; });
-					SetTooltip("Rotate mode");
-                    Toggle(tool == Tool::Scale,  showcase.toolScaleIcon,  [this](bool value) { if (value) tool = Tool::Scale;  });
-					SetTooltip("Scale mode");
+                    // The viewport's tool; Q, W, E and R over the view set it too.
+                    ViewportTool& tool = scene.tool;
+                    Toggle(tool == ViewportTool::Select, showcase.toolSelectIcon, [&tool](bool value) { if (value) tool = ViewportTool::Select; });
+					SetTooltip("Select mode (Q)");
+                    Toggle(tool == ViewportTool::Move,   showcase.toolMoveIcon,   [&tool](bool value) { if (value) tool = ViewportTool::Move;   });
+					SetTooltip("Move mode (W)");
+                    Toggle(tool == ViewportTool::Rotate, showcase.toolRotateIcon, [&tool](bool value) { if (value) tool = ViewportTool::Rotate; });
+					SetTooltip("Rotate mode (E)");
+                    Toggle(tool == ViewportTool::Scale,  showcase.toolScaleIcon,  [&tool](bool value) { if (value) tool = ViewportTool::Scale;  });
+					SetTooltip("Scale mode (R)");
                 }
             });
 

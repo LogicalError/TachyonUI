@@ -139,7 +139,7 @@ namespace tachyon::vulkan
         void CreateDrawDepthImages(VulkanImage& drawImage, VulkanImage& depthImage, VkFormat colorFormat);
         void DestroyDrawDepthImages(VulkanImage& drawImage, VulkanImage& depthImage);
 
-        VkCommandBuffer BeginWindowFrame(FrameData& currentFrame);
+        VkCommandBuffer BeginWindowFrame(FrameData& currentFrame, VulkanGraphicsContext* graphics = nullptr);
         void EndWindowFrame(FrameData& currentFrame);
 
         void PerformReadback(const VulkanImage& drawImage);
