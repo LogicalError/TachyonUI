@@ -79,8 +79,8 @@ void main()
         vec2  P2 = (P1 + P3) * 0.5;
         float t1, t2;
 
-        float d1 = abs(sdBezier(uv, P0, P1, P2, t1));
-        float d2 = abs(sdBezier(uv, P2, P3, P4, t2));
+        float d1 = sdBezierExact(uv, P0, P1, P2, t1);
+        float d2 = sdBezierExact(uv, P2, P3, P4, t2);
 
         float totalLen1 = arcLengthEstimate(P0, P1, P2, 1.0);
         float totalLen2 = arcLengthEstimate(P2, P3, P4, 1.0);

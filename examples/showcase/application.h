@@ -197,6 +197,10 @@ namespace tachyon
                 g.AddStop(tachyon::color4f{ 3.0f, 2.6f, 2.0f, 1.0f }, 0.9f);   // brighter than white
                 return g;
             }();
+            // CurveField demos: a falloff, and a color's red, green, blue and alpha curves.
+            tachyon::CurveView demoCurve;
+            tachyon::CurveView demoColorCurves;
+            bool               curvesSeeded = false;
             int listSelected = 0;
 
             // ListView
@@ -592,6 +596,8 @@ namespace tachyon
         void RenderThemePicker();
         /// The timeline editor demo's tracks, keys, sound and events, and its callbacks.
         void SeedAnimation();
+        /// The Inspector's curves: a falloff, and a color's channels; their edits on the undo history.
+        void SeedCurves();
         void RenderHierarchyPanel(HierarchyPanel& panel);
         void RenderNodeViewPanel();
         /// A reroute (NodeModel::reroute) in `color`, unwired, its dot on the grid point

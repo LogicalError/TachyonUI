@@ -31,7 +31,7 @@ namespace tachyon
                 for (ID* id : { &buttonID, &toggleID, &checkboxID, &switchID, &textID, &numberID,
                                 &sliderFieldID, &intSliderFieldID, &sliderID, &colorID, &gradientID, &listID, &disabledID,
                                 &toolbarButtonID, &toolbarToggleID, &toolbarMenuID, &breadcrumbID, &typedID,
-                                &listViewID, &tableID, &dropdownID, &timelineID, &editorID, &edgesID, &cornersID, &shadowID })
+                                &listViewID, &tableID, &dropdownID, &timelineID, &editorID, &edgesID, &cornersID, &shadowID, &curveID })
                     *id = app.idManager.CreateStaticID();
                 tableColumns.push_back({
                     .column = { .header = "Name", .initialWidth = 120, .minWidth = 60, .maxWidth = 300 },
@@ -77,6 +77,7 @@ namespace tachyon
                     app.EdgesField(edgesID, edges);
                     app.CornersField(cornersID, corners);
                     app.ShadowField(shadowID, shadow);
+                    app.CurveField(curveID, curve, LayoutOverride::FixedWidth(120));
                     app.BeginDisabled();
                     app.Button(disabledID, "Disabled", [] {});
                     app.EndDisabled();
@@ -114,7 +115,7 @@ namespace tachyon
                     { toolbarToggleID, "toolbar Toggle" }, { toolbarMenuID, "toolbar BeginMenu" }, { breadcrumbID, "Breadcrumb" },
                     { typedID, "TypedField" }, { listViewID, "ListView" }, { tableID, "VirtualTable" }, { dropdownID, "Dropdown" },
                     { timelineID, "Timeline" }, { editorID, "TimelineEditor" }, { edgesID, "EdgesField" },
-                    { cornersID, "CornersField" }, { shadowID, "ShadowField" } };
+                    { cornersID, "CornersField" }, { shadowID, "ShadowField" }, { curveID, "CurveField" } };
                 const auto& storage = app.elementStorage;
                 std::string name = "an unnamed control";
                 for (ElementRef ref = storage.FindElementRefByID(id); ref.IsValid(); ref = storage.GetParentRef(ref))
@@ -132,7 +133,7 @@ namespace tachyon
             HeadlessGUIApp app;
             ID buttonID, toggleID, checkboxID, switchID, textID, numberID, sliderFieldID, intSliderFieldID,
                sliderID, colorID, gradientID, listID, disabledID, toolbarButtonID, toolbarToggleID, toolbarMenuID,
-               breadcrumbID, typedID, listViewID, tableID, dropdownID, timelineID, editorID, edgesID, cornersID, shadowID;
+               breadcrumbID, typedID, listViewID, tableID, dropdownID, timelineID, editorID, edgesID, cornersID, shadowID, curveID;
             TimelineState playback;
             TimelineView animation;
             bool toolbarToggle = false;
@@ -150,6 +151,7 @@ namespace tachyon
             BoxEdges   edges   = BoxEdges(1, 2, 3, 4);   // four sides of their own
             BoxCorners corners = BoxCorners(4);          // linked
             BoxShadow  shadow  { .y = 4, .blur = 12, .color = { 0, 0, 0, 90 } };
+            CurveView  curve;
         };
 
         TEST_F(KeyboardFocusTest, TabReachesEveryControlAndEachShowsTheFocus)
@@ -173,7 +175,7 @@ namespace tachyon
             const std::set<ID> reached(visited.begin(), visited.end());
             for (const ID id : { buttonID, toggleID, checkboxID, switchID, textID, numberID,
                                  sliderFieldID, intSliderFieldID, sliderID, toolbarButtonID, toolbarToggleID,
-                                 toolbarMenuID, typedID, listViewID, tableID, dropdownID })
+                                 toolbarMenuID, typedID, listViewID, tableID, dropdownID, curveID })
                 EXPECT_TRUE(reached.contains(id)) << "Tab skips a control: " << Describe(id);
             // The Timeline's buttons and scrubber: its six buttons and the scrubber.
             EXPECT_EQ(std::count_if(visited.begin(), visited.end(),

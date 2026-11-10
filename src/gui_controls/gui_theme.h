@@ -539,6 +539,15 @@ namespace tachyon
         StyleRef timelineFpsStyleRef {};            ///< the fps dropdown
         StyleRef timelineSnapStyleRef {};           ///< the Snap toggle; selected while snapping
         StyleRef boxSidesLinkStyleRef {};           ///< EdgesField / CornersField: the link toggle; selected while linked
+        StyleRef curveFieldStyleRef {};             ///< CurveField: the box the curve is drawn in
+        StyleRef curveWindowStyleRef {};            ///< its editor's window
+        StyleRef curveToolbarStyleRef {};           ///< the editor's rows over and under the plot
+        StyleRef curveChannelStyleRef {};           ///< a channel's chip; selected for the active one
+        StyleRef curvePlotStyleRef {};              ///< the plot; its padding holds the grid's labels
+        StyleRef curveLabelStyleRef {};             ///< drawn: a grid line's number
+        StyleRef curveReadoutStyleRef {};           ///< drawn: the selected key's time and value beside it
+        StyleRef curveBoxSelectStyleRef {};         ///< drawn: the box a drag on the plot selects with
+        StyleRef curvePresetStyleRef {};            ///< a preset's thumbnail button
         StyleRef timelineZoomStyleRef {};           ///< the zoom slider and its icons
         StyleRef timelineHeaderStyleRef {};         ///< the row over the track list and the ruler
         StyleRef timelineListHeaderStyleRef {};     ///< "Tracks", the filter and the add button
@@ -697,6 +706,7 @@ namespace tachyon
         IconID timelineAudioIcon    = IconID::Invalid; ///< TimelineEditor: an audio track
         IconID timelineEventsIcon   = IconID::Invalid; ///< TimelineEditor: an events track (a flag)
         IconID linkIcon             = IconID::Invalid; ///< EdgesField / CornersField: the sides are linked (a chain)
+        IconID curveFrameAllIcon    = IconID::Invalid; ///< CurveField's editor: show all the keys (four corners)
         IconID unlinkIcon           = IconID::Invalid; ///< and each is its own (a broken chain)
         ///@}
 
@@ -712,6 +722,13 @@ namespace tachyon
         /// summary key, and an audio clip's waveform.
         tachyon::VisualColorStyleIndex timelineKeyColor, timelineKeyEdgeColor, timelineKeySelectedColor,
                                        timelineKeySelectedEdgeColor, timelineSummaryKeyColor, timelineWaveColor;
+        /// A curve editor's: the plot's grid, its major lines and its lines at zero; a key's edge
+        /// (the plot's color); a selected key and its tangent handles.
+        tachyon::VisualColorStyleIndex curveGridColor, curveGridMajorColor, curveZeroColor, curveKeyEdgeColor,
+                                       curveSelectedKeyColor, curveHandleColor;
+        /// A channel's color by CurveChannelColor, and the same at 55% for the channels not
+        /// being edited.
+        tachyon::VisualColorStyleIndex curveChannelColors[5] {}, curveChannelFadedColors[5] {};
         tachyon::color4b               scrim {};              ///< dims a window under its modal dialog (fading in and out)
         /// --disabled-opacity: a disabled control, with all its parts, is drawn this opaque,
         /// unless its style sets an opacity for :disabled.

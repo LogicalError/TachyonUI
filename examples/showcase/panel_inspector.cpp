@@ -42,6 +42,48 @@ namespace tachyon
                            [this, panel] { EnableInspectorPanel(*panel); }, [this, panel] { DisableInspectorPanel(*panel); });
     }
 
+    void Application::SeedCurves()
+    {
+        if (showcase.curvesSeeded)
+            return;
+        showcase.curvesSeeded = true;
+        auto withIDs = [this](Curve curve) {
+            for (CurveKey& k : curve.keys)
+                k.stableID = idManager.CreateStaticID();
+            return curve;
+        };
+        auto onEdit = [this](CurveView* view, const char* what) {
+            return [this, view, what](const CurveEdit& edit) {
+                commandManager.History().Push({ .description = what,
+                    .undo = [view, edit] { ApplyCurveEdit(*view, edit, /*undo*/ true); },
+                    .redo = [view, edit] { ApplyCurveEdit(*view, edit, /*undo*/ false); } });
+                commandManager.History().EndMerge();
+            };
+        };
+
+        // A falloff: full at the center, easing out to nothing at the edge.
+        static constexpr float2 kFalloff[] = { { 0.0f, 1.0f }, { 0.35f, 0.85f }, { 1.0f, 0.0f } };
+        CurveView& falloff = showcase.demoCurve;
+        falloff.channels = { CurveChannel{ .name = "Falloff", .curve = withIDs(MakeCurve(kFalloff)) } };
+        falloff.channels[0].curve.keys.back().mode = CurveTangentMode::Flat;
+        UpdateCurveTangents(falloff.channels[0].curve);
+        falloff.clampValues = true;
+        falloff.onEdit = onEdit(&falloff, "Edit curve");
+
+        // A color's curves, as a Curves node has them: each straight, the red lifted a little.
+        CurveView& color = showcase.demoColorCurves;
+        const CurvePreset& linear = DefaultCurvePresets()[1];
+        const std::pair<const char*, CurveChannelColor> channels[] = {
+            { "R", CurveChannelColor::Red }, { "G", CurveChannelColor::Green }, { "B", CurveChannelColor::Blue },
+            { "A", CurveChannelColor::Alpha } };
+        for (const auto& [name, tint] : channels)
+            color.channels.push_back(CurveChannel{ .name = name, .color = tint, .curve = withIDs(linear.curve) });
+        static constexpr float2 kRed[] = { { 0.0f, 0.0f }, { 0.5f, 0.62f }, { 1.0f, 1.0f } };
+        color.channels[0].curve = withIDs(MakeCurve(kRed));
+        color.clampValues = true;
+        color.onEdit = onEdit(&color, "Edit color curves");
+    }
+
     void Application::EnableInspectorPanel(InspectorPanel& p)
     {
         p.inspectorRows.clear();
@@ -182,6 +224,9 @@ namespace tachyon
         add("Color",    [this]() { DragLabel("Color");    ColorField(showcase.demoColor);       });
         add("Gradient", [this]() { DragLabel("Gradient"); GradientField(showcase.demoGradient); });
         add("HDR gradient", [this]() { DragLabel("HDR gradient"); GradientField(showcase.demoGradientF); });
+        SeedCurves();
+        add("Curve", [this]() { DragLabel("Curve"); CurveField(showcase.demoCurve); });
+        add("Color curves", [this]() { DragLabel("Color curves"); CurveField(showcase.demoColorCurves); });
         add("Int2", [this]() { DragLabel("Int2"); Field(showcase.int2Value); });
         add("Int3", [this]() { DragLabel("Int3"); Field(showcase.int3Value); });
         add("Int4", [this]() { DragLabel("Int4"); Field(showcase.int4Value); });

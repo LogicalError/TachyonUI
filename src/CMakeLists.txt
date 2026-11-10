@@ -384,6 +384,9 @@ list(APPEND GUI_CONTROLS_FILES
 
   gui_controls/controls.cpp
   gui_controls/controls_box_fields.cpp
+  gui_controls/controls_curve.cpp
+  gui_controls/gui_curve_helpers.cpp
+  gui_controls/gui_curve_types.h
   gui_controls/controls_color_internal.h
   gui_controls/controls_color.cpp
   gui_controls/controls_message_box.cpp

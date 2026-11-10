@@ -117,4 +117,4 @@ if (GradientField(gradientMap))   // member: GradientF gradientMap
 
 ---
 
-[Previous: Sliders](sliders.md) | [Controls](../controls.md) | [Next: Menus](menus.md)
+[Previous: Sliders](sliders.md) | [Controls](../controls.md) | [Next: Curves](curves.md)
