@@ -13,6 +13,7 @@
 #endif
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <chrono>
 #include <fstream>
@@ -545,11 +546,21 @@ namespace tachyon
         m_styleFiles.assign(files.begin(), files.end());
     }
 
+    std::string GUIApplication::ThemePathKey(std::string_view themePath)
+    {
+        // A backslash separates folders on every platform here, as a path saved on Windows
+        // must still find its theme elsewhere.
+        std::string path(themePath);
+        std::replace(path.begin(), path.end(), '\\', '/');
+        return std::filesystem::path(path).lexically_normal().generic_string();
+    }
+
     void GUIApplication::RequestReloadTheme(std::string_view themePath, float fontScale)
     {
         // Callers (e.g. a dragged slider) may call this every frame; skip no-ops.
-        if (themePath == m_themePath && fontScale == m_globalFontScale) return;
-        m_themePath = std::string(themePath);
+        const std::string path = ThemePathKey(themePath);
+        if (path == m_themePath && fontScale == m_globalFontScale) return;
+        m_themePath = path;
         m_globalFontScale = fontScale;
         m_themeReloadPending = true;
     }
@@ -580,13 +591,13 @@ namespace tachyon
     ThemeVariableOverrides& GUIApplication::ThemeVariables()
     {
         // By the theme's path, written the same way however it was given.
-        return m_themeVariables[std::filesystem::path(m_themePath).lexically_normal().generic_string()];
+        return m_themeVariables[ThemePathKey(m_themePath)];
     }
 
     const ThemeVariableOverrides& GUIApplication::GetThemeVariables() const
     {
         static const ThemeVariableOverrides kNone;
-        const auto it = m_themeVariables.find(std::filesystem::path(m_themePath).lexically_normal().generic_string());
+        const auto it = m_themeVariables.find(ThemePathKey(m_themePath));
         return it != m_themeVariables.end() ? it->second : kNone;
     }
 
