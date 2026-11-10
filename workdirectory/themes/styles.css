@@ -6871,6 +6871,157 @@
     cursor: crosshair;
 }
 
+/* With fps set the frame ruler holds the times, so the plot has no labels under it. */
+.curve-plot-frames {
+    border-width: 0px;
+    margin: 0px;
+    padding: 10px 14px 10px 40px;
+    min-height: 160px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    background-color: var(--curve-plot);
+    overflow: hidden;
+    cursor: crosshair;
+}
+.curve-toolbar-label {
+    color: var(--text-3);
+    font-size: 11px;
+    padding: 0px 2px 0px 6px;
+    margin: 0px;
+    border-width: 0px;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    flex-shrink: 0;
+}
+
+/* The channel tree down the left of an animation curve editor. */
+.curve-tree {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    width: 238px;
+    padding: 6px 4px;
+    margin: 0px;
+    gap: 0px;
+    border-width: 0px 1px 0px 0px;
+    border-color: var(--line-subtle);
+    background-color: transparent;
+    flex-shrink: 0;
+    overflow: auto;
+}
+.curve-tree-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    height: 22px;
+    padding: 0px 8px 4px 8px;
+    margin: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+.curve-tree-group, .curve-tree-row, .curve-tree-row-hidden {
+    -tachyon-state-layer: content;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0px 8px;
+    margin: 0px;
+    border-width: 0px;
+    border-radius: var(--radius-md);
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    -tachyon-icon-size: 12px;
+    -tachyon-icon-color: var(--text-3);
+    text-wrap: nowrap;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.curve-tree-group:hover, .curve-tree-row:hover, .curve-tree-row-hidden:hover { background-color: var(--bg-hover); }
+.curve-tree-row::highlight(selected), .curve-tree-row-hidden::highlight(selected) { background-color: var(--accent-soft); color: var(--text-1); }
+.curve-tree-row-hidden { opacity: 0.55; }
+.curve-tree-swatch {
+    width: 10px;
+    height: 10px;
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+.curve-tree-name {
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+    -tachyon-icon-size: 12px;
+    -tachyon-icon-color: var(--text-3);
+    -tachyon-icon-text-gap: 6px;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+.curve-tree-value {
+    font-family: monospace;
+    font-size: 11px;
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-2);
+    text-wrap: nowrap;
+    flex-shrink: 0;
+}
+
+/* The frame ruler over the plot, and the playhead's frame in its pill. */
+.curve-ruler {
+    height: 24px;
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px 0px 1px 0px;
+    border-color: var(--line-subtle);
+    background-color: var(--dialog-header);
+    flex-shrink: 0;
+    overflow: hidden;
+    cursor: pointer;
+}
+.curve-ruler-label {
+    font-family: monospace;
+    font-size: 10.5px;
+    color: var(--text-3);
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    text-wrap: nowrap;
+}
+.curve-playhead {
+    font-family: monospace;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--on-accent);
+    background-color: var(--accent);
+    border-width: 0px;
+    border-radius: var(--radius-md);
+    padding: 1px 6px;
+    margin: 0px;
+    text-wrap: nowrap;
+}
+
 .curve-label, .plot-label {
     font-family: monospace;
     font-size: 10px;
@@ -8241,6 +8392,7 @@
 .color-picker-square:focus-visible, .gradient-editor-bar:focus-visible, .timeline-lanes:focus-visible,
 .box-sides-link:focus-visible, .curve-channel:focus-visible, .curve-plot:focus-visible,
 .plot-channel:focus-visible, .plot:focus-visible,
+.curve-plot-frames:focus-visible, .curve-tree-row:focus-visible, .curve-tree-row-hidden:focus-visible, .curve-tree-group:focus-visible,
 .viewport:focus-visible, .viewport-tool:focus-visible {
     box-shadow: inset 0 0 0 1px var(--accent);
 }

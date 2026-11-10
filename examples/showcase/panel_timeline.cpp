@@ -4,7 +4,8 @@
 #include <cmath>
 
 //
-// The Timeline panel: the timeline editor with tracks of keys, a sound and events.
+// The Timeline panel: the timeline editor with tracks of keys, a sound and events. The Curves
+// panel: the sphere's animation curves, on the timeline's playhead.
 //
 
 namespace tachyon
@@ -89,6 +90,7 @@ namespace tachyon
             animation.selectedTrack = track.stableID;
             CommitTimelineEdit(animation, AddTrackEdit(animation, std::move(track), at));
         };
+        SeedAnimationCurves();
         view.onTrackContextMenu = [this](int track)
         {
             MenuItem("Key at the playhead", [this, track] {
@@ -100,15 +102,54 @@ namespace tachyon
         };
     }
 
+    void Application::SeedAnimationCurves()
+    {
+        CurveView& view = animationCurves;
+        view.fps = animation.fps;
+        view.range = { 0.0f, animation.duration, -2.0f, 4.0f };
+        auto channel = [this](const char* path, const char* name, CurveChannelColor color, std::initializer_list<float2> points) {
+            CurveChannel c{ .name = name, .path = path, .color = color,
+                            .curve = MakeCurve(std::span<const float2>(points.begin(), points.size())) };
+            for (CurveKey& k : c.curve.keys)
+                k.stableID = idManager.CreateStaticID();
+            return c;
+        };
+        // The keys on the Timeline's Position, Rotation and Scale tracks, with values.
+        view.channels = {
+            channel("Sphere/Position", "X", CurveChannelColor::Red,   { { 0.0f, 0.0f }, { 1.0f, 1.5f }, { 2.5f, -1.0f }, { 4.0f, 0.5f }, { 6.0f, 0.0f } }),
+            channel("Sphere/Position", "Y", CurveChannelColor::Green, { { 0.0f, 0.0f }, { 1.0f, 2.0f }, { 2.5f, 0.0f }, { 4.0f, 1.2f }, { 6.0f, 0.0f } }),
+            channel("Sphere/Position", "Z", CurveChannelColor::Blue,  { { 0.0f, -1.0f }, { 2.5f, 0.5f }, { 6.0f, -1.0f } }),
+            channel("Sphere/Rotation", "Y", CurveChannelColor::Value, { { 0.0f, 0.0f }, { 3.0f, 1.8f }, { 6.0f, 3.6f } }),
+            channel("Sphere/Scale", "Uniform", CurveChannelColor::Alpha, { { 2.0f, 1.0f }, { 5.0f, 1.6f } }) };
+        // The rotation turns at an even rate; the scale pops.
+        for (CurveKey& k : view.channels[3].curve.keys)
+            k.interpolation = CurveInterpolation::Linear;
+        view.channels[4].curve.keys[0].interpolation = CurveInterpolation::Constant;
+        for (CurveChannel& c : view.channels)
+            UpdateCurveTangents(c.curve);
+
+        view.onEdit = [this](const CurveEdit& edit)
+        {
+            commandManager.History().Push({ .description = "Edit curves",
+                .undo = [this, edit] { ApplyCurveEdit(animationCurves, edit, /*undo*/ true); },
+                .redo = [this, edit] { ApplyCurveEdit(animationCurves, edit, /*undo*/ false); } });
+            commandManager.History().EndMerge();
+        };
+        // Scrubbing the ruler moves the timeline's playhead, as scrubbing the timeline's does.
+        view.onPlayheadChanged = [this](float time) { animation.playback.time = time; };
+    }
+
     void Application::RenderTimelinePanel()
     {
         // The editor, the whole panel: tracks of keys, a sound and events, played round the
-        // loop range.
-        if (!animationSeeded)
-            SeedAnimation();
-        AdvanceTimeline(animation.playback,
-                        TimelineOptions{ .duration = animation.duration, .fps = animation.fps, .loopRange = animation.loopRange },
-                        frameTime);
+        // loop range (in OnGUI).
         TimelineEditor(idManager.AllocateDynamicID("editor"), animation, LayoutOverride{}.FlexGrow(1));
+    }
+
+    void Application::RenderCurvesPanel()
+    {
+        // The curve editor, the whole panel, its playhead the timeline's.
+        animationCurves.playhead = animation.playback.time;
+        CurveEditor(idManager.AllocateDynamicID("curves"), animationCurves, LayoutOverride{}.FlexGrow(1));
     }
 }

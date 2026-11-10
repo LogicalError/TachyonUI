@@ -151,6 +151,8 @@ namespace tachyon
         // The timeline editor demo: its tracks, set up the first time it's drawn.
         TimelineView     animation;
         bool             animationSeeded = false;
+        /// The Curves panel: the animated sphere's curves, its playhead the timeline's.
+        CurveView        animationCurves;
         // The Viewport panel's scene: its shapes, the view onto them, and what draws them.
         std::vector<SceneObject> sceneObjects;
         int              sceneSelected = -1;
@@ -608,6 +610,7 @@ namespace tachyon
         // while the panel is the active tab.
         void RenderReorderablePanel();
         void RenderTimelinePanel();
+        void RenderCurvesPanel();
         void RenderSketchPanel();
         void EraseSketchAt(float2 at, float radius);
         /// The Appearance page's theme editor: the theme's colors and sizes by category, each
@@ -619,6 +622,8 @@ namespace tachyon
         void RenderThemePicker();
         /// The timeline editor demo's tracks, keys, sound and events, and its callbacks.
         void SeedAnimation();
+        /// The Curves panel's channels: the sphere's position, rotation and scale.
+        void SeedAnimationCurves();
         /// The Inspector's curves: a falloff, and a color's channels; their edits on the undo history.
         void SeedCurves();
         /// The Inspector's Levels plot: the demo image's histogram and black, gray and white handles.

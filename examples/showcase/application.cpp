@@ -1494,6 +1494,13 @@ namespace tachyon
             panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
             return id;
         }
+        if (title == "Curves")
+        {
+            // Its playhead moves while the timeline plays: never cached.
+            const ID id = CreatePanel(panels, name, theme.curveBezierIcon, [this] { RenderCurvesPanel(); });
+            panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
+            return id;
+        }
         if (title == "Timeline")
         {
             // The simulation's fill grows every frame, playing or not: never cached.
@@ -1555,7 +1562,7 @@ namespace tachyon
                     Split("RightPinned", 540,
                         Tabs({ "NodeView", "Viewport", "Settings" }),
                         Tabs({ "Profiler", "Inspector", "Reorderable", "Misc", "BoxTest", "TreeTable", "Table", "FrozenTable", "Sketch" }))),
-                Split("LeftPinned", 500, Tabs({ "Files" }), Tabs({ "Log", "Timeline" })),
+                Split("LeftPinned", 500, Tabs({ "Files" }), Tabs({ "Log", "Timeline", "Curves" })),
                 120, 160));
         presets.AddBuiltIn("Scene",
             Split("LeftPinned", 280,
@@ -1566,7 +1573,7 @@ namespace tachyon
         presets.AddBuiltIn("Graph", Split("RightPinned", 420, Tabs({ "NodeView" }), Tabs({ "Inspector" })));
         presets.AddBuiltIn("Tables", Split("RightPinned", 420, Tabs({ "Table", "TreeTable", "FrozenTable" }), Tabs({ "Inspector" })));
         presets.AddBuiltIn("Viewport", Tabs({ "Viewport" }));
-        presets.AddBuiltIn("Animation", Split("BottomPinned", 160, Tabs({ "Viewport" }), Tabs({ "Timeline" })));
+        presets.AddBuiltIn("Animation", Split("BottomPinned", 300, Tabs({ "Viewport" }), Tabs({ "Timeline", "Curves" })));
         // A file of these types opens with its layout (from the Files panel, or "+" for a level).
         presets.SetForFileType(".level", "Scene");
         presets.SetForFileType(".mat", "Graph");
@@ -1990,6 +1997,12 @@ namespace tachyon
     void Application::OnGUI()
     {
         ApplyPendingLayout();
+        // The animation plays whichever of its panels shows, Timeline or Curves.
+        if (!animationSeeded)
+            SeedAnimation();
+        AdvanceTimeline(animation.playback,
+                        TimelineOptions{ .duration = animation.duration, .fps = animation.fps, .loopRange = animation.loopRange },
+                        frameTime);
         auto&& sizeConstraints = LayoutOverride::FixedSize(1700, 900);
         
         {

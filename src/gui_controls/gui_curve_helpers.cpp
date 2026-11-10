@@ -17,22 +17,17 @@ namespace tachyon
 
         float Finite(float v, float fallback = 0.0f) { return std::isfinite(v) ? v : fallback; }
 
-        // Steps from `a` to its next key: a held value when either side is Constant.
-        bool IsStep(const CurveKey& a, const CurveKey& b)
-        {
-            return (a.mode == CurveTangentMode::Broken && a.outMode == CurveSideMode::Constant)
-                || (b.mode == CurveTangentMode::Broken && b.inMode == CurveSideMode::Constant);
-        }
-
-        // Between two keys, `time` inside them.
+        // Between two keys, `time` inside them, as `a`'s interpolation says.
         float EvaluateSegment(const CurveKey& a, const CurveKey& b, float time)
         {
             const float dt = b.time - a.time;
             if (!(dt > 0.0f))
                 return b.value;
-            if (IsStep(a, b))
+            if (a.interpolation == CurveInterpolation::Constant)
                 return a.value;
             const float s  = std::clamp((time - a.time) / dt, 0.0f, 1.0f);
+            if (a.interpolation == CurveInterpolation::Linear)
+                return a.value + (b.value - a.value) * s;
             const float s2 = s * s, s3 = s2 * s;
             const float h00 = 2.0f * s3 - 3.0f * s2 + 1.0f;
             const float h10 = s3 - 2.0f * s2 + s;
@@ -119,19 +114,18 @@ namespace tachyon
                 const float dt = other->time - k.time;
                 return dt != 0.0f ? (other->value - k.value) / dt : 0.0f;
             };
-            switch (k.mode)
+            switch (k.tangents)
             {
             case CurveTangentMode::Flat:
                 k.inSlope = k.outSlope = 0.0f;
                 break;
             case CurveTangentMode::Auto:
-            case CurveTangentMode::ClampedAuto:
             {
                 // Smooth through it: the slope between its neighbors. An end key is level.
                 float slope = 0.0f;
                 if (prev && next && next->time > prev->time)
                     slope = (next->value - prev->value) / (next->time - prev->time);
-                if (k.mode == CurveTangentMode::ClampedAuto && prev && next)
+                if (prev && next)
                 {
                     const float in = toward(prev), out = toward(next);
                     // A peak or a trough stays level; elsewhere no steeper than three times
@@ -147,14 +141,10 @@ namespace tachyon
                 k.inSlope = k.outSlope = slope;
                 break;
             }
-            case CurveTangentMode::FreeSmooth:
+            case CurveTangentMode::Aligned:
                 k.inSlope = k.outSlope;
                 break;
-            case CurveTangentMode::Broken:
-                if (k.inMode == CurveSideMode::Linear)   k.inSlope  = toward(prev);
-                if (k.outMode == CurveSideMode::Linear)  k.outSlope = toward(next);
-                if (k.inMode == CurveSideMode::Constant) k.inSlope  = 0.0f;
-                if (k.outMode == CurveSideMode::Constant) k.outSlope = 0.0f;
+            case CurveTangentMode::Free:
                 break;
             }
             k.inSlope  = Finite(k.inSlope);
@@ -162,11 +152,11 @@ namespace tachyon
         }
     }
 
-    Curve MakeCurve(std::span<const float2> points, CurveTangentMode mode)
+    Curve MakeCurve(std::span<const float2> points, CurveTangentMode mode, CurveInterpolation interpolation)
     {
         Curve curve;
         for (const float2 p : points)
-            curve.keys.push_back({ .time = p.x, .value = p.y, .mode = mode });
+            curve.keys.push_back({ .time = p.x, .value = p.y, .tangents = mode, .interpolation = interpolation });
         SortKeys(curve);
         UpdateCurveTangents(curve);
         return curve;
@@ -175,12 +165,11 @@ namespace tachyon
     std::span<const CurvePreset> DefaultCurvePresets()
     {
         // Over 0 to 1 both ways.
-        auto key = [](float time, float value, float slope, CurveTangentMode mode = CurveTangentMode::FreeSmooth) {
-            return CurveKey{ .time = time, .value = value, .inSlope = slope, .outSlope = slope, .mode = mode };
+        auto key = [](float time, float value, float slope, CurveTangentMode mode = CurveTangentMode::Aligned) {
+            return CurveKey{ .time = time, .value = value, .inSlope = slope, .outSlope = slope, .tangents = mode };
         };
         auto linear = [](float time, float value) {
-            return CurveKey{ .time = time, .value = value, .mode = CurveTangentMode::Broken,
-                             .inMode = CurveSideMode::Linear, .outMode = CurveSideMode::Linear };
+            return CurveKey{ .time = time, .value = value, .interpolation = CurveInterpolation::Linear };
         };
         auto make = [](std::vector<CurveKey> keys) {
             Curve curve{ .keys = std::move(keys) };
@@ -223,12 +212,17 @@ namespace tachyon
             view.onEdit(edit);
     }
 
+    float SnapToFrame(const CurveView& view, float time)
+    {
+        return view.fps > 0.0f ? std::round(time * view.fps) / view.fps : time;
+    }
+
     CurveEdit AddCurveKeyEdit(const CurveView& view, int channel, float time, float value, ID keyID)
     {
         if (!ValidChannel(view, channel) || !view.channels[size_t(channel)].visible)
             return {};
         const CurveRange& r = view.range;
-        time = std::clamp(Finite(time), std::min(r.timeMin, r.timeMax), std::max(r.timeMin, r.timeMax));
+        time = std::clamp(SnapToFrame(view, Finite(time)), std::min(r.timeMin, r.timeMax), std::max(r.timeMin, r.timeMax));
         value = Finite(value);
         if (view.clampValues)
             value = std::clamp(value, std::min(r.valueMin, r.valueMax), std::max(r.valueMin, r.valueMax));
@@ -253,31 +247,20 @@ namespace tachyon
 
     CurveEdit SetCurveTangentModeEdit(const CurveView& view, CurveTangentMode mode)
     {
+        // Free and Aligned keep the slopes the key has; the others work theirs out.
         return ChangeEach(view, [&view, mode](int, Curve& curve) {
             for (CurveKey& k : curve.keys)
-            {
-                if (!view.selectedKeys.contains(k.stableID))
-                    continue;
-                if (mode == CurveTangentMode::Broken && k.mode != CurveTangentMode::Broken)
-                    k.inMode = k.outMode = CurveSideMode::Free;   // broken where they were
-                k.mode = mode;
-            }
+                if (view.selectedKeys.contains(k.stableID))
+                    k.tangents = mode;
         });
     }
 
-    CurveEdit SetCurveSideModeEdit(const CurveView& view, CurveSideMode side, bool in, bool out)
+    CurveEdit SetCurveInterpolationEdit(const CurveView& view, CurveInterpolation interpolation)
     {
-        return ChangeEach(view, [&view, side, in, out](int, Curve& curve) {
+        return ChangeEach(view, [&view, interpolation](int, Curve& curve) {
             for (CurveKey& k : curve.keys)
-            {
-                if (!view.selectedKeys.contains(k.stableID))
-                    continue;
-                if (k.mode != CurveTangentMode::Broken)
-                    k.inMode = k.outMode = CurveSideMode::Free;
-                k.mode = CurveTangentMode::Broken;
-                if (in)  k.inMode  = side;
-                if (out) k.outMode = side;
-            }
+                if (view.selectedKeys.contains(k.stableID))
+                    k.interpolation = interpolation;
         });
     }
 

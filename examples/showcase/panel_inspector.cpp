@@ -65,7 +65,7 @@ namespace tachyon
         static constexpr float2 kFalloff[] = { { 0.0f, 1.0f }, { 0.35f, 0.85f }, { 1.0f, 0.0f } };
         CurveView& falloff = showcase.demoCurve;
         falloff.channels = { CurveChannel{ .name = "Falloff", .curve = withIDs(MakeCurve(kFalloff)) } };
-        falloff.channels[0].curve.keys.back().mode = CurveTangentMode::Flat;
+        falloff.channels[0].curve.keys.back().tangents = CurveTangentMode::Flat;
         UpdateCurveTangents(falloff.channels[0].curve);
         falloff.clampValues = true;
         falloff.onEdit = onEdit(&falloff, "Edit curve");

@@ -382,7 +382,8 @@ namespace tachyon
             EXPECT_GT(view.shown.valueMax, 1.0f);
         }
 
-        // A handle's drag sets the slope: both sides of a smooth key, one side of a broken one.
+        // A handle's drag sets the slope: both sides of a key (it turns Aligned), one side of a
+        // Free one.
         TEST_F(CurveFieldTest, DraggingAHandleSetsTheSlope)
         {
             Open();
@@ -391,18 +392,36 @@ namespace tachyon
             const int2 handle = HandleAt(1, true);
             Drag(handle, { handle.x, handle.y - 40 });
             const CurveKey& k = view.channels[0].curve.keys[1];
-            EXPECT_EQ(k.mode, CurveTangentMode::FreeSmooth);
+            EXPECT_EQ(k.tangents, CurveTangentMode::Aligned);
             EXPECT_GT(k.outSlope, 1.5f);
             EXPECT_EQ(k.inSlope, k.outSlope);
             ASSERT_EQ(edits.size(), 1u);
 
-            view.channels[0].curve.keys[1].mode = CurveTangentMode::Broken;
+            view.channels[0].curve.keys[1].tangents = CurveTangentMode::Free;
             const float out = k.outSlope;
             const int2 in = HandleAt(1, false);
             Drag(in, { in.x, in.y + 30 });
             EXPECT_EQ(view.channels[0].curve.keys[1].outSlope, out) << "the other side stays";
             EXPECT_NE(view.channels[0].curve.keys[1].inSlope, out);
-            EXPECT_EQ(view.channels[0].curve.keys[1].inMode, CurveSideMode::Free);
+            EXPECT_EQ(view.channels[0].curve.keys[1].tangents, CurveTangentMode::Free);
+        }
+
+        // Only a Bezier segment has handles: none leaving a Linear key, none arriving after a
+        // Constant one.
+        TEST_F(CurveFieldTest, NoHandlesOnStraightOrSteppedSides)
+        {
+            view.channels[0].curve.keys[1].interpolation = CurveInterpolation::Linear;
+            view.channels[0].curve.keys[0].interpolation = CurveInterpolation::Constant;
+            Open();
+            for (const bool out : { true, false })
+            {
+                app.ClickAt(KeyAt(1));
+                Frame();
+                ASSERT_TRUE(view.selectedKeys.contains(KeyID(1)));
+                const int2 handle = HandleAt(1, out);
+                Drag(handle, { handle.x, handle.y - 40 });
+                EXPECT_EQ(view.channels[0].curve.keys[1].tangents, CurveTangentMode::Auto) << (out ? "out" : "in");
+            }
         }
 
         // ---------------------------------------------------------------------
@@ -544,13 +563,17 @@ namespace tachyon
             EXPECT_EQ(view.menuKey, KeyID(1));
             EXPECT_EQ(view.selectedKeys, std::unordered_set<ID>{ KeyID(1) });
             ClickMenuItem("Flat");
-            EXPECT_EQ(view.channels[0].curve.keys[1].mode, CurveTangentMode::Flat);
+            EXPECT_EQ(view.channels[0].curve.keys[1].tangents, CurveTangentMode::Flat);
             EXPECT_EQ(view.channels[0].curve.keys[1].outSlope, 0.0f);
+
+            RightClick(key);
+            ClickMenuItem("Linear");
+            EXPECT_EQ(view.channels[0].curve.keys[1].interpolation, CurveInterpolation::Linear) << "to the next key, straight";
 
             RightClick(key);
             ClickMenuItem("Delete key");
             EXPECT_EQ(view.channels[0].curve.keys.size(), 2u);
-            EXPECT_EQ(edits.size(), 2u);
+            EXPECT_EQ(edits.size(), 3u);
         }
 
         // A right click on the empty plot: Add key, there.

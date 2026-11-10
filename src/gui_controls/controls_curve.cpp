@@ -78,10 +78,14 @@ namespace tachyon
             return {};
         }
 
-        // Whether a key shows a handle on a side: not on a Broken key's Linear or Constant side.
-        bool HasHandle(const CurveKey& k, bool out)
+        // Whether key `index` shows a handle on a side: only where a Bezier segment takes its
+        // slope, the one before it arriving and its own leaving.
+        bool HasHandle(const Curve& curve, size_t index, bool out)
         {
-            return k.mode != CurveTangentMode::Broken || (out ? k.outMode : k.inMode) == CurveSideMode::Free;
+            const auto& keys = curve.keys;
+            if (out)
+                return index + 1 < keys.size() && keys[index].interpolation == CurveInterpolation::Bezier;
+            return index > 0 && keys[index - 1].interpolation == CurveInterpolation::Bezier;
         }
 
         // The end of a key's handle on a side, `length` pixels from it along its slope.
@@ -112,7 +116,7 @@ namespace tachyon
                     if (!view.selectedKeys.contains(key.stableID))
                         continue;
                     for (const bool out : { true, false })
-                        if (HasHandle(key, out) && Distance(HandleEnd(plot, key, out, length), pos) <= reach)
+                        if (HasHandle(channel.curve, size_t(k), out) && Distance(HandleEnd(plot, key, out, length), pos) <= reach)
                             return { c, k, out };
                 }
             }
@@ -139,6 +143,9 @@ namespace tachyon
 
         // The selected keys moved by `dt` and `dv` from where they were in `before`, kept in the
         // range; in time order again.
+        // The frame `time` is on, as shown.
+        int64_t FrameOf(const CurveView& view, float time) { return int64_t(std::llround(double(time) * double(view.fps))); }
+
         void MoveSelected(CurveView& view, const std::vector<Curve>& before, float dt, float dv)
         {
             const CurveRange& r = view.range;
@@ -154,7 +161,7 @@ namespace tachyon
                 {
                     if (!view.selectedKeys.contains(k.stableID))
                         continue;
-                    k.time = std::clamp(k.time + dt, tMin, tMax);
+                    k.time = std::clamp(SnapToFrame(view, k.time + dt), tMin, tMax);
                     k.value += dv;
                     if (view.clampValues)
                         k.value = std::clamp(k.value, vMin, vMax);
@@ -235,14 +242,17 @@ namespace tachyon
                     const float dt = b.time - a.time;
                     if (std::max(ta, tb) < plot.shown.timeMin || std::min(ta, tb) > plot.shown.timeMax)
                         continue;
-                    const bool step = (a.mode == CurveTangentMode::Broken && a.outMode == CurveSideMode::Constant)
-                                   || (b.mode == CurveTangentMode::Broken && b.inMode == CurveSideMode::Constant);
-                    if (step || !(dt > 0.0f))
+                    if (a.interpolation == CurveInterpolation::Constant || !(dt > 0.0f))
                     {
                         // Held at a's value up to b, then up or down to it; a mirrored copy
                         // runs the same way, from a's place to b's.
                         ctx.RenderLine(px(ta, a.value), px(tb, a.value), style);
                         ctx.RenderLine(px(tb, a.value), px(tb, b.value), style);
+                        continue;
+                    }
+                    if (a.interpolation == CurveInterpolation::Linear)
+                    {
+                        ctx.RenderLine(px(ta, a.value), px(tb, b.value), style);
                         continue;
                     }
                     const float third = dt / 3.0f;
@@ -379,6 +389,192 @@ namespace tachyon
         return changed;
     }
 
+
+    // -------------------------------------------------------------------------
+    // The channel tree and the frame ruler (an animation curve editor's)
+    // -------------------------------------------------------------------------
+
+    void GUIApplication::CurveTree(CurveView& view)
+    {
+        CurveView* v = &view;
+        BeginVertical(idManager.AllocateDynamicID("curve_tree"), theme.curveTreeStyleRef, LayoutOverride::Auto().NoShrink());
+
+        // The header: Channel, and the playhead's frame its values are at.
+        BeginHorizontal(idManager.AllocateDynamicID("curve_tree_header"), theme.curveTreeHeaderStyleRef, LayoutOverride::Auto().NoShrink());
+        Text(idManager.AllocateDynamicID("curve_tree_title"), "Channel", theme.curveTreeNameStyleRef);
+        if (view.fps > 0.0f)
+            Text(idManager.AllocateDynamicID("curve_tree_frame"), std::format("@ f {}", FrameOf(view, view.playhead)), theme.curveTreeValueStyleRef);
+        EndHorizontal();
+
+        const int32_t indent = styleManager.Px(14);
+        auto row = [&](std::string_view key, StyleRef style, int depth, std::function<void()> onClick, bool selected) {
+            if (selected) BeginSelected();
+            const ElementRef ref = RegisterControl(
+                Element{ .id = idManager.AllocateDynamicID(key), .eventHandler = MakeButtonHandler(std::move(onClick)), .styleRef = style },
+                LayoutOverride::Auto().NoShrink());
+            if (selected) EndSelected();
+            VERIFY(elementStorage.BeginChildren());
+            if (depth > 0)
+                RegisterElement(Element{ .id = idManager.AllocateDynamicID(std::string(key) + "/indent"), .styleRef = theme.emptyHorzStyleRef,
+                                         .flags = ElementFlags::NoInput },
+                                LayoutOverride::FixedSize(Pixels{ indent * depth }, Pixels{ 1 }));
+            return ref;
+        };
+
+        // Each group's row before its first channel, unless a group round it is closed.
+        std::vector<std::string> open;
+        for (int c = 0; c < (int)view.channels.size(); ++c)
+        {
+            const CurveChannel& channel = view.channels[size_t(c)];
+            std::vector<std::string> segments;
+            for (size_t start = 0; start < channel.path.size();)
+            {
+                const size_t slash = std::min(channel.path.find('/', start), channel.path.size());
+                if (slash > start)
+                    segments.push_back(channel.path.substr(start, slash - start));
+                start = slash + 1;
+            }
+            size_t common = 0;
+            while (common < open.size() && common < segments.size() && open[common] == segments[common])
+                ++common;
+            open.resize(common);
+            bool hidden = false;   // under a closed group
+            std::string path;
+            for (size_t d = 0; d < segments.size(); ++d)
+            {
+                path += (d ? "/" : "") + segments[d];
+                if (d >= common && !hidden)
+                {
+                    const bool closed = view.collapsedGroups.contains(path);
+                    row("curve_group/" + path, theme.curveTreeGroupStyleRef, int(d),
+                        [v, path, closed]() { if (closed) v->collapsedGroups.erase(path); else v->collapsedGroups.insert(path); },
+                        false);
+                    const ID nameID = idManager.AllocateDynamicID("curve_group_name/" + path);
+                    RegisterElement(Element{ .id = nameID,
+                                             .textID = textSystem->RegisterText(nameID, closed ? theme.treeArrowRight : theme.treeArrowDown,
+                                                                                segments[d], theme.curveTreeNameStyleRef, ElementState::None),
+                                             .styleRef = theme.curveTreeNameStyleRef, .flags = ElementFlags::NoInput },
+                                    LayoutOverride{});
+                    VERIFY(elementStorage.EndChildren());
+                }
+                if (d >= common)
+                    open.push_back(segments[d]);
+                hidden = hidden || view.collapsedGroups.contains(path);
+            }
+            if (hidden)
+                continue;
+
+            // The channel: its color, name, value at the playhead, and its eye.
+            const std::string key = std::format("curve_channel/{}/{}", channel.path, c);
+            row(key, channel.visible ? theme.curveTreeRowStyleRef : theme.curveTreeRowHiddenStyleRef, int(segments.size()),
+                [v, c]() { v->activeChannel = c; }, c == view.activeChannel);
+            Element swatch{ .id = idManager.AllocateDynamicID(key + "/swatch"), .styleRef = theme.curveTreeSwatchStyleRef,
+                            .flags = ElementFlags::NoInput };
+            swatch.colorStyleIndex = theme.curveChannelColors[size_t(channel.color)];
+            RegisterElement(std::move(swatch), LayoutOverride{});
+            Text(idManager.AllocateDynamicID(key + "/name"), channel.name, theme.curveTreeNameStyleRef);
+            if (view.fps > 0.0f)
+                Text(idManager.AllocateDynamicID(key + "/value"), Number(EvaluateCurve(channel.curve, view.playhead)), theme.curveTreeValueStyleRef);
+            Button(idManager.AllocateDynamicID(key + "/eye"),
+                   { channel.visible ? theme.timelineEyeIcon : theme.timelineEyeOffIcon, {}, channel.visible ? "Hide" : "Show" },
+                   [v, c]() {
+                       if (c >= (int)v->channels.size())
+                           return;
+                       v->channels[size_t(c)].visible = !v->channels[size_t(c)].visible;
+                       std::erase_if(v->selectedKeys, [&](ID id) {
+                           const auto& keys = v->channels[size_t(c)].curve.keys;
+                           return std::any_of(keys.begin(), keys.end(), [id](const CurveKey& k) { return k.stableID == id; });
+                       });
+                   }, theme.iconButtonStyleRef);
+            VERIFY(elementStorage.EndChildren());
+        }
+        EndVertical();
+    }
+
+    void GUIApplication::CurveRuler(CurveView& view)
+    {
+        CurveView* v = &view;
+        const ID rulerID = idManager.AllocateDynamicID("curve_ruler");
+        const ElementStorage& es = elementStorage;
+        GUIStateManager& gsm = guiStateManager;
+
+        // A press or drag on it moves the playhead there, onto a frame.
+        EventHandler handler;
+        if (!guiStateManager.Construction().IsDisabled())
+            handler = [&es, &gsm, v](ElementEvent&& event) -> bool {
+                auto moveTo = [&]() {
+                    const CurvePlot plot{ v->plotRect, ShownOf(*v) };
+                    if (plot.rect.w <= 0)
+                        return;
+                    v->playhead = SnapToFrame(*v, plot.Time(float(event.LocalCursor(es).x)));
+                    if (v->onPlayheadChanged)
+                        v->onPlayheadChanged(v->playhead);
+                };
+                switch (event.type)
+                {
+                    case EventType::MouseDown:
+                        if (!v->playheadDrag.Press(event, es, MouseButtons::Left, /*atOnce*/ true))
+                            return false;
+                        gsm.Interaction().SetCaptureID(event.id);
+                        moveTo();
+                        return true;
+                    case EventType::MouseMove:
+                        if (!v->playheadDrag.Move(event, 0))
+                            return false;
+                        moveTo();
+                        return true;
+                    case EventType::MouseUp:
+                        return v->playheadDrag.Release(event) != PointerDrag::Ended::No;
+                    default:
+                        return false;
+                }
+            };
+        const ElementRef ref = RegisterControl(Element{ .id = rulerID, .eventHandler = std::move(handler), .styleRef = theme.curveRulerStyleRef },
+                                               LayoutOverride::Auto().NoShrink());
+        if (!ref.IsValid())
+            return;
+
+        // The frame numbers, under the plot's last place; the playhead's in its pill.
+        const CurvePlot last{ view.plotRect, ShownOf(view) };
+        std::vector<PlotGrid::Label> labels;
+        if (last.rect.w > 0)
+        {
+            const float frameStep = std::max(1.0f, NiceStep(last.TimeSpan() * view.fps, float(last.rect.w), float(styleManager.Px(56))));
+            PlotGrid::AddLabels(*this, theme.curveRulerLabelStyleRef, labels, last.shown.timeMin * view.fps, last.shown.timeMax * view.fps,
+                                frameStep, /*onYAxis*/ false, "curve_ruler_labels");
+        }
+        const TextID pill = textSystem->RegisterText(idManager.AllocateDynamicID("curve_playhead"), std::to_string(FrameOf(view, view.playhead)),
+                                                     theme.curvePlayheadStyleRef, ElementState::None);
+        const TextMeasurement pillSize = textSystem->MeasureText(pill, TextWrapContext{});
+        const VisualBoxStyleIndex pillBox = theme.curvePlayheadStyleRef.visualBoxStyleIndex;
+        const int2 pillPad{ styleManager.Px(6), styleManager.Px(1) };
+        const int32_t px1 = std::max(1, styleManager.Px(1));
+        VERIFY(elementStorage.AddCustomDraw(ref, [=, this](CustomDrawContext& ctx)
+        {
+            // In screen space, as the plot's place is.
+            ctx.SetSpace(DrawSpace::Screen);
+            const IntRect r = ctx.ElementRect();
+            const CurvePlot plot{ v->plotRect, ShownOf(*v) };
+            if (plot.rect.w <= 0)
+                return;
+            for (const PlotGrid::Label& label : labels)
+            {
+                const float x = plot.X(label.at / v->fps);
+                ctx.RenderQuad(IntRect{ int32_t(x), r.y + r.h - styleManager.Px(5), px1, styleManager.Px(5) }, r, theme.curveGridMajorColor);
+                ctx.RenderText(label.text, IntRect{ int32_t(x) - label.size.x / 2, r.y + (r.h - label.size.y) / 2 - styleManager.Px(2),
+                                                    label.size.x, label.size.y });
+            }
+            const float x = plot.X(v->playhead);
+            if (x < float(plot.rect.x) || x > float(plot.rect.x + plot.rect.w))
+                return;
+            const int32_t w = pillSize.maxWidth + 2 * pillPad.x, h = pillSize.maxHeight + 2 * pillPad.y;
+            const IntRect box{ int32_t(x) - w / 2, r.y + (r.h - h) / 2, w, h };
+            ctx.RenderQuad(IntRect{ int32_t(x), r.y, px1, r.h }, r, theme.curveHandleColor);
+            ctx.RenderBox(box, pillBox);
+            ctx.RenderText(pill, IntRect{ box.x + pillPad.x, box.y + pillPad.y, pillSize.maxWidth, pillSize.maxHeight });
+        }));
+    }
+
     // -------------------------------------------------------------------------
     // CurveEditor
     // -------------------------------------------------------------------------
@@ -391,12 +587,47 @@ namespace tachyon
         const bool disabled = guiStateManager.Construction().IsDisabled();
         auto newKeyID = [this]() { return idManager.CreateStaticID(); };
 
+        // With fps set, an animation editor: interpolation and tangents over the plot, frames
+        // on a ruler with the playhead. With paths, the channels as a tree down the left.
+        const bool animation = view.fps > 0.0f;
+        const bool tree = std::any_of(view.channels.begin(), view.channels.end(), [](const CurveChannel& c) { return !c.path.empty(); });
+
         BeginVertical(id, theme.emptyVertStyleRef, std::move(constraints));
         const bool pushed = idManager.PushParent(id);
 
-        // ---- Over the plot: the channels, the selected key, frame all ------------
+        // ---- Over the plot: the channels or the modes, the selected key, frame all --
         BeginHorizontal(idManager.AllocateDynamicID("curve_top"), theme.curveToolbarStyleRef, LayoutOverride::Auto().NoShrink());
-        if (channelCount > 1)
+        if (animation)
+        {
+            // The selected keys' interpolation and tangents; the first selected key's lit.
+            const CurveKey* first = nullptr;
+            for (const CurveChannel& channel : view.channels)
+                for (const CurveKey& k : channel.curve.keys)
+                    if (!first && view.selectedKeys.contains(k.stableID))
+                        first = &k;
+            Text(idManager.AllocateDynamicID("curve_interpolation_label"), "Interpolation", theme.curveToolbarLabelStyleRef);
+            BeginToggleGroup(LayoutOverride{}.NoGrow());
+            const std::tuple<CurveInterpolation, IconID, const char*> interpolations[] = {
+                { CurveInterpolation::Constant, theme.curveConstantIcon, "Constant" },
+                { CurveInterpolation::Linear,   theme.curveLinearIcon,   "Linear" },
+                { CurveInterpolation::Bezier,   theme.curveBezierIcon,   "Bezier" } };
+            for (const auto& [i, icon, name] : interpolations)
+                Toggle(idManager.AllocateDynamicID(std::string("curve_interpolation_") + name), first && first->interpolation == i,
+                       GUIContent{ icon, name }, [v, i = i](bool) { CommitCurveEdit(*v, SetCurveInterpolationEdit(*v, i)); });
+            EndToggleGroup();
+            Text(idManager.AllocateDynamicID("curve_tangents_label"), "Tangents", theme.curveToolbarLabelStyleRef);
+            BeginToggleGroup(LayoutOverride{}.NoGrow());
+            const std::pair<CurveTangentMode, const char*> modes[] = {
+                { CurveTangentMode::Auto, "Auto" }, { CurveTangentMode::Aligned, "Aligned" },
+                { CurveTangentMode::Free, "Free" }, { CurveTangentMode::Flat, "Flat" } };
+            for (const auto& [m, name] : modes)
+                Toggle(idManager.AllocateDynamicID(std::string("curve_tangents_") + name), first && first->tangents == m,
+                       GUIContent{ name }, [v, m = m](bool) { CommitCurveEdit(*v, SetCurveTangentModeEdit(*v, m)); });
+            EndToggleGroup();
+            Button(idManager.AllocateDynamicID("curve_frame_all"), { theme.curveFrameAllIcon, "Frame all", "Frame all (A)" },
+                   [v]() { FrameAll(*v); }, theme.controls->button);
+        }
+        else if (channelCount > 1 && !tree)
         {
             for (int c = 0; c < channelCount; ++c)
             {
@@ -467,22 +698,43 @@ namespace tachyon
                 CommitCurveEdit(*v, edit);
             };
             float time = key.time, value = key.value;
-            DragLabel(idManager.AllocateDynamicID("curve_time_label"), "Time", theme.dragLabelStyleRef);
-            if (Field(idManager.AllocateDynamicID("curve_time"), time, TextEditBehavior::None, theme.controls->number,
-                      NumericFieldConfig<float>{ .stepPerPixel = double(shown.timeMax - shown.timeMin) / 400.0 },
-                      LayoutOverride::FixedWidth(Pixels{ styleManager.Px(64) })))
-                setKey(time, key.value);
+            if (animation)
+            {
+                // The time as a frame.
+                int64_t frame = FrameOf(view, key.time);
+                DragLabel(idManager.AllocateDynamicID("curve_time_label"), "Frame", theme.dragLabelStyleRef);
+                if (Field(idManager.AllocateDynamicID("curve_frame"), frame, TextEditBehavior::None, theme.controls->number,
+                          NumericFieldConfig<int64_t>{ .stepPerPixel = 0.25 },
+                          LayoutOverride::FixedWidth(Pixels{ styleManager.Px(64) })))
+                    setKey(float(frame) / view.fps, key.value);
+            }
+            else
+            {
+                DragLabel(idManager.AllocateDynamicID("curve_time_label"), "Time", theme.dragLabelStyleRef);
+                if (Field(idManager.AllocateDynamicID("curve_time"), time, TextEditBehavior::None, theme.controls->number,
+                          NumericFieldConfig<float>{ .stepPerPixel = double(shown.timeMax - shown.timeMin) / 400.0 },
+                          LayoutOverride::FixedWidth(Pixels{ styleManager.Px(64) })))
+                    setKey(time, key.value);
+            }
             DragLabel(idManager.AllocateDynamicID("curve_value_label"), "Value", theme.dragLabelStyleRef);
             if (Field(idManager.AllocateDynamicID("curve_value"), value, TextEditBehavior::None, theme.controls->number,
                       NumericFieldConfig<float>{ .stepPerPixel = double(shown.valueMax - shown.valueMin) / 400.0 },
                       LayoutOverride::FixedWidth(Pixels{ styleManager.Px(64) })))
                 setKey(key.time, value);
         }
-        Button(idManager.AllocateDynamicID("curve_frame_all"), { theme.curveFrameAllIcon, {}, "Frame all (A)" },
-               [v]() { FrameAll(*v); }, theme.iconButtonStyleRef);
+        if (!animation)
+            Button(idManager.AllocateDynamicID("curve_frame_all"), { theme.curveFrameAllIcon, {}, "Frame all (A)" },
+                   [v]() { FrameAll(*v); }, theme.iconButtonStyleRef);
         EndHorizontal();
 
-        // ---- The plot ----------------------------------------------------------
+        // ---- The tree, the ruler and the plot --------------------------------------
+        BeginHorizontal(idManager.AllocateDynamicID("curve_body"), theme.emptyHorzStyleRef, LayoutOverride{}.FlexGrow(1));
+        if (tree)
+            CurveTree(view);
+        BeginVertical(idManager.AllocateDynamicID("curve_main"), theme.emptyVertStyleRef, LayoutOverride{}.FlexGrow(1));
+        if (animation)
+            CurveRuler(view);
+
         const ID plotID = idManager.AllocateDynamicID("curve_plot");
         const CurvePlot lastPlot{ view.plotRect, ShownOf(view) };
 
@@ -493,8 +745,10 @@ namespace tachyon
         const float valueStep = NiceStep(lastPlot.ValueSpan(), float(lastPlot.rect.h), minGapV);
         if (lastPlot.rect.w > 0 && lastPlot.rect.h > 0)
         {
-            PlotGrid::AddLabels(*this, theme.curveLabelStyleRef, labels, lastPlot.shown.timeMin, lastPlot.shown.timeMax, timeStep,
-                                /*onYAxis*/ false, "curve_time_labels");
+            // With fps set, the times are on the ruler instead.
+            if (!animation)
+                PlotGrid::AddLabels(*this, theme.curveLabelStyleRef, labels, lastPlot.shown.timeMin, lastPlot.shown.timeMax, timeStep,
+                                    /*onYAxis*/ false, "curve_time_labels");
             PlotGrid::AddLabels(*this, theme.curveLabelStyleRef, labels, lastPlot.shown.valueMin, lastPlot.shown.valueMax, valueStep,
                                 /*onYAxis*/ true, "curve_value_labels");
         }
@@ -506,7 +760,8 @@ namespace tachyon
         {
             const CurveChannel& channel = view.channels[size_t(selChannel)];
             const CurveKey& key = channel.curve.keys[size_t(selKey)];
-            const std::string text = channelCount > 1 ? std::format("{} \xC2\xB7 {} \xC2\xB7 {}", channel.name, Number(key.time), Number(key.value))
+            const std::string text = animation ? std::format("{} \xC2\xB7 f {} \xC2\xB7 {}", channel.name, FrameOf(view, key.time), Number(key.value))
+                                   : channelCount > 1 ? std::format("{} \xC2\xB7 {} \xC2\xB7 {}", channel.name, Number(key.time), Number(key.value))
                                                       : std::format("{} \xC2\xB7 {}", Number(key.time), Number(key.value));
             readout = textSystem->RegisterText(idManager.AllocateDynamicID("curve_readout"), text, theme.curveReadoutStyleRef, ElementState::None);
             const TextMeasurement m = textSystem->MeasureText(readout, TextWrapContext{});
@@ -647,14 +902,13 @@ namespace tachyon
                                     const float minDt = plot.TimeSpan() * 1e-4f;
                                     dt = v->tangentOut ? std::max(dt, minDt) : std::min(dt, -minDt);
                                     const float slope = (plot.Value(at.y) - k.value) / dt;
-                                    if (k.mode == CurveTangentMode::Broken)
-                                    {
+                                    // A Free key's side alone; any other key turns Aligned,
+                                    // the slope on both sides.
+                                    if (k.tangents == CurveTangentMode::Free)
                                         (v->tangentOut ? k.outSlope : k.inSlope) = slope;
-                                        (v->tangentOut ? k.outMode : k.inMode) = CurveSideMode::Free;
-                                    }
                                     else
                                     {
-                                        k.mode = CurveTangentMode::FreeSmooth;
+                                        k.tangents = CurveTangentMode::Aligned;
                                         k.inSlope = k.outSlope = slope;
                                     }
                                     UpdateCurveTangents(curve);
@@ -804,7 +1058,7 @@ namespace tachyon
         }
 
         const ElementRef plotRef = RegisterControl(
-            Element{ .id = plotID, .eventHandler = std::move(plotHandler), .styleRef = theme.curvePlotStyleRef },
+            Element{ .id = plotID, .eventHandler = std::move(plotHandler), .styleRef = animation ? theme.curvePlotFramesStyleRef : theme.curvePlotStyleRef },
             LayoutOverride::Auto().FlexGrow(1));
         VERIFY(elementStorage.AddPostLayout(plotRef, [v](PostLayoutContext& ctx) { v->plotRect = ctx.ElementInnerRect(); }));
         {
@@ -827,6 +1081,14 @@ namespace tachyon
                                     { theme.curveGridColor, theme.curveGridMajorColor, theme.curveZeroColor }, px1);
                 PlotGrid::DrawLabels(ctx, grid, labels, px4, px4);
 
+                // The playhead, through the plot.
+                if (v->fps > 0.0f)
+                {
+                    const float x = plot.X(v->playhead);
+                    if (x >= float(inner.x) && x <= float(inner.x + inner.w))
+                        ctx.RenderQuad(IntRect{ int32_t(x), inner.y, px1, inner.h }, inner, theme.curveHandleColor);
+                }
+
                 // The curves: the others thinner and faded, the active one on top; before the
                 // first key and after the last dashed.
                 const int count = (int)v->channels.size();
@@ -845,8 +1107,9 @@ namespace tachyon
 
                     // Its keys: rounded squares in its color with an edge of the plot's; a
                     // selected one larger and light, ringed in the accent, with its handles.
-                    for (const CurveKey& k : channel.curve.keys)
+                    for (size_t index = 0; index < channel.curve.keys.size(); ++index)
                     {
+                        const CurveKey& k = channel.curve.keys[index];
                         const float2 p = plot.At(k);
                         if (p.x < float(outer.x) || p.x > float(outer.x + outer.w))
                             continue;
@@ -855,7 +1118,7 @@ namespace tachyon
                         {
                             for (const bool out : { false, true })
                             {
-                                if (!HasHandle(k, out))
+                                if (!HasHandle(channel.curve, index, out))
                                     continue;
                                 const float2 end = HandleEnd(plot, k, out, handleLength);
                                 ctx.RenderLine(int2{ int32_t(p.x), int32_t(p.y) }, int2{ int32_t(end.x), int32_t(end.y) },
@@ -925,40 +1188,30 @@ namespace tachyon
             {
                 MenuItem("Delete key", [v]() { CommitCurveEdit(*v, DeleteSelectedCurveKeysEdit(*v)); });
                 MenuSeparator();
-                // The mode of the key right-clicked, checked.
-                CurveTangentMode mode = CurveTangentMode::ClampedAuto;
-                CurveSideMode inMode = CurveSideMode::Free, outMode = CurveSideMode::Free;
+                // The interpolation and tangents of the key right-clicked, checked.
+                CurveTangentMode mode = CurveTangentMode::Auto;
+                CurveInterpolation interpolation = CurveInterpolation::Bezier;
                 for (const CurveChannel& channel : view.channels)
                     for (const CurveKey& k : channel.curve.keys)
-                        if (k.stableID == view.menuKey) { mode = k.mode; inMode = k.inMode; outMode = k.outMode; }
+                        if (k.stableID == view.menuKey) { mode = k.tangents; interpolation = k.interpolation; }
+                static constexpr std::pair<CurveInterpolation, const char*> kInterpolations[] = {
+                    { CurveInterpolation::Constant, "Constant" }, { CurveInterpolation::Linear, "Linear" },
+                    { CurveInterpolation::Bezier, "Bezier" } };
+                for (const auto& [i, name] : kInterpolations)
+                {
+                    if (i == interpolation) BeginSelected();
+                    MenuItem(name, [v, i]() { CommitCurveEdit(*v, SetCurveInterpolationEdit(*v, i)); });
+                    if (i == interpolation) EndSelected();
+                }
+                MenuSeparator();
                 static constexpr std::pair<CurveTangentMode, const char*> kModes[] = {
-                    { CurveTangentMode::ClampedAuto, "Clamped auto" }, { CurveTangentMode::Auto, "Auto" },
-                    { CurveTangentMode::FreeSmooth, "Free smooth" },   { CurveTangentMode::Flat, "Flat" },
-                    { CurveTangentMode::Broken, "Broken" } };
+                    { CurveTangentMode::Auto, "Auto" }, { CurveTangentMode::Aligned, "Aligned" },
+                    { CurveTangentMode::Free, "Free" }, { CurveTangentMode::Flat, "Flat" } };
                 for (const auto& [m, name] : kModes)
                 {
                     if (m == mode) BeginSelected();
                     MenuItem(name, [v, m]() { CommitCurveEdit(*v, SetCurveTangentModeEdit(*v, m)); });
                     if (m == mode) EndSelected();
-                }
-                MenuSeparator();
-                static constexpr std::pair<CurveSideMode, const char*> kSides[] = {
-                    { CurveSideMode::Free, "Free" }, { CurveSideMode::Linear, "Linear" }, { CurveSideMode::Constant, "Constant" } };
-                const bool broken = mode == CurveTangentMode::Broken;
-                for (const auto& [label, in, out] : { std::tuple{ "Left tangent", true, false }, std::tuple{ "Right tangent", false, true },
-                                                      std::tuple{ "Both tangents", true, true } })
-                {
-                    if (BeginMenu(idManager.AllocateDynamicID("curve_side_menu"), label))
-                    {
-                        for (const auto& [side, name] : kSides)
-                        {
-                            const bool checked = broken && (!in || inMode == side) && (!out || outMode == side);
-                            if (checked) BeginSelected();
-                            MenuItem(name, [v, side = side, in = in, out = out]() { CommitCurveEdit(*v, SetCurveSideModeEdit(*v, side, in, out)); });
-                            if (checked) EndSelected();
-                        }
-                    }
-                    EndMenu();
                 }
             }
             else
@@ -980,7 +1233,12 @@ namespace tachyon
         if (!disabled)
             EndContextMenu();
 
+        EndVertical();     // the ruler and the plot
+        EndHorizontal();   // the tree beside them
+
         // ---- Under the plot: the presets, and what the curve does past its ends ----
+        if (!animation)
+        {
         BeginHorizontal(idManager.AllocateDynamicID("curve_bottom"), theme.curveToolbarStyleRef, LayoutOverride::Auto().NoShrink());
         const std::span<const CurvePreset> presets = view.presets.empty() ? DefaultCurvePresets() : std::span<const CurvePreset>(view.presets);
         const int active = view.activeChannel;
@@ -1021,6 +1279,7 @@ namespace tachyon
             SetTooltip("After the last key");
         }
         EndHorizontal();
+        }
 
         if (pushed) (void)idManager.PopParent();
         EndVertical();

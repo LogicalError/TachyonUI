@@ -186,6 +186,9 @@ namespace tachyon
             timelineKeyIcon      = registerIcon("timeline-key", R"(<path d="m12 4 8 8-8 8-8-8Z"/>)");
             timelineAudioIcon    = registerIcon("timeline-audio", R"(<path d="M11 5 6 9H2v6h4l5 4ZM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>)");
             timelineEventsIcon   = registerIcon("timeline-events", R"(<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>)");
+            curveConstantIcon = registerIcon("curve-constant", R"(<path d="M3 18h6V6h6v12h6"/>)");
+            curveLinearIcon   = registerIcon("curve-linear", R"(<path d="M3 18 9 6l6 12 6-12"/>)");
+            curveBezierIcon   = registerIcon("curve-bezier", R"(<path d="M3 18c3 0 3-12 6-12s3 12 6 12 3-12 6-12"/>)");
             curveFrameAllIcon = registerIcon("curve-frame-all", R"(<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>)");
             viewportSelectIcon = registerIcon("viewport-select",
                 R"(<path d="M4.04 4.69a.5.5 0 0 1 .65-.65l16 6.5a.5.5 0 0 1-.06.95l-6.13 1.58a2 2 0 0 0-1.43 1.43l-1.58 6.13a.5.5 0 0 1-.95.06Z"/>)");
@@ -929,6 +932,19 @@ namespace tachyon
         curveReadoutStyleRef              = registerCSS("curve-readout");
         curveBoxSelectStyleRef            = registerCSS("curve-box-select");
         curvePresetStyleRef               = registerCSS("curve-preset");
+        curvePlotFramesStyleRef           = registerCSS("curve-plot-frames");
+        curveToolbarLabelStyleRef         = registerCSS("curve-toolbar-label");
+        curveTreeStyleRef                 = registerCSS("curve-tree");
+        curveTreeHeaderStyleRef           = registerCSS("curve-tree-header");
+        curveTreeGroupStyleRef            = registerCSS("curve-tree-group");
+        curveTreeRowStyleRef              = registerCSS("curve-tree-row");
+        curveTreeRowHiddenStyleRef        = registerCSS("curve-tree-row-hidden");
+        curveTreeSwatchStyleRef           = registerCSS("curve-tree-swatch");
+        curveTreeNameStyleRef             = registerCSS("curve-tree-name");
+        curveTreeValueStyleRef            = registerCSS("curve-tree-value");
+        curveRulerStyleRef                = registerCSS("curve-ruler");
+        curveRulerLabelStyleRef           = registerCSS("curve-ruler-label");
+        curvePlayheadStyleRef             = registerCSS("curve-playhead");
         plotToolbarStyleRef               = registerCSS("plot-toolbar");
         plotChannelStyleRef               = registerCSS("plot-channel");
         plotStyleRef                      = registerCSS("plot");

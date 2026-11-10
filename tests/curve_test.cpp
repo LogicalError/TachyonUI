@@ -20,15 +20,14 @@ namespace tachyon
             return id;
         }
 
-        CurveKey Key(float time, float value, CurveTangentMode mode = CurveTangentMode::ClampedAuto, uint32_t id = 0)
+        CurveKey Key(float time, float value, CurveTangentMode mode = CurveTangentMode::Auto, uint32_t id = 0)
         {
-            return CurveKey{ .stableID = id ? Id(id) : ID::Invalid(), .time = time, .value = value, .mode = mode };
+            return CurveKey{ .stableID = id ? Id(id) : ID::Invalid(), .time = time, .value = value, .tangents = mode };
         }
 
         CurveKey Linear(float time, float value)
         {
-            return CurveKey{ .time = time, .value = value, .mode = CurveTangentMode::Broken,
-                             .inMode = CurveSideMode::Linear, .outMode = CurveSideMode::Linear };
+            return CurveKey{ .time = time, .value = value, .interpolation = CurveInterpolation::Linear };
         }
 
         Curve Updated(std::vector<CurveKey> keys)
@@ -51,34 +50,31 @@ namespace tachyon
             EXPECT_EQ(EvaluateCurve(one, 10.0f), 0.7f);
         }
 
-        // Linear sides go straight from key to key; the keys' own values are hit exactly.
-        TEST(Curve, LinearSidesAreStraight)
+        // Linear goes straight to the next key, whatever the keys' slopes; the keys' own values
+        // are hit exactly.
+        TEST(Curve, LinearIsStraight)
         {
-            const Curve curve = Updated({ Linear(0.0f, 0.0f), Linear(1.0f, 2.0f), Linear(3.0f, 0.0f) });
+            CurveKey a = Linear(0.0f, 0.0f);
+            a.tangents = CurveTangentMode::Free;
+            a.outSlope = 9.0f;
+            const Curve curve = Updated({ a, Linear(1.0f, 2.0f), Linear(3.0f, 0.0f) });
             EXPECT_FLOAT_EQ(EvaluateCurve(curve, 0.0f), 0.0f);
-            EXPECT_FLOAT_EQ(EvaluateCurve(curve, 0.25f), 0.5f);
+            EXPECT_FLOAT_EQ(EvaluateCurve(curve, 0.25f), 0.5f) << "the slope doesn't bend it";
             EXPECT_FLOAT_EQ(EvaluateCurve(curve, 1.0f), 2.0f);
             EXPECT_FLOAT_EQ(EvaluateCurve(curve, 2.0f), 1.0f);
             EXPECT_FLOAT_EQ(EvaluateCurve(curve, 3.0f), 0.0f);
-            EXPECT_FLOAT_EQ(curve.keys[1].inSlope, 2.0f);
-            EXPECT_FLOAT_EQ(curve.keys[1].outSlope, -1.0f);
         }
 
-        // A Constant side holds the value up to the next key.
+        // Constant holds the key's value up to the next key: a step.
         TEST(Curve, ConstantStepsHold)
         {
-            CurveKey a = Key(0.0f, 1.0f, CurveTangentMode::Broken);
-            a.outMode = CurveSideMode::Constant;
-            const Curve curve = Updated({ a, Key(1.0f, 3.0f) });
+            CurveKey a = Key(0.0f, 1.0f);
+            a.interpolation = CurveInterpolation::Constant;
+            const Curve curve = Updated({ a, Key(1.0f, 3.0f), Key(2.0f, 5.0f) });
             EXPECT_EQ(EvaluateCurve(curve, 0.5f), 1.0f);
             EXPECT_EQ(EvaluateCurve(curve, 0.999f), 1.0f);
             EXPECT_EQ(EvaluateCurve(curve, 1.0f), 3.0f);
-
-            // The next key's Constant arriving side holds the one before too.
-            CurveKey b = Key(1.0f, 3.0f, CurveTangentMode::Broken);
-            b.inMode = CurveSideMode::Constant;
-            const Curve held = Updated({ Key(0.0f, 1.0f), b });
-            EXPECT_EQ(EvaluateCurve(held, 0.5f), 1.0f);
+            EXPECT_GT(EvaluateCurve(curve, 1.5f), 3.0f) << "the next key's own interpolation after it";
         }
 
         // Flat keys ease in and out: halfway at the middle, slow at the ends.
@@ -93,9 +89,9 @@ namespace tachyon
         // Each slope sets its own side: a steep start, a level end.
         TEST(Curve, SlopesShapeTheSegment)
         {
-            CurveKey a = Key(0.0f, 0.0f, CurveTangentMode::FreeSmooth);
+            CurveKey a = Key(0.0f, 0.0f, CurveTangentMode::Aligned);
             a.outSlope = 2.0f;
-            CurveKey b = Key(1.0f, 1.0f, CurveTangentMode::FreeSmooth);
+            CurveKey b = Key(1.0f, 1.0f, CurveTangentMode::Aligned);
             const Curve curve = Updated({ a, b });
             EXPECT_NEAR(EvaluateCurve(curve, 0.5f), 0.75f, 1e-5f);   // h10 * 2 + h01 = 0.25 + 0.5
             EXPECT_NEAR(EvaluateCurve(curve, 0.01f), 0.02f, 1e-3f);
@@ -138,16 +134,16 @@ namespace tachyon
 
         TEST(Curve, AutoIsTheSlopeBetweenTheNeighbors)
         {
-            const Curve curve = Updated({ Key(0.0f, 0.0f, CurveTangentMode::Auto), Key(1.0f, 1.0f, CurveTangentMode::Auto),
-                                          Key(3.0f, 5.0f, CurveTangentMode::Auto) });
+            const Curve curve = Updated({ Key(0.0f, 0.0f), Key(1.0f, 1.0f), Key(3.0f, 5.0f) });
             EXPECT_FLOAT_EQ(curve.keys[1].inSlope, 5.0f / 3.0f);
             EXPECT_FLOAT_EQ(curve.keys[1].outSlope, 5.0f / 3.0f);
             EXPECT_EQ(curve.keys[0].outSlope, 0.0f) << "an end key is level";
             EXPECT_EQ(curve.keys[2].inSlope, 0.0f);
         }
 
-        // Clamped auto: a peak stays level, and a slope is held to three times the gentler side's.
-        TEST(Curve, ClampedAutoDoesntOvershoot)
+        // Auto doesn't overshoot: a peak stays level, and a slope is held to three times the
+        // gentler side's.
+        TEST(Curve, AutoDoesntOvershoot)
         {
             // Lopsided, so the slope between the neighbors isn't level by itself.
             const Curve peak = Updated({ Key(0.0f, 0.0f), Key(1.0f, 1.0f), Key(3.0f, 0.5f) });
@@ -167,45 +163,31 @@ namespace tachyon
             EXPECT_NEAR(falling.keys[1].outSlope, -0.3f, 1e-5f);
         }
 
-        TEST(Curve, FlatAndFreeSmooth)
+        // Flat is level; Aligned keeps one slope, the leaving one, both sides; Free keeps each
+        // side's own.
+        TEST(Curve, FlatAlignedAndFree)
         {
             CurveKey flat = Key(1.0f, 1.0f, CurveTangentMode::Flat);
             flat.inSlope = 4.0f;
-            CurveKey smooth = Key(2.0f, 0.0f, CurveTangentMode::FreeSmooth);
-            smooth.inSlope = 1.0f;
-            smooth.outSlope = -3.0f;
-            const Curve curve = Updated({ Key(0.0f, 0.0f), flat, smooth });
+            CurveKey aligned = Key(2.0f, 0.0f, CurveTangentMode::Aligned);
+            aligned.inSlope = 1.0f;
+            aligned.outSlope = -3.0f;
+            CurveKey free = Key(3.0f, 2.0f, CurveTangentMode::Free);
+            free.inSlope = 7.0f;
+            free.outSlope = -2.0f;
+            const Curve curve = Updated({ Key(0.0f, 0.0f), flat, aligned, free, Key(4.0f, 0.0f) });
             EXPECT_EQ(curve.keys[1].inSlope, 0.0f);
             EXPECT_EQ(curve.keys[1].outSlope, 0.0f);
             EXPECT_EQ(curve.keys[2].inSlope, -3.0f) << "one slope, the leaving one";
             EXPECT_EQ(curve.keys[2].outSlope, -3.0f);
-        }
-
-        // A broken key's sides: free keeps its slope, linear points at the neighbor, constant is level.
-        TEST(Curve, BrokenSides)
-        {
-            CurveKey k = Key(1.0f, 1.0f, CurveTangentMode::Broken);
-            k.inMode = CurveSideMode::Free;
-            k.inSlope = 7.0f;
-            k.outMode = CurveSideMode::Linear;
-            Curve curve = Updated({ Key(0.0f, 0.0f), k, Key(3.0f, 0.0f) });
-            EXPECT_EQ(curve.keys[1].inSlope, 7.0f);
-            EXPECT_FLOAT_EQ(curve.keys[1].outSlope, -0.5f);
-            curve.keys[1].inMode = CurveSideMode::Constant;
-            curve.keys[1].outMode = CurveSideMode::Constant;
-            UpdateCurveTangents(curve);
-            EXPECT_EQ(curve.keys[1].inSlope, 0.0f);
-            EXPECT_EQ(curve.keys[1].outSlope, 0.0f);
-            // An end's linear side has no neighbor: level.
-            Curve ends = Updated({ Linear(0.0f, 0.0f), Linear(1.0f, 1.0f) });
-            EXPECT_EQ(ends.keys[0].inSlope, 0.0f);
-            EXPECT_EQ(ends.keys[1].outSlope, 0.0f);
+            EXPECT_EQ(curve.keys[3].inSlope, 7.0f) << "each its own";
+            EXPECT_EQ(curve.keys[3].outSlope, -2.0f);
         }
 
         TEST(Curve, MakeCurveSortsAndWorksOutTheSlopes)
         {
             const float2 points[] = { { 1.0f, 1.0f }, { 0.0f, 0.0f }, { 2.0f, 4.0f } };
-            const Curve curve = MakeCurve(points, CurveTangentMode::Auto);
+            const Curve curve = MakeCurve(points);
             ASSERT_EQ(curve.keys.size(), 3u);
             EXPECT_EQ(curve.keys[0].time, 0.0f);
             EXPECT_EQ(curve.keys[2].time, 2.0f);
@@ -245,12 +227,12 @@ namespace tachyon
             void SetUp() override
             {
                 view.channels = { CurveChannel{ .name = "R", .color = CurveChannelColor::Red,
-                                                .curve = Updated({ Key(0.0f, 0.0f, CurveTangentMode::ClampedAuto, 1),
-                                                                   Key(0.5f, 0.8f, CurveTangentMode::ClampedAuto, 2),
-                                                                   Key(1.0f, 1.0f, CurveTangentMode::ClampedAuto, 3) }) },
+                                                .curve = Updated({ Key(0.0f, 0.0f, CurveTangentMode::Auto, 1),
+                                                                   Key(0.5f, 0.8f, CurveTangentMode::Auto, 2),
+                                                                   Key(1.0f, 1.0f, CurveTangentMode::Auto, 3) }) },
                                   CurveChannel{ .name = "G", .color = CurveChannelColor::Green,
-                                                .curve = Updated({ Key(0.0f, 1.0f, CurveTangentMode::ClampedAuto, 4),
-                                                                   Key(1.0f, 0.0f, CurveTangentMode::ClampedAuto, 5) }) } };
+                                                .curve = Updated({ Key(0.0f, 1.0f, CurveTangentMode::Auto, 4),
+                                                                   Key(1.0f, 0.0f, CurveTangentMode::Auto, 5) }) } };
                 view.onEdit = [this](const CurveEdit& edit) { edits.push_back(edit); };
             }
             ID Make() { return Id(nextID++); }
@@ -296,6 +278,17 @@ namespace tachyon
             EXPECT_EQ(AddCurveKeyEdit(view, 1, 0.25f, 5.0f, Make()).changes[0].to.keys[1].value, 3.0f);
         }
 
+        // With fps set, an added key lands on the frame nearest.
+        TEST_F(CurveEdits, AddedKeysLandOnFrames)
+        {
+            view.fps = 10.0f;
+            EXPECT_FLOAT_EQ(AddCurveKeyEdit(view, 1, 0.43f, 0.5f, Make()).changes[0].to.keys[1].time, 0.4f);
+            EXPECT_FLOAT_EQ(SnapToFrame(view, 0.46f), 0.5f);
+            EXPECT_TRUE(AddCurveKeyEdit(view, 1, 0.04f, 0.5f, Make()).empty()) << "frame 0, where there's a key";
+            view.fps = 0.0f;
+            EXPECT_EQ(SnapToFrame(view, 0.46f), 0.46f);
+        }
+
         // The selected keys go from every channel; what's gone isn't selected any more.
         TEST_F(CurveEdits, DeletingTheSelectedKeys)
         {
@@ -315,29 +308,33 @@ namespace tachyon
         {
             view.selectedKeys = { Id(2) };
             CommitCurveEdit(view, SetCurveTangentModeEdit(view, CurveTangentMode::Flat));
-            EXPECT_EQ(view.channels[0].curve.keys[1].mode, CurveTangentMode::Flat);
+            EXPECT_EQ(view.channels[0].curve.keys[1].tangents, CurveTangentMode::Flat);
             EXPECT_EQ(view.channels[0].curve.keys[1].outSlope, 0.0f);
-            EXPECT_EQ(view.channels[0].curve.keys[0].mode, CurveTangentMode::ClampedAuto) << "only the selected";
+            EXPECT_EQ(view.channels[0].curve.keys[0].tangents, CurveTangentMode::Auto) << "only the selected";
             EXPECT_TRUE(SetCurveTangentModeEdit(view, CurveTangentMode::Flat).empty()) << "already";
 
-            // Broken from another mode: each side free, where its slope was.
-            view.channels[0].curve.keys[1].inMode = CurveSideMode::Constant;
-            CommitCurveEdit(view, SetCurveTangentModeEdit(view, CurveTangentMode::Broken));
-            EXPECT_EQ(view.channels[0].curve.keys[1].inMode, CurveSideMode::Free);
-            EXPECT_EQ(view.channels[0].curve.keys[1].outMode, CurveSideMode::Free);
+            // Free from another mode: each side keeps the slope it had.
+            CommitCurveEdit(view, SetCurveTangentModeEdit(view, CurveTangentMode::Auto));
+            const float slope = view.channels[0].curve.keys[1].outSlope;
+            CommitCurveEdit(view, SetCurveTangentModeEdit(view, CurveTangentMode::Free));
+            EXPECT_EQ(view.channels[0].curve.keys[1].tangents, CurveTangentMode::Free);
+            EXPECT_EQ(view.channels[0].curve.keys[1].inSlope, slope);
+            EXPECT_EQ(view.channels[0].curve.keys[1].outSlope, slope);
+        }
 
-            // A side's mode breaks it, and sets that side only.
-            view.selectedKeys = { Id(3) };
-            view.channels[0].curve.keys[2].outMode = CurveSideMode::Constant;
-            CommitCurveEdit(view, SetCurveSideModeEdit(view, CurveSideMode::Linear, /*in*/ true, /*out*/ false));
-            const CurveKey& last = view.channels[0].curve.keys[2];
-            EXPECT_EQ(last.mode, CurveTangentMode::Broken);
-            EXPECT_EQ(last.inMode, CurveSideMode::Linear);
-            EXPECT_EQ(last.outMode, CurveSideMode::Free) << "free once broken from another mode";
-            EXPECT_FLOAT_EQ(last.inSlope, (1.0f - 0.8f) / 0.5f);
-            CommitCurveEdit(view, SetCurveSideModeEdit(view, CurveSideMode::Constant, false, true));
-            EXPECT_EQ(view.channels[0].curve.keys[2].inMode, CurveSideMode::Linear) << "the other side stays";
-            EXPECT_EQ(view.channels[0].curve.keys[2].outMode, CurveSideMode::Constant);
+        // The interpolation of the selected keys' segments to the next key.
+        TEST_F(CurveEdits, Interpolation)
+        {
+            view.selectedKeys = { Id(1), Id(4) };
+            CommitCurveEdit(view, SetCurveInterpolationEdit(view, CurveInterpolation::Constant));
+            EXPECT_EQ(view.channels[0].curve.keys[0].interpolation, CurveInterpolation::Constant);
+            EXPECT_EQ(view.channels[1].curve.keys[0].interpolation, CurveInterpolation::Constant) << "on every channel";
+            EXPECT_EQ(view.channels[0].curve.keys[1].interpolation, CurveInterpolation::Bezier) << "only the selected";
+            EXPECT_EQ(EvaluateCurve(view.channels[0].curve, 0.4f), 0.0f) << "a step";
+            EXPECT_TRUE(SetCurveInterpolationEdit(view, CurveInterpolation::Constant).empty()) << "already";
+            ASSERT_EQ(edits.size(), 1u);
+            ApplyCurveEdit(view, edits[0], /*undo*/ true);
+            EXPECT_EQ(view.channels[0].curve.keys[0].interpolation, CurveInterpolation::Bezier);
         }
 
         // A preset is stretched over the range, its slopes with it, with new keys.
