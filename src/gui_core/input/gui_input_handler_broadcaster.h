@@ -58,6 +58,12 @@ namespace tachyon
                 if (h) h->OnFileDrop(id, screenPos, action, data);
         }
 
+        void OnPen(tachyon::ID id, const PenState& pen) override
+        {
+            for (IPlatformInputHandler* h : m_handlers)
+                if (h) h->OnPen(id, pen);
+        }
+
     private:
         std::vector<IPlatformInputHandler*> m_handlers;
     };

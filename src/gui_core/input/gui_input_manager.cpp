@@ -219,6 +219,15 @@ namespace tachyon
         m_recordedEvents.push_back({ type, std::move(state) });
     }
 
+    PenState InputManager::PointerPen(MouseButtons buttons) const
+    {
+        if (m_pen.IsPen())
+            return m_pen;
+        PenState mouse;
+        mouse.pressure = buttons != MouseButtons::None ? 1.0f : 0.0f;
+        return mouse;
+    }
+
     void InputManager::OnMouseMove(tachyon::ID /*windowId*/, tachyon::int2 screenPos, tachyon::MouseButtons /*buttons*/, KeyModifier modifiers)
     {
         InputState state;
@@ -228,6 +237,7 @@ namespace tachyon
         state.buttons      = m_currentButtons;
         state.prevButtons  = m_currentButtons;
         state.modifiers    = modifiers;
+        state.pen          = PointerPen(state.buttons);
 
         m_prevScreenPos = state.screenPos;
         m_recordedEvents.push_back({ EventType::MouseMove, std::move(state) });
@@ -242,6 +252,7 @@ namespace tachyon
         state.prevButtons  = m_currentButtons;
         state.buttons      = buttons;
         state.modifiers    = modifiers;
+        state.pen          = PointerPen(buttons);
 
         const EventType type = (action == MouseAction::MouseDown) ? EventType::MouseDown : EventType::MouseUp;
         m_prevScreenPos    = state.screenPos;
@@ -259,6 +270,7 @@ namespace tachyon
         state.prevButtons  = m_currentButtons;
         state.scroll       = scrollOffset;
         state.modifiers    = modifiers;
+        state.pen          = PointerPen(state.buttons);
 
         m_prevScreenPos = state.screenPos;
         m_recordedEvents.push_back({ EventType::MouseScroll, std::move(state), windowId });
@@ -303,6 +315,9 @@ namespace tachyon
         // A mismatch between physical and recorded buttons means SDL missed an event
         // (e.g. swallowed on Windows activation); synthesize it. Comparing against the
         // recorded state means this never double-fires when SDL delivers normally.
+        // A pen's tip isn't a physical mouse button: the OS may not report it as one.
+        if (m_pen.IsPen())
+            return;
         auto check = [&](MouseButtons bit)
         {
             bool physPressed    = (physicalButtons & bit) != MouseButtons::None;

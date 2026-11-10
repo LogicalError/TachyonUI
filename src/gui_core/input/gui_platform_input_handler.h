@@ -17,6 +17,7 @@ namespace tachyon
     enum class MouseButtons : uint8_t;
     enum class MouseAction : uint8_t;
     enum class FileDropAction : uint8_t;
+    struct PenState;
 
     /// Platform-level input interface: receives raw OS events (keyboard, mouse)
     /// and forwards them into the GUI input pipeline.
@@ -40,6 +41,9 @@ namespace tachyon
         /// A drag from another application over window `id`: it came, moved to screenPos (screen
         /// pixels), dropped a file or text (`data`), or ended (dropped, or left the window).
         virtual void OnFileDrop(tachyon::ID /*id*/, tachyon::int2 /*screenPos*/, FileDropAction /*action*/, std::string_view /*data*/) {}
+        /// The pen changed (came near, touched, pressed harder, tilted, left). It comes before
+        /// the pointer event it goes with; a default PenState means the mouse again.
+        virtual void OnPen(tachyon::ID /*id*/, const PenState& /*pen*/) {}
     };
     /// @}
 };

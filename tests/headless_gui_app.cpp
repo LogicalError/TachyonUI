@@ -339,6 +339,11 @@ void HeadlessGUIApp::InjectMouseMove(tachyon::int2 pos, tachyon::MouseButtons bu
     inputManager->OnMouseMove(m_rootWindowID, pos, buttonsHeld, mods);
 }
 
+void HeadlessGUIApp::InjectPen(const tachyon::PenState& pen)
+{
+    inputManager->OnPen(m_rootWindowID, pen);
+}
+
 void HeadlessGUIApp::InjectMouseDown(tachyon::int2 pos, tachyon::MouseButtons button,
                                       tachyon::KeyModifier mods)
 {

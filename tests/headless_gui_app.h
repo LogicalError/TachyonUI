@@ -104,6 +104,9 @@ public:
     void InjectMouseUp(tachyon::int2 pos,
                        tachyon::MouseButtons button = tachyon::MouseButtons::Left,
                        tachyon::KeyModifier mods = tachyon::KeyModifier::None);
+    // The pen, as the OS backend reports it before the pointer events it goes with; a
+    // default PenState gives the pointer back to the mouse.
+    void InjectPen(const tachyon::PenState& pen);
     void InjectKey(tachyon::KeyCode key,
                    tachyon::KeyAction action = tachyon::KeyAction::KeyDown,
                    tachyon::KeyModifier mods = tachyon::KeyModifier::None);

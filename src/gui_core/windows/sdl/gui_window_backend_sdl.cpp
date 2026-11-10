@@ -6,6 +6,7 @@
 
 #include <gui_core/input/gui_input_enums.h>
 #include <gui_core/input/gui_platform_input_handler.h>
+#include <gui_core/input/gui_input_state.h>
 
 #include <gui_core/windows/gui_window_flags.h>
 #include <gui_core/graphics/gui_graphics_context.h>
@@ -180,6 +181,75 @@ namespace tachyon
             return tachyon::int2{ int32_t(x) + winX, int32_t(y) + winY };
         }
         return backend->WindowPointToPixels(window, x, y);
+    }
+
+    static_assert(int(PenAxis::Pressure)           == SDL_PEN_AXIS_PRESSURE);
+    static_assert(int(PenAxis::TiltX)              == SDL_PEN_AXIS_XTILT);
+    static_assert(int(PenAxis::TiltY)              == SDL_PEN_AXIS_YTILT);
+    static_assert(int(PenAxis::Distance)           == SDL_PEN_AXIS_DISTANCE);
+    static_assert(int(PenAxis::Rotation)           == SDL_PEN_AXIS_ROTATION);
+    static_assert(int(PenAxis::Slider)             == SDL_PEN_AXIS_SLIDER);
+    static_assert(int(PenAxis::TangentialPressure) == SDL_PEN_AXIS_TANGENTIAL_PRESSURE);
+
+    // The pen's buttons, tip and eraser from SDL's input flags.
+    static void SetPenFlags(PenState& pen, SDL_PenInputFlags flags)
+    {
+        pen.pointer     = PointerType::Pen;
+        pen.inProximity = true;
+        pen.touching    = (flags & SDL_PEN_INPUT_DOWN) != 0;
+        pen.eraser      = (flags & SDL_PEN_INPUT_ERASER_TIP) != 0;
+        pen.buttons     = uint8_t((flags >> 1) & 0x1F);   // SDL_PEN_INPUT_BUTTON_1 to _5
+    }
+
+    // Applies a pen event to `pen`; false for any other event. One pen is tracked at a time.
+    static bool UpdatePen(const SDL_Event* event, PenState& pen)
+    {
+        switch (event->type)
+        {
+            case SDL_EVENT_PEN_PROXIMITY_IN:
+                pen = PenState{ .pointer = PointerType::Pen, .inProximity = true };
+                return true;
+            case SDL_EVENT_PEN_PROXIMITY_OUT:
+                pen = PenState{};
+                return true;
+            case SDL_EVENT_PEN_DOWN:
+            case SDL_EVENT_PEN_UP:
+                SetPenFlags(pen, event->ptouch.pen_state);
+                pen.touching = event->ptouch.down;
+                pen.eraser   = event->ptouch.eraser;
+                return true;
+            case SDL_EVENT_PEN_BUTTON_DOWN:
+            case SDL_EVENT_PEN_BUTTON_UP:
+                SetPenFlags(pen, event->pbutton.pen_state);
+                return true;
+            case SDL_EVENT_PEN_MOTION:
+                SetPenFlags(pen, event->pmotion.pen_state);
+                return true;
+            case SDL_EVENT_PEN_AXIS:
+                SetPenFlags(pen, event->paxis.pen_state);
+                if (event->paxis.axis < SDL_PEN_AXIS_COUNT)
+                    pen.SetAxis(PenAxis(event->paxis.axis), event->paxis.value);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // The window a pen event is for; 0 for any other event.
+    static SDL_WindowID PenEventWindow(const SDL_Event* event)
+    {
+        switch (event->type)
+        {
+            case SDL_EVENT_PEN_PROXIMITY_IN:
+            case SDL_EVENT_PEN_PROXIMITY_OUT: return event->pproximity.windowID;
+            case SDL_EVENT_PEN_DOWN:
+            case SDL_EVENT_PEN_UP:            return event->ptouch.windowID;
+            case SDL_EVENT_PEN_BUTTON_DOWN:
+            case SDL_EVENT_PEN_BUTTON_UP:     return event->pbutton.windowID;
+            case SDL_EVENT_PEN_MOTION:        return event->pmotion.windowID;
+            case SDL_EVENT_PEN_AXIS:          return event->paxis.windowID;
+            default:                          return 0;
+        }
     }
 
     static IWindowContext* LocalGetWindowContext(OSWindowHandle handle)
@@ -937,6 +1007,10 @@ namespace tachyon
         }
         
         static tachyon::MouseButtons lastMouseButtons = tachyon::MouseButtons::None;
+        // The pen as SDL reports it, and whether the input handlers were last told of the pen
+        // rather than the mouse. SDL also turns the pen into mouse events (SDL_PEN_MOUSEID).
+        static tachyon::PenState s_pen;
+        static bool s_penSent = false;
 
         m_eventWatch = [](OSWindowHandle data, SDL_Event* event) -> bool
             {
@@ -982,6 +1056,33 @@ namespace tachyon
                 {
                     if (backend->ModalBlockerFor(event) != nullptr)
                         return false;
+                }
+
+                // A pointer event from the mouse while the handlers last heard of the pen
+                // gives the pointer back to the mouse; the pen's next event takes it again.
+                auto PointerFrom = [&](OSWindowHandle window, SDL_MouseID which)
+                {
+                    const bool fromPen = which == SDL_PEN_MOUSEID;
+                    if (fromPen == s_penSent)
+                        return;
+                    if (tachyon::IPlatformInputHandler* handler = GetInputContext(window))
+                    {
+                        handler->OnPen(GetWindowID(window), fromPen ? s_pen : tachyon::PenState{});
+                        s_penSent = fromPen;
+                    }
+                };
+
+                if (const SDL_WindowID penWindow = PenEventWindow(event))
+                {
+                    if (SDL_GetWindowFromID(penWindow) == (SDL_Window*)data && UpdatePen(event, s_pen))
+                    {
+                        if (tachyon::IPlatformInputHandler* handler = GetInputContext(data))
+                        {
+                            handler->OnPen(GetWindowID(data), s_pen);
+                            s_penSent = s_pen.IsPen();
+                        }
+                    }
+                    return false;
                 }
 
                 switch(event->type)
@@ -1062,6 +1163,7 @@ namespace tachyon
                         if (inputHandler == nullptr)
                             break;
 
+                        PointerFrom(data, event->motion.which);
                         const tachyon::int2 pixelPos = PixelPointOf((SDL_Window*)data, event->motion.x, event->motion.y);
                         const float x = float(pixelPos.x);
                         const float y = float(pixelPos.y);
@@ -1081,6 +1183,7 @@ namespace tachyon
 
                         tachyon::ID windowID = GetWindowID(data);
 
+                        PointerFrom(data, event->button.which);
                         const tachyon::int2 pixelPos = PixelPointOf((SDL_Window*)data, event->button.x, event->button.y);
                         const float x = float(pixelPos.x);
                         const float y = float(pixelPos.y);
@@ -1121,6 +1224,7 @@ namespace tachyon
                         if (inputHandler == nullptr)
                             break;
 
+                        PointerFrom(data, event->wheel.which);
                         const tachyon::int2 pixelPos = PixelPointOf((SDL_Window*)data, event->wheel.mouse_x, event->wheel.mouse_y);
                         const float x = float(pixelPos.x);
                         const float y = float(pixelPos.y);
@@ -1846,6 +1950,14 @@ namespace tachyon
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
             case SDL_EVENT_MOUSE_BUTTON_UP:    return SDL_GetWindowFromID(event->button.windowID);
             case SDL_EVENT_MOUSE_WHEEL:        return SDL_GetWindowFromID(event->wheel.windowID);
+            case SDL_EVENT_PEN_PROXIMITY_IN:
+            case SDL_EVENT_PEN_PROXIMITY_OUT:
+            case SDL_EVENT_PEN_DOWN:
+            case SDL_EVENT_PEN_UP:
+            case SDL_EVENT_PEN_BUTTON_DOWN:
+            case SDL_EVENT_PEN_BUTTON_UP:
+            case SDL_EVENT_PEN_MOTION:
+            case SDL_EVENT_PEN_AXIS:           return SDL_GetWindowFromID(PenEventWindow(event));
             case SDL_EVENT_DROP_BEGIN:
             case SDL_EVENT_DROP_POSITION:
             case SDL_EVENT_DROP_FILE:

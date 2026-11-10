@@ -785,6 +785,7 @@ namespace tachyon
         textGlowSampleStyleRef      = theme.GetStyle("text-glow-sample");
         settingsTitleStyleRef       = theme.GetStyle("settings-title");
         settingsScrollStyleRef      = theme.GetStyle("settings-scroll");
+        sketchPadStyleRef           = theme.GetStyle("sketch-pad");
         {
             const char* kSideTag[4]   = { "left", "right", "top", "bottom" };
             const char* kVAlignTag[3] = { "top",  "mid",   "bot" };
@@ -1482,6 +1483,13 @@ namespace tachyon
         if (title == "Table")       return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderTablePanel(); });
         if (title == "FrozenTable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderSplitScrollPanel(); });
         if (title == "Reorderable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderReorderablePanel(); });
+        if (title == "Sketch")
+        {
+            // The pen's readout changes with every move: never cached.
+            const ID id = CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderSketchPanel(); });
+            panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
+            return id;
+        }
         if (title == "Timeline")
         {
             // The simulation's fill grows every frame, playing or not: never cached.
@@ -1542,7 +1550,7 @@ namespace tachyon
                     Tabs({ "Hierarchy" }),
                     Split("RightPinned", 540,
                         Tabs({ "NodeView", "Viewport", "Settings" }),
-                        Tabs({ "Profiler", "Inspector", "Reorderable", "Misc", "BoxTest", "TreeTable", "Table", "FrozenTable" }))),
+                        Tabs({ "Profiler", "Inspector", "Reorderable", "Misc", "BoxTest", "TreeTable", "Table", "FrozenTable", "Sketch" }))),
                 Split("LeftPinned", 500, Tabs({ "Files" }), Tabs({ "Log", "Timeline" })),
                 120, 160));
         presets.AddBuiltIn("Scene",
