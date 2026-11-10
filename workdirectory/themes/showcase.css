@@ -433,6 +433,25 @@
 }
 
 /* ---- Settings page title -------------------------------------------------- */
+/* A settings page's body under its title, scrolling when it runs long. flex-basis 0:
+   sized by the page, not by its content, or it would never be shorter than that. */
+.settings-scroll {
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px;
+    gap: 0px;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    overflow: auto;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+
 /* Header line above each settings page's body - larger font, bold-ish, with
    a bottom margin so it visually separates from the field rows. */
 .settings-title {

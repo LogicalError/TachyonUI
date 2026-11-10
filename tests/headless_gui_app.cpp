@@ -145,6 +145,7 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
     };
 
     m_frame.RunStage(tachyon::FrameStage::PreFrame, ctx);
+    TickFrameClock(*this, int64_t(m_timeMs) * 1000000);   // AdvanceTime moves it
     ApplyPendingStyleReload();
 
     // -- BeginFrame on every manager that matters for construction/dispatch.

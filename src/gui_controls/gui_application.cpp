@@ -395,7 +395,8 @@ namespace tachyon
         styleManager.SetUIScale(m_displayScale * m_uiScale);
         theme.InitializeDefaultStyles(styleManager, textSystem);
         const float fontScale = m_globalFontScale > 0.0f ? m_globalFontScale : 1.0f;
-        if (theme.LoadTheme(styleManager, textSystem, ResourcePath(m_themePath), m_styleFiles, fontScale, m_accent))
+        if (theme.LoadTheme(styleManager, textSystem, ResourcePath(m_themePath), m_styleFiles, fontScale, m_accent,
+                            ThemeVariables()))
         {
             // After LoadTheme, so .table-cell / .tree-table-cell are resolved.
             if (textSystem) theme.ComputeRowMetrics(styleManager, *textSystem);
@@ -556,14 +557,62 @@ namespace tachyon
         m_themeReloadPending = true;
     }
 
+    void GUIApplication::SetThemeVariable(std::string_view name, std::string_view value)
+    {
+        // A dragged color or size may set it every frame; skip no-ops.
+        ThemeVariableOverrides& variables = ThemeVariables();
+        const auto it = variables.find(name);
+        if (it != variables.end() && it->second == value) return;
+        variables.insert_or_assign(std::string(name), std::string(value));
+        // A color shows at once; the theme loads again once it has stopped changing for a
+        // moment, for the colors made from it.
+        if (theme.ShowVariableColor(styleManager, name, value))
+            m_themeReloadAt = m_frameClock.Seconds() + kThemeSettleSecs;
+        else
+            m_themeReloadPending = true;
+    }
+
+    ThemeVariableOverrides& GUIApplication::ThemeVariables()
+    {
+        // By the theme's path, written the same way however it was given.
+        return m_themeVariables[std::filesystem::path(m_themePath).lexically_normal().generic_string()];
+    }
+
+    const ThemeVariableOverrides& GUIApplication::GetThemeVariables() const
+    {
+        static const ThemeVariableOverrides kNone;
+        const auto it = m_themeVariables.find(std::filesystem::path(m_themePath).lexically_normal().generic_string());
+        return it != m_themeVariables.end() ? it->second : kNone;
+    }
+
+    void GUIApplication::ClearThemeVariable(std::string_view name)
+    {
+        ThemeVariableOverrides& variables = ThemeVariables();
+        const auto it = variables.find(name);
+        if (it == variables.end()) return;
+        variables.erase(it);
+        m_themeReloadPending = true;
+    }
+
+    void GUIApplication::ClearThemeVariables()
+    {
+        ThemeVariableOverrides& variables = ThemeVariables();
+        if (variables.empty()) return;
+        variables.clear();
+        m_themeReloadPending = true;
+    }
+
     void GUIApplication::ApplyPendingStyleReload()
     {
         // Runs before BeginFrame so style state is consistent for the whole frame.
         if (windowManager && windowManager->MainDisplayScale() != m_displayScale)
             m_themeReloadPending = true; // the main window moved to a monitor with another scale
+        if (m_themeReloadAt >= 0.0 && m_frameClock.Seconds() >= m_themeReloadAt)
+            m_themeReloadPending = true; // a color shown at once has settled
         if (!m_themeReloadPending)
             return;
         m_themeReloadPending = false;
+        m_themeReloadAt = -1.0;
 
         // Another palette or accent (not just another scale or font size): the old look crossfades out.
         if ((m_themePath != m_loadedThemePath || m_accent != m_loadedAccent) && !m_loadedThemePath.empty()

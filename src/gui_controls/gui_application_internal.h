@@ -71,5 +71,7 @@ namespace tachyon
         static ColorPickerSubsystem&    ColorPicker(GUIApplication& app)    { return *app.m_colorPickerSub; }
         static GradientEditorSubsystem& GradientEditor(GUIApplication& app) { return *app.m_gradientEditorSub; }
         static void      ReloadThemeNextFrame(GUIApplication& app)                                 { app.m_themeReloadPending = true; }
+        /// Moves the frame clock to `nowNanos`, as a frame does: for a headless frame, run on its own clock.
+        static void      TickFrameClock(GUIApplication& app, int64_t nowNanos)                    { app.m_frameClock.Tick(nowNanos, 0.0f); }
     };
 }

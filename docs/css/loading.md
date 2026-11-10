@@ -13,7 +13,7 @@ A theme is a palette file followed by one or more style files:
 | File | Contents |
 | --- | --- |
 | `themes/dark.css`, `themes/light.css` | The palette: only `:root` custom properties (colors, shadows). |
-| `themes/styles.css` | The library's rules: shared dimensions in `:root`, `@font-face`, one class per control part. |
+| `themes/styles.css` | The library's rules: an `@property` rule describing each variable, shared dimensions in `:root`, `@font-face`, one class per control part. |
 | `themes/showcase.css` | Showcase app only. |
 
 A custom property is a named value, such as `--accent`. It is defined inside a `:root { }`
@@ -121,6 +121,8 @@ Button("Larger text", [this] { RequestReloadTheme(GetThemePath(), GetGlobalFontS
   - on `SetUIScale`
   - when the main window moves to a monitor with a different display scale
   - on `SetAccent` (see [The accent color](#the-accent-color))
+  - on `SetThemeVariable`, `ClearThemeVariable` and `ClearThemeVariables` (see
+    [Changing variables from code](#changing-variables-from-code))
 - Parse errors are logged as `file:line:column: message`.
   - The bad declaration or rule is skipped.
   - Parsing continues after it.
@@ -180,6 +182,82 @@ The palette variables that follow the accent:
   palette, white on the light one. That suits the four presets; with a color of your own,
   check that text on it reads well.
 - `theme.IsLight()` says whether the palette loaded is a light one.
+
+## Changing variables from code
+
+Any variable can be changed at runtime, without a file: a color, a size, a shadow. A
+settings page can let the user make the theme their own this way.
+
+- `SetThemeVariable(name, value)` sets a variable to a CSS value.
+  - For example `SetThemeVariable("--bg-panel", "#202020")` or
+    `SetThemeVariable("--radius-md", "6px")`.
+  - It wins over the palette, the style files and `SetAccent`.
+- Each palette keeps its own changes.
+  - A change made while `dark.css` is loaded is the dark palette's.
+  - Switch to `light.css` and its own changes show; switch back and the dark ones do.
+- `ClearThemeVariable(name)` takes one back to the palette's value.
+- `ClearThemeVariables()` takes them all back, for the palette loaded.
+- `GetThemeVariables()` returns the palette loaded's changes, by name.
+- `PersistThemeVariables(key)` keeps every palette's changes in the saved UI state (see
+  [Saved UI state](../overview/errors-and-state.md#saved-ui-state)), like `PersistValue`.
+
+```cpp
+PersistThemeVariables("themeVariables");      // in Initialize, before RestoreUIState
+...
+SetThemeVariable("--accent", "#F472B6");      // pink, for this palette
+ClearThemeVariables();                        // back to the palette's own
+```
+
+How fast a change shows:
+
+- A color shows on the next frame, without loading the theme again: each color taken from a
+  variable keeps a slot of its own, and the new color is written into it.
+- Colors only made from it catch up a moment later, once it has stayed the same for 0.4 s:
+  the theme loads again then. These are hover tints over it, shadows in it, and variables
+  set from it.
+  - So dragging a color in a picker stays smooth.
+- Anything else, such as a size, loads the theme again at the start of the next frame.
+- A value that would end its declaration (one with `;`, `{` or `}`) is left out, and logged.
+
+## A theme editor
+
+The `@property` rules (see [\@property](syntax.md#property)) say enough about each variable
+to build an editor for them:
+
+- `theme.GetVariables()`: the loaded theme's variables, in their order, as
+  `CustomPropertyInfo`s.
+  - Each has its `name`, `type`, `category`, `label`, `description`, and `min` and `max`
+    when `hasRange`.
+- `theme.GetVariable(name)`: its value, changes included, as a `CustomProperty`.
+  - Its `text` is the value as written, such as `"#121418"` or `"4px 0px 0px 4px"`.
+  - Its parsed forms: `color` when `hasColor`, `number` and `dims` when `hasNumber`,
+    `shadows` when `hasShadow`.
+
+A row per variable, with a field for its kind (the showcase's Appearance page has the whole
+editor, in `examples/showcase/settings_theme.cpp`):
+
+```cpp
+for (const CustomPropertyInfo& info : theme.GetVariables())
+{
+    const CustomProperty* value = theme.GetVariable(info.name);
+    if (!value || info.type != CustomPropertyType::Color)
+        continue;
+    Label(info.label);
+    SetTooltip(info.description);
+    color4b color = value->color;
+    if (ColorField(idManager.AllocateDynamicID("color"), color))
+        SetThemeVariable(info.name, std::format("#{:02X}{:02X}{:02X}{:02X}", color.r, color.g, color.b, color.a));
+}
+```
+
+The fields for the other kinds:
+
+| `type` | Field |
+| --- | --- |
+| `Number`, `Length` | `Field` with a `NumericFieldConfig` from the range |
+| `Edges`, `Lengths` | `EdgesField` |
+| `Corners` | `CornersField` |
+| `Shadow` | `ShadowField` |
 
 ---
 

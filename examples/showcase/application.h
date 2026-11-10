@@ -118,7 +118,7 @@ namespace tachyon
         StyleRef profilerHeaderStyleRef, profilerRecordStyleRef, profilerPauseStyleRef, profilerMsStyleRef, profilerFpsStyleRef;
         StyleRef profilerPctCellStyleRef, profilerPctTrackStyleRef, profilerPctFillStyleRef, profilerPctTextStyleRef;
         StyleRef logDetailPaneStyleRef, logDetailTextStyleRef;
-        StyleRef shortcutCategoryStyleRef, shortcutTableStyleRef, shortcutCellStyleRef, settingsTitleStyleRef;
+        StyleRef shortcutCategoryStyleRef, shortcutTableStyleRef, shortcutCellStyleRef, settingsTitleStyleRef, settingsScrollStyleRef;
         StyleRef dataTableCellStyleRef, dataTableNumberStyleRef;
         StyleRef textShadowSampleStyleRef, textGlowSampleStyleRef;
         StyleRef iconVAlignDemoStyleRefs[4][3];   // [IconSide L/R/T/B][top/mid/bot]
@@ -159,6 +159,16 @@ namespace tachyon
             ID windowLayoutID1 { };
             ID windowLayoutID2 { };
             ID dragGhostWindowID {};
+
+            // The theme editor on the Appearance page: its search, which categories are open,
+            // and the Reset dialog.
+            struct ThemeEditor
+            {
+                std::string                 search;
+                std::map<std::string, bool> open;
+                bool                        confirmReset = false;
+                ID                          resetDialogID {};
+            } themeEditor;
 
             // Reorderable demo state
             ID reorderTabsID { ID::Invalid() };
@@ -573,6 +583,13 @@ namespace tachyon
         // while the panel is the active tab.
         void RenderReorderablePanel();
         void RenderTimelinePanel();
+        /// The Appearance page's theme editor: the theme's colors and sizes by category, each
+        /// change kept for that theme (settings_theme.cpp).
+        void RenderThemeEditor();
+        /// A theme variable's row: its label, and a field for its type.
+        void ThemeVariableRow(const CustomPropertyInfo& info);
+        /// The theme picker's row: Dark or Light, and Reset for the changes made to it.
+        void RenderThemePicker();
         /// The timeline editor demo's tracks, keys, sound and events, and its callbacks.
         void SeedAnimation();
         void RenderHierarchyPanel(HierarchyPanel& panel);

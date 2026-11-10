@@ -29,6 +29,18 @@ const CustomProperty* StyleSheet::GetCustomProperty(std::string_view name) const
 }
 
 // ============================================================================
+// StyleSheet::GetPropertyInfo
+// ============================================================================
+
+const CustomPropertyInfo* StyleSheet::GetPropertyInfo(std::string_view name) const
+{
+    for (const CustomPropertyInfo& info : propertyInfos)
+        if (info.name == name)
+            return &info;
+    return nullptr;
+}
+
+// ============================================================================
 // ParseStyleSheet
 // ============================================================================
 

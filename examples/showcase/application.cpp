@@ -50,6 +50,7 @@ namespace tachyon
         PersistValue("fontSize", showcase.settingsFontScalePct);
         PersistValue("motion", showcase.settingsMotionIndex);
         PersistValue("accent", showcase.settingsAccentIndex);
+        PersistThemeVariables("themeVariables");
         PersistShortcuts("shortcuts", commandManager);
         AddBuiltInLayouts();
         PersistLayoutPresets("layouts", showcase.layoutPresets);
@@ -77,6 +78,9 @@ namespace tachyon
     {
         if (!m_startTheme.empty())
             showcase.settingsThemePath = m_startTheme;
+        else if (std::none_of(std::begin(kThemePaths), std::end(kThemePaths), [this](const char* path) {
+                     return std::filesystem::path(path).lexically_normal() == std::filesystem::path(showcase.settingsThemePath).lexically_normal(); }))
+            showcase.settingsThemePath = kThemePaths[0];   // saved, but not one the showcase offers
         showcase.settingsFontScalePct = std::clamp(std::round(showcase.settingsFontScalePct / 10.0f) * 10.0f, 100.0f, 300.0f);
         showcase.settingsMotionIndex  = std::clamp(showcase.settingsMotionIndex, 0, 2);
         showcase.settingsAccentIndex  = std::clamp(showcase.settingsAccentIndex, 0, int(std::size(kAccentPresets)) - 1);
@@ -780,6 +784,7 @@ namespace tachyon
         textShadowSampleStyleRef    = theme.GetStyle("text-shadow-sample");
         textGlowSampleStyleRef      = theme.GetStyle("text-glow-sample");
         settingsTitleStyleRef       = theme.GetStyle("settings-title");
+        settingsScrollStyleRef      = theme.GetStyle("settings-scroll");
         {
             const char* kSideTag[4]   = { "left", "right", "top", "bottom" };
             const char* kVAlignTag[3] = { "top",  "mid",   "bot" };

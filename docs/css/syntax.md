@@ -257,6 +257,69 @@ From `themes/styles.css`, where `--border` and `--radius-md` hold one number eac
 }
 ```
 
+### !important
+
+A variable set with `!important` keeps its value when a later `:root` sets it again without
+it:
+
+- A later `!important` value does replace it.
+- A rule that used the variable before either was set keeps what it had.
+
+```css
+:root { --radius-md: 6px !important; }   /* first */
+:root { --radius-md: 4px; }              /* later, in styles.css: left as 6px */
+```
+
+The app's own changes to a theme (`SetThemeVariable`, see
+[Changing variables from code](loading.md#changing-variables-from-code)) are put in front
+of the palette this way, so they win over every file.
+
+## \@property
+
+An `@property` rule says what a custom property is, for a theme editor: what kind of value
+it holds, a name to show, what it's for, and the group it belongs in. The library's are at
+the top of `themes/styles.css`.
+
+```css
+@property --radius-md {
+    syntax: "<length>";
+    category: "Sizes";
+    label: "Control corners";
+    description: "Corner radius of controls";
+    range: 0px 16px;
+}
+```
+
+| Descriptor | What it says |
+| --- | --- |
+| `syntax` | The kind of value, from the table below |
+| `category` | The group a theme editor shows it in, such as "Surfaces" |
+| `label` | The name a theme editor shows for it, such as "Panel" |
+| `description` | What it's for, a short sentence |
+| `range` | The smallest and largest number it may be: `range: 0 1;` |
+
+| `syntax` | Holds | A theme editor shows |
+| --- | --- | --- |
+| `"<color>"` | A color or a gradient | A color field |
+| `"<number>"` | One number | A number field |
+| `"<length>"` | One length, in pixels | A number field |
+| `"<edges>"` | One to four lengths, a side each, as `border-width` takes them | `EdgesField` |
+| `"<corners>"` | One to four lengths, a corner each, as `border-radius` takes them | `CornersField` |
+| `"<length>+"` | One to four lengths | `EdgesField` |
+| `"<shadow>"` | A box-shadow, or `none` | `ShadowField` |
+| `"*"` | Anything | Its text |
+
+- Each variable's value is checked against its rule once the whole theme is read, so the
+  rule and the value can be in any file and either order.
+  - A value of another kind is an error, for example a length for a `"<color>"`.
+  - A number outside the `range` is an error. With several lengths, each is checked.
+- `inherits` and `initial-value`, which browsers' `@property` has, are accepted and passed
+  over: the palette sets every value.
+- A second rule for the same name replaces the first, in the first's place.
+- In C++, `StyleSheet::propertyInfos` lists them in order, as `CustomPropertyInfo`s.
+  `GUITheme::GetVariables()` has the loaded theme's (see
+  [A theme editor](loading.md#a-theme-editor)).
+
 ---
 
 [Previous: How a theme loads](loading.md) | [CSS and theming](../css.md) | [Next: Values](values.md)

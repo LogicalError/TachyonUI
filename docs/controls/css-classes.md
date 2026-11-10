@@ -33,6 +33,8 @@ Button("Delete", onDelete, theme.GetStyle("my-danger-button"));  // your own cla
 | `AutocompleteField` | `textbox`; list `command-search-list`, rows `menu-item-row`, highlighted row `command-search-current-row` |
 | `Field` (numbers) | `number-field` |
 | `Field` (vectors) | `vector-component`, `axis-label-x` / `-y` / `-z` / `-w` |
+| `EdgesField`, `CornersField` | `box-sides-link` (the link toggle), `vector-component`, `axis-label-w` |
+| `ShadowField` | a `ColorField`, `vector-component`, `axis-label-w` |
 | `TypedField` | `typed-field` |
 | `Field` (lists, dictionaries) | `collection-area` |
 | `SliderField` | `slider-field-track` |

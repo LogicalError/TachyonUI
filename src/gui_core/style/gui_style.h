@@ -530,6 +530,10 @@ namespace tachyon
         short4    transformationY = { 0, one, 0, 0 }; ///< second row of the 2x3 gradient transform (half floats)
         ColorType type            = (ColorType)0; ///< how the fill is painted
         short2    animSpeed       = { 0, 0 }; ///< half floats, see SetAnimSpeed
+        /// The theme variable the fill came from, as numbered in StyleSheet::colorVariables
+        /// (from 1); 0 for none. Registered, a variable's fills get slots of their own, so a
+        /// new value can be written into them (StyleManager::SetVariableColor) at once.
+        uint16_t  variable        = 0;
 
         /// Sets the 2x3 transform applied to gradient coordinates, row by row.
         void SetTransformation(float3 x, float3 y);

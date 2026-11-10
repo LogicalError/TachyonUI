@@ -17,8 +17,8 @@ From `themes/styles.css`:
 
 | Page | Covers |
 | --- | --- |
-| [How a theme loads](css/loading.md) | Theme files, load order, palettes, reloads, the accent color |
-| [Syntax](css/syntax.md) | Rules, selectors, states, comments, `@font-face`, custom properties |
+| [How a theme loads](css/loading.md) | Theme files, load order, palettes, reloads, the accent color, changing variables from code, a theme editor |
+| [Syntax](css/syntax.md) | Rules, selectors, states, comments, `@font-face`, custom properties, `!important`, `@property` |
 | [Values](css/values.md) | Numbers, units, colors, gradients |
 | [Properties](css/properties.md) | Every supported property, and what isn't supported |
 | [Using styles from C++](css/from-cpp.md) | Theme classes, styles built in code, UI scale |

@@ -186,6 +186,10 @@ namespace tachyon
             timelineKeyIcon      = registerIcon("timeline-key", R"(<path d="m12 4 8 8-8 8-8-8Z"/>)");
             timelineAudioIcon    = registerIcon("timeline-audio", R"(<path d="M11 5 6 9H2v6h4l5 4ZM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>)");
             timelineEventsIcon   = registerIcon("timeline-events", R"(<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>)");
+            linkIcon   = registerIcon("link",
+                R"(<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>)");
+            unlinkIcon = registerIcon("unlink",
+                R"(<path d="m18.8 13.2 1.7-1.7a5 5 0 0 0-7-7l-1.7 1.7M5.2 10.8l-1.7 1.7a5 5 0 0 0 7 7l1.7-1.7M8 2v3M2 8h3M16 22v-3M22 16h-3"/>)");
 
             // The spinner: a quarter of a circle of radius 9, a frame every 15 degrees.
             for (int frame = 0; frame < kSpinnerFrames; ++frame)
@@ -266,6 +270,45 @@ namespace tachyon
         return it != m_paletteColors.end() ? it->second : fallback;
     }
 
+    const CustomProperty* GUITheme::GetVariable(std::string_view name) const
+    {
+        const auto it = m_variableValues.find(std::string(name));
+        return it != m_variableValues.end() ? &it->second : nullptr;
+    }
+
+    VisualColorStyleIndex GUITheme::VariableColor(StyleManager& styleManager, const char* name, color4f fallback)
+    {
+        const auto it = m_variableValues.find(name);
+        if (it == m_variableValues.end() || !it->second.hasColor)
+            return styleManager.RegisterColorStyle(ColorStyle::Create(fallback));
+        ColorStyle color = ColorStyle::Create(it->second.color);
+        // Numbered after the ones the styles use when they use it nowhere.
+        const auto [number, added] = m_colorVariables.try_emplace(name, uint16_t(m_colorVariables.size() + 1));
+        color.variable = number->second;
+        return styleManager.RegisterColorStyle(color);
+    }
+
+    bool GUITheme::ShowVariableColor(StyleManager& styleManager, std::string_view name, std::string_view value)
+    {
+        const auto current = m_variableValues.find(std::string(name));
+        if (current == m_variableValues.end() || !current->second.hasColor || value.find_first_of(";{}") != std::string_view::npos)
+            return false;   // a value that would end its declaration is left to the reload, which skips it
+        const StyleSheet parsed = ParseStyleSheet(std::format(":root {{ {}: {}; }}", name, value));
+        const CustomProperty* color = parsed.GetCustomProperty(name);
+        if (parsed.HasErrors() || !color || !color->hasColor)
+            return false;
+
+        if (const auto number = m_colorVariables.find(std::string(name)); number != m_colorVariables.end())
+            styleManager.SetVariableColor(number->second, color->colorStyle);
+        CustomProperty& now = current->second;
+        now.color      = color->color;
+        now.colorStyle = color->colorStyle;
+        now.text       = color->text;
+        const color4b c = color->color;
+        m_paletteColors[std::string(name)] = { c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, c.a / 255.0f };
+        return true;
+    }
+
     StyleRef GUITheme::GetStyle(std::string_view cssClass) const
     {
         const auto it = m_classStyles.find(cssClass);
@@ -286,7 +329,7 @@ namespace tachyon
 
     bool GUITheme::LoadTheme(StyleManager& styleManager, ITextSystem* textSystem, const std::string& themePath,
                              std::span<const std::string> styleFiles, float fontScale,
-                             std::optional<AccentColors> accent)
+                             std::optional<AccentColors> accent, const ThemeVariableOverrides& overrides)
     {
         // -------------------------------------------------------------------------
         // Theme = palette file (dark.css / light.css, only `:root` vars) + a
@@ -315,12 +358,32 @@ namespace tachyon
             ss << text << '\n';
             line += int(std::count(text.begin(), text.end(), '\n')) + 1;
         };
+        // Variables set in code come first, each `!important`, so a file setting it later
+        // leaves it.
+        std::string overrideBlock;
+        if (!overrides.empty())
+        {
+            overrideBlock = ":root {\n";
+            for (const auto& [name, value] : overrides)
+            {
+                // One declaration each: a value can't end it or the block.
+                if (name.size() < 3 || !name.starts_with("--") || value.find_first_of(";{}") != std::string::npos
+                    || name.find_first_of(";{}: ") != std::string::npos)
+                {
+                    TACHYON_LOG_ERROR(kLogTheme, "theme variable {}: '{}' is not a single value", name, value);
+                    continue;
+                }
+                overrideBlock += std::format("    {}: {} !important;\n", name, value);
+            }
+            overrideBlock += "}";
+            append("(theme variables)", overrideBlock);
+        }
         append(themePath, *palette);
 
         // Light or dark, from the palette alone; an accent set in code goes after it, so the
         // style files see it in place of the palette's.
         {
-            const StyleSheet paletteSheet = ParseStyleSheet(*palette);
+            const StyleSheet paletteSheet = ParseStyleSheet(overrideBlock + "\n" + *palette);
             m_isLight = IsLightColor(PaletteColor(paletteSheet, "--bg-panel", color4b{ 0, 0, 0, 255 }));
             if (accent)
                 append("(accent)", AccentOverride(m_isLight ? accent->light : accent->dark, m_isLight, paletteSheet));
@@ -351,6 +414,11 @@ namespace tachyon
             RegisterFontFaces(*textSystem, sheet.fontFaces, themeDir);
         TACHYON_LOG_INFO(kLogTheme, "loaded {}: {} styles, {} errors", themePath, sheet.styles.size(), sheet.errors.size());
 
+        m_variables      = sheet.propertyInfos;
+        m_variableValues = sheet.customProperties;
+        m_colorVariables.clear();
+        for (size_t i = 0; i < sheet.colorVariables.size(); ++i)
+            m_colorVariables[sheet.colorVariables[i]] = uint16_t(i + 1);
         m_paletteColors.clear();
         for (const auto& [name, prop] : sheet.customProperties)
             if (prop.hasColor)
@@ -359,10 +427,7 @@ namespace tachyon
         // Line color styles from CSS custom properties (with fallbacks)
         auto lineColorFromCSS = [&](const char* varName, color4f fallback) -> tachyon::VisualColorStyleIndex
             {
-                const auto* prop = sheet.GetCustomProperty(varName);
-                if (prop && prop->hasColor)
-                    return styleManager.RegisterColorStyle(ColorStyle::Create(prop->color));
-                return styleManager.RegisterColorStyle(ColorStyle::Create(fallback));
+                return VariableColor(styleManager, varName, fallback);
             };
 
         lineGrayStyle      = lineColorFromCSS("--text-3", color4f{ 0.4f, 0.4f, 0.4f, 1.0f });
@@ -827,6 +892,7 @@ namespace tachyon
         timelineDividerStyleRef           = registerCSS("timeline-divider");
         timelineFpsStyleRef               = registerCSS("timeline-fps");
         timelineSnapStyleRef              = registerCSS("timeline-snap");
+        boxSidesLinkStyleRef              = registerCSS("box-sides-link");
         timelineZoomStyleRef              = registerCSS("timeline-zoom");
         timelineHeaderStyleRef            = registerCSS("timeline-header");
         timelineListHeaderStyleRef        = registerCSS("timeline-list-header");

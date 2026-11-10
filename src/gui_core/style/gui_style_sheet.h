@@ -42,6 +42,45 @@ namespace tachyon
         /// A box-shadow value (`--shadow: 0 8px 20px rgba(0,0,0,0.35);`, or none).
         BoxShadow  shadows[kMaxBoxShadows] {}; ///< see hasShadow
         bool       hasShadow = false; ///< shadows is set (all-empty for `none`)
+
+        std::string text;              ///< the value as written, such as "#121418" or "4px 0px 0px 4px"
+        int         line = 0;          ///< the line that set it
+        bool        important = false; ///< set with `!important`: a later plain declaration leaves it
+    };
+
+    /// The kind of value an `@property` rule's `syntax` allows.
+    enum class CustomPropertyType : uint8_t
+    {
+        Any,       ///< "*": anything, not checked
+        Color,     ///< "<color>": a color or a gradient
+        Number,    ///< "<number>": one number
+        Length,    ///< "<length>": one length, in pixels
+        Lengths,   ///< "<length>+": one to four lengths
+        Edges,     ///< "<edges>": one to four lengths, a side each, as border-width takes them
+        Corners,   ///< "<corners>": one to four lengths, a corner each, as border-radius takes them
+        Shadow,    ///< "<shadow>": a box-shadow, or none
+    };
+
+    /// What an `@property` rule says about a custom property: enough for a theme editor to
+    /// show it and pick the right field for it.
+    ///     @property --radius-md {
+    ///         syntax: "<length>";
+    ///         category: "Sizes";
+    ///         label: "Control corners";
+    ///         description: "Corner radius of controls";
+    ///         range: 0 16;
+    ///     }
+    struct CustomPropertyInfo
+    {
+        std::string        name;          ///< with the leading "--"
+        CustomPropertyType type = CustomPropertyType::Any;
+        std::string        category;      ///< the group it's shown in, such as "Surfaces"
+        std::string        label;         ///< the name it's shown with, such as "Panel"
+        std::string        description;   ///< what it's used for, a short sentence
+        bool               hasRange = false;   ///< min and max are set
+        float              min = 0.0f;    ///< the smallest value a number or length may have
+        float              max = 0.0f;    ///< the largest
+        int                line = 0;      ///< the line of the rule
     };
 
     /// One `@font-face` rule. Faces sharing a family name form one family.
@@ -69,7 +108,12 @@ namespace tachyon
         /// with StyleManager::RegisterWithChildStyles.
         std::unordered_map<std::string, ChildStyles>    childStyles;
         std::unordered_map<std::string, CustomProperty> customProperties; ///< keyed by name including the leading "--"
-        std::vector<FontFace>                           fontFaces; ///< in source order
+        /// What the `@property` rules say about the custom properties, in source order; a
+        /// second rule for a name replaces the first in its place.
+        std::vector<CustomPropertyInfo>                 propertyInfos;
+        /// The custom properties whose colors the styles use, numbered from 1 in this order:
+        /// ColorStyle::variable of a color taken from `var(--name)` is its number.
+        std::vector<std::string>                        colorVariables;        std::vector<FontFace>                           fontFaces; ///< in source order
         Style                                           baseStyle; ///< what `*` rules set; styles start from it
         std::vector<ParseError>                         errors; ///< in the order found
 
@@ -79,6 +123,9 @@ namespace tachyon
         const Style*          GetStyle(std::string_view name)          const;
         /// A custom property by name (with the leading "--"); nullptr when not defined.
         const CustomProperty* GetCustomProperty(std::string_view name) const;
+        /// The `@property` rule's facts for a custom property (with the leading "--");
+        /// nullptr when it has none.
+        const CustomPropertyInfo* GetPropertyInfo(std::string_view name) const;
     };
 
     /// Parses a theme's CSS (the subset TachyonUI supports, see docs/css.md) into a
