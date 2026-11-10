@@ -82,6 +82,9 @@ namespace tachyon
         tachyon::KeyModifier modifiers = tachyon::KeyModifier::None;
 
         tachyon::float2 scroll{}; ///< wheel notches (fractional on hi-res devices); label drags: pixels
+        /// A trackpad pinch (a MouseScroll event): how far the fingers spread since the last one,
+        /// above 1 apart (zoom in), below 1 together. 1 for every other event.
+        float pinch = 1.0f;
 
         tachyon::KeyCode lastKey = tachyon::KeyCode::None;
         tachyon::KeyAction lastKeyAction = tachyon::KeyAction::KeyDown;

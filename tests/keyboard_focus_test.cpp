@@ -31,7 +31,7 @@ namespace tachyon
                 for (ID* id : { &buttonID, &toggleID, &checkboxID, &switchID, &textID, &numberID,
                                 &sliderFieldID, &intSliderFieldID, &sliderID, &colorID, &gradientID, &listID, &disabledID,
                                 &toolbarButtonID, &toolbarToggleID, &toolbarMenuID, &breadcrumbID, &typedID,
-                                &listViewID, &tableID, &dropdownID, &timelineID, &editorID, &edgesID, &cornersID, &shadowID, &curveID })
+                                &listViewID, &tableID, &dropdownID, &timelineID, &editorID, &edgesID, &cornersID, &shadowID, &curveID, &plotID })
                     *id = app.idManager.CreateStaticID();
                 tableColumns.push_back({
                     .column = { .header = "Name", .initialWidth = 120, .minWidth = 60, .maxWidth = 300 },
@@ -78,6 +78,7 @@ namespace tachyon
                     app.CornersField(cornersID, corners);
                     app.ShadowField(shadowID, shadow);
                     app.CurveField(curveID, curve, LayoutOverride::FixedWidth(120));
+                    app.Plot(plotID, plot, LayoutOverride{}.Size(200, 140));
                     app.BeginDisabled();
                     app.Button(disabledID, "Disabled", [] {});
                     app.EndDisabled();
@@ -115,7 +116,8 @@ namespace tachyon
                     { toolbarToggleID, "toolbar Toggle" }, { toolbarMenuID, "toolbar BeginMenu" }, { breadcrumbID, "Breadcrumb" },
                     { typedID, "TypedField" }, { listViewID, "ListView" }, { tableID, "VirtualTable" }, { dropdownID, "Dropdown" },
                     { timelineID, "Timeline" }, { editorID, "TimelineEditor" }, { edgesID, "EdgesField" },
-                    { cornersID, "CornersField" }, { shadowID, "ShadowField" }, { curveID, "CurveField" } };
+                    { cornersID, "CornersField" }, { shadowID, "ShadowField" }, { curveID, "CurveField" },
+                    { plotID, "Plot" } };
                 const auto& storage = app.elementStorage;
                 std::string name = "an unnamed control";
                 for (ElementRef ref = storage.FindElementRefByID(id); ref.IsValid(); ref = storage.GetParentRef(ref))
@@ -133,7 +135,7 @@ namespace tachyon
             HeadlessGUIApp app;
             ID buttonID, toggleID, checkboxID, switchID, textID, numberID, sliderFieldID, intSliderFieldID,
                sliderID, colorID, gradientID, listID, disabledID, toolbarButtonID, toolbarToggleID, toolbarMenuID,
-               breadcrumbID, typedID, listViewID, tableID, dropdownID, timelineID, editorID, edgesID, cornersID, shadowID, curveID;
+               breadcrumbID, typedID, listViewID, tableID, dropdownID, timelineID, editorID, edgesID, cornersID, shadowID, curveID, plotID;
             TimelineState playback;
             TimelineView animation;
             bool toolbarToggle = false;
@@ -152,6 +154,8 @@ namespace tachyon
             BoxCorners corners = BoxCorners(4);          // linked
             BoxShadow  shadow  { .y = 4, .blur = 12, .color = { 0, 0, 0, 90 } };
             CurveView  curve;
+            PlotView   plot { .series = { PlotSeries{ .name = "R", .values = { 1, 2 } }, PlotSeries{ .name = "G", .values = { 2, 1 } } },
+                              .handles = { { "Black", 0.0f }, { "White", 1.0f } } };
         };
 
         TEST_F(KeyboardFocusTest, TabReachesEveryControlAndEachShowsTheFocus)
@@ -192,6 +196,8 @@ namespace tachyon
             EXPECT_EQ(partsOf("CornersField"), 2);
             // The shadow's color field, and its four sizes.
             EXPECT_GE(partsOf("ShadowField"), 5);
+            // Its three chips (All, R, G) and the plot.
+            EXPECT_EQ(partsOf("Plot"), 4);
 
             for (const ID id : visited)
             {

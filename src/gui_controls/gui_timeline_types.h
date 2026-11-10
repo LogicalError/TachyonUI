@@ -200,7 +200,7 @@ namespace tachyon
         float             scrubBefore = 0.0f;
         PointerDrag       pan;                          ///< the scroll bar's thumb
         float             panBefore = 0.0f;
-        PointerDrag       dragScroll;                   ///< the right button held over the ruler or lanes
+        PointerDrag       dragScroll;                   ///< the middle button (or Alt + left) held over the ruler or lanes
         float             dragScrollStart = 0.0f;       ///< the view's start at its press
         int               dragScrollOffset = 0;         ///< the rows' scroll at its press
         int               zoom = 0;                     ///< the zoom slider, 0 (all of it) to 100

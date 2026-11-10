@@ -44,6 +44,8 @@ namespace tachyon
         void OnTextComposition(tachyon::ID, std::string_view, int32_t) override {} // the text editor shows it
         void OnFileDrop(tachyon::ID windowId, tachyon::int2 screenPos, FileDropAction action, std::string_view data) override;
         void OnPen(tachyon::ID /*windowId*/, const PenState& pen) override { m_pen = pen; }
+        /// Recorded as a MouseScroll with InputState::pinch, where the pointer is.
+        void OnPinch(tachyon::ID windowId, float scale, KeyModifier modifiers) override;
         ///@}
 
         /// The pen as of the latest OnPen; a default PenState while the mouse has the pointer.

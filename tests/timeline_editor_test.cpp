@@ -249,7 +249,7 @@ namespace tachyon
 
         // A drag with the right button pans along the time and scrolls the rows; Escape puts
         // both back; a right click that doesn't move does neither.
-        TEST_F(TimelineEditorTest, TheRightButtonDragsTheViewAround)
+        TEST_F(TimelineEditorTest, TheMiddleButtonDragsTheViewAround)
         {
             // Enough rows to scroll.
             for (int i = 0; i < 40; ++i)
@@ -262,11 +262,11 @@ namespace tachyon
             const int2 from = LanesPoint(3.0f, 3);
 
             app.InjectMouseMove(from);
-            app.InjectMouseDown(from, MouseButtons::Right);
+            app.InjectMouseDown(from, MouseButtons::Middle);
             Frame();
-            app.InjectMouseMove({ from.x - 50, from.y - 30 }, MouseButtons::Right);
+            app.InjectMouseMove({ from.x - 50, from.y - 30 }, MouseButtons::Middle);
             Frame();
-            app.InjectMouseMove({ from.x - 100, from.y - 60 }, MouseButtons::Right);
+            app.InjectMouseMove({ from.x - 100, from.y - 60 }, MouseButtons::Middle);
             Frame();
             const float perPixel = 2.0f / float(LanesRange().w);
             EXPECT_NEAR(view.viewStart, 2.0f + 100.0f * perPixel, 1e-3f) << "the time follows the pointer";
@@ -275,25 +275,90 @@ namespace tachyon
             Frame();
             EXPECT_EQ(view.viewStart, 2.0f);
             EXPECT_EQ(scrolling.GetScrollOffset(body).y, 0);
-            app.InjectMouseUp({ from.x - 100, from.y - 60 }, MouseButtons::Right);
+            app.InjectMouseUp({ from.x - 100, from.y - 60 }, MouseButtons::Middle);
             Frame();
 
             // Not past the ends: the rows don't scroll down past the top.
             app.InjectMouseMove(from);
-            app.InjectMouseDown(from, MouseButtons::Right);
+            app.InjectMouseDown(from, MouseButtons::Middle);
             Frame();
-            app.InjectMouseMove({ from.x + 2000, from.y + 200 }, MouseButtons::Right);
+            app.InjectMouseMove({ from.x + 2000, from.y + 200 }, MouseButtons::Middle);
             Frame();
             EXPECT_EQ(view.viewStart, 0.0f);
             EXPECT_EQ(scrolling.GetScrollOffset(body).y, 0);
-            app.InjectMouseUp({ from.x + 2000, from.y + 200 }, MouseButtons::Right);
+            app.InjectMouseUp({ from.x + 2000, from.y + 200 }, MouseButtons::Middle);
             Frame();
 
-            // A right click that doesn't move.
-            app.ClickAt(from, MouseButtons::Right);
+            // A middle click that doesn't move.
+            app.ClickAt(from, MouseButtons::Middle);
             Frame();
             EXPECT_EQ(view.viewStart, 0.0f);
             EXPECT_TRUE(edits.empty());
+        }
+
+        // Alt + left drags the view as the middle button does; a right drag doesn't.
+        TEST_F(TimelineEditorTest, AltLeftDragsTheViewAndARightDragDoesnt)
+        {
+            view.viewStart = 2.0f;
+            view.viewLength = 2.0f;
+            Settle();
+            const int2 from = LanesPoint(3.0f, 1);
+            app.DragFrom(from, { from.x - 100, from.y }, MouseButtons::Right);
+            Frame();
+            EXPECT_EQ(view.viewStart, 2.0f) << "the right button doesn't drag the view";
+
+            app.InjectMouseMove(from, MouseButtons::None, KeyModifier::Alt);
+            app.InjectMouseDown(from, MouseButtons::Left, KeyModifier::Alt);
+            Frame();
+            app.InjectMouseMove({ from.x - 100, from.y }, MouseButtons::Left, KeyModifier::Alt);
+            Frame();
+            app.InjectMouseUp({ from.x - 100, from.y }, MouseButtons::Left, KeyModifier::Alt);
+            Frame();
+            const float perPixel = 2.0f / float(LanesRange().w);
+            EXPECT_NEAR(view.viewStart, 2.0f + 100.0f * perPixel, 1e-3f);
+            EXPECT_TRUE(edits.empty()) << "no key moved";
+        }
+
+        // With the wheel set to scroll: it scrolls along the time sideways, Ctrl zooms; up and
+        // down is the rows' scroll area's. A pinch zooms.
+        TEST_F(TimelineEditorTest, TheWheelScrollsInPanMode)
+        {
+            app.SetWheelMode(WheelMode::Pan);
+            view.viewStart = 2.0f;
+            view.viewLength = 2.0f;
+            Settle();
+            const int2 at = LanesPoint(3.0f, 1);
+            app.InjectMouseMove(at);
+            app.InjectMouseScroll(at, { 0, -1 }, KeyModifier::Shift);
+            Frame();
+            EXPECT_GT(view.viewStart, 2.0f) << "Shift: later";
+            EXPECT_FLOAT_EQ(view.viewLength, 2.0f) << "no zoom";
+            app.InjectMouseScroll(at, { 0, 1 }, KeyModifier::Control);
+            Frame();
+            EXPECT_LT(view.viewLength, 2.0f) << "Ctrl zooms in";
+            const float zoomed = view.viewLength;
+            app.InjectPinch(0.5f);
+            Frame();
+            EXPECT_GT(view.viewLength, zoomed) << "a pinch together zooms out";
+        }
+
+        TEST_F(TimelineEditorTest, InPanModeUpAndDownScrollsTheRows)
+        {
+            app.SetWheelMode(WheelMode::Pan);
+            for (int i = 0; i < 40; ++i)
+                view.tracks.push_back(TimelineTrack{ .stableID = app.idManager.CreateStaticID(), .name = "More" });
+            view.viewStart = 2.0f;
+            view.viewLength = 2.0f;
+            Settle();
+            auto& scrolling = app.guiStateManager.GetScrollManagement();
+            const ScrollOffsetHandle body = scrolling.GetOrCreateScrollOffsetHandle(WithStyle(app.theme.timelineBodyStyleRef));
+            const int2 at = LanesPoint(3.0f, 2);
+            app.InjectMouseMove(at);
+            app.InjectMouseScroll(at, { 0, -1 });
+            Frame();
+            EXPECT_LT(scrolling.GetScrollOffset(body).y, 0) << "toward the user: the rows scroll down";
+            EXPECT_EQ(view.viewStart, 2.0f) << "the time stays";
+            EXPECT_FLOAT_EQ(view.viewLength, 2.0f);
         }
 
         // ---------------------------------------------------------------------

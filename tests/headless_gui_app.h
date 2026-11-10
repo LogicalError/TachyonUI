@@ -107,6 +107,8 @@ public:
     // The pen, as the OS backend reports it before the pointer events it goes with; a
     // default PenState gives the pointer back to the mouse.
     void InjectPen(const tachyon::PenState& pen);
+    // A trackpad pinch by `scale` (above 1: the fingers apart) where the pointer is.
+    void InjectPinch(float scale, tachyon::KeyModifier mods = tachyon::KeyModifier::None);
     void InjectKey(tachyon::KeyCode key,
                    tachyon::KeyAction action = tachyon::KeyAction::KeyDown,
                    tachyon::KeyModifier mods = tachyon::KeyModifier::None);

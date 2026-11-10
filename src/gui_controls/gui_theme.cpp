@@ -923,6 +923,11 @@ namespace tachyon
         curveReadoutStyleRef              = registerCSS("curve-readout");
         curveBoxSelectStyleRef            = registerCSS("curve-box-select");
         curvePresetStyleRef               = registerCSS("curve-preset");
+        plotToolbarStyleRef               = registerCSS("plot-toolbar");
+        plotChannelStyleRef               = registerCSS("plot-channel");
+        plotStyleRef                      = registerCSS("plot");
+        plotLabelStyleRef                 = registerCSS("plot-label");
+        plotReadoutStyleRef               = registerCSS("plot-readout");
         timelineZoomStyleRef              = registerCSS("timeline-zoom");
         timelineHeaderStyleRef            = registerCSS("timeline-header");
         timelineListHeaderStyleRef        = registerCSS("timeline-list-header");

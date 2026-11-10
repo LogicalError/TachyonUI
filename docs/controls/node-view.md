@@ -147,7 +147,10 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
   without them there's no menu.
   - A right click on the empty canvas opens the canvas's, for where it was clicked.
   - One on a node opens the node's and selects the node, if it wasn't.
-  - A right drag pans instead; a right click on a wire still offers to delete it.
+  - A right click on a wire offers to delete it.
+- The middle button (or Alt + left) drags the view; the wheel zooms or scrolls it, as
+  `SetWheelMode` says, and a pinch zooms. See Panning and zooming in
+  [Common conventions](conventions.md).
   - With the canvas focused, the Menu key or Shift+F10 opens the selected node's (the
     one clicked last), or the canvas's when none is selected.
 
@@ -360,7 +363,8 @@ Wires are made and removed with the mouse only.
 - Let go over a node, and the wire goes to the node's first socket that takes it.
 - Drag from a wired input to take its wire off: let go over another input to move it, or
   over the empty canvas to remove it.
-- A middle click on a wire removes it; a right click offers to, or to add a reroute on it.
+- A middle click on a wire removes it (a middle drag from it drags the view instead); a right
+  click offers to, or to add a reroute on it.
 - A wire's middle segments can be dragged to move its lanes. A lane goes where it's put as
   long as it clears the two nodes: between them, or round them (above or below them both).
   One let go inside a node goes to that node's nearer edge.
@@ -389,7 +393,7 @@ Wires are made and removed with the mouse only.
   - moving or resizing a frame
   - moving a wire lane
   - box selection
-  - panning with the right button
+  - dragging the view with the middle button (or Alt + left)
   - dragging in the minimap
 
 Classes: `node-view`, `node`, `node-reroute`, `node-header`, `node-title`, `node-category`, `node-row`,

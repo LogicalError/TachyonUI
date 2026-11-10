@@ -84,6 +84,33 @@ namespace tachyon
         color.onEdit = onEdit(&color, "Edit color curves");
     }
 
+    void Application::SeedLevels()
+    {
+        PlotView& levels = showcase.demoLevels;
+        if (!levels.series.empty() || demoImagePixels.empty())
+            return;
+        // The demo image's channels, each counted into 64 bins over 0 to 255.
+        const std::pair<const char*, CurveChannelColor> channels[] = {
+            { "R", CurveChannelColor::Red }, { "G", CurveChannelColor::Green }, { "B", CurveChannelColor::Blue } };
+        for (int c = 0; c < 3; ++c)
+        {
+            std::vector<float> samples;
+            for (size_t i = size_t(c); i < demoImagePixels.size(); i += 4)
+                samples.push_back(float(demoImagePixels[i]));
+            levels.series.push_back(PlotSeries{ .name = channels[c].first, .kind = PlotSeriesKind::Area,
+                                                .color = channels[c].second, .values = HistogramBins(samples, 64, 0.0f, 255.0f) });
+        }
+        levels.xMax = 255.0f;
+        levels.handles = { { "Black", 0.0f, { 0.0f, 0.0f, 0.0f, 1.0f } }, { "Gray", 128.0f, { 0.5f, 0.5f, 0.5f, 1.0f } },
+                           { "White", 255.0f, { 1.0f, 1.0f, 1.0f, 1.0f } } };
+        levels.onEdit = [this](const PlotEdit& edit) {
+            commandManager.History().Push({ .description = "Move a level",
+                .undo = [this, edit] { ApplyPlotEdit(showcase.demoLevels, edit, /*undo*/ true); },
+                .redo = [this, edit] { ApplyPlotEdit(showcase.demoLevels, edit, /*undo*/ false); } });
+            commandManager.History().EndMerge();
+        };
+    }
+
     void Application::EnableInspectorPanel(InspectorPanel& p)
     {
         p.inspectorRows.clear();
@@ -227,6 +254,23 @@ namespace tachyon
         SeedCurves();
         add("Curve", [this]() { DragLabel("Curve"); CurveField(showcase.demoCurve); });
         add("Color curves", [this]() { DragLabel("Color curves"); CurveField(showcase.demoColorCurves); });
+        add("Levels", [this]() {
+            SeedLevels();   // once the demo image is made
+            Label("Levels", "of the image");
+            BeginVertical(idManager.AllocateDynamicID("levelsColumn"), theme.emptyVertStyleRef, LayoutOverride{}.FlexGrow(1));
+            Plot(showcase.demoLevels, LayoutOverride{}.Height(190));
+            BeginHorizontal(idManager.AllocateDynamicID("levelsOptions"), inspectorPairHalfStyleRef, LayoutOverride{}.FlexGrow(1));
+            // The image whose colors the plot counts.
+            Image(demoImageIndex, LayoutOverride::FixedSize(32, 32));
+            static constexpr std::string_view kKinds[] = { "Bars", "Area", "Line" };
+            if (Dropdown(showcase.demoLevelsKind, kKinds))
+                for (PlotSeries& series : showcase.demoLevels.series)
+                    series.kind = PlotSeriesKind(showcase.demoLevelsKind);
+            if (Checkbox(showcase.demoLevelsLog, "Log scale"))
+                showcase.demoLevels.yScale = showcase.demoLevelsLog ? PlotScale::Log : PlotScale::Linear;
+            EndHorizontal();
+            EndVertical();
+        });
         add("Int2", [this]() { DragLabel("Int2"); Field(showcase.int2Value); });
         add("Int3", [this]() { DragLabel("Int3"); Field(showcase.int3Value); });
         add("Int4", [this]() { DragLabel("Int4"); Field(showcase.int4Value); });

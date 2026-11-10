@@ -276,6 +276,19 @@ namespace tachyon
         m_recordedEvents.push_back({ EventType::MouseScroll, std::move(state), windowId });
     }
 
+    void InputManager::OnPinch(tachyon::ID windowId, float scale, KeyModifier modifiers)
+    {
+        InputState state;
+        state.screenPos     = m_prevScreenPos;
+        state.prevScreenPos = m_prevScreenPos;
+        state.buttons       = m_currentButtons;
+        state.prevButtons   = m_currentButtons;
+        state.pinch         = scale;
+        state.modifiers     = modifiers;
+        state.pen           = PointerPen(state.buttons);
+        m_recordedEvents.push_back({ EventType::MouseScroll, std::move(state), windowId });
+    }
+
     void InputManager::OnFileDrop(tachyon::ID windowId, tachyon::int2 screenPos, FileDropAction action, std::string_view data)
     {
         switch (action)

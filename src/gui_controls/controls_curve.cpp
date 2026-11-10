@@ -1,5 +1,6 @@
 #include <gui_controls/gui_application.h>
 #include <gui_controls/gui_curve_types.h>
+#include <gui_controls/gui_plot_grid_internal.h>
 
 #include <algorithm>
 #include <cmath>
@@ -30,7 +31,7 @@ namespace tachyon
         CurveRange ShownOf(const CurveView& view) { return Sane(view.shownSet ? view.shown : view.range); }
 
         // A range shown over a rect, value up.
-        struct Plot
+        struct CurvePlot
         {
             IntRect    rect;
             CurveRange shown;
@@ -44,24 +45,18 @@ namespace tachyon
             float2 At(const CurveKey& k) const { return { X(k.time), Y(k.value) }; }
         };
 
-        // A step of 1, 2 or 5 times a power of ten, at least `minPixels` apart over `pixels`.
-        float NiceStep(float span, float pixels, float minPixels)
+        using PlotGrid::NiceStep;
+
+        PlotGrid::Frame GridFrame(const CurvePlot& plot)
         {
-            if (!(span > 0.0f) || !(pixels > 0.0f))
-                return 0.0f;
-            const float raw = span * minPixels / pixels;
-            const float power = std::pow(10.0f, std::floor(std::log10(raw)));
-            for (const float m : { 1.0f, 2.0f, 5.0f })
-                if (m * power >= raw)
-                    return m * power;
-            return 10.0f * power;
+            return { plot.rect, plot.shown.timeMin, plot.shown.timeMax, plot.shown.valueMin, plot.shown.valueMax };
         }
 
         float Distance(float2 a, float2 b) { return std::hypot(a.x - b.x, a.y - b.y); }
 
         // The key under `pos`: the active channel's first, then the other visible ones.
         struct KeyHit { int channel = -1; int key = -1; ID id = ID::Invalid(); };
-        KeyHit HitKey(const CurveView& view, const Plot& plot, float2 pos, float reach)
+        KeyHit HitKey(const CurveView& view, const CurvePlot& plot, float2 pos, float reach)
         {
             const int count = (int)view.channels.size();
             for (int n = 0; n < count; ++n)
@@ -90,7 +85,7 @@ namespace tachyon
         }
 
         // The end of a key's handle on a side, `length` pixels from it along its slope.
-        float2 HandleEnd(const Plot& plot, const CurveKey& k, bool out, float length)
+        float2 HandleEnd(const CurvePlot& plot, const CurveKey& k, bool out, float length)
         {
             const float sx = float(plot.rect.w) / plot.TimeSpan(), sy = float(plot.rect.h) / plot.ValueSpan();
             const float slope = out ? k.outSlope : k.inSlope;
@@ -104,7 +99,7 @@ namespace tachyon
 
         // The handle under `pos`, of a selected key on a visible channel.
         struct HandleHit { int channel = -1; int key = -1; bool out = false; };
-        HandleHit HitHandle(const CurveView& view, const Plot& plot, float2 pos, float reach, float length)
+        HandleHit HitHandle(const CurveView& view, const CurvePlot& plot, float2 pos, float reach, float length)
         {
             for (int c = 0; c < (int)view.channels.size(); ++c)
             {
@@ -219,7 +214,7 @@ namespace tachyon
         // form of its Hermite one, which the renderer draws smooth; a step as two straight lines.
         // Before the first key and after the last, dashed: the end value held, or the curve
         // repeated (backwards every other time, for ping-pong) as far as the plot shows.
-        void DrawCurve(CustomDrawContext& ctx, const Plot& plot, const Curve& curve, const LineStyle& solid, const LineStyle& dashed)
+        void DrawCurve(CustomDrawContext& ctx, const CurvePlot& plot, const Curve& curve, const LineStyle& solid, const LineStyle& dashed)
         {
             const auto& keys = curve.keys;
             if (keys.empty() || plot.rect.w <= 0 || plot.rect.h <= 0)
@@ -313,14 +308,6 @@ namespace tachyon
             if (std::fabs(v) < 5e-5f) v = 0.0f;   // no "-0.000"
             return std::format("{:.3f}", v);
         }
-
-        // A grid line's number, as short as its step lets it be.
-        std::string GridNumber(float v, float step)
-        {
-            const int decimals = std::clamp(int(std::ceil(-std::log10(step) - 1e-4f)), 0, 6);
-            if (std::fabs(v) < step * 1e-3f) v = 0.0f;
-            return std::format("{:.{}f}", v, decimals);
-        }
     }
 
     // -------------------------------------------------------------------------
@@ -361,7 +348,7 @@ namespace tachyon
         // The curves over the range, the active channel's on top.
         VERIFY(elementStorage.AddCustomDraw(fieldRef, [this, v](CustomDrawContext& ctx)
         {
-            const Plot plot{ ctx.ElementInnerRect(), Sane(v->range) };
+            const CurvePlot plot{ ctx.ElementInnerRect(), Sane(v->range) };
             const float width = float(std::max(1, styleManager.Px(1))) * 1.5f;
             for (int n = 0; n < (int)v->channels.size(); ++n)
             {
@@ -497,34 +484,19 @@ namespace tachyon
 
         // ---- The plot ----------------------------------------------------------
         const ID plotID = idManager.AllocateDynamicID("curve_plot");
-        const Plot lastPlot{ view.plotRect, ShownOf(view) };
+        const CurvePlot lastPlot{ view.plotRect, ShownOf(view) };
 
         // The grid's numbers, from where the plot was last frame.
-        struct GridLabel { TextID text; float at; int2 size; bool value; };
-        std::vector<GridLabel> labels;
+        std::vector<PlotGrid::Label> labels;
         const float minGap = float(styleManager.Px(56)), minGapV = float(styleManager.Px(32));
         const float timeStep  = NiceStep(lastPlot.TimeSpan(),  float(lastPlot.rect.w), minGap);
         const float valueStep = NiceStep(lastPlot.ValueSpan(), float(lastPlot.rect.h), minGapV);
-        auto addLabels = [&](float lo, float hi, float step, bool isValue, const char* hint) {
-            if (!(step > 0.0f))
-                return;
-            const int first = int(std::ceil(lo / step - 1e-3f)), last = int(std::floor(hi / step + 1e-3f));
-            if (last < first || last - first > 200)
-                return;
-            const ID rangeID = idManager.AllocateRangedID(uint32_t(last - first + 1), hint);
-            for (int i = first; i <= last; ++i)
-            {
-                const float at = float(i) * step;
-                const TextID text = textSystem->RegisterText(idManager.GetSubID(rangeID, uint32_t(i - first)), GridNumber(at, step),
-                                                             theme.curveLabelStyleRef, ElementState::None);
-                const TextMeasurement m = textSystem->MeasureText(text, TextWrapContext{});
-                labels.push_back({ text, at, { m.maxWidth, m.maxHeight }, isValue });
-            }
-        };
         if (lastPlot.rect.w > 0 && lastPlot.rect.h > 0)
         {
-            addLabels(lastPlot.shown.timeMin, lastPlot.shown.timeMax, timeStep, false, "curve_time_labels");
-            addLabels(lastPlot.shown.valueMin, lastPlot.shown.valueMax, valueStep, true, "curve_value_labels");
+            PlotGrid::AddLabels(*this, theme.curveLabelStyleRef, labels, lastPlot.shown.timeMin, lastPlot.shown.timeMax, timeStep,
+                                /*onYAxis*/ false, "curve_time_labels");
+            PlotGrid::AddLabels(*this, theme.curveLabelStyleRef, labels, lastPlot.shown.valueMin, lastPlot.shown.valueMax, valueStep,
+                                /*onYAxis*/ true, "curve_value_labels");
         }
 
         // The selected key's time and value beside it.
@@ -549,11 +521,11 @@ namespace tachyon
             const float reach = float(styleManager.Px(7));
             const float handleLength = float(styleManager.Px(40));
             const int32_t dragDistance = styleManager.Px(kDragStartDistance);
-            plotHandler = [&gsm, &es, v, reach, handleLength, dragDistance, newKeyID](ElementEvent&& event) -> bool
+            plotHandler = [&gsm, &es, v, reach, handleLength, dragDistance, newKeyID, wheelMode = GetWheelMode()](ElementEvent&& event) -> bool
             {
                 if (event.rect == nullptr)
                     return false;
-                const Plot plot{ event.rect->innerRect, ShownOf(*v) };
+                const CurvePlot plot{ event.rect->innerRect, ShownOf(*v) };
                 const int2 cursor = event.LocalCursor(es);
                 const float2 at{ float(cursor.x), float(cursor.y) };
                 const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
@@ -576,9 +548,10 @@ namespace tachyon
                 {
                     case EventType::MouseDown:
                     {
-                        if (event.state.MiddlePressed())
+                        // The middle button (or Alt + left) drags the view.
+                        if (const MouseButtons panButton = PanDragButton(event.state); panButton != MouseButtons::None)
                         {
-                            v->pan.Press(event, es, MouseButtons::Middle, /*atOnce*/ true);
+                            v->pan.Press(event, es, panButton, /*atOnce*/ true);
                             v->panFrom = ShownOf(*v);
                             gsm.Interaction().SetCaptureID(event.id);
                             return true;
@@ -653,7 +626,7 @@ namespace tachyon
                         if (v->pan.IsPressed(event.id))
                         {
                             const int2 d = v->pan.ScreenDelta(event.state);
-                            const Plot from{ plot.rect, v->panFrom };
+                            const CurvePlot from{ plot.rect, v->panFrom };
                             const float dt = -float(d.x) / float(std::max(1, plot.rect.w)) * from.TimeSpan();
                             const float dv =  float(d.y) / float(std::max(1, plot.rect.h)) * from.ValueSpan();
                             v->shown = { v->panFrom.timeMin + dt, v->panFrom.timeMax + dt, v->panFrom.valueMin + dv, v->panFrom.valueMax + dv };
@@ -757,12 +730,25 @@ namespace tachyon
                     }
                     case EventType::MouseScroll:
                     {
-                        // The wheel zooms round the pointer; Shift only along the time, Ctrl only the values.
-                        const float ticks = event.state.scroll.y;
-                        if (ticks == 0.0f)
+                        // The wheel zooms round the pointer or scrolls the view, as the app's
+                        // wheel mode says; a zoom with Alt only along the time. A pinch zooms.
+                        const WheelNavigation nav = NavigateByWheel(event.state, wheelMode, 1.15f);
+                        if (!nav.Any())
                             return false;
-                        const float factor = std::pow(1.15f, -ticks);
-                        ZoomAround(*v, { plot.Time(at.x), plot.Value(at.y) }, factor, !ctrl, !shift);
+                        if (nav.zoom != 1.0f)
+                        {
+                            const bool alt = (event.state.modifiers & KeyModifier::Alt) != KeyModifier::None;
+                            ZoomAround(*v, { plot.Time(at.x), plot.Value(at.y) }, 1.0f / nav.zoom, true, !alt);
+                        }
+                        if (nav.pan.x != 0.0f || nav.pan.y != 0.0f)
+                        {
+                            // A notch scrolls a tenth of the view.
+                            CurveRange s = ShownOf(*v);
+                            const float dt = nav.pan.x * 0.1f * (s.timeMax - s.timeMin);
+                            const float dv = -nav.pan.y * 0.1f * (s.valueMax - s.valueMin);
+                            v->shown = { s.timeMin + dt, s.timeMax + dt, s.valueMin + dv, s.valueMax + dv };
+                            v->shownSet = true;
+                        }
                         return true;
                     }
                     case EventType::KeyDown:
@@ -833,39 +819,13 @@ namespace tachyon
             VERIFY(elementStorage.AddCustomDraw(plotRef, [=, this](CustomDrawContext& ctx)
             {
                 const IntRect outer = ctx.ElementRect(), inner = ctx.ElementInnerRect();
-                const Plot plot{ inner, ShownOf(*v) };
+                const CurvePlot plot{ inner, ShownOf(*v) };
 
-                // The grid: minor lines a quarter of a labelled step apart, the labelled ones
-                // brighter, the lines at zero brighter still.
-                auto gridLines = [&](float lo, float hi, float step, bool vertical) {
-                    if (!(step > 0.0f))
-                        return;
-                    const float minor = step / 4.0f;
-                    const int first = int(std::ceil(lo / minor - 1e-3f)), last = int(std::floor(hi / minor + 1e-3f));
-                    if (last - first > 2000)
-                        return;
-                    for (int i = first; i <= last; ++i)
-                    {
-                        const VisualColorStyleIndex color = i == 0 ? theme.curveZeroColor : (i % 4 == 0 ? theme.curveGridMajorColor : theme.curveGridColor);
-                        if (vertical)
-                            ctx.RenderQuad(IntRect{ int32_t(plot.X(float(i) * minor)), inner.y, px1, inner.h }, inner, color);
-                        else
-                            ctx.RenderQuad(IntRect{ inner.x, int32_t(plot.Y(float(i) * minor)), inner.w, px1 }, inner, color);
-                    }
-                };
-                const float tStep = NiceStep(plot.TimeSpan(), float(inner.w), minGap);
-                const float vStep = NiceStep(plot.ValueSpan(), float(inner.h), minGapV);
-                gridLines(plot.shown.timeMin, plot.shown.timeMax, tStep, true);
-                gridLines(plot.shown.valueMin, plot.shown.valueMax, vStep, false);
-                for (const GridLabel& label : labels)
-                {
-                    if (label.value)
-                        ctx.RenderText(label.text, IntRect{ inner.x - label.size.x - px4, int32_t(plot.Y(label.at)) - label.size.y / 2,
-                                                            label.size.x, label.size.y });
-                    else
-                        ctx.RenderText(label.text, IntRect{ int32_t(plot.X(label.at)) - label.size.x / 2, inner.y + inner.h + px4,
-                                                            label.size.x, label.size.y });
-                }
+                // The grid and its numbers.
+                const PlotGrid::Frame grid = GridFrame(plot);
+                PlotGrid::DrawLines(ctx, grid, NiceStep(plot.TimeSpan(), float(inner.w), minGap), NiceStep(plot.ValueSpan(), float(inner.h), minGapV),
+                                    { theme.curveGridColor, theme.curveGridMajorColor, theme.curveZeroColor }, px1);
+                PlotGrid::DrawLabels(ctx, grid, labels, px4, px4);
 
                 // The curves: the others thinner and faded, the active one on top; before the
                 // first key and after the last dashed.
@@ -948,7 +908,7 @@ namespace tachyon
             {
                 // Just opened: what's under the right click.
                 view.menuKey = ID::Invalid();
-                const Plot plot{ view.plotRect, ShownOf(view) };
+                const CurvePlot plot{ view.plotRect, ShownOf(view) };
                 const int2 at = contextMenuScreenPos.value_or(int2{ view.plotRect.x + view.plotRect.w / 2, view.plotRect.y + view.plotRect.h / 2 });
                 const float2 p{ float(at.x), float(at.y) };
                 view.menuAt = { plot.Time(p.x), plot.Value(p.y) };
@@ -1043,7 +1003,7 @@ namespace tachyon
                 Curve shape = preset.curve;
                 shape.preWrap = shape.postWrap = CurveWrapMode::Clamp;
                 const LineStyle style{ .colorStyleIndex = presetColor, .lineWidth = width };
-                DrawCurve(ctx, Plot{ ctx.ElementInnerRect(), CurveRange{} }, shape, style, style);
+                DrawCurve(ctx, CurvePlot{ ctx.ElementInnerRect(), CurveRange{} }, shape, style, style);
             }));
         }
         BeginHorizontal(idManager.AllocateDynamicID("curve_bottom_gap"), theme.emptyHorzStyleRef, LayoutOverride{}.FlexGrow(1));

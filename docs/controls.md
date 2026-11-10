@@ -33,6 +33,7 @@ results all controls share.
 | [Sliders](controls/sliders.md) | `SliderField`, `Slider` |
 | [Color and gradient fields](controls/color-and-gradient.md) | `ColorField`, `GradientField` and their pickers |
 | [Curves](controls/curves.md) | `CurveField` and its curve editor, `EvaluateCurve` |
+| [Plots](controls/plots.md) | `Plot`: histograms and other series, with handles (Levels) |
 | [Menus](controls/menus.md) | Menus, menu items, menu bar, title bar, context menus |
 | [Tooltips and message dialogs](controls/tooltips-and-dialogs.md) | Tooltips, modal `MessageDialog` |
 | [Lists and reorderable groups](controls/lists.md) | List views, drag-to-reorder groups |
@@ -55,6 +56,7 @@ results all controls share.
 \subpage md_docs_2controls_2sliders
 \subpage md_docs_2controls_2color-and-gradient
 \subpage md_docs_2controls_2curves
+\subpage md_docs_2controls_2plots
 \subpage md_docs_2controls_2menus
 \subpage md_docs_2controls_2tooltips-and-dialogs
 \subpage md_docs_2controls_2lists

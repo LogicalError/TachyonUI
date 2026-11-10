@@ -458,6 +458,11 @@ namespace tachyon
         inputBroadcaster.OnPen(windowID, pen);
     }
 
+    void GUIApplication::InjectPinch(ID windowID, float scale, KeyModifier mods)
+    {
+        inputBroadcaster.OnPinch(windowID, scale, mods);
+    }
+
     void GUIApplication::InjectMouseLeave(ID windowID)
     {
         if (windowManager->GetWindowHandle(windowID) == windowBackend->GetWindowUnderMouse())

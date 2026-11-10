@@ -44,6 +44,9 @@ namespace tachyon
         /// The pen changed (came near, touched, pressed harder, tilted, left). It comes before
         /// the pointer event it goes with; a default PenState means the mouse again.
         virtual void OnPen(tachyon::ID /*id*/, const PenState& /*pen*/) {}
+        /// Two fingers pinched on a trackpad over window `id`: `scale` is how far they spread
+        /// since the last call, above 1 apart.
+        virtual void OnPinch(tachyon::ID /*id*/, float /*scale*/, KeyModifier /*modifiers*/) {}
     };
     /// @}
 };

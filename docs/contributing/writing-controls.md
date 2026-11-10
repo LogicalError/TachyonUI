@@ -856,6 +856,7 @@ Do it the same way as similar controls:
 | Context menu | Actions besides the control's main one | `BeginContextMenu(id)`. It opens on a right-click, Shift+F10 or the Menu key. |
 | Move in a list | Items the user puts in order: rows, tabs, columns | Drag the item, or press Alt + an arrow key on the focused item. A reorderable group does both. |
 | Close | Items that can be closed, like tabs | A "Close" item in the context menu, and Ctrl+W / Ctrl+F4 on the focused item |
+| Pan and zoom | A canvas the user moves around in: a graph, a plot, a timeline | `PanDragButton` for the middle button (or Alt + left) and `NavigateByWheel` with `GetWheelMode()` for the wheel and a pinch (see Panning and zooming in Common conventions). Never the right button: it opens menus. |
 | Drag and drop | Values that move from one control to another | A drag source and a drop target that agree on a payload type |
 | Files dropped on it | Controls that import or open files | `FileDragOver` and `FileDrop` (see Files from other applications). Draw the element as the drop target while `FileDragTargetID` returns it. |
 | Copy and paste | Values that can be written as text | Ctrl+C / Ctrl+V while the control has the focus |
