@@ -186,6 +186,7 @@ namespace tachyon
             timelineKeyIcon      = registerIcon("timeline-key", R"(<path d="m12 4 8 8-8 8-8-8Z"/>)");
             timelineAudioIcon    = registerIcon("timeline-audio", R"(<path d="M11 5 6 9H2v6h4l5 4ZM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>)");
             timelineEventsIcon   = registerIcon("timeline-events", R"(<path d="M4 22V4M4 4h12l-2 4 2 4H4"/>)");
+            curveFrameAllIcon = registerIcon("curve-frame-all", R"(<path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/>)");
             linkIcon   = registerIcon("link",
                 R"(<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>)");
             unlinkIcon = registerIcon("unlink",
@@ -452,6 +453,26 @@ namespace tachyon
         timelineKeySelectedEdgeColor = lineColorFromCSS("--text-1", color4f{ 0.91f, 0.92f, 0.94f, 1.0f });
         timelineSummaryKeyColor      = lineColorFromCSS("--timeline-summary", color4f{ 0.42f, 0.45f, 0.5f, 1.0f });
         timelineWaveColor            = lineColorFromCSS("--timeline-wave", color4f{ 0.2f, 0.82f, 0.75f, 0.65f });
+        curveGridColor               = lineColorFromCSS("--curve-grid", color4f{ 0.08f, 0.09f, 0.11f, 1.0f });
+        curveGridMajorColor          = lineColorFromCSS("--curve-grid-major", color4f{ 0.12f, 0.14f, 0.16f, 1.0f });
+        curveZeroColor               = lineColorFromCSS("--curve-zero", color4f{ 0.2f, 0.23f, 0.27f, 1.0f });
+        curveKeyEdgeColor            = lineColorFromCSS("--curve-plot", color4f{ 0.05f, 0.06f, 0.07f, 1.0f });
+        curveSelectedKeyColor        = lineColorFromCSS("--text-1", color4f{ 0.91f, 0.92f, 0.94f, 1.0f });
+        curveHandleColor             = lineColorFromCSS("--accent", color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
+        {
+            // Value, red, green, blue, alpha: the design's axis colors, and the warning color for one value.
+            static constexpr const char* kChannelVars[5] = { "--warn", "--axis-x", "--axis-y", "--axis-z", "--text-1" };
+            static constexpr color4f kFallbacks[5] = { { 0.9f, 0.7f, 0.33f, 1.0f }, { 0.94f, 0.42f, 0.42f, 1.0f },
+                                                       { 0.31f, 0.77f, 0.54f, 1.0f }, { 0.42f, 0.61f, 1.0f, 1.0f },
+                                                       { 0.91f, 0.92f, 0.94f, 1.0f } };
+            for (int c = 0; c < 5; ++c)
+            {
+                curveChannelColors[c] = lineColorFromCSS(kChannelVars[c], kFallbacks[c]);
+                color4f faded = GetColor(kChannelVars[c], kFallbacks[c]);
+                faded.a *= 0.55f;
+                curveChannelFadedColors[c] = styleManager.RegisterColorStyle(ColorStyle::Create(faded));
+            }
+        }
         if (const auto* prop = sheet.GetCustomProperty("--scrim"); prop && prop->hasColor) scrim = prop->color;
         else                                                                                  scrim = color4b{ 0, 0, 0, 140 };
         if (const auto* prop = sheet.GetCustomProperty("--error"); prop && prop->hasColor) invalidColor = prop->color;
@@ -893,6 +914,15 @@ namespace tachyon
         timelineFpsStyleRef               = registerCSS("timeline-fps");
         timelineSnapStyleRef              = registerCSS("timeline-snap");
         boxSidesLinkStyleRef              = registerCSS("box-sides-link");
+        curveFieldStyleRef                = registerCSS("curve-field");
+        curveWindowStyleRef               = registerCSS("curve-window");
+        curveToolbarStyleRef              = registerCSS("curve-toolbar");
+        curveChannelStyleRef              = registerCSS("curve-channel");
+        curvePlotStyleRef                 = registerCSS("curve-plot");
+        curveLabelStyleRef                = registerCSS("curve-label");
+        curveReadoutStyleRef              = registerCSS("curve-readout");
+        curveBoxSelectStyleRef            = registerCSS("curve-box-select");
+        curvePresetStyleRef               = registerCSS("curve-preset");
         timelineZoomStyleRef              = registerCSS("timeline-zoom");
         timelineHeaderStyleRef            = registerCSS("timeline-header");
         timelineListHeaderStyleRef        = registerCSS("timeline-list-header");

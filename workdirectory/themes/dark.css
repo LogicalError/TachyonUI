@@ -151,6 +151,11 @@
     --frame-bar-over: #E5B454;
     --budget-line: #5A606C;
 
+    --curve-plot: #0E1013;
+    --curve-grid: #15181D;
+    --curve-grid-major: #1F232A;
+    --curve-zero: #343A45;
+
     --timeline-ready: #6B9BFF33;        /* the accent at 20% */
     --timeline-tick: #3A3F4A;
     --timeline-marker: #F59E4B;

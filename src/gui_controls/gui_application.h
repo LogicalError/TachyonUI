@@ -64,6 +64,7 @@
 #include <gui_controls/gui_theme.h>
 #include <gui_controls/gui_content.h>
 #include <gui_controls/gui_progress_types.h>
+#include <gui_controls/gui_curve_types.h>
 #include <gui_controls/gui_timeline_types.h>
 #include <gui_controls/controls_toolbar_dock.h>
 #include <gui_core/gui_result.h>
@@ -781,6 +782,28 @@ namespace tachyon
         void        TimelineEditor(ID id, TimelineView& view, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
         inline void TimelineEditor(       TimelineView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { TimelineEditor(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
+
+        ///@}
+
+        /// @name Curves
+        ///@{
+
+        /// A curve in a box, over `view.range`: a click opens the curve editor (CurveEditor) in a
+        /// window under it. Every change comes to `view.onEdit`, already applied. True on the
+        /// frame after a change, as a field's is.
+        ///     CurveView falloff;   // a member: one channel, keys over 0 to 1
+        ///     Label("Falloff");
+        ///     CurveField(idManager.AllocateDynamicID("falloff"), falloff);
+        bool        CurveField(ID id, CurveView& view, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline bool CurveField(       CurveView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return CurveField(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
+
+        /// The curve editor a CurveField opens, as a control of its own: the channels and the
+        /// selected key's time and value over the plot; the keys, their tangent handles and the
+        /// grid on it; the presets and the wrap modes under it.
+        void        CurveEditor(ID id, CurveView& view, LayoutOverride&& constraints = {});
+        /// As above, with the call site as the ID.
+        inline void CurveEditor(       CurveView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { CurveEditor(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
 
         ///@}
 

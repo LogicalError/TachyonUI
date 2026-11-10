@@ -801,6 +801,30 @@
     label: "Budget line";
     description: "The frame graph's budget line";
 }
+@property --curve-plot {
+    syntax: "<color>";
+    category: "Curves";
+    label: "Plot";
+    description: "A curve editor's plot, and a curve field";
+}
+@property --curve-grid {
+    syntax: "<color>";
+    category: "Curves";
+    label: "Grid";
+    description: "The plot's minor grid lines";
+}
+@property --curve-grid-major {
+    syntax: "<color>";
+    category: "Curves";
+    label: "Major grid";
+    description: "The plot's major grid lines";
+}
+@property --curve-zero {
+    syntax: "<color>";
+    category: "Curves";
+    label: "Zero line";
+    description: "The plot's lines at zero";
+}
 @property --timeline-ready {
     syntax: "<color>";
     category: "Timeline";
@@ -6766,7 +6790,131 @@
 }
 .box-sides-link:hover { color: var(--text-1); }
 .box-sides-link::highlight(selected) { color: var(--accent); }
-.box-sides-link:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* ---- CurveField: the curve in a box, and the editor window it opens --------- */
+.curve-field {
+    border-width: var(--border);
+    border-radius: var(--radius-md);
+    border-color: var(--line-subtle);
+    background-color: var(--curve-plot);
+    margin: 1px;
+    padding: 2px 4px;
+    min-width: 60px;
+    height: 24px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    cursor: pointer;
+}
+.curve-field:hover { border-color: var(--line-strong); }
+.curve-field::highlight(selected) { border-color: var(--accent); }
+
+.curve-window {
+    width: 520px;
+    padding: 0px;
+    gap: 0px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    border-width: 1px;
+    border-radius: var(--radius-dialog);
+    border-color: var(--dialog-border);
+    background-color: var(--dialog-bg);
+    overflow: hidden;
+}
+
+/* The rows over the plot (channels, the selected key, frame all) and under it (presets, wrap). */
+.curve-toolbar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    margin: 0px;
+    border-width: 0px;
+    background-color: var(--dialog-header);
+    flex-shrink: 0;
+}
+
+.curve-channel {
+    -tachyon-state-layer: content;
+    border-width: 1px;
+    border-radius: var(--radius-md);
+    border-color: transparent;
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    padding: 2px 8px;
+    margin: 0px;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    -tachyon-icon-size: 10px;
+    flex-grow: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.curve-channel:hover { color: var(--text-1); }
+.curve-channel::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); color: var(--text-1); }
+
+.curve-plot {
+    border-width: 0px;
+    margin: 0px;
+    /* Room for the value labels at the left and the time labels under the grid. */
+    padding: 10px 14px 22px 40px;
+    min-height: 240px;
+    flex-grow: 1;
+    flex-shrink: 1;
+    background-color: var(--curve-plot);
+    overflow: hidden;
+    cursor: crosshair;
+}
+
+.curve-label {
+    font-family: monospace;
+    font-size: 10px;
+    color: var(--text-3);
+    padding: 0px;
+    margin: 0px;
+    border-width: 0px;
+    text-wrap: nowrap;
+}
+
+.curve-readout {
+    font-family: monospace;
+    font-size: 10.5px;
+    color: var(--tooltip-text);
+    background-color: var(--tooltip-bg);
+    border-width: 1px;
+    border-color: var(--tooltip-border);
+    border-radius: var(--radius-sm);
+    padding: 2px 6px;
+    margin: 0px;
+    text-wrap: nowrap;
+}
+
+.curve-box-select {
+    border-width: 1px;
+    border-color: var(--accent);
+    background-color: var(--accent-soft);
+}
+
+.curve-preset {
+    -tachyon-state-layer: content;
+    width: 44px;
+    height: 28px;
+    border-width: 1px;
+    border-radius: var(--radius-sm);
+    border-color: var(--line-subtle);
+    background-color: var(--curve-plot);
+    color: var(--text-2);
+    padding: 3px;
+    margin: 0px;
+    flex-grow: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.curve-preset:hover { border-color: var(--line-strong); color: var(--text-1); }
 .timeline-snap::highlight(selected) { background-color: var(--bg-active); color: var(--text-1); -tachyon-icon-color: var(--accent); }
 .timeline-zoom {
     display: flex;
@@ -7996,7 +8144,8 @@
 .color-picker-strip:focus-visible, .color-picker-track:focus-visible, .color-picker-swatch:focus-visible,
 .color-picker-recent:focus-visible, .color-picker-range:focus-visible, .color-picker-new:focus-visible,
 .toast-action:focus-visible, .toast-action-secondary:focus-visible, .toast-dismiss:focus-visible, .toast-earlier:focus-visible,
-.banner-primary:focus-visible, .banner-secondary:focus-visible, .banner-link:focus-visible {
+.banner-primary:focus-visible, .banner-secondary:focus-visible, .banner-link:focus-visible,
+.curve-field:focus-visible, .curve-preset:focus-visible {
     box-shadow: var(--focus-ring);
 }
 
@@ -8008,6 +8157,7 @@
 .list-item:focus-visible, .list-item-row:focus-visible,
 .menu-item:focus-visible, .menu-item-row:focus-visible, .menu-bar-trigger:focus-visible,
 .title-bar-button:focus-visible, .title-bar-close-button:focus-visible,
-.color-picker-square:focus-visible, .gradient-editor-bar:focus-visible, .timeline-lanes:focus-visible {
+.color-picker-square:focus-visible, .gradient-editor-bar:focus-visible, .timeline-lanes:focus-visible,
+.box-sides-link:focus-visible, .curve-channel:focus-visible, .curve-plot:focus-visible {
     box-shadow: inset 0 0 0 1px var(--accent);
 }

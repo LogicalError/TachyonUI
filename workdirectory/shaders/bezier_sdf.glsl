@@ -31,3 +31,52 @@ float sdBezier( vec2 p, vec2 v0, vec2 v1, vec2 v2, out float t)
     vec2 d = v0+t*(k+k+t*w);
 	return length(d);
 }
+
+// The exact distance from p to the quadratic Bezier v0, v1, v2: the nearest point solved as
+// a cubic (one real root or three), so it holds anywhere, not only near the curve. A quadratic
+// that bends less than a quarter of a pixel off its chord is measured as the straight segment,
+// where the cubic's numbers would run out of precision. t is the nearest point's parameter.
+float sdBezierExact( vec2 p, vec2 v0, vec2 v1, vec2 v2, out float t )
+{
+    vec2 a = v1 - v0;
+    vec2 b = v0 - 2.0*v1 + v2;
+    vec2 c = a * 2.0;
+    vec2 d = v0 - p;
+
+    // The farthest a quadratic gets from its chord is a quarter of |b|.
+    if (dot(b, b) < 1.0)
+    {
+        vec2 chord = v2 - v0;
+        float l2 = dot(chord, chord);
+        t = l2 > 0.0 ? clamp(dot(p - v0, chord) / l2, 0.0, 1.0) : 0.0;
+        return length(p - (v0 + chord * t));
+    }
+
+    float kk = 1.0 / dot(b, b);
+    float kx = kk * dot(a, b);
+    float ky = kk * (2.0*dot(a, a) + dot(d, b)) / 3.0;
+    float kz = kk * dot(d, a);
+
+    float pp = ky - kx*kx;
+    float q  = kx*(2.0*kx*kx - 3.0*ky) + kz;
+    float h  = q*q + 4.0*pp*pp*pp;
+    if (h >= 0.0)
+    {
+        // One root.
+        h = sqrt(h);
+        vec2 x  = (vec2(h, -h) - q) / 2.0;
+        vec2 uv = sign(x) * pow(abs(x), vec2(1.0/3.0));
+        t = clamp(uv.x + uv.y - kx, 0.0, 1.0);
+        return length(d + (c + b*t)*t);
+    }
+    // Three: the two that can be nearest.
+    float z = sqrt(-pp);
+    float v = acos(clamp(q / (pp*z*2.0), -1.0, 1.0)) / 3.0;
+    float m = cos(v);
+    float n = sin(v) * 1.732050808;
+    vec2  ts = clamp(vec2(m + m, -n - m) * z - kx, 0.0, 1.0);
+    float d1 = length(d + (c + b*ts.x)*ts.x);
+    float d2 = length(d + (c + b*ts.y)*ts.y);
+    t = d1 < d2 ? ts.x : ts.y;
+    return min(d1, d2);
+}
