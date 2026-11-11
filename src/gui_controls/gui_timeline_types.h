@@ -99,11 +99,18 @@ namespace tachyon
     {
         float              start  = 0.0f;   ///< where it starts, in seconds
         float              length = 0.0f;   ///< how long it plays, in seconds
-        /// Its loudness over its length, 0 to 1, evenly spaced: the waveform's bars.
+        /// How far into the sound it starts playing, in seconds: trimming its start moves it on.
+        float              offset = 0.0f;
+        /// The whole sound's length, in seconds, which `peaks` cover; 0: offset + length.
+        float              sourceLength = 0.0f;
+        /// The sound's loudness over its whole length, 0 to 1, evenly spaced: the waveform's bars.
         std::vector<float> peaks;
 
         bool operator==(const TimelineClip&) const = default;
     };
+
+    /// The whole sound's length: TimelineClip::sourceLength, or its offset and length.
+    inline float SourceLengthOf(const TimelineClip& clip) { return clip.sourceLength > 0.0f ? clip.sourceLength : clip.offset + clip.length; }
 
     /// A row of the timeline: its name and controls in the track list, its lane beside them.
     struct TimelineTrack
@@ -186,6 +193,22 @@ namespace tachyon
             bool        moved = false;
         };
         KeyDrag           keyDrag;
+        /// A clip's parts: its body moves it, its ends trim it.
+        enum class ClipPart : uint8_t { None, Body, Start, End };
+        struct ClipDrag
+        {
+            PointerDrag press;
+            int         track = -1;
+            ClipPart    part  = ClipPart::None;
+            float       pressTime = 0.0f;               ///< the time under the press
+            std::vector<TimelineTrack> before;          ///< the tracks as they were
+            bool        moved = false;
+        };
+        ClipDrag          clipDrag;
+        int               hoverClipTrack = -1;          ///< the track whose clip is under the pointer ...
+        ClipPart          hoverClipPart  = ClipPart::None;   ///< ... and which part, for its hover look
+        int               hoverTrack = -1;              ///< the track whose key, event or summary key is under the pointer ...
+        float             hoverTime  = 0.0f;            ///< ... and its time, for its hover look
         PointerDrag       boxSelect;
         float             boxFrom = 0.0f;              ///< the box's anchor: time and row
         int               boxFromRow = 0;
@@ -196,6 +219,7 @@ namespace tachyon
         TimelineRange     loopBefore;
         int               loopEdge = 0;                 ///< 0 a new range, 1 its start, 2 its end, 3 the whole of it
         float             loopPressTime = 0.0f;
+        int               hoverLoopEdge = 0;            ///< the loop edge under the pointer on the ruler: 0 none, 1 start, 2 end
         PointerDrag       scrub;                        ///< on the ruler
         float             scrubBefore = 0.0f;
         PointerDrag       pan;                          ///< the scroll bar's thumb

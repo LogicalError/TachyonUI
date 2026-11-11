@@ -64,6 +64,24 @@ namespace tachyon
         m_pendingDestroy.clear();
     }
 
+    void NullWindowBackend::WaitForEvents(float timeoutSecs)
+    {
+        std::unique_lock lock(m_wakeMutex);
+        if (timeoutSecs > 0.0f)
+            m_wakeSignal.wait_for(lock, std::chrono::duration<float>(timeoutSecs), [this] { return m_woken; });
+        m_woken = false;
+    }
+
+    void NullWindowBackend::Wake()
+    {
+        {
+            std::lock_guard lock(m_wakeMutex);
+            m_woken = true;
+        }
+        ++m_events;
+        m_wakeSignal.notify_all();
+    }
+
     MouseButtons NullWindowBackend::GetMouseButtons()
     {
         return MouseButtons::None;

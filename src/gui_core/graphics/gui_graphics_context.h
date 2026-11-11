@@ -65,6 +65,11 @@ namespace tachyon
         /// constructor, deleted by Cleanup.
         GUIRenderer* guiRenderer = nullptr;
 
+        /// True when something drawn changed since the last call without a draw changing: an
+        /// image registered or unregistered (a slot reused shows other pixels), or a scene
+        /// rendered. Clears it.
+        bool TakeContentChanged() { const bool changed = m_contentChanged; m_contentChanged = false; return changed; }
+
     public:
         GraphicsContext() = default;
 
@@ -147,6 +152,12 @@ namespace tachyon
         /// to just before the next, so without the vsync wait. 0 for backends that don't measure it.
         virtual float GetLastFrameBuildSeconds() const { return 0.0f; }
 
+    protected:
+        /// For backends: see TakeContentChanged.
+        void MarkContentChanged() { m_contentChanged = true; }
+
+    private:
+        bool m_contentChanged = false;
     };
     /// @}
 }

@@ -563,6 +563,10 @@ namespace tachyon
         void    EndFadeOf(Window& window);
         /// Moves the stand-ins, and ends the fades that are done.
         void    AnimateFades();
+    public:
+        /// True while a popup fades in or out, or waits to: frames are needed until it's done.
+        bool    IsFading() const;
+    private:
         bool    m_reducedMotion = false;
         /// First top-level window still open; null when there is none.
         const Window* MainWindow() const;

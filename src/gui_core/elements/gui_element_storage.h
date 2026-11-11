@@ -130,9 +130,14 @@ namespace tachyon
             m_generation++; // Wraps around            
             if (m_generation == 0) m_generation = 1; // never 0
             ClearStorage();
+            m_anyAnimated = false;
             m_constructionModeActive = true;
             return ElementStorageResult::Success;
         }
+
+        /// True when an element with ElementFlags::Animated was added since BeginConstruction:
+        /// something on screen moves every frame.
+        bool HasAnimated() const { return m_anyAnimated; }
 
         /// Finishes the tree; NotConstructing if not constructing. An unmatched BeginChildren is
         /// closed here, so the frame still completes, and reported as MissingEndChildren.
@@ -484,6 +489,7 @@ namespace tachyon
 
         uint64_t m_generation = 1;
         bool m_constructionModeActive = false;
+        bool m_anyAnimated = false;   ///< see HasAnimated
 
 
         std::vector<PostDrawEntry>      m_postDrawEntries;

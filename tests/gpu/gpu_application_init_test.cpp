@@ -241,6 +241,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         EXPECT_TRUE(app.Run());
         const tachyon::OSWindowHandle handle = app.windowManager->GetWindowHandle(app.windowID);
         ASSERT_NE(handle, nullptr) << "the window exists";
@@ -501,6 +502,7 @@ namespace
                 default: break;
             }
         };
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         EXPECT_TRUE(app.Run());
         EXPECT_EQ(app.clicks, 1);
         app.Cleanup();
@@ -566,6 +568,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         EXPECT_TRUE(app.Run());
         ASSERT_GT(app.replayFrames, 0) << "test setup: the area was replayed from the cache";
         EXPECT_EQ(app.replayFramesWithAfterDraw, app.replayFrames);
@@ -629,6 +632,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         EXPECT_TRUE(app.Run());
         ASSERT_GT(app.renderedFrames, 0);
         EXPECT_EQ(app.renderedFramesWithAfterDraw, app.renderedFrames);

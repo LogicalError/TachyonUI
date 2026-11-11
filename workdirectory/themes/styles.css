@@ -3036,7 +3036,8 @@
     flex-grow: 1;
     flex-shrink: 1;
 }
-.title-bar-tab {
+/* .title-bar-tab-panel-focused: one while its window holds the focus; its shown tab is underlined in the accent. */
+.title-bar-tab, .title-bar-tab-panel-focused {
     height: 26px;
     border-radius: var(--radius-md);
     border-width: 0px;
@@ -3057,9 +3058,11 @@
     -tachyon-icon-size: 14px;
     -tachyon-icon-text-gap: 6px;
 }
-.title-bar-tab:hover  { background-color: var(--bg-header); color: var(--text-1); }
-.title-bar-tab:active { background-color: var(--title-bar-tab); color: var(--text-1); }
-.title-bar-tab::highlight(selected) { background-color: var(--title-bar-tab); border-color: transparent; color: var(--text-1); }
+.title-bar-tab:hover, .title-bar-tab-panel-focused:hover   { background-color: var(--bg-header); color: var(--text-1); }
+.title-bar-tab:active, .title-bar-tab-panel-focused:active { background-color: var(--title-bar-tab); color: var(--text-1); }
+.title-bar-tab::highlight(selected), .title-bar-tab-panel-focused::highlight(selected) { background-color: var(--title-bar-tab); border-color: transparent; color: var(--text-1); }
+.title-bar-tab-panel-focused { border-width: 0px 0px 2px 0px; padding: 2px 10px 0px 10px; } /* the line's room, its text still centred */
+.title-bar-tab-panel-focused::highlight(selected) { border-color: var(--accent); }
 .title-bar-grip {
     width: 12px;
     margin: 0px 2px 0px 0px;
@@ -4468,7 +4471,8 @@
 }
 
 /* ---- tabStyle: individual tab --------------------------------------------- */
-.tab {
+/* .tab-panel-focused: a docked tab whose group holds the focus; its shown tab is underlined in the accent. */
+.tab, .tab-panel-focused {
     border-radius: var(--radius-md);
     border-width: 0px; /* the selected tab's accent line, on top */
     padding: 4px 10px 4px 10px;
@@ -4488,9 +4492,11 @@
     -tachyon-icon-size: 14px;
     -tachyon-icon-text-gap: 6px;
 }
-.tab:hover  { background-color: var(--bg-header); color: var(--text-1); }
-.tab:active { background-color: var(--bg-active); color: var(--text-1); }
-.tab::highlight(selected) { background-color: var(--bg-active); border-color: transparent; color: var(--text-1); }
+.tab:hover, .tab-panel-focused:hover   { background-color: var(--bg-header); color: var(--text-1); }
+.tab:active, .tab-panel-focused:active { background-color: var(--bg-active); color: var(--text-1); }
+.tab::highlight(selected), .tab-panel-focused::highlight(selected) { background-color: var(--bg-active); border-color: transparent; color: var(--text-1); }
+.tab-panel-focused { border-width: 0px 0px 2px 0px; padding: 4px 10px 2px 10px; } /* the line's room, out of the padding */
+.tab-panel-focused::highlight(selected) { border-color: var(--accent); }
 
 /* ---- tabOverflowStyle: "+N" after the tabs that fit, listing the rest ----- */
 .tab-overflow {
@@ -5819,6 +5825,7 @@
     text-underline-offset: 2px;
 }
 .dialog-button-primary {
+    -tachyon-state-layer: content 18% 30%; /* hover and pressed: the text color over the fill, stronger over a saturated one */
     height: 28px;
     margin: 0px;
     padding: 0px 18px;
@@ -5839,12 +5846,12 @@
     text-underline-color: var(--on-accent);
     text-underline-offset: 2px;
 }
-.dialog-button-primary:hover  { background-color: var(--divider-hover); }
 /* The default button (focused): a ring. */
 .dialog-button:focus         { border-color: var(--accent); }
 .dialog-button-primary:focus { border-width: 1px; border-color: var(--text-1); }
 /* A destructive button (Quit, Delete). */
 .dialog-button-danger {
+    -tachyon-state-layer: light 18% 30%; /* hover and pressed: white over the red, brighter */
     height: 28px;
     margin: 0px;
     padding: 0px 14px;
@@ -7020,6 +7027,7 @@
     padding: 1px 6px;
     margin: 0px;
     text-wrap: nowrap;
+    -tachyon-state-layer: light 18% 30%;
 }
 
 .curve-label, .plot-label {
@@ -7292,6 +7300,7 @@
     flex-grow: 0;
     flex-shrink: 0;
 }
+.timeline-row:hover { background-color: var(--bg-hover); }
 .timeline-row::highlight(selected) { background-color: var(--accent-soft); color: var(--text-1); }
 .timeline-chevron {
     width: 14px;
@@ -7377,6 +7386,8 @@
     flex-grow: 0;
     flex-shrink: 0;
 }
+/* Hovered: the letter brightens, and with it the state layer. */
+.timeline-mute:hover, .timeline-solo:hover { color: var(--text-1); }
 .timeline-mute::highlight(selected) { background-color: var(--bg-active); color: var(--text-1); }
 .timeline-solo::highlight(selected) { background-color: var(--warn-soft); color: var(--warn-text); }
 .timeline-ruler {
@@ -7412,6 +7423,7 @@
     font-size: 10.5px;
     font-weight: 500;
     text-wrap: nowrap;
+    -tachyon-state-layer: light 18% 30%;
 }
 .timeline-lanes {
     margin: 0px;
@@ -7426,10 +7438,10 @@
 .timeline-row-line      { border-width: 0px; background-color: var(--timeline-row-line); border-color: transparent; }
 .timeline-outside       { border-width: 0px; background-color: var(--timeline-outside); border-color: transparent; }
 .timeline-loop-range    { border-width: 0px; background-color: var(--accent-soft); border-color: transparent; }
-.timeline-loop-edge     { border-width: 0px; background-color: var(--accent); border-color: transparent; }
-.timeline-clip          { border-width: 1px; border-radius: 4px; background-color: var(--timeline-clip); border-color: var(--timeline-clip-border); }
+.timeline-loop-edge     { border-width: 0px; background-color: var(--accent); border-color: transparent; -tachyon-state-layer: light 30% 45%; }
+.timeline-clip          { border-width: 1px; border-radius: 4px; background-color: var(--timeline-clip); border-color: var(--timeline-clip-border); -tachyon-state-layer: light 10% 18%; }
 .timeline-event         { border-width: 0px; background-color: var(--timeline-marker); border-color: transparent; }
-.timeline-event-chip    { border-width: 0px; border-radius: 3px; background-color: var(--timeline-event-soft); border-color: transparent; }
+.timeline-event-chip    { border-width: 0px; border-radius: 3px; background-color: var(--timeline-event-soft); border-color: transparent; -tachyon-state-layer: light 14% 24%; }
 .timeline-event-label {
     margin: 0px;
     padding: 0px;
@@ -7457,6 +7469,7 @@
     flex-shrink: 0;
 }
 .timeline-scroll-thumb  { border-width: 0px; border-radius: 3px; background-color: var(--line-strong); border-color: transparent; }
+.timeline-scroll-thumb:hover { background-color: var(--text-3); }
 .toast-actions {
     display: flex;
     flex-direction: row;
@@ -8382,7 +8395,7 @@
 }
 
 /* Tabs, rows and menu items sit flush with their neighbours: an outline inside them instead. */
-.tab:focus-visible, .title-bar-tab:focus-visible, .tab-overflow:focus-visible, .table-header:focus-visible,
+.tab:focus-visible, .tab-panel-focused:focus-visible, .title-bar-tab:focus-visible, .title-bar-tab-panel-focused:focus-visible, .tab-overflow:focus-visible, .table-header:focus-visible,
 .document-tab:focus-visible, .document-tab-level:focus-visible, .document-tab-material:focus-visible,
 .document-tab-layout:focus-visible, .document-tab-prefab:focus-visible, .document-tab-animation:focus-visible,
 .document-close:focus-visible, .document-new:focus-visible, .document-list:focus-visible,

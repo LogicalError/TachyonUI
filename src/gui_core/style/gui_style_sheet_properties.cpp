@@ -261,6 +261,34 @@ bool Parser::ParseDeclValue(StyleDecl& d)
         return true;
     }
 
+    if (ICEq(p,"-tachyon-state-layer"))
+    {
+        // none, or content (the text color) or light (white) with its strengths hovered and
+        // pressed, in percent: content 16% 28%.
+        const std::string kind = m_lex.Consume().text;
+        if (ICEq(kind,"none"))
+            d.enumVal = (int)StateLayer::None;
+        else if (ICEq(kind,"content") || ICEq(kind,"light"))
+        {
+            d.enumVal = (int)(ICEq(kind,"light") ? StateLayer::Light : StateLayer::Content);
+            for (int n = 0; n < 2 && m_lex.Check(TT::Number); ++n)
+            {
+                const float percent = ConsumeFloat();
+                if (m_lex.Check(TT::Percent)) m_lex.Consume(TT::Percent);
+                if (percent < 0.0f || percent > 100.0f) { Error("-tachyon-state-layer strengths are 0% to 100%"); return false; }
+                (n == 0 ? d.uVal : d.uVal2) = uint16_t(std::lround(percent));
+                if (n == 0) d.hasSecondNumber = true;   // a hovered strength
+                else        d.iVal = 1;                 // ... and a pressed one
+            }
+        }
+        else { Error("Unknown -tachyon-state-layer '"+kind+"' (none, or content or light with its hovered and pressed strengths)"); return false; }
+        if (!m_lex.Check(TT::Semicolon) && !m_lex.Check(TT::CloseBrace))
+        {
+            Error("-tachyon-state-layer: none, or content and up to two strengths"); return false;
+        }
+        return true;
+    }
+
     std::string v = m_lex.Consume().text;
 
     if (ICEq(p,"break-after"))
@@ -360,12 +388,6 @@ bool Parser::ParseDeclValue(StyleDecl& d)
         else if (ICEq(v,"space-around"))                 { d.enumVal=(int)AlignContent::SpaceAround;  return true; }
         else if (ICEq(v,"space-evenly"))                 { d.enumVal=(int)AlignContent::SpaceEvenly;  return true; }
         Error("Unknown align-content '"+v+"'"); return false;
-    }
-    if (ICEq(p,"-tachyon-state-layer"))
-    {
-        if      (ICEq(v,"none"))    { d.enumVal=(int)StateLayer::None;    return true; }
-        else if (ICEq(v,"content")) { d.enumVal=(int)StateLayer::Content; return true; }
-        Error("Unknown -tachyon-state-layer '"+v+"' (none or content)"); return false;
     }
     if (ICEq(p,"cursor"))
     {
@@ -654,7 +676,13 @@ void Parser::ApplyDecl(Style& s, uint64_t slots, const StyleDecl& d)
     if (ICEq(p,"overflow-y")) { s.overflowY  = (Overflow)d.enumVal;    return; }
     if (ICEq(p,"visibility")) { s.visibility = (Visibility)d.enumVal;  return; }
     if (ICEq(p,"cursor"))     { s.cursor     = (MouseCursor)d.enumVal; return; }
-    if (ICEq(p,"-tachyon-state-layer")) { s.stateLayer = (StateLayer)d.enumVal; return; }
+    if (ICEq(p,"-tachyon-state-layer"))
+    {
+        s.stateLayer = (StateLayer)d.enumVal;
+        if (d.hasSecondNumber) s.stateLayerHover   = uint8_t(d.uVal);
+        if (d.iVal != 0)       s.stateLayerPressed = uint8_t(d.uVal2);
+        return;
+    }
     if (ICEq(p,"-tachyon-icon-side"))  { s.iconSide   = (IconSide)d.enumVal;    return; }
 
     if (ICEq(p,"-tachyon-icon-text-gap"))

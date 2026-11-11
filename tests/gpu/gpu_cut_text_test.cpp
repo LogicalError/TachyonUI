@@ -174,6 +174,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         ASSERT_GT(app.textLaid.w, 0) << "the text didn't show whole";
         if (!app.drawn)
@@ -220,6 +221,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         ASSERT_GT(app.textLaid.w, 0) << "the text didn't show whole";
         const ElementRef item = app.elementStorage.FindElementRefByID(app.labelID);

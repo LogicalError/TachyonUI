@@ -183,6 +183,10 @@ namespace tachyon
         bool              keyMoved = false;
         PointerDrag       tangentDrag;          ///< a handle
         ID                tangentKey = ID::Invalid();
+        ID                hoverKey       = ID::Invalid();   ///< the key under the pointer, for its hover look
+        ID                hoverHandleKey = ID::Invalid();   ///< the key whose handle is under the pointer ...
+        bool              hoverHandleOut = false;           ///< ... and which side
+        int               hoverChannel   = -1;              ///< the channel whose curve is under the pointer, away from keys and handles
         bool              tangentOut = false;   ///< the leaving side's handle
         PointerDrag       boxSelect;
         float2            boxFrom {}, boxTo {};  ///< in time and value

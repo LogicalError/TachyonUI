@@ -31,6 +31,81 @@ while (app.UpdateFrame())
 - `Run` sets `applicationQuit` back to false when it starts.
 - Call `Cleanup` after the loop.
 
+## Drawing only when something changes
+
+By default `Run()` doesn't draw frames while nothing changes: it sleeps, and the CPU and GPU
+rest.
+
+- A frame is drawn when:
+  - there's input: the mouse moves, a key is pressed, a window is resized or uncovered
+  - something animates: a hover fading in, a spinner turning, a menu sliding open
+  - the last frame looked different from the one before it
+  - a timer is due, such as a tooltip's delay or a toast hiding itself
+  - your app asks for one (see below)
+- Only the windows that look different are drawn again; the others keep what they show.
+
+### The modes
+
+`SetRedrawMode` picks how often frames are drawn. Switch it any time.
+
+| Mode | Does |
+| --- | --- |
+| `RedrawMode::WhenNeeded` (the default) | Sleeps until a frame is needed, as above |
+| `RedrawMode::WhenChanged` | Builds a frame at the display's refresh rate, but draws only the windows that changed |
+| `RedrawMode::Always` | Draws every frame, as fast as the display refreshes, like a game |
+
+- For example, an editor with a live 3D view that always moves:
+
+  ```cpp
+  app.SetRedrawMode(tachyon::RedrawMode::Always);
+  ```
+
+### When your app changes something by itself
+
+The library sees input and its own animations. It can't see a change that comes from your
+app alone, so ask for a frame:
+
+- `RequestRedraw()`: a frame as soon as possible.
+  - For example, new data arrived from a download:
+
+    ```cpp
+    onDownloaded = [this] { RequestRedraw(); };   // safe from any thread
+    ```
+- `RequestRedrawIn(seconds)`: a frame later.
+  - For example, a clock that shows minutes:
+
+    ```cpp
+    Text(id, CurrentTime());
+    RequestRedrawIn(SecondsToNextMinute());
+    ```
+- `ElementFlags::Animated` on an element: it moves every frame, so frames keep coming while
+  it's on screen.
+  - For example, a live view of a running process: flag its element, or call
+    `RequestRedraw()` each frame while it should move.
+- Both requests are safe from any thread and wake a sleeping `Run()`.
+- Without a request, a change made from another thread shows only at the next input.
+
+### In your own loop
+
+`UpdateFrame` never sleeps in your loop. Ask whether a frame is needed, and skip it, or sleep,
+when it isn't:
+
+```cpp
+while (app.UpdateFrame())
+{
+    if (app.NeedsFrame())
+    {
+        if (!app.RecordFrame()) break;
+        app.PresentFrame();
+    }
+    else
+        WaitForYourEvents(app.SecondsUntilFrame());   // INFINITY: until input or a request
+}
+```
+
+- `NeedsFrame()` is always true outside `RedrawMode::WhenNeeded`.
+- `SecondsUntilFrame()` is 0 when a frame is needed now.
+
 ## Errors and device loss
 
 - Calls that can fail return `Result<T>`:

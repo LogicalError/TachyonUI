@@ -352,6 +352,7 @@ namespace tachyon
         StyleRef dockWindowBodyStyleRef {};     ///< a torn-off window's split layout, inset the same
         StyleRef titleBarTabBarStyleRef {};     ///< the tab strip in a torn-off window's title bar
         StyleRef titleBarTabStyleRef {};        ///< a tab in it
+        StyleRef titleBarTabPanelFocusedStyleRef {};   ///< a tab in it while the window holds the focus
         StyleRef titleBarGripStyleRef {};       ///< the grip before it
         StyleRef titleBarTitleStyleRef {};      ///< the window's name when the tabs aren't in the bar
         StyleRef titleBarTextButtonStyleRef {}; ///< a text button in a title bar (Dock)
@@ -470,6 +471,7 @@ namespace tachyon
         ///@{
         StyleRef tabBarStyleRef {};
         StyleRef tabStyleRef {};
+        StyleRef tabPanelFocusedStyleRef {};   ///< a docked tab whose group holds the focus
         StyleRef tabOverflowStyleRef {};   ///< the "+N" button after the tabs that fit
         StyleRef tabContentStyleRef {};
         StyleRef tabCloseStyleRef {};

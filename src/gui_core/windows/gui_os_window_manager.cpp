@@ -385,6 +385,14 @@ namespace tachyon
         window.fadeWait = -1;
     }
 
+    bool OSWindowManager::IsFading() const
+    {
+        for (const auto& window : windows)
+            if (window.fade != 0 || window.fadeWait >= 0)
+                return true;
+        return false;
+    }
+
     void OSWindowManager::AnimateFades()
     {
         const uint32_t now = windowBackendManager->GetTicks();

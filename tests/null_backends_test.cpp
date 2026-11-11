@@ -45,6 +45,8 @@ namespace
             SetWindowBackend(std::make_unique<tachyon::NullWindowBackend>());
             if (!Initialize())
                 return false;
+            // A frame each pass: the script counts them.
+            SetRedrawMode(tachyon::RedrawMode::Always);
             windowID = idManager.CreateStaticID();
             buttonID = idManager.CreateStaticID();
             m_frame.OnPostLayout([this](tachyon::FrameContext&)

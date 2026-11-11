@@ -83,6 +83,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         EXPECT_EQ(app.added, 1) << "the menu item was chosen";
         ASSERT_EQ(app.view.nodes.size(), 3u);
@@ -102,6 +103,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         EXPECT_EQ(app.added, 1);
         EXPECT_EQ(app.view.nodes.size(), 3u);

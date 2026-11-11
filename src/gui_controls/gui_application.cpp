@@ -14,6 +14,9 @@
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>
 
 #include <algorithm>
+#include <climits>
+#include <cmath>
+#include <thread>
 #include <filesystem>
 #include <chrono>
 #include <fstream>
@@ -141,6 +144,7 @@ namespace tachyon
 
     Result<void> GUIApplication::Initialize(const InitializeOptions& options)
     {
+        m_uiThread = std::this_thread::get_id();
         if (m_initialized)
         {
             ReportMisuse("GUIApplication: Initialize called on an initialized app (ignored)");
@@ -683,16 +687,84 @@ namespace tachyon
         if (guiRenderer) guiRenderer->ClearScopeCaptures();
     }
 
+
     Result<void> GUIApplication::Run()
     {
         applicationQuit = false;
-        while (UpdateFrame())
+        for (;;)
         {
+            // Asleep until there's something to draw.
+            if (m_redrawMode == RedrawMode::WhenNeeded && windowBackend)
+                while (!NeedsFrame())
+                    windowBackend->WaitForEvents(SecondsUntilFrame());
+            if (!UpdateFrame())
+                break;
             if (Result<void> frame = RecordFrame(); !frame)
                 return frame;
             PresentFrame();
+            // Nothing presented, so no vsync wait: the next build waits for the refresh instead.
+            if (m_redrawMode == RedrawMode::WhenChanged && !m_recordedAny)
+            {
+                const float hz = windowManager ? windowManager->MainRefreshRate() : 0.0f;
+                const auto period = std::chrono::duration<double>(1.0 / double(hz > 0.0f ? hz : 60.0f));
+                std::this_thread::sleep_until(m_frameStart + std::chrono::duration_cast<std::chrono::steady_clock::duration>(period));
+            }
         }
         return {};
+    }
+
+    void GUIApplication::RequestRedraw()
+    {
+        m_redrawRequests.Request();
+        // From another thread, Run may be asleep.
+        if (windowBackend && std::this_thread::get_id() != m_uiThread)
+            windowBackend->Wake();
+    }
+
+    void GUIApplication::RequestRedrawIn(float seconds)
+    {
+        const double secs = std::isfinite(seconds) ? std::max(0.0, double(seconds)) : 1.0e9;
+        m_redrawRequests.RequestAt(SteadyClockNowNanos() + int64_t(secs * 1.0e9));
+        // From another thread, a sleeping Run's timeout may be too late now.
+        if (windowBackend && std::this_thread::get_id() != m_uiThread)
+            windowBackend->Wake();
+    }
+
+    bool GUIApplication::NeedsFrame() const
+    {
+        if (applicationQuit || m_redrawMode != RedrawMode::WhenNeeded || m_moreFrames)
+            return true;
+        if (windowBackend && windowBackend->GetEventCount() != m_seenEvents)
+            return true;
+        if (inputManager && !inputManager->GetRecordedEvents().empty())
+            return true;
+        const int64_t now = SteadyClockNowNanos();
+        return m_redrawRequests.IsDue(now) || m_timerAt <= now;
+    }
+
+    float GUIApplication::SecondsUntilFrame() const
+    {
+        if (NeedsFrame())
+            return 0.0f;
+        const int64_t next = std::min(m_redrawRequests.NextAt(), m_timerAt);
+        if (next == INT64_MAX)
+            return INFINITY;
+        return float(double(std::max<int64_t>(0, next - SteadyClockNowNanos())) * 1.0e-9);
+    }
+
+    void GUIApplication::NoteFrameNeeds(float elapsedTimeSecs)
+    {
+        // Something moves by itself: another frame. RecordFrame adds the windows whose draws changed.
+        m_moreFrames = transitionManager.HasRunning() || elementStorage.HasAnimated() || windowManager->IsFading()
+                    || !m_crossfades.empty() || m_themeReloadPending || guiStateManager.Drag().IsDragging()
+                    || (inputManager && inputManager->GetCurrentButtons() != MouseButtons::None);
+
+        // A change due later: a frame then.
+        const float at = std::min({ m_buildTimerAt, tooltipManager.NextChangeTime(),
+                                    guiStateManager.Interaction().ActiveFlashEndsAt() });
+        m_timerAt = std::isfinite(at)
+            ? m_frameTickNanos + int64_t(double(std::max(0.0f, at - elapsedTimeSecs)) * 1.0e9)
+            : INT64_MAX;
     }
 
     Result<void> GUIApplication::RecoverDevice()
@@ -718,6 +790,10 @@ namespace tachyon
             return false;
         m_frameStart = std::chrono::steady_clock::now();
         TACHYON_PROFILE_FRAME_BEGIN("Frame");
+        // What this frame answers: the events so far, and the redraws asked for by now.
+        if (windowBackend)
+            m_seenEvents = windowBackend->GetEventCount();
+        m_redrawRequests.Answer(SteadyClockNowNanos());
 
         // Pump input right before the build, after the previous present.
         {
@@ -747,6 +823,12 @@ namespace tachyon
         }
         frameBuildTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - buildStart).count();
 
+        // What changed without a window's draws changing: styles (a theme switch), images, a
+        // scene rendered, a window uncovered. Read before PrepareFrame takes the style changes.
+        const bool drawAll = m_redrawMode == RedrawMode::Always
+                          || styleManager.AreVisualColorStylesModified() || styleManager.AreVisualBoxStylesModified()
+                          || gradientManager.HasPageTableChanged();
+
         // Uploads must run between build and render: the render consumes what this build requested
         // (windows created/resized by OnFrame, glyphs, styles, gradient pages).
         {
@@ -757,11 +839,23 @@ namespace tachyon
         }
         {
             TACHYON_PROFILE_SCOPE("Render");
+            // Only the windows whose draws changed, unless everything is drawn again.
+            const bool all = drawAll || graphicsContext->TakeContentChanged()
+                          || (windowBackend && windowBackend->TakeWindowsExposed());
+            bool anyChanged = false;
+            m_recordedAny = false;
             windowManager->ForEachAliveWindowContext
                 ([&](IWindowContext* context, IntRect rect)
                 {
+                    const bool changed = guiRenderer == nullptr || guiRenderer->DrawsChanged(context->GetID());
+                    anyChanged = anyChanged || changed;
+                    if (!all && !changed && !context->NeedsRecord())
+                        return;
+                    m_recordedAny = true;
                     context->RecordWindowFrame(graphicsContext, rect);
                 });
+            // Changed draws may change again (sizes measured this frame): one more to see.
+            m_moreFrames = m_moreFrames || anyChanged;
         }
         return {};
     }
@@ -828,9 +922,10 @@ namespace tachyon
     IntRect GUIApplication::OpaqueInterior(IntRect rectLayout, const TransitionState& ts) const
     {
         int32_t inset = 0;
-        for (const auto& [styleIndex, weight] : { std::pair{ ts.fromStyleIndex, 1.0f - ts.blendT }, std::pair{ ts.toStyleIndex, ts.blendT } })
+        for (int i = 0; i < ts.styles.count; ++i)
         {
-            if (weight <= 0.0f)
+            const uint32_t styleIndex = ts.styles.styles[size_t(i)];
+            if (ts.styles.weights[size_t(i)] <= 0.0f)
                 continue;
             const VisualBoxStyle* box = styleManager.GetVisualBoxStyleAt(styleIndex);
             if (box == nullptr || !styleManager.IsBoxBackgroundOpaque(styleIndex))
@@ -849,22 +944,41 @@ namespace tachyon
 
     void GUIApplication::RenderBoxShadows(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, bool ring)
     {
-        const VisualShadowStyle* to   = styleManager.GetVisualShadowStyle(ts.toStyleIndex);
-        const VisualShadowStyle* from = ts.blendT < 1.0f ? styleManager.GetVisualShadowStyle(ts.fromStyleIndex) : to;
-        if (!to && !from)
-            return;
+        // Each layer mixed over the states as their colors are: each into what the ones before
+        // made, by its share of all so far.
         const VisualShadowStyle none{};
-        if (!to)   to   = &none;
-        if (!from) from = &none;
+        bool any = false;
+        const VisualShadowStyle* shadows[StyleBlend::kMaxStyles];
+        for (int i = 0; i < ts.styles.count; ++i)
+        {
+            const VisualShadowStyle* s = styleManager.GetVisualShadowStyle(ts.styles.styles[size_t(i)]);
+            any = any || s != nullptr;
+            shadows[i] = s ? s : &none;
+        }
+        if (!any)
+            return;
+        auto mixed = [&](auto layerOf) {
+            VisualShadow layer = layerOf(*shadows[0]);
+            float soFar = ts.styles.weights[0];
+            for (int i = 1; i < ts.styles.count; ++i)
+            {
+                const float share = ts.styles.weights[size_t(i)];
+                if (share <= 0.0f)
+                    continue;
+                layer = BlendShadow(layer, layerOf(*shadows[i]), share / (soFar + share));
+                soFar += share;
+            }
+            return layer;
+        };
 
         const auto  boxStyles = styleManager.GetVisualBoxStylesSpan();
-        const float radius    = ts.toStyleIndex < boxStyles.size() ? float(boxStyles[ts.toStyleIndex].borderRadius.topLeft) : 0.0f;
+        const float radius    = ts.current < boxStyles.size() ? float(boxStyles[ts.current].borderRadius.topLeft) : 0.0f;
         auto draw = [&](const VisualShadow& s) { RenderShadowLayer(rectLayout, clipRectScreen, s, radius); };
         // The first layer is on top, as in CSS; the focus ring over all of them.
         for (int i = kMaxBoxShadows - 1; i >= 0; --i)
-            draw(BlendShadow(from->layers[i], to->layers[i], ts.blendT));
+            draw(mixed([i](const VisualShadowStyle& s) { return s.layers[i]; }));
         if (ring)
-            draw(BlendShadow(from->ring, to->ring, ts.blendT));
+            draw(mixed([](const VisualShadowStyle& s) { return s.ring; }));
     }
 
     void GUIApplication::RenderShadowLayer(IntRect rectLayout, IntRect clipRectScreen, const VisualShadow& s, float radius)
@@ -884,7 +998,7 @@ namespace tachyon
 
     void GUIApplication::RenderInvalidHalo(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, float grown)
     {
-        const VisualBoxStyle* box = styleManager.GetVisualBoxStyleAt(ts.toStyleIndex);
+        const VisualBoxStyle* box = styleManager.GetVisualBoxStyleAt(ts.current);
         VisualShadow halo = theme.invalidHalo;
         halo.spread = int16_t(std::lround(float(halo.spread) * grown));
         halo.blur   = uint16_t(std::lround(float(halo.blur) * grown));
@@ -893,7 +1007,7 @@ namespace tachyon
 
     void GUIApplication::RenderInvalidBorder(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, IntRect snappedPx)
     {
-        const VisualBoxStyle* box = styleManager.GetVisualBoxStyleAt(ts.toStyleIndex);
+        const VisualBoxStyle* box = styleManager.GetVisualBoxStyleAt(ts.current);
         BoxEdges   widths = box ? box->borderWidths : BoxEdges{};
         const BoxCorners radius = box ? box->borderRadius : BoxCorners{};
         if (widths.top == 0 && widths.right == 0 && widths.bottom == 0 && widths.left == 0)
@@ -944,6 +1058,17 @@ namespace tachyon
 
         interaction.SetPropagatedHoverIDs(std::move(hoverProp));
         interaction.SetPropagatedFocusedIDs(std::move(focusedProp));
+
+        // Everything holding the focus, for IsFocusWithin.
+        std::vector<ID> holders;
+        if (const ID focusedID = interaction.GetFocusedID(); focusedID != ID::Invalid())
+            for (ElementRef ref = elementStorage.FindElementRefByID(focusedID); ref.IsValid(); )
+            {
+                ref = elementStorage.GetParentRef(ref);
+                if (const Element* el = ref.IsValid() ? elementStorage.GetElementPtr(ref) : nullptr)
+                    holders.push_back(el->id);
+            }
+        interaction.SetFocusAncestorIDs(std::move(holders));
     }
 
     void GUIApplication::OnRender(float elapsedTimeSecs)
@@ -1219,7 +1344,7 @@ namespace tachyon
                     {
                         TransitionState ts = transitionManager.Resolve(childElement.id, baseBoxStyleIndex, state, elapsedTimeSecs);
                         // A mid-transition blend would freeze in the capture; rebuild until it settles.
-                        if (capturing && ts.blendT < 1.0f)
+                        if (capturing && ts.styles.IsBlending())
                             m_uiCache->Invalidate(captureScopeId);
                         // Windows get an OS-drawn shadow instead.
                         const bool isWindow = (childElement.flags & ElementFlags::IsWindow) != ElementFlags::None;
@@ -1231,11 +1356,7 @@ namespace tachyon
                         const bool invalid = depthStates[depth].invalid && !parentState.invalid && !isWindow;
                         if (invalid)
                         {
-                            float grown = 1.0f;
-                            if (const auto blend = transitionManager.Find(childElement.id, elapsedTimeSecs);
-                                blend && ((blend->fromState ^ blend->toState) & ElementState::Invalid) != ElementState::None &&
-                                (blend->toState & ElementState::Invalid) != ElementState::None)
-                                grown = blend->t;
+                            const float grown = transitionManager.Value(childElement.id, TransitionChannel::Invalid, elapsedTimeSecs).value_or(1.0f);
                             if (capturing && grown < 1.0f)
                                 m_uiCache->Invalidate(captureScopeId);
                             RenderInvalidHalo(rectLayout, parentClipRectScreen, ts, grown);
@@ -1247,11 +1368,11 @@ namespace tachyon
                             if (const IntRect covered = OpaqueInterior(rectLayout, ts); covered.w > 0 && covered.h > 0)
                                 guiRenderer->RenderOccluder(covered, parentClipRectScreen);
                         // rect is LAYOUT space (mapped by SetTransform), the scissor is SCREEN space.
-                        guiRenderer->RenderBox(rectLayout, parentClipRectScreen, ts.fromStyleIndex, ts.toStyleIndex, ts.blendT,
+                        guiRenderer->RenderBox(rectLayout, parentClipRectScreen, ts.styles,
                                                childElement.colorStyleIndex, childElement.backgroundImage, elementSnappedRect);
                         // An inset focus ring: an outline over the box, under its content.
                         if (ring)
-                            if (const VisualShadowStyle* s = styleManager.GetVisualShadowStyle(ts.toStyleIndex); s && s->insetRing != 0)
+                            if (const VisualShadowStyle* s = styleManager.GetVisualShadowStyle(ts.current); s && s->insetRing != 0)
                                 guiRenderer->RenderBox(rectLayout, parentClipRectScreen, s->insetRing - 1, s->insetRing - 1, 1.0f,
                                                        {}, ImageIndex::Invalid, elementSnappedRect);
                         // ... and its error border, over the box's own in whatever state it's in.
@@ -1494,8 +1615,10 @@ namespace tachyon
         struct FrameScope { bool& inFrame; FrameScope(bool& f) : inFrame(f) { inFrame = true; } ~FrameScope() { inFrame = false; } } frameScope{ m_inFrame };
 
         // Once per frame; shared by transitions and GPU push constants.
-        m_frameClock.Tick(SteadyClockNowNanos(), windowManager ? windowManager->MainRefreshRate() : 0.0f);
+        m_frameTickNanos = SteadyClockNowNanos();
+        m_frameClock.Tick(m_frameTickNanos, windowManager ? windowManager->MainRefreshRate() : 0.0f);
         const float elapsedTimeSecs = static_cast<float>(m_frameClock.Seconds());
+        m_buildTimerAt = INFINITY;
 
         FrameContext ctx{
             .app               = *this,
@@ -1732,6 +1855,7 @@ namespace tachyon
         transitionManager.Purge(elapsedTimeSecs);
         if (!m_crossfades.empty() && elapsedTimeSecs - m_crossfadeStart >= kThemeCrossfadeSecs)
             EndThemeCrossfade();
+        NoteFrameNeeds(elapsedTimeSecs);
 
         m_frame.RunStage(FrameStage::EndFrame, ctx);
 

@@ -6,6 +6,7 @@
 #include <gui_core/input/gui_input_enums.h>
 #include <gui_core/memory/gui_allocation_hooks.h>
 
+#include <atomic>
 #include <vector>
 #include <unordered_set>
 #include <unordered_map>
@@ -71,6 +72,12 @@ namespace tachyon
         uint32_t GetFocusChangeCount() const override { return m_focusChanges; }
 
         void PollEvents(std::function<void(OSWindowHandle, IWindowContext*)> cleanup) override;
+        /// SDL_WaitEventTimeout; with pumpEvents off it doesn't wait, the host runs SDL's loop.
+        void WaitForEvents(float timeoutSecs) override;
+        /// Pushes an event of its own, which ends SDL's wait.
+        void Wake() override;
+        uint64_t GetEventCount() const override { return m_events.load(); }
+        bool TakeWindowsExposed() override { return m_exposed.exchange(false); }
         int2 GetScreenMousePos() override;
         std::optional<color4b> ReadScreenPixel(int2 screenPos) override;
         bool TakeCloseRequest(OSWindowHandle window) override;
@@ -149,6 +156,9 @@ namespace tachyon
         /// Live resize, window moves, close requests and modality; sees every event, drops none.
         static bool BackendEventWatch(void* userdata, SDL_Event* event);
         uint32_t m_focusChanges = 0;
+        uint32_t m_wakeEvent = 0;                ///< the SDL event type Wake pushes; 0 without one
+        std::atomic<uint64_t> m_events = 0;      ///< every event the watch saw
+        std::atomic<bool>     m_exposed = false; ///< see TakeWindowsExposed
         bool m_checkFocusLeftApp = false;  ///< a window lost focus: did the app?
         bool m_suppressLiveResize = false; ///< no live-resize render during code changes
         SDL_Window* m_lastFocusableWindow = nullptr; ///< reroutes tooltip input

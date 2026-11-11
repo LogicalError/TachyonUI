@@ -29,6 +29,7 @@ list(APPEND GUI_CORE_TEST_FILES
   curve_editor_test.cpp
   accent_test.cpp
   null_backends_test.cpp
+  redraw_test.cpp
   breadcrumb_test.cpp
   node_view_zoom_test.cpp
   vector_field_test.cpp

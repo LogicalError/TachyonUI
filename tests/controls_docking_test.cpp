@@ -295,6 +295,40 @@ namespace tachyon
 
         // A torn-off window's tab takes the title bar's tab style (in the light theme it joins
         // the panel); docked tabs keep theirs.
+        // The group holding the focus, in its panel or on its tabs, draws its tabs in the
+        // focused-group style; the other groups keep the plain one.
+        TEST_F(DockingTest, TheGroupHoldingTheFocusMarksItsTabs)
+        {
+            const ID fieldA = app.idManager.CreateStaticID(), fieldB = app.idManager.CreateStaticID();
+            layout.panels[panelA].onPanelGUI = [&] { app.Button(fieldA, GUIContent{ "A" }, {}); };
+            layout.panels[panelB].onPanelGUI = [&] { app.Button(fieldB, GUIContent{ "B" }, {}); };
+            layout.panels[panelA].cacheSignature = [] { return std::optional<uint64_t>{}; };
+            layout.panels[panelB].cacheSignature = [] { return std::optional<uint64_t>{}; };
+            auto tabsWith = [&](StyleRef style) {
+                int count = 0;
+                const auto& storage = app.elementStorage;
+                for (auto it = storage.TopDownDepthScanBegin(); it != storage.TopDownDepthScanEnd(); ++it)
+                    for (const Element& e : it->GetChildren(storage))
+                        if (e.styleRef.visualBoxStyleIndex == style.visualBoxStyleIndex && e.styleRef.layoutStyleIndex == style.layoutStyleIndex)
+                            ++count;
+                return count;
+            };
+            Frame();
+            EXPECT_EQ(tabsWith(app.theme.tabPanelFocusedStyleRef), 0) << "no focus, no group marked";
+
+            app.guiStateManager.Interaction().SetFocusID(fieldB);
+            Frame();
+            Frame();
+            EXPECT_EQ(tabsWith(app.theme.tabPanelFocusedStyleRef), 2) << "B and C, the right group";
+            EXPECT_EQ(tabsWith(app.theme.tabStyleRef), 1) << "A";
+
+            app.guiStateManager.Interaction().SetFocusID(fieldA);
+            Frame();
+            Frame();
+            EXPECT_EQ(tabsWith(app.theme.tabPanelFocusedStyleRef), 1) << "A";
+            EXPECT_EQ(tabsWith(app.theme.tabStyleRef), 2) << "B and C";
+        }
+
         TEST_F(DockingTest, TornOffTabsUseTheTitleBarTabStyle)
         {
             auto fw = std::make_unique<FloatingDockWindow>();

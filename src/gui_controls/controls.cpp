@@ -251,8 +251,12 @@ namespace tachyon
                                          std::move(constraints));
         VERIFY(elementStorage.BeginChildren());
         [[maybe_unused]] const bool pushed = idManager.PushParent(id);   // the parts' IDs under the label's
-        Text(idManager.AllocateDynamicID("label_title"), text, theme.groupLabelTitleStyleRef);
-        Text(idManager.AllocateDynamicID("label_caption"), caption, theme.groupLabelCaptionStyleRef);
+        // The title and caption show the label's state: focused with its control, hovered.
+        const ElementState labelState = elementStorage.GetElementUnsafe(ref).state;
+        RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("label_title"), .styleRef = theme.groupLabelTitleStyleRef,
+                                          .state = labelState }, text, {});
+        RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("label_caption"), .styleRef = theme.groupLabelCaptionStyleRef,
+                                          .state = labelState }, caption, {});
         if (pushed) (void)idManager.PopParent();
         VERIFY(elementStorage.EndChildren());
         if (gs && gs->resizable)
@@ -909,13 +913,12 @@ namespace tachyon
             float on = value ? 1.0f : 0.0f;
             tachyon::ElementState knobFrom = knobState;
             float knobT = 1.0f;
-            if (const auto blend = transitionManager.Find(trackID, guiStateManager.Interaction().GetFrameTime());
-                blend && ((blend->fromState ^ blend->toState) & tachyon::ElementState::Selected) != tachyon::ElementState::None)
+            if (const auto turning = transitionManager.Value(trackID, TransitionChannel::Selected, guiStateManager.Interaction().GetFrameTime()))
             {
-                const bool toOn = (blend->toState & tachyon::ElementState::Selected) != tachyon::ElementState::None;
-                on       = toOn ? blend->t : 1.0f - blend->t;
+                // How far on it is; the knob's two styles mix by how far to the state it heads for.
+                on       = *turning;
                 knobFrom = knobState ^ tachyon::ElementState::Selected;
-                knobT    = blend->t;
+                knobT    = value ? on : 1.0f - on;
             }
             VERIFY(elementStorage.AddCustomDraw(trackRef,
                 [knobStyle, knobFrom, knobState, knobT, knobSize, on](tachyon::CustomDrawContext& ctx)

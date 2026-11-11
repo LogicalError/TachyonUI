@@ -81,6 +81,25 @@ namespace
         EXPECT_EQ(Emit(), -1) << "reported once";
     }
 
+    // The close button, top right, chooses the cancel button too: it's on top of the dialog's
+    // body, so the pointer reaches it.
+    TEST_F(MessageDialogTest, TheCloseButtonChoosesTheCancelButton)
+    {
+        Emit();
+        Emit();
+        const ID close = FindByStyle(app.theme.messageBoxCloseStyleRef);
+        ASSERT_NE(close, ID::Invalid());
+        app.mouseWindow = dialogID;   // the dialog is a window of its own
+        app.InjectMouseMove(app.CenterOf(close));
+        Emit();
+        EXPECT_EQ(app.guiStateManager.Interaction().GetHoveredID(), close) << "nothing over it";
+        app.ClickAt(app.CenterOf(close));
+        int choice = Emit();
+        if (choice < 0) choice = Emit();
+        app.mouseWindow = ID::Invalid();
+        EXPECT_EQ(choice, 0);
+    }
+
     TEST_F(MessageDialogTest, EscChoosesTheCancelButton)
     {
         Emit();

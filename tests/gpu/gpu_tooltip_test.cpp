@@ -152,6 +152,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         ASSERT_GT(app.boxLaid.w, 0) << "the tooltip didn't show";
         const OSWindowHandle tooltip = app.windowManager->GetWindowHandle(app.tooltipWindowID);
@@ -197,6 +198,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         ASSERT_GT(app.boxLaid.w, 0) << "the tooltip didn't show";
         if (!app.drawn)

@@ -2,6 +2,8 @@
 
 #include <gui_core/graphics/gui_graphics_context.h>
 
+#include <unordered_map>
+
 namespace tachyon
 {
     /// @addtogroup graphics
@@ -36,10 +38,15 @@ namespace tachyon
         ImageIndex RegisterImage(Image* image) override;
         void       UnregisterImage(ImageIndex index) override;
 
-        void PrepareFrame(StyleManager&, GradientManager&, float) override {}
+        /// Nothing to upload: takes the style and gradient changes, as a GPU backend's upload does.
+        void PrepareFrame(StyleManager& styleManager, GradientManager& gradientManager, float) override;
+
+        /// How many frames the window was recorded in (RecordWindowFrame), for tests.
+        uint64_t RecordedFrames(ID window) const;
 
     private:
         ImageSet* m_imageSet = nullptr;
+        std::unordered_map<ID, uint64_t> m_recorded;
     };
     /// @}
 }

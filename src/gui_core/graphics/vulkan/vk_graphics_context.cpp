@@ -211,8 +211,8 @@ bool tachyon::vulkan::VulkanGraphicsContext::RenderWindowFrame(VkCommandBuffer c
 }
 
 tachyon::ImageSet* VulkanGraphicsContext::GetImageSet() const { return vulkanImageSet; }
-tachyon::ImageIndex VulkanGraphicsContext::RegisterImage(tachyon::Image* image) { return vulkanImageSet->Add(image); }
-void VulkanGraphicsContext::UnregisterImage(tachyon::ImageIndex index) { vulkanImageSet->Remove(index); }
+tachyon::ImageIndex VulkanGraphicsContext::RegisterImage(tachyon::Image* image) { MarkContentChanged(); return vulkanImageSet->Add(image); }
+void VulkanGraphicsContext::UnregisterImage(tachyon::ImageIndex index) { MarkContentChanged(); vulkanImageSet->Remove(index); }
 
 tachyon::ImageIndex VulkanGraphicsContext::RegisterExternalImage(VkImageView view, VkSampler sampler)
 {
@@ -275,6 +275,7 @@ tachyon::ImageIndex VulkanGraphicsContext::RenderScene(tachyon::ID key, tachyon:
 {
     if (!deviceContext.initialized || size.x == 0 || size.y == 0 || vulkanImageSet == nullptr)
         return tachyon::ImageIndex::Invalid;
+    MarkContentChanged();   // its pixels are drawn again, its image slot the same
     SceneTarget& scene = m_scenes[key];
     scene.lastFrame = m_sceneFrame;
     if (scene.color == nullptr || scene.extent.width != size.x || scene.extent.height != size.y)

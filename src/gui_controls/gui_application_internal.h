@@ -23,6 +23,8 @@ namespace tachyon
         using GUIApplication::m_toolbarWindowDrag;
         using GUIApplication::m_uiCache;
         using GUIApplication::FireStateTransitions;
+        using GUIApplication::NoteFrameNeeds;
+        using GUIApplication::m_moreFrames;
 
         using GUIApplication::controlStylesStack;
         using GUIApplication::tooltipWindowID;

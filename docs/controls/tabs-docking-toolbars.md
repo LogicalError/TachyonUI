@@ -161,10 +161,17 @@ void EmitFloatingDockWindows();
 - Call `EmitFloatingDockWindows()` after the container. It builds the windows of the
   floating panels.
 - Closing a panel destroys it.
+- The tab group holding the focus shows it: its shown tab is underlined in the accent.
+  - The focus counts as held when it's in the group's panel or on one of its tabs.
+  - For example, click into a field in the Log panel: Log's tab is underlined, while the
+    Scene group's shown tab keeps its plain look.
+  - A torn-off window's title-bar tabs do the same.
 - The CSS classes:
   - `dock-container`
   - `dock-leaf`
   - `dock-content`
+  - `tab` and `title-bar-tab` for the tabs; `tab-panel-focused` and
+    `title-bar-tab-panel-focused` for those of the group holding the focus
   - `dock-split-horz` and `dock-split-vert`
   - `dock-sizer-horz` and `dock-sizer-vert` for the handles between the halves of a split
   - `dock-window` for a floating panel's window

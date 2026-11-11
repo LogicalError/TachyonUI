@@ -499,6 +499,14 @@ namespace tachyon
                 const float x = float(event.LocalCursor(es).x);
                 if (DragScroll(*v, event, es, gsm, g, ID::Invalid(), 0, dragDistance))
                     return true;
+                // The loop edge within reach of the pointer: 1 its start, 2 its end, 0 none.
+                auto loopEdgeAt = [&]() {
+                    const TimelineRange loop = v->loopRange;
+                    if (loop.empty()) return 0;
+                    if (std::fabs(x - g.XAt(loop.start)) <= float(edgeReach)) return 1;
+                    if (std::fabs(x - g.XAt(loop.end)) <= float(edgeReach)) return 2;
+                    return 0;
+                };
                 switch (event.type)
                 {
                     case EventType::MouseDown:
@@ -517,11 +525,8 @@ namespace tachyon
                             return true;
                         }
                         int edge = shift ? 0 : -1;
-                        if (!loop.empty() && !shift)
-                        {
-                            if (std::fabs(x - g.XAt(loop.start)) <= float(edgeReach)) edge = 1;
-                            else if (std::fabs(x - g.XAt(loop.end)) <= float(edgeReach)) edge = 2;
-                        }
+                        if (!shift && loopEdgeAt() != 0)
+                            edge = loopEdgeAt();
                         if (edge >= 0)
                         {
                             v->loopDrag.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
@@ -556,6 +561,9 @@ namespace tachyon
                             playbackChanged();
                             return true;
                         }
+                        // What's under the pointer, for its hover look; not while dragging.
+                        if (!v->loopDrag.IsHeld() && !v->scrub.IsHeld() && !v->dragScroll.IsHeld())
+                            v->hoverLoopEdge = loopEdgeAt();
                         return false;
                     }
                     case EventType::MouseUp:
@@ -601,6 +609,12 @@ namespace tachyon
         {
             const TimelineRange loop = view.loopRange;
             const float time = view.playback.time;
+            // A press anywhere on the ruler moves the playhead, so its pill lights up while
+            // the ruler is hovered; a loop edge within reach, or being dragged, does too.
+            const bool rulerHovered = (guiStateManager.GetCurrentState(rulerID) & ElementState::Hover) != ElementState::None;
+            const bool scrubbing    = view.scrub.IsHeld();
+            const int  litEdge      = view.loopDrag.IsHeld() ? view.loopEdge : (rulerHovered ? view.hoverLoopEdge : 0);
+            const ElementState pillState = (rulerHovered && litEdge == 0) || scrubbing ? ElementState::Hover : ElementState::None;
             const VisualBoxStyleIndex tick = theme.timelineTickStyleRef.visualBoxStyleIndex, major = theme.timelineTickMajorStyleRef.visualBoxStyleIndex;
             const VisualBoxStyleIndex band = theme.timelineLoopRangeStyleRef.visualBoxStyleIndex, edge = theme.timelineLoopEdgeStyleRef.visualBoxStyleIndex;
             const VisualBoxStyleIndex line = theme.timelinePlayheadStyleRef.visualBoxStyleIndex, pill = theme.timelinePlayheadLabelStyleRef.visualBoxStyleIndex;
@@ -616,8 +630,10 @@ namespace tachyon
                 {
                     const int32_t a = int32_t(g.XAt(loop.start)), b = int32_t(g.XAt(loop.end));
                     ctx.RenderBox(IntRect{ a, outer.y, b - a, outer.h }, outer, band);
-                    ctx.RenderBox(IntRect{ a, outer.y, px2, outer.h }, outer, edge);
-                    ctx.RenderBox(IntRect{ b - px2, outer.y, px2, outer.h }, outer, edge);
+                    // A lit edge is drawn wider too: two pixels of a lighter color are easy to miss.
+                    const int32_t wa = litEdge == 1 ? px4 : px2, wb = litEdge == 2 ? px4 : px2;
+                    ctx.RenderBox(IntRect{ a, outer.y, wa, outer.h }, outer, edge, litEdge == 1 ? ElementState::Hover : ElementState::None);
+                    ctx.RenderBox(IntRect{ b - wb, outer.y, wb, outer.h }, outer, edge, litEdge == 2 ? ElementState::Hover : ElementState::None);
                 }
                 // A major tick every labelled step, three minor ones between.
                 if (labelStep > 0.0f)
@@ -640,7 +656,7 @@ namespace tachyon
                     ctx.RenderBox(IntRect{ x, outer.y, px1, outer.h }, outer, line);
                     const int32_t w = std::max(pillMin, pillTextSize.x + pillPad);
                     const IntRect p{ x - w / 2, outer.y + px4, w, pillHeight };
-                    ctx.RenderBox(p, outer, pill);
+                    ctx.RenderBox(p, outer, pill, pillState);
                     ctx.RenderText(pillText, IntRect{ p.x + (w - pillTextSize.x) / 2, p.y + (pillHeight - pillTextSize.y) / 2,
                                                        pillTextSize.x, pillTextSize.y });
                 }
@@ -756,6 +772,10 @@ namespace tachyon
         // The event names, for the draw.
         struct EventLabel { int row; float time; TextID text; int2 size; bool selected; };
         std::vector<EventLabel> eventLabels;
+        // Where each label is beside its event's line, for the lanes to take it as the event.
+        struct LabelSpan { int track; ID event; float time; int32_t from, to; };
+        std::vector<LabelSpan> labelSpans;
+        const int32_t labelFrom = std::max(1, styleManager.Px(2)) + styleManager.Px(4), labelPad = 2 * styleManager.Px(5);
         for (int r = 0; r < (int)rows.size(); ++r)
         {
             const TimelineTrack& track = view.tracks[size_t(rows[size_t(r)])];
@@ -770,6 +790,7 @@ namespace tachyon
                                                              theme.timelineEventLabelStyleRef, ElementState::None);
                 const TextMeasurement m = textSystem->MeasureText(text, TextWrapContext{});
                 eventLabels.push_back({ r, event.time, text, { m.maxWidth, m.maxHeight }, view.selectedKeys.contains(event.stableID) });
+                labelSpans.push_back({ rows[size_t(r)], event.stableID, event.time, labelFrom, labelFrom + m.maxWidth + labelPad });
             }
             if (inTrack)
                 (void)idManager.PopParent();
@@ -784,7 +805,9 @@ namespace tachyon
             const ElementStorage& es = elementStorage;
             const float reach = float(styleManager.Px(6));
             const int32_t dragDistance = styleManager.Px(kDragStartDistance);
-            lanesHandler = [this, &gsm, &es, v, rows, rowHeight, reach, dragDistance, bodyID, playbackChanged, wheelMode = GetWheelMode()](ElementEvent&& event) -> bool
+            const float edgeReach = float(styleManager.Px(5));
+            lanesHandler = [this, &gsm, &es, v, rows, rowHeight, reach, edgeReach, dragDistance, bodyID, playbackChanged, labelSpans,
+                            wheelMode = GetWheelMode()](ElementEvent&& event) -> bool
             {
                 if (event.rect == nullptr)
                     return false;
@@ -805,6 +828,25 @@ namespace tachyon
                 };
                 if (DragScroll(*v, event, es, gsm, g, bodyID, event.rect->rect.h, dragDistance))
                     return true;
+                // A key or event under the pointer, an event's label too.
+                auto hitAt = [&](float x) {
+                    Hit hit = HitOnRow(*v, track, g, x, reach);
+                    if (hit.ids.empty())
+                        for (const LabelSpan& span : labelSpans)
+                            if (span.track == track && x >= g.XAt(span.time) + float(span.from) && x <= g.XAt(span.time) + float(span.to))
+                                return Hit{ { span.event }, span.time };
+                    return hit;
+                };
+                // The part of the row's clip under the pointer: its ends first, they're narrow.
+                auto clipPartAt = [&](float x) {
+                    if (track < 0 || !v->tracks[size_t(track)].clip)
+                        return TimelineView::ClipPart::None;
+                    const TimelineClip& clip = *v->tracks[size_t(track)].clip;
+                    const float a = g.XAt(clip.start), b = g.XAt(clip.start + clip.length);
+                    if (std::fabs(x - a) <= edgeReach) return TimelineView::ClipPart::Start;
+                    if (std::fabs(x - b) <= edgeReach) return TimelineView::ClipPart::End;
+                    return x > a && x < b ? TimelineView::ClipPart::Body : TimelineView::ClipPart::None;
+                };
                 switch (event.type)
                 {
                     case EventType::MouseDown:
@@ -815,7 +857,20 @@ namespace tachyon
                         gsm.TextEditorFocus().Clear();
                         if (track >= 0)
                             v->selectedTrack = v->tracks[size_t(track)].stableID;
-                        const Hit hit = HitOnRow(*v, track, g, float(at.x), reach);
+                        // A clip: its body moves it, its ends trim it (not on a locked track).
+                        if (const TimelineView::ClipPart part = clipPartAt(float(at.x));
+                            part != TimelineView::ClipPart::None && !v->tracks[size_t(track)].locked)
+                        {
+                            v->clipDrag.press.Press(event, es);
+                            v->clipDrag.track     = track;
+                            v->clipDrag.part      = part;
+                            v->clipDrag.pressTime = g.TimeAt(float(at.x));
+                            v->clipDrag.before    = v->tracks;
+                            v->clipDrag.moved     = false;
+                            gsm.Interaction().SetCaptureID(event.id);
+                            return true;
+                        }
+                        const Hit hit = hitAt(float(at.x));
                         if (!hit.ids.empty())
                         {
                             const bool allSelected = std::all_of(hit.ids.begin(), hit.ids.end(), [v](ID id) { return v->selectedKeys.contains(id); });
@@ -831,7 +886,7 @@ namespace tachyon
                             if (!ctrl || !allSelected)
                             {
                                 v->keyDrag.press.Press(event, es);
-                                v->keyDrag.pressTime = hit.time;
+                                v->keyDrag.pressTime = g.TimeAt(float(at.x));
                                 v->keyDrag.before = v->tracks;
                                 v->keyDrag.moved = false;
                             }
@@ -845,6 +900,55 @@ namespace tachyon
                     }
                     case EventType::MouseMove:
                     {
+                        // What's under the pointer, for its hover look; not while dragging.
+                        if (!v->keyDrag.press.IsHeld() && !v->boxSelect.IsHeld() && !v->dragScroll.IsHeld() && !v->clipDrag.press.IsHeld())
+                        {
+                            const Hit hovered = hitAt(float(at.x));
+                            v->hoverTrack = hovered.ids.empty() ? -1 : track;
+                            v->hoverTime  = hovered.time;
+                            v->hoverClipPart  = clipPartAt(float(at.x));
+                            v->hoverClipTrack = v->hoverClipPart != TimelineView::ClipPart::None ? track : -1;
+                        }
+                        if (v->clipDrag.press.IsPressed(event.id))
+                        {
+                            if (!v->clipDrag.press.Move(event, dragDistance))
+                                return true;
+                            const int t = v->clipDrag.track;
+                            if (v->clipDrag.before.size() != v->tracks.size() || t < 0 || !v->clipDrag.before[size_t(t)].clip)
+                            {
+                                v->clipDrag = {};
+                                return true;
+                            }
+                            const TimelineClip& from = *v->clipDrag.before[size_t(t)].clip;
+                            TimelineClip clip = from;
+                            const float delta     = SnappedDelta(*v, g.TimeAt(float(at.x)) - v->clipDrag.pressTime);
+                            const float source    = SourceLengthOf(from);
+                            const float minLength = std::max(FrameOf(*v), 0.01f);
+                            switch (v->clipDrag.part)
+                            {
+                                case TimelineView::ClipPart::Body:
+                                    clip.start = std::max(0.0f, from.start + delta);
+                                    break;
+                                case TimelineView::ClipPart::Start:
+                                {
+                                    // Plays the sound from further in (or back to its start); the end stays.
+                                    const float d = std::clamp(delta, -from.offset, from.length - minLength);
+                                    clip.start  = from.start + d;
+                                    clip.offset = from.offset + d;
+                                    clip.length = from.length - d;
+                                    clip.sourceLength = source;
+                                    break;
+                                }
+                                case TimelineView::ClipPart::End:
+                                    clip.length = std::clamp(from.length + delta, minLength, std::max(minLength, source - from.offset));
+                                    clip.sourceLength = source;
+                                    break;
+                                default: break;
+                            }
+                            v->tracks[size_t(t)].clip = clip;
+                            v->clipDrag.moved = true;
+                            return true;
+                        }
                         if (v->keyDrag.press.IsPressed(event.id))
                         {
                             if (!v->keyDrag.press.Move(event, dragDistance))
@@ -886,6 +990,19 @@ namespace tachyon
                     }
                     case EventType::MouseUp:
                     {
+                        if (v->clipDrag.press.IsPressed(event.id))
+                        {
+                            v->clipDrag.press.Release(event);
+                            if (v->clipDrag.moved)
+                            {
+                                // Already where it's dropped: the edit, for undo.
+                                const TimelineEdit edit = ChangesSince(*v, v->clipDrag.before);
+                                if (!edit.empty() && v->onEdit)
+                                    v->onEdit(edit);
+                            }
+                            v->clipDrag = {};
+                            return true;
+                        }
                         if (v->keyDrag.press.IsPressed(event.id))
                         {
                             v->keyDrag.press.Release(event);
@@ -914,6 +1031,13 @@ namespace tachyon
                     {
                         if (IsDragCancelKey(event.state))
                         {
+                            if (v->clipDrag.press.Cancel(event.id))
+                            {
+                                if (v->clipDrag.before.size() == v->tracks.size())
+                                    v->tracks = v->clipDrag.before;
+                                v->clipDrag = {};
+                                return true;
+                            }
                             if (v->keyDrag.press.Cancel(event.id))
                             {
                                 if (v->keyDrag.before.size() == v->tracks.size())
@@ -1018,13 +1142,20 @@ namespace tachyon
                 std::vector<float> summary;
                 std::optional<TimelineClip> clip;
                 std::vector<std::pair<float, bool>> events;
+                std::optional<float> hovered;               // the time of what's under the pointer
+                TimelineView::ClipPart clipHovered = TimelineView::ClipPart::None;
             };
             std::vector<RowDraw> drawn;
             drawn.reserve(rows.size());
+            const bool lanesHovered = (guiStateManager.GetCurrentState(lanesID) & ElementState::Hover) != ElementState::None;
             for (const int t : rows)
             {
                 const TimelineTrack& track = view.tracks[size_t(t)];
-                RowDraw row{ track.kind, view.selectedTrack == track.stableID, {}, {}, track.clip, {} };
+                RowDraw row{ track.kind, view.selectedTrack == track.stableID, {}, {}, track.clip, {}, std::nullopt };
+                if (lanesHovered && t == view.hoverTrack)
+                    row.hovered = view.hoverTime;
+                if (lanesHovered && t == view.hoverClipTrack)
+                    row.clipHovered = view.hoverClipPart;
                 for (const TimelineKey& key : track.keys) row.keys.push_back({ key.time, view.selectedKeys.contains(key.stableID) });
                 for (const TimelineEvent& e : track.events) row.events.push_back({ e.time, view.selectedKeys.contains(e.stableID) });
                 if (track.kind == TimelineTrackKind::Group)
@@ -1039,12 +1170,14 @@ namespace tachyon
             const GUITheme& th = theme;
             const VisualBoxStyleIndex laneSelected = th.timelineLaneSelectedStyleRef.visualBoxStyleIndex, rowLine = th.timelineRowLineStyleRef.visualBoxStyleIndex;
             const VisualBoxStyleIndex outside = th.timelineOutsideStyleRef.visualBoxStyleIndex, clipBox = th.timelineClipStyleRef.visualBoxStyleIndex;
+            const VisualBoxStyleIndex clipEdge = th.timelineLoopEdgeStyleRef.visualBoxStyleIndex;
             const VisualBoxStyleIndex eventLine = th.timelineEventStyleRef.visualBoxStyleIndex, eventChip = th.timelineEventChipStyleRef.visualBoxStyleIndex;
             const VisualBoxStyleIndex selectedLine = th.timelinePlayheadStyleRef.visualBoxStyleIndex, boxStyle = th.timelineBoxSelectStyleRef.visualBoxStyleIndex;
             const VisualColorStyleIndex keyFill = th.timelineKeyColor, keyEdge = th.timelineKeyEdgeColor, keySelected = th.timelineKeySelectedColor,
                                         keySelectedEdge = th.timelineKeySelectedEdgeColor, summary = th.timelineSummaryKeyColor, wave = th.timelineWaveColor;
             const float keyHalf = float(styleManager.Px(10)) * 0.7071f, selectedHalf = float(styleManager.Px(11)) * 0.7071f;
             const float summaryHalf = float(styleManager.Px(8)) * 0.7071f, edgeWidth = float(std::max(1, styleManager.Px(1))) * 1.4142f;
+            const float hoverGrow = float(std::max(1, styleManager.Px(2))) * 0.7071f;   // a hovered diamond, 2px larger across
             const int32_t px1 = std::max(1, styleManager.Px(1)), px2 = std::max(1, styleManager.Px(2)), px3 = styleManager.Px(3), px4 = styleManager.Px(4);
             const int32_t px5 = styleManager.Px(5), barGap = std::max(1, styleManager.Px(1)), barWidth = std::max(1, styleManager.Px(2));
             VERIFY(elementStorage.AddCustomDraw(lanesRef, [=](CustomDrawContext& ctx)
@@ -1065,14 +1198,22 @@ namespace tachyon
                     {
                         const int32_t a = int32_t(g.XAt(row.clip->start)), b = int32_t(g.XAt(row.clip->start + row.clip->length));
                         const IntRect box{ a, y + px3, b - a, rowHeight - 2 * px3 };
-                        ctx.RenderBox(box, outer, clipBox);
-                        // The waveform: a bar a few pixels, each the loudest of the peaks it covers.
+                        ctx.RenderBox(box, outer, clipBox, row.clipHovered != TimelineView::ClipPart::None ? ElementState::Hover : ElementState::None);
+                        // An end under the pointer: a bar there, as the loop range's.
+                        if (row.clipHovered == TimelineView::ClipPart::Start || row.clipHovered == TimelineView::ClipPart::End)
+                            ctx.RenderBox(IntRect{ row.clipHovered == TimelineView::ClipPart::Start ? a : b - px2, box.y, px2, box.h }, outer, clipEdge);
+                        // The waveform: a bar a few pixels, each the loudest of the peaks it covers, of
+                        // the part of the sound the clip plays.
                         const std::vector<float>& peaks = row.clip->peaks;
+                        const float source = std::max(SourceLengthOf(*row.clip), 1e-6f);
+                        const float shownFrom = row.clip->offset / source, shownSpan = row.clip->length / source;
                         const int32_t room = box.w - 2 * px4;
-                        const int bars = std::min((int)peaks.size(), room / (barWidth + barGap));
-                        for (int i = 0; i < bars; ++i)
+                        const int bars = std::min(int(float(peaks.size()) * std::min(1.0f, shownSpan)) + 1, room / (barWidth + barGap));
+                        for (int i = 0; i < bars && !peaks.empty(); ++i)
                         {
-                            const size_t from = size_t(i) * peaks.size() / size_t(bars), to = std::max(from + 1, size_t(i + 1) * peaks.size() / size_t(bars));
+                            const float n = float(peaks.size());
+                            const size_t from = std::min(peaks.size() - 1, size_t((shownFrom + shownSpan * float(i) / float(bars)) * n));
+                            const size_t to   = std::clamp(size_t((shownFrom + shownSpan * float(i + 1) / float(bars)) * n), from + 1, peaks.size());
                             float peak = 0.0f;
                             for (size_t p = from; p < to; ++p) peak = std::max(peak, Finite(peaks[p], 0.0f));
                             const int32_t h = std::max(px1, int32_t(std::clamp(peak, 0.0f, 1.0f) * float(box.h - 2 * px3)));
@@ -1080,24 +1221,30 @@ namespace tachyon
                             ctx.RenderQuad(bar, outer, wave, 1.0f);
                         }
                     }
+                    // What's under the pointer: a little larger, with the light edge.
+                    auto isHovered = [&row](float t) { return row.hovered && std::fabs(*row.hovered - t) < 1e-4f; };
                     for (const auto& [t, selected] : row.events)
                     {
                         const int32_t x = int32_t(g.XAt(t));
-                        ctx.RenderBox(IntRect{ x, y + px4, px2, rowHeight - 2 * px4 }, outer, selected ? selectedLine : eventLine);
+                        const int32_t w = isHovered(t) ? px3 : px2;
+                        ctx.RenderBox(IntRect{ x - (w - px2) / 2, y + px4, w, rowHeight - 2 * px4 }, outer, selected ? selectedLine : eventLine);
                     }
                     for (const float t : row.summary)
                     {
                         const float x = g.XAt(t);
                         if (!shown(x)) continue;
-                        Diamond(ctx, x, cy, summaryHalf + edgeWidth, keyEdge);
-                        Diamond(ctx, x, cy, summaryHalf, summary);
+                        const bool hovered = isHovered(t);
+                        const float half = summaryHalf + (hovered ? hoverGrow : 0.0f);
+                        Diamond(ctx, x, cy, half + edgeWidth, hovered ? keySelectedEdge : keyEdge);
+                        Diamond(ctx, x, cy, half, summary);
                     }
                     for (const auto& [t, selected] : row.keys)
                     {
                         const float x = g.XAt(t);
                         if (!shown(x)) continue;
-                        const float half = selected ? selectedHalf : keyHalf;
-                        Diamond(ctx, x, cy, half + edgeWidth, selected ? keySelectedEdge : keyEdge);
+                        const bool hovered = isHovered(t);
+                        const float half = (selected ? selectedHalf : keyHalf) + (hovered ? hoverGrow : 0.0f);
+                        Diamond(ctx, x, cy, half + edgeWidth, selected || hovered ? keySelectedEdge : keyEdge);
                         Diamond(ctx, x, cy, half, selected ? keySelected : keyFill);
                     }
                 }
@@ -1105,7 +1252,10 @@ namespace tachyon
                 {
                     const int32_t x = int32_t(g.XAt(label.time)) + px2 + px4;
                     const int32_t h = label.size.y + 2 * px1, y = outer.y + label.row * rowHeight + (rowHeight - h) / 2;
-                    ctx.RenderBox(IntRect{ x, y, label.size.x + 2 * px5, h }, outer, eventChip);
+                    // Its event under the pointer (the line or the label): the chip shows it.
+                    const auto& hovered = drawn[size_t(label.row)].hovered;
+                    const bool hover = hovered && std::fabs(*hovered - label.time) < 1e-4f;
+                    ctx.RenderBox(IntRect{ x, y, label.size.x + 2 * px5, h }, outer, eventChip, hover ? ElementState::Hover : ElementState::None);
                     ctx.RenderText(label.text, IntRect{ x + px5, y + px1, label.size.x, label.size.y });
                 }
                 // Outside the loop range, dimmed.
@@ -1184,6 +1334,9 @@ namespace tachyon
         {
             const VisualBoxStyleIndex thumb = theme.timelineScrollThumbStyleRef.visualBoxStyleIndex;
             const int32_t thick = styleManager.Px(6);
+            // A press anywhere on the bar takes the thumb, so it lights up while the bar is hovered.
+            const ElementState thumbState = view.pan.IsHeld() || (guiStateManager.GetCurrentState(scrollID) & ElementState::Hover) != ElementState::None
+                                          ? ElementState::Hover : ElementState::None;
             VERIFY(elementStorage.AddCustomDraw(scrollRef, [=](CustomDrawContext& ctx)
             {
                 const IntRect inner = ctx.ElementInnerRect();
@@ -1191,7 +1344,7 @@ namespace tachyon
                     return;
                 const int32_t a = inner.x + int32_t(range.start / length * float(inner.w));
                 const int32_t b = inner.x + int32_t(range.end / length * float(inner.w));
-                ctx.RenderBox(IntRect{ a, inner.y + (inner.h - thick) / 2, std::max(thick, b - a), thick }, inner, thumb);
+                ctx.RenderBox(IntRect{ a, inner.y + (inner.h - thick) / 2, std::max(thick, b - a), thick }, inner, thumb, thumbState);
             }));
         }
 

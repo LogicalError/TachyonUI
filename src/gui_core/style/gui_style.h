@@ -537,7 +537,9 @@ namespace tachyon
 
         /// Sets the 2x3 transform applied to gradient coordinates, row by row.
         void SetTransformation(float3 x, float3 y);
-        /// Scroll speed over time: x along the gradient (or texture U), y texture V.
+        /// Scroll speed over time: x along the gradient (or texture U), y texture V. It moves
+        /// only while frames are drawn: give what's drawn with it ElementFlags::Animated, or
+        /// GUIApplication::SetRedrawMode(RedrawMode::Always).
         void SetAnimSpeed(float x, float y = 0.0f);
         /// The 2x3 gradient transform as floats.
         float3x2 GetTransformation() const;
@@ -653,7 +655,8 @@ namespace tachyon
     enum class StateLayer : uint8_t
     {
         None,    ///< as the CSS gives them
-        Content, ///< the state's text color over its background: 8% hovered, 14% pressed
+        Content, ///< the state's text color over its background: 8% hovered, 14% pressed (or the style's strengths)
+        Light,   ///< white over its background, as strong: brighter, whatever the text color
     };
 
     /// The visual properties of one element state (normal, :hover, :active, ...).
@@ -727,6 +730,10 @@ namespace tachyon
         /// -tachyon-state-layer: Content makes the hovered and pressed backgrounds from the
         /// state's text color over its background, in place of the :hover / :active ones.
         StateLayer      stateLayer = StateLayer::None;
+        /// How strong the state layer is hovered and pressed, in percent: `-tachyon-state-layer:
+        /// content 16% 28%`. The spec's 8% and 14% unless given; more over a saturated fill.
+        uint8_t         stateLayerHover   = 8;
+        uint8_t         stateLayerPressed = 14;
 
         LayoutData      layoutData {}; ///< flex, grid and size properties
 

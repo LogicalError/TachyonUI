@@ -35,12 +35,9 @@ struct Box
     ivec2      size;
 
     int        textureIndex;
-    int        styleIndex;   // "from" state GPU style index
     int16_t    colorIndex;   // Per-element ColorStyle override (0 = use box style's background); supports gradients.
     int16_t    _pad3;
-    int        styleIndexTo; // "to" state GPU style index
-    float      blendT;       // 0 = fully "from", 1 = fully "to"
-    int        _pad0;
+    uint       styles[4];    // up to four state styles mixed: GPU style index in the low 24 bits, share (of 255) in the top 8
     i16vec4    snappedPx;    // window pixels {x0,y0,x1,y1} snapped to the parent; all 0 = snap here
 };
 

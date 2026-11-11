@@ -775,10 +775,11 @@ namespace tachyon
             app.InjectMouseMove(app.CenterOf(second));
             for (int i = 0; i < 3; ++i) app.Frame(draw);
             ASSERT_EQ(app.guiStateManager.Interaction().GetFocusedID(), second);
-            const auto blend = app.transitionManager.Find(first, app.guiStateManager.Interaction().GetFrameTime());
-            ASSERT_TRUE(blend.has_value()) << "the item left blends out";
-            EXPECT_EQ(blend->toState & (ElementState::Hover | ElementState::Focused), ElementState::None)
-                << "to neither hovered nor focused";
+            const float now = app.guiStateManager.Interaction().GetFrameTime();
+            ASSERT_TRUE(app.transitionManager.IsRunning(first)) << "the item left blends out";
+            for (const TransitionChannel channel : { TransitionChannel::Hover, TransitionChannel::Focused })
+                if (const auto on = app.transitionManager.Value(first, channel, now + 0.05f))
+                    EXPECT_LT(*on, 1.0f) << "on its way to neither hovered nor focused";
         }
 
         // An invalid control's border and halo come from --error and --invalid-halo.
@@ -790,11 +791,25 @@ namespace tachyon
             EXPECT_NE(app.theme.invalidHalo.color, VisualColorStyleIndex::Invalid);
         }
 
+        // Rows show they're hovered: the timeline's and the curve tree's.
+        TEST_F(ControlsMenuTest, TheThemesRowsShowHover)
+        {
+            for (const char* name : { "timeline-row", "curve-tree-row" })
+            {
+                const StyleRef style = app.theme.GetStyle(name);
+                auto background = [&](ElementState s) {
+                    const VisualBoxStyle* box = app.styleManager.GetVisualBoxStyle(style.visualBoxStyleIndex, s);
+                    return box ? box->backgroundColorIndex : VisualColorStyleIndex::Invalid;
+                };
+                EXPECT_NE(background(ElementState::Hover), background(ElementState::None)) << name;
+            }
+        }
+
         // The theme's buttons compute their hover and pressed backgrounds (a state layer):
         // each differs from the one before it.
         TEST_F(ControlsMenuTest, TheThemesButtonsHaveStateLayers)
         {
-            for (const char* name : { "button", "toggle", "dialog-button" })
+            for (const char* name : { "button", "toggle", "dialog-button", "dialog-button-primary", "dialog-button-danger" })
             {
                 const StyleRef style = app.theme.GetStyle(name);
                 auto background = [&](ElementState s) {

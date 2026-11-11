@@ -2,7 +2,10 @@
 
 #include <gui_core/windows/gui_window_backend.h>
 
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <mutex>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -33,6 +36,10 @@ namespace tachyon
         OSWindowHandle GetActiveWindow() override { return nullptr; }
         uint32_t GetFocusChangeCount() const override { return 0; }
         void PollEvents(std::function<void(OSWindowHandle, IWindowContext*)> cleanup) override;
+        /// No OS events come: waits for Wake or the timeout.
+        void WaitForEvents(float timeoutSecs) override;
+        void Wake() override;
+        uint64_t GetEventCount() const override { return m_events.load(); }
         int2 GetScreenMousePos() override { return {}; }
         MouseButtons GetMouseButtons() override;
         void SetCursor(MouseCursor) override {}
@@ -63,6 +70,11 @@ namespace tachyon
         std::unordered_set<OSWindowHandle>             m_pendingDestroy;
         uintptr_t                                      m_nextHandle = 0;
         std::chrono::steady_clock::time_point          m_start = std::chrono::steady_clock::now();
+
+        std::mutex                                     m_wakeMutex;
+        std::condition_variable                        m_wakeSignal;
+        bool                                           m_woken = false;   ///< a Wake not yet taken by a wait
+        std::atomic<uint64_t>                          m_events = 0;
     };
     /// @}
 }

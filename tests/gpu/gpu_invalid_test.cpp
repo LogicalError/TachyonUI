@@ -72,6 +72,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
 
         const IntRect rect = app.windowManager->GetWindowRect(app.windowID);

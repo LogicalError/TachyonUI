@@ -4,6 +4,8 @@
 #include <gui_core/state/gui_scroll_management.h>
 #include <gui_core/input/gui_input_enums.h>
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 
 namespace tachyon
@@ -35,6 +37,8 @@ namespace tachyon
         /// PropagatesDescendantState ancestors of m_hoveredID / m_focusedID, recomputed each frame.
         std::vector<ID> m_propagatedHoverIDs;
         std::vector<ID> m_propagatedFocusedIDs;
+        /// Every ancestor of m_focusedID, innermost first, recomputed each frame: what holds the focus.
+        std::vector<ID> m_focusAncestorIDs;
 
         /// Hides mouse hover during keyboard navigation. Set by widgets that consume a
         /// nav key, cleared by InputManager on the next MouseMove.
@@ -93,11 +97,27 @@ namespace tachyon
         void FlashActive(ID id)            { m_activeFlashID = id; m_activeFlashStartSecs = m_frameTimeSecs; }
         ID   GetActiveFlashID() const      { return m_activeFlashID; }
         bool IsActiveFlashing(ID id) const { return id == m_activeFlashID && (m_frameTimeSecs - m_activeFlashStartSecs) < kActiveFlashDuration; }
+        /// The frame time the flash running now ends at; INFINITY when none runs.
+        float ActiveFlashEndsAt() const
+        {
+            const float end = m_activeFlashStartSecs + kActiveFlashDuration;
+            return m_activeFlashID != ID::Invalid() && m_frameTimeSecs < end ? end : INFINITY;
+        }
 
         const std::vector<ID>& GetPropagatedHoverIDs()   const { return m_propagatedHoverIDs;   }
         const std::vector<ID>& GetPropagatedFocusedIDs() const { return m_propagatedFocusedIDs; }
         void SetPropagatedHoverIDs(std::vector<ID> v)   { m_propagatedHoverIDs   = std::move(v); }
         void SetPropagatedFocusedIDs(std::vector<ID> v) { m_propagatedFocusedIDs = std::move(v); }
+
+        /// Whether the focus is `id` or inside it, as the elements were nested last frame
+        /// (like the other states, it trails the build by a frame).
+        bool IsFocusWithin(ID id) const
+        {
+            if (id == ID::Invalid()) return false;
+            if (id == m_focusedID) return true;
+            return std::find(m_focusAncestorIDs.begin(), m_focusAncestorIDs.end(), id) != m_focusAncestorIDs.end();
+        }
+        void SetFocusAncestorIDs(std::vector<ID> v) { m_focusAncestorIDs = std::move(v); }
 
         /// Applies hover, active-ID edges and deferred capture release; clears the click
         /// and expired flash. `disabledID`: a disabled element under the cursor.

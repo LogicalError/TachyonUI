@@ -118,13 +118,6 @@ namespace tachyon
             }
         }
 
-        // The close button, top right: as Cancel.
-        const ID closeID = idManager.AllocateDynamicID("message_box_close");
-        controls.push_back(closeID);
-        Button(closeID, theme.tabCloseIcon, [choose, cancelButton] { choose(cancelButton); },
-               theme.messageBoxCloseStyleRef,
-               LayoutOverride{}.Absolute(styleManager.Px(8), styleManager.Px(8), PositionConstraintAxis::kAuto, PositionConstraintAxis::kAuto));
-
         // Severity icon | title, message and extras.
         BeginHorizontal(idManager.AllocateDynamicID("message_box_body"), theme.messageBoxBodyStyleRef, LayoutOverride{}.NoShrink());
         {
@@ -242,6 +235,13 @@ namespace tachyon
         for (int i = 0; i < count; ++i)
             if (!desc.buttons[size_t(i)].alignLeft) emitButton(i);
         EndHorizontal();
+
+        // The close button, top right: as Cancel. Last, so it's over the body for the pointer.
+        const ID closeID = idManager.AllocateDynamicID("message_box_close");
+        controls.push_back(closeID);
+        Button(closeID, theme.tabCloseIcon, [choose, cancelButton] { choose(cancelButton); },
+               theme.messageBoxCloseStyleRef,
+               LayoutOverride{}.Absolute(styleManager.Px(8), styleManager.Px(8), PositionConstraintAxis::kAuto, PositionConstraintAxis::kAuto));
 
         store.GetOrCreate<MessageDialogState>(id).controls = std::move(controls);
         if (pushed) (void)idManager.PopParent();

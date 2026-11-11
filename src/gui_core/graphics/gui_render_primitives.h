@@ -40,12 +40,11 @@ namespace tachyon
         tachyon::int2       size = { 0,0 };
 
         tachyon::ImageIndex textureIndex  = tachyon::ImageIndex::Invalid;
-        uint32_t        styleIndex    = 0; ///< "from" state GPU style index
         int16_t         colorIndex    = 0; ///< color style overriding the background (gradients too); 0: none
         int16_t         _pad3         = 0;
-        uint32_t        styleIndexTo  = 0; ///< "to" state GPU style index
-        float           blendT        = 1.0f; ///< 0 = fully "from", 1 = fully "to"
-        uint32_t        _pad0         = 0;
+        /// Up to four state styles mixed (StyleBlend): the GPU style index in the low 24 bits,
+        /// its share (0 to 255, all of them adding up to 255) in the top 8; 0 when unused.
+        uint32_t        styles[4]     = { 0xFF000000u, 0, 0, 0 };
         /// The box in window pixels, snapped relative to its parent (SnapToParent);
         /// { x0, y0, x1, y1 }, all zero = snap absolutely.
         int16_t         snappedPx[4]  = { 0, 0, 0, 0 };

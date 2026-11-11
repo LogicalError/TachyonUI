@@ -20,6 +20,7 @@ namespace tachyon
             CurveView view;
             std::vector<CurveEdit> edits;
             std::vector<float> playheads;
+            int32_t width = 1000;   // the editor's, as a panel sizes it
 
             void SetUp() override
             {
@@ -44,8 +45,8 @@ namespace tachyon
             void Frame()
             {
                 app.Frame([&] {
-                    app.BeginRootWindow({ 1000, 600 });
-                    app.CurveEditor(view, LayoutOverride::FixedSize(Pixels{ 1000 }, Pixels{ 600 }));   // as a panel sizes it
+                    app.BeginRootWindow({ 2000, 600 });
+                    app.CurveEditor(view, LayoutOverride::FixedSize(Pixels{ width }, Pixels{ 600 }));   // as a panel sizes it
                     app.EndRootWindow();
                 });
             }
@@ -121,7 +122,8 @@ namespace tachyon
 
             view.selectedKeys = { KeyID(0, 1) };
             Frames();
-            const std::vector<ID> eyes = AllWithStyle(app.theme.iconButtonStyleRef);
+            // The timeline's row button: dim, bright when hovered, as the timeline's eyes.
+            const std::vector<ID> eyes = AllWithStyle(app.theme.timelineRowButtonStyleRef);
             ASSERT_EQ(eyes.size(), 3u) << "one a row";
             app.ClickAt(app.CenterOf(eyes[1]));
             Frames();
@@ -240,6 +242,18 @@ namespace tachyon
             EXPECT_TRUE(AllWithStyle(app.theme.curvePlotStyleRef).empty());
         }
 
+        // Frame all sizes to its icon and text, whatever room the toolbar has.
+        TEST_F(CurveEditorTest, FrameAllKeepsItsSize)
+        {
+            Frames();
+            const ID frameAll = app.FindByText("Frame all");
+            ASSERT_NE(frameAll, ID::Invalid());
+            const int32_t narrow = app.GetElementRect(frameAll).w;
+            width = 1600;
+            Frames();
+            EXPECT_EQ(app.GetElementRect(frameAll).w, narrow);
+        }
+
         // Paths without fps: the tree in place of the chips, and no ruler.
         TEST_F(CurveEditorTest, ATreeWithoutFps)
         {
@@ -248,6 +262,21 @@ namespace tachyon
             EXPECT_FALSE(AllWithStyle(app.theme.curveTreeStyleRef).empty());
             EXPECT_TRUE(AllWithStyle(app.theme.curveChannelStyleRef).empty());
             EXPECT_TRUE(AllWithStyle(app.theme.curveRulerStyleRef).empty());
+        }
+
+        // A row stays hovered over all of it: its name, value and eye too, not only between them.
+        TEST_F(CurveEditorTest, ARowIsHoveredOverItsLabels)
+        {
+            Frames();
+            const ID row = AllWithStyle(app.theme.curveTreeRowStyleRef)[0];
+            const IntRect r = app.GetElementRect(row);
+            for (int x = r.x + 4; x < r.x + r.w; x += 16)
+            {
+                app.InjectMouseMove({ x, r.y + r.h / 2 });
+                Frame();
+                Frame();
+                EXPECT_NE(app.guiStateManager.GetCurrentState(row) & ElementState::Hover, ElementState::None) << "at " << x - r.x;
+            }
         }
 
         // Without fps or paths, as it was: chips, presets, no tree, no ruler.

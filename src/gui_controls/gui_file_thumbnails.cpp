@@ -192,6 +192,12 @@ namespace tachyon
         m_entries.erase(it);
     }
 
+    void FileThumbnails::SetOnRead(std::function<void()> onRead)
+    {
+        std::lock_guard lock(m_mutex);
+        m_onRead = std::move(onRead);
+    }
+
     void FileThumbnails::Work()
     {
 #ifdef _WIN32
@@ -211,6 +217,13 @@ namespace tachyon
                       done.picture.rgba.size() >= size_t(done.picture.size.x) * done.picture.size.y * 4;
             lock.lock();
             m_done.push_back(std::move(done));
+            // Told without the lock: it may ask for anything.
+            if (const std::function<void()> onRead = m_onRead)
+            {
+                lock.unlock();
+                onRead();
+                lock.lock();
+            }
         }
         lock.unlock();
 #ifdef _WIN32

@@ -451,6 +451,13 @@ namespace tachyon
                     phantomIdx = std::clamp(phantomIdx, 0, count);
                 }
 
+                // The group holding the focus, in its panel (as built last frame) or on its
+                // tabs, marks its tabs, so the panel the keyboard reaches is told apart from
+                // the other groups' shown ones.
+                const auto& interaction = app.guiStateManager.Interaction();
+                const bool holdsFocus = interaction.IsFocusWithin(node->lastContentID) || interaction.IsFocusWithin(node->tabBarID);
+                const tachyon::StyleRef tabStyle = inTitleBar ? (holdsFocus ? app.theme.titleBarTabPanelFocusedStyleRef : app.theme.titleBarTabStyleRef)
+                                                              : (holdsFocus ? app.theme.tabPanelFocusedStyleRef : app.theme.tabStyleRef);
                 for (int i = 0; i < count; ++i)
                 {
                     if (emitPhantom && i == phantomIdx)
@@ -458,8 +465,7 @@ namespace tachyon
 
                     auto it = layout->panels.find(node->panelIds[i]);
                     if (it == layout->panels.end()) continue;
-                    app.Tab(it->second.id, { it->second.icon, it->second.title },
-                            inTitleBar ? app.theme.titleBarTabStyleRef : app.theme.tabStyleRef);
+                    app.Tab(it->second.id, { it->second.icon, it->second.title }, tabStyle);
                 }
 
                 if (emitPhantom && phantomIdx >= count)

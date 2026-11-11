@@ -197,6 +197,11 @@ CurveEditor(idManager.AllocateDynamicID("curves"), curves, LayoutOverride{}.Flex
 - On a selected key's handle: a drag sets the slope.
   - A `Free` key: that side only.
   - Any other key becomes `Aligned`, the same slope both sides.
+- On a curve, away from its keys:
+  - it's drawn in full color and a little thicker while the pointer is on it
+  - a press makes it the active channel; a drag from there still selects in a box
+  - a right click: Add key puts the key on that curve
+- The key or handle under the pointer is drawn larger, with a light edge.
 - On the empty plot:
   - a click clears the selection
   - a drag selects the keys in a box; Shift adds them, Ctrl toggles them

@@ -33,6 +33,8 @@ namespace tachyon
         int           primitiveCount;
         PrimitiveKind kind;
         int           replay = -1; ///< index into PrimitiveRenderTarget::replays
+
+        bool operator==(const PrimitiveRenderPass&) const = default;
     };
 
     struct PrimitiveRenderTarget
@@ -54,8 +56,17 @@ namespace tachyon
 
         /// A cached scope drawn here, moved `delta` window pixels from where it was captured;
         /// its primitives' draw orders start at `baseOrder`.
-        struct ScopeReplay { tachyon::ID scope; tachyon::int2 delta; uint32_t baseOrder = 0; };
+        struct ScopeReplay
+        {
+            tachyon::ID   scope;
+            tachyon::int2 delta;
+            uint32_t      baseOrder = 0;
+            bool operator==(const ScopeReplay&) const = default;
+        };
         std::vector<ScopeReplay> replays;
+        /// A cached scope captured again into this target this frame drew something else than
+        /// before: what it replays changed, though its replay is the same.
+        bool recaptured = false;
 
     public:
         void FinishRenderPass();
@@ -77,7 +88,11 @@ namespace tachyon
 
         void SetTransform(tachyon::float3x2 transform);
         void SetOpacity(float opacity) { currentOpacity = opacity; }
-        void RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, uint32_t fromStyleIndex, uint32_t toStyleIndex, float blendT, tachyon::VisualColorStyleIndex colorStyleIndex = {}, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, tachyon::IntRect snappedPx = {});
+        void RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, const tachyon::StyleBlend& styles, tachyon::VisualColorStyleIndex colorStyleIndex = {}, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, tachyon::IntRect snappedPx = {});
+        void RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, uint32_t fromStyleIndex, uint32_t toStyleIndex, float blendT, tachyon::VisualColorStyleIndex colorStyleIndex = {}, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, tachyon::IntRect snappedPx = {})
+        {
+            RenderBox(rect, clipRect, tachyon::StyleBlend::Between(fromStyleIndex, toStyleIndex, blendT), colorStyleIndex, textureIndex, snappedPx);
+        }
         void RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int bpp, int mode, tachyon::VisualColorStyleIndex textColorIndex, tachyon::IntRect clipRect, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, float shadowBlur = -1.0f);
         void RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachyon::int2 p2, tachyon::int2 p3, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle);
         void RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle);
@@ -118,7 +133,8 @@ namespace tachyon
         void Reset() override;
         void SetTransform(tachyon::float3x2 transform) override;
         void SetOpacity(float opacity) override;
-        void RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, uint32_t fromStyleIndex, uint32_t toStyleIndex, float blendT, tachyon::VisualColorStyleIndex colorStyleIndex = {}, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, tachyon::IntRect snappedPx = {}) override;
+        using GUIRenderer::RenderBox;
+        void RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, const tachyon::StyleBlend& styles, tachyon::VisualColorStyleIndex colorStyleIndex = {}, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, tachyon::IntRect snappedPx = {}) override;
         void RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int bpp, int mode, tachyon::VisualColorStyleIndex textColorIndex, tachyon::IntRect clipRect, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, float shadowBlur = -1.0f) override;
         void RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachyon::int2 p2, tachyon::int2 p3, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle) override;
         void RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle) override;
@@ -165,6 +181,7 @@ namespace tachyon
 
         bool BeginWindow(tachyon::ID id) override;
         void EndWindow() override;
+        bool DrawsChanged(tachyon::ID window) const override;
 
         // Draw caching. A capture's primitives go to the GPU once and are drawn from there,
         // moved by the world matrix, each time it is replayed; until their copy is on the GPU
@@ -194,6 +211,7 @@ namespace tachyon
         struct ScopeCapture
         {
             PrimitiveRenderTarget target;
+            PrimitiveRenderTarget previous;   ///< while capturing again: what it drew before
             RHI::ResidentBufferId resident = 0;
             std::array<DeviceAddress, kPrimitiveKindCount> addresses{}; ///< in the resident buffer
             uint64_t lastUsedFrame = 0;
@@ -213,6 +231,18 @@ namespace tachyon
         PrimitiveRenderTarget* m_captureSaved = nullptr;
         uint64_t m_frame = 0;
         size_t   m_lastUploadBytes = 0;
+
+        /// A window's draws as of its last EndWindow, to tell whether the next frame's are the same.
+        struct DrawSnapshot
+        {
+            PrimitiveRenderTarget draws;
+            bool seen    = false;   ///< drawn at least once
+            bool changed = true;    ///< the last EndWindow's draws differed from the ones before
+        };
+        std::unordered_map<tachyon::ID, DrawSnapshot> m_lastDraws;
+        tachyon::ID m_currentWindow = tachyon::ID::Invalid();
+        /// Compares the window's draws with its snapshot, and keeps them when they differ.
+        void NoteDraws(tachyon::ID window, const PrimitiveRenderTarget& target);
     };
     /// @}
 }

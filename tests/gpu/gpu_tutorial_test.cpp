@@ -33,6 +33,7 @@ namespace
         tachyon::Result<void> result = app.Initialize();
         ASSERT_TRUE(result) << result.GetError().message;
 
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         result = app.Run();
         EXPECT_TRUE(result) << result.GetError().message;
         EXPECT_GE(app.frames, 5);

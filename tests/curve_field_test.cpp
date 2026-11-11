@@ -406,6 +406,57 @@ namespace tachyon
             EXPECT_EQ(view.channels[0].curve.keys[1].tangents, CurveTangentMode::Free);
         }
 
+        // The key or handle under the pointer is the hovered one, for its hover look; none over
+        // the empty plot.
+        TEST_F(CurveFieldTest, TheKeyOrHandleUnderThePointerIsHovered)
+        {
+            Open();
+            app.InjectMouseMove(KeyAt(1));
+            Frame();
+            EXPECT_EQ(view.hoverKey, KeyID(1));
+            EXPECT_EQ(view.hoverHandleKey, ID::Invalid());
+            app.InjectMouseMove(At(0.2f, 0.9f));
+            Frame();
+            EXPECT_EQ(view.hoverKey, ID::Invalid()) << "the empty plot";
+
+            app.ClickAt(KeyAt(1));
+            Frame();
+            app.InjectMouseMove(HandleAt(1, true));
+            Frame();
+            EXPECT_EQ(view.hoverHandleKey, KeyID(1));
+            EXPECT_TRUE(view.hoverHandleOut);
+            EXPECT_EQ(view.hoverKey, ID::Invalid()) << "the handle, not the key";
+        }
+
+        // The curve under the pointer, away from its keys, is hovered; a press on it makes it
+        // the active one.
+        TEST_F(CurveFieldTest, TheCurveUnderThePointerIsHovered)
+        {
+            const float2 flat[] = { { 0.0f, 0.2f }, { 1.0f, 0.2f } };
+            view.channels.push_back(CurveChannel{ .name = "G", .color = CurveChannelColor::Green, .curve = MakeCurve(flat) });
+            for (CurveKey& k : view.channels[1].curve.keys)
+                k.stableID = app.idManager.CreateStaticID();
+            view.activeChannel = 0;
+            Open();
+            app.InjectMouseMove(At(0.7f, 0.2f));
+            Frame();
+            EXPECT_EQ(view.hoverChannel, 1);
+            app.InjectMouseMove(At(0.3f, EvaluateCurve(view.channels[0].curve, 0.3f)));
+            Frame();
+            EXPECT_EQ(view.hoverChannel, 0) << "the diagonal";
+            app.InjectMouseMove(At(0.2f, 0.9f));
+            Frame();
+            EXPECT_EQ(view.hoverChannel, -1) << "the empty plot";
+            app.InjectMouseMove(KeyAt(1));
+            Frame();
+            EXPECT_EQ(view.hoverChannel, -1) << "a key, not its curve";
+
+            app.ClickAt(At(0.7f, 0.2f));
+            Frame();
+            EXPECT_EQ(view.activeChannel, 1);
+            EXPECT_TRUE(view.selectedKeys.empty());
+        }
+
         // Only a Bezier segment has handles: none leaving a Linear key, none arriving after a
         // Constant one.
         TEST_F(CurveFieldTest, NoHandlesOnStraightOrSteppedSides)

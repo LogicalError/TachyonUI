@@ -729,6 +729,38 @@ namespace tachyon
         EXPECT_EQ(hovered->backgroundColorIndex, sm.RegisterColorStyle(ColorStyle::Create(over(base, hoverText, 0.08f))));
     }
 
+    // A style's own strengths in place of 8% and 14%.
+    TEST(StyleManagerTest, AStateLayerTakesTheStylesStrengths)
+    {
+        const color4b base{ 0x6B, 0x9B, 0xFF, 255 }, text{ 0x0B, 0x0D, 0x12, 255 };
+        Style s{};
+        s.stateLayer        = StateLayer::Content;
+        s.stateLayerHover   = 16;
+        s.stateLayerPressed = 28;
+        for (StyleState& state : s.states)
+        {
+            state.backgroundColor = ColorStyle::Create(base);
+            state.textColor       = ColorStyle::Create(text);
+        }
+        StyleManager::ApplyStateLayer(s);
+        auto over = [](color4b b, color4b l, float a) {
+            auto mix = [&](uint8_t x, uint8_t y) { return uint8_t(std::lround(float(x) * a + float(y) * (1.0f - a))); };
+            return color4b{ mix(l.r, b.r), mix(l.g, b.g), mix(l.b, b.b), 255 };
+        };
+        EXPECT_EQ(s.states[ElementState::Hover].backgroundColor.GetFirstColor(), over(base, text, 0.16f));
+        EXPECT_EQ(s.states[ElementState::Hover | ElementState::Active].backgroundColor.GetFirstColor(), over(base, text, 0.28f));
+
+        // A light layer: white over the fill, whatever the text color, so hover brightens.
+        Style light = s;
+        light.stateLayer = StateLayer::Light;
+        for (StyleState& state : light.states)
+            state.backgroundColor = ColorStyle::Create(base);
+        StyleManager::ApplyStateLayer(light);
+        const color4b white{ 255, 255, 255, 255 };
+        EXPECT_EQ(light.states[ElementState::Hover].backgroundColor.GetFirstColor(), over(base, white, 0.16f));
+        EXPECT_EQ(light.states[ElementState::Hover | ElementState::Active].backgroundColor.GetFirstColor(), over(base, white, 0.28f));
+    }
+
     // Over a transparent background the layer is the text color, 8% opaque; a gradient
     // background is left as it is.
     TEST(StyleManagerTest, AStateLayerOverTransparentOrGradient)

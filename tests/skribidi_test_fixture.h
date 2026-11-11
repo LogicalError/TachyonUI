@@ -59,9 +59,11 @@ namespace GUITest
     public:
         void Reset() override {}
         void SetTransform(tachyon::float3x2) override {}
-        void RenderBox(tachyon::IntRect rect, tachyon::IntRect clip, uint32_t style, uint32_t, float,
+        using tachyon::GUIRenderer::RenderBox;
+        void RenderBox(tachyon::IntRect rect, tachyon::IntRect clip, const tachyon::StyleBlend& styles,
                        tachyon::VisualColorStyleIndex, tachyon::ImageIndex, tachyon::IntRect) override
         {
+            const uint32_t style = styles.styles[0];   // the heaviest
             lastBoxStyle = style;
             boxes.push_back(rect);
             boxStyles.push_back(style);

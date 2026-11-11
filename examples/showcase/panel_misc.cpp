@@ -66,6 +66,7 @@ namespace tachyon
             shapeBox.id = id;
             shapeBox.state = guiStateManager.GetCurrentState(shapeBox.id);
             shapeBox.styleRef = boxStyleRefs[showcase.testBoxStyleCount];
+            shapeBox.flags = tachyon::ElementFlags::Animated;   // its shapes turn, and its gradient moves
 
             auto addRes = elementStorage.Add(std::move(shapeBox), tachyon::LayoutOverride::FixedSize(Pixels{ size.x }, Pixels{ size.y }));
             VERIFY(addRes.status);

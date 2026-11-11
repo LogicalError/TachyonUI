@@ -88,6 +88,9 @@ namespace tachyon
         virtual void RecordWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect) { RenderWindowFrame(graphicsContext, rect, false); }
         /// May wait for vsync; nothing to do for a render-to-image window.
         virtual void PresentWindowFrame() {}
+        /// True when the window must be recorded this frame even though its draws didn't change
+        /// (its swapchain is out of date). False by default.
+        virtual bool NeedsRecord() const { return false; }
         /// A transparent window the OS composites from a CPU copy (a layered window on
         /// Windows): shows its last frame again at screenPos (screen pixels). The default does nothing.
         virtual void UpdateTransparentWindow(int2 /*screenPos*/) {}
@@ -151,6 +154,20 @@ namespace tachyon
         /// gets each handle and its context while the window still exists. Runs in UpdateFrame,
         /// and again in RecordFrame.
         virtual void PollEvents(std::function<void(OSWindowHandle, IWindowContext*)> cleanup) = 0;
+        /// Sleeps until the OS has an event for the app, Wake is called, or `timeoutSecs` pass
+        /// (0: returns at once). The events stay for PollEvents. A Wake that came before the
+        /// wait ends it at once. The default sleeps a sixtieth of a second at most, so the app
+        /// looks again at the frame rate.
+        virtual void WaitForEvents(float timeoutSecs);
+        /// Ends a WaitForEvents early, or the next one when none runs; counts as an event.
+        /// Safe from any thread.
+        virtual void Wake() {}
+        /// How many OS events (input, window changes, Wake) the backend has seen; it only goes
+        /// up, so the app can tell whether anything happened since it last looked.
+        virtual uint64_t GetEventCount() const { return 0; }
+        /// True when a window was uncovered, shown or restored since the last call, so it must
+        /// be drawn again even though nothing in it changed. Clears it.
+        virtual bool TakeWindowsExposed() { return false; }
         /// The mouse position in screen pixels (SDL: as of the last PollEvents).
         virtual int2 GetScreenMousePos() = 0;
         /// The mouse buttons held down, wherever the mouse is (SDL: as of the last PollEvents).

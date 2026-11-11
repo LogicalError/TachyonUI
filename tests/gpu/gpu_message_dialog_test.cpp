@@ -87,6 +87,7 @@ namespace
             app.Cleanup();
             GTEST_SKIP() << "no Vulkan device available";
         }
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         ASSERT_GT(app.dialogLaid.h, 0);
         EXPECT_EQ(app.dialogOS.size, app.dialogLaid.size) << "its window as big as laid out";
