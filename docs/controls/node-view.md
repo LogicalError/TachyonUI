@@ -412,6 +412,70 @@ view.nodes.push_back(std::move(mix));
 RenderNodeView(view);
 ```
 
+## State machines
+
+Set `view.kind = NodeViewKind::StateMachine` and the view edits a state machine instead of a
+graph. Its nodes are the states, and arrows between them are its transitions. Unlike a graph's
+wires, transitions may run both ways and back into the same state: cycles are the point.
+
+- A state is a node without fields: its title bar alone, and its properties are ignored.
+- `view.transitions` holds the arrows, each a `StateTransition`:
+  - `from` and `to`: the states, by their stableID; the same state for a loop
+  - `label`: shown on the arrow, an event or a condition
+  - `stableID`: yours to assign, as a node's
+  - For example, `{ .stableID = ids.CreateStaticID(), .from = patrol, .to = chase, .label = "sees player" }`.
+- How it's drawn:
+  - a straight arrow between the two states' edges, aimed centre to centre
+  - two states joined both ways: the two arrows side by side
+  - a state to itself: a loop over its top
+  - each label beside its arrow, clear of the line, on the arrow's right as it runs, so a
+    pair's labels sit on opposite sides; a loop's over it
+  - an arrow and its label light up together, under the pointer or selected
+- `view.initialState` is marked with a dot and an arrow into it; `view.activeState`, the
+  state your app's machine is in, gets a ring.
+  - For example, a game sets `activeState` each frame from its AI.
+- A state with `NodeModel::subMachine` holds a machine of its own: it's drawn with a mark.
+  - A double-click on it calls `view.onOpenState(node)`.
+  - Show that machine's view, and use `breadcrumb` and `onBreadcrumb` to go back up.
+
+The user:
+
+- drags from the band round a state to another state, or back onto the same one, to add a
+  transition. Escape drops it.
+  - Pointing at a state shows the band, dashed; on it, the band lights up, a dot marks the
+    point on the state's edge nearest the pointer, with a dashed stub on to the pointer, and
+    the cursor is the pointing hand.
+  - Inside a state, a press moves it, as a node (the move cursor).
+- or picks Add transition from a state's menu, then clicks the state it goes to; a click
+  elsewhere or Escape drops it. `StartTransition(view, node)` does the same from a key or a
+  menu of yours.
+- clicks an arrow to select it (`selectedTransitionIDs`); Shift adds, Ctrl toggles.
+- double-clicks an arrow to edit its label, in a field right where the label is; Enter keeps
+  it, Escape doesn't.
+- frames the selection with Home (`FrameSelectedNodes`), which takes in the states a selected
+  transition joins.
+- right-clicks an arrow for its menu: Rename, Delete transition, then
+  `view.onTransitionContextMenu`'s items.
+
+Every change is a `NodeViewEdit`, as the graph's are, so undo works the same way:
+
+- `AddTransitionEdit`, `RemoveTransitionsEdit`, `SetInitialStateEdit`
+- `RemoveNodesEdit` takes a state's transitions with it, and its being the initial one.
+- `StateTransitionPath` and `TransitionAt` give an arrow's geometry and find one under a point.
+
+Classes: `node-state`, `node-header-state`, `node-transition-label`, `node-transition-rename`,
+`node-state-active`, `node-state-edge` (the band), `node-state-nested`.
+
+```cpp
+view.kind  = NodeViewKind::StateMachine;
+view.nodes = { NodeModel{ .stableID = sleep,  .title = "Sleep",  .pos = { -320, -140 } },
+               NodeModel{ .stableID = patrol, .title = "Patrol", .pos = { 80, -140 } } };
+view.transitions  = { { .stableID = ids.CreateStaticID(), .from = sleep,  .to = patrol, .label = "noise" },
+                      { .stableID = ids.CreateStaticID(), .from = patrol, .to = sleep,  .label = "tired" } };
+view.initialState = sleep;
+RenderNodeView(view);
+```
+
 ---
 
 [Previous: Tabs, docking and toolbars](tabs-docking-toolbars.md) | [Controls](../controls.md) | [Next: Timeline](timeline.md)

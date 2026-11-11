@@ -2,7 +2,7 @@
 #include <gui_controls/gui_timeline_internal.h>
 
 #include <gui_core/graphics/gui_custom_draw_context.h>
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 
 #include <algorithm>
 #include <cmath>
@@ -22,12 +22,9 @@ namespace tachyon
 
     namespace
     {
-        // Per-scrubber state of a press on it (element data store).
-        struct ScrubState
-        {
-            PointerDrag drag;
-            float       startTime = 0.0f;   // put back by Escape
-        };
+        // Per-scrubber state of a press on it (element data store): the time as it was, put
+        // back by Escape.
+        using ScrubState = Gesture<float>;
 
         // The length, 0 when it isn't a length.
         float LengthOf(const TimelineOptions& options)
@@ -156,34 +153,25 @@ namespace tachyon
                         case EventType::MouseDown:
                             if (!event.state.LeftPressed())
                                 break;
-                            {
-                                gsm.Interaction().SetFocusID(event.id);
-                                gsm.TextEditorFocus().Clear();
-                                auto& scrubState = store.GetOrCreate<ScrubState>(event.id);
-                                scrubState.drag.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
-                                scrubState.startTime = s->time;
-                                s->time = timeAtPointer();
-                            }
+                            // The press takes the capture by being handled.
+                            store.GetOrCreate<ScrubState>(event.id).Press(event, es, gsm, s->time, { .atOnce = true, .capture = false });
+                            s->time = timeAtPointer();
                             return true;
                         case EventType::MouseMove:
-                            if (auto* scrubState = store.Get<ScrubState>(event.id); scrubState && scrubState->drag.Move(event, 0))
+                            if (auto* scrubState = store.Get<ScrubState>(event.id); scrubState && scrubState->Move(event, 0))
                             {
                                 s->time = timeAtPointer();
                                 return true;
                             }
                             break;
                         case EventType::MouseUp:
-                            if (auto* scrubState = store.Get<ScrubState>(event.id); scrubState && scrubState->drag.Release(event) != PointerDrag::Ended::No)
+                            if (auto* scrubState = store.Get<ScrubState>(event.id); scrubState && scrubState->Release(event) != PointerDrag::Ended::No)
                                 return true;
                             break;
                         case EventType::KeyDown:
                         {
-                            if (auto* scrubState = store.Get<ScrubState>(event.id);
-                                scrubState && IsDragCancelKey(event.state) && scrubState->drag.Cancel(event.id))
-                            {
-                                s->time = scrubState->startTime;
+                            if (auto* scrubState = store.Get<ScrubState>(event.id); scrubState && scrubState->Cancel(event, gsm, s->time))
                                 return true;
-                            }
                             if (gsm.Interaction().GetFocusedID() != event.id || event.state.consumed)
                                 break;
                             switch (event.state.lastKey)

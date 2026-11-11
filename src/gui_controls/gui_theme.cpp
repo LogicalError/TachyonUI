@@ -468,6 +468,10 @@ namespace tachyon
         curveKeyEdgeColor            = lineColorFromCSS("--curve-plot", color4f{ 0.05f, 0.06f, 0.07f, 1.0f });
         curveSelectedKeyColor        = lineColorFromCSS("--text-1", color4f{ 0.91f, 0.92f, 0.94f, 1.0f });
         curveHandleColor             = lineColorFromCSS("--accent", color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
+        nodeTransitionColor          = lineColorFromCSS("--text-3", color4f{ 0.56f, 0.59f, 0.65f, 1.0f });
+        nodeTransitionHoverColor     = lineColorFromCSS("--text-1", color4f{ 0.91f, 0.92f, 0.94f, 1.0f });
+        nodeTransitionSelectedColor  = lineColorFromCSS("--accent", color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
+        nodeInitialStateColor        = lineColorFromCSS("--text-1", color4f{ 0.91f, 0.92f, 0.94f, 1.0f });
         {
             // Value, red, green, blue, alpha: the design's axis colors, and the warning color for one value.
             static constexpr const char* kChannelVars[5] = { "--warn", "--axis-x", "--axis-y", "--axis-z", "--text-1" };
@@ -744,10 +748,17 @@ namespace tachyon
         nodeFrameBandStyleRef             = registerCSS("node-frame-band");
         nodeFrameTitleStyleRef            = registerCSS("node-frame-title");
         nodeFrameRenameStyleRef           = registerCSS("node-frame-rename");
+        nodeTransitionLabelStyleRef       = registerCSS("node-transition-label");
+        nodeTransitionRenameStyleRef      = registerCSS("node-transition-rename");
+        nodeStateActiveStyleRef           = registerCSS("node-state-active");
+        nodeStateEdgeStyleRef             = registerCSS("node-state-edge");
+        nodeStateNestedStyleRef           = registerCSS("node-state-nested");
         nodeFramePortsStyleRef            = registerCSS("node-frame-ports");
         nodeFramePortStyleRef             = registerCSS("node-frame-port");
         nodeFramePortOutStyleRef          = registerCSS("node-frame-port-out");
         nodeHeaderStyleRef                = registerCSS("node-header");
+        nodeHeaderStateStyleRef           = registerCSS("node-header-state");
+        nodeStateStyleRef                 = registerCSS("node-state");
         nodeCategoryStyleRef              = registerCSS("node-category");
         nodeTitleStyleRef                 = registerCSS("node-title");
         nodeCaptionStyleRef               = registerCSS("node-caption");

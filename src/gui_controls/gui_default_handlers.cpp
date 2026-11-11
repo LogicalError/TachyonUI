@@ -85,8 +85,7 @@ namespace tachyon
                 case EventType::MouseDown:
                     if (event.state.LeftPressed())
                     {
-                        guiStateManager.Interaction().SetFocusID(event.id);
-                        guiStateManager.TextEditorFocus().Clear();
+                        TakeFocus(guiStateManager, event.id);
                         guiStateManager.Interaction().SetClicked(event.id);
                         if (onClick) onClick();
                         return true;
@@ -231,8 +230,7 @@ namespace tachyon
                         const int32_t clickOffset = mousePos - geom.trackPos;
 
                         auto& state = store.GetOrCreate<ScrollbarDragState>(event.id);
-                        state.drag.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ true);
-                        state.startScroll = currentScroll;
+                        state.drag.Press(event, elementStorage, guiStateManager, currentScroll, { .atOnce = true, .focus = false });
 
                         if (clickOffset >= currentThumbOffset &&
                             clickOffset <  currentThumbOffset + geom.thumbSize)
@@ -251,8 +249,6 @@ namespace tachyon
                                 : 0;
                             writeScroll(newScroll);
                         }
-
-                        guiStateManager.Interaction().SetCaptureID(event.id);
                         return true;
                     }
                     break;
@@ -289,8 +285,8 @@ namespace tachyon
                 case EventType::KeyDown:
                 {
                     auto* state = store.Get<ScrollbarDragState>(event.id);
-                    if (!state || !IsDragCancelKey(event.state) || !state->drag.Cancel(event.id)) return false;
-                    writeScroll(state->startScroll);
+                    if (!state || !state->drag.Cancel(event, guiStateManager)) return false;
+                    writeScroll(state->drag.before);
                     return true;
                 }
 
@@ -343,8 +339,7 @@ namespace tachyon
                     {
                         const uintptr_t payloadValue = getPayloadValue ? getPayloadValue() : 0;
                         std::any payload = getPayload ? getPayload() : std::any(payloadValue);
-                        guiStateManager.Interaction().SetFocusID(event.id);
-                        guiStateManager.TextEditorFocus().Clear();
+                        TakeFocus(guiStateManager, event.id);
                         guiStateManager.Drag().Begin(event.id, payloadType, payloadValue, event.state.screenPos, std::move(payload), sourceVisualizer);
                         return true;
                     }

@@ -581,15 +581,15 @@ namespace tachyon
             Settle();
             app.InjectMouseMove(LanesPoint(2.0f, 1));
             Frame();
-            ASSERT_GE(view.hoverTrack, 0);
-            EXPECT_EQ(view.tracks[size_t(view.hoverTrack)].stableID, position);
-            EXPECT_FLOAT_EQ(view.hoverTime, 2.0f);
+            ASSERT_GE(view.hover.part.track, 0);
+            EXPECT_EQ(view.tracks[size_t(view.hover.part.track)].stableID, position);
+            EXPECT_FLOAT_EQ(view.hover.part.time, 2.0f);
             app.InjectMouseMove(LanesPoint(3.0f, 1));
             Frame();
-            EXPECT_EQ(view.hoverTrack, -1) << "the empty lane";
+            EXPECT_EQ(view.hover.part.track, -1) << "the empty lane";
             app.InjectMouseMove(LanesPoint(5.0f, 5));
             Frame();
-            EXPECT_FLOAT_EQ(view.hoverTime, 5.0f) << "an event, as a key";
+            EXPECT_FLOAT_EQ(view.hover.part.time, 5.0f) << "an event, as a key";
         }
 
         // ---------------------------------------------------------------------
@@ -652,17 +652,17 @@ namespace tachyon
             Settle();
             app.InjectMouseMove(LanesPoint(3.0f, 4));
             Frame();
-            EXPECT_EQ(view.hoverClipTrack, 5);
-            EXPECT_EQ(view.hoverClipPart, TimelineView::ClipPart::Body);
+            EXPECT_EQ(view.hover.part.clipTrack, 5);
+            EXPECT_EQ(view.hover.part.clipPart, TimelineView::ClipPart::Body);
             app.InjectMouseMove(LanesPoint(0.5f, 4));
             Frame();
-            EXPECT_EQ(view.hoverClipPart, TimelineView::ClipPart::Start);
+            EXPECT_EQ(view.hover.part.clipPart, TimelineView::ClipPart::Start);
             app.InjectMouseMove(LanesPoint(6.5f, 4));
             Frame();
-            EXPECT_EQ(view.hoverClipPart, TimelineView::ClipPart::End);
+            EXPECT_EQ(view.hover.part.clipPart, TimelineView::ClipPart::End);
             app.InjectMouseMove(LanesPoint(7.5f, 4));
             Frame();
-            EXPECT_EQ(view.hoverClipPart, TimelineView::ClipPart::None);
+            EXPECT_EQ(view.hover.part.clipPart, TimelineView::ClipPart::None);
         }
 
         // An event's label is the event too: hovering it, and dragging it by it.
@@ -672,8 +672,8 @@ namespace tachyon
             const int2 label = LanesPoint(5.0f, 5) + int2{ app.styleManager.Px(20), 0 };
             app.InjectMouseMove(label);
             Frame();
-            EXPECT_EQ(view.hoverTrack, 6);
-            EXPECT_FLOAT_EQ(view.hoverTime, 5.0f);
+            EXPECT_EQ(view.hover.part.track, 6);
+            EXPECT_FLOAT_EQ(view.hover.part.time, 5.0f);
             Drag(label, label + int2{ LanesPoint(6.0f, 5).x - LanesPoint(5.0f, 5).x, 0 });
             EXPECT_NEAR(view.tracks[6].events[1].time, 6.0f, 0.05f);
         }
@@ -868,13 +868,13 @@ namespace tachyon
             Settle();
             app.InjectMouseMove(RulerPoint(2.0f));
             Frame();
-            EXPECT_EQ(view.hoverLoopEdge, 1);
+            EXPECT_EQ(view.loopEdgeHover.part, 1);
             app.InjectMouseMove(RulerPoint(5.0f));
             Frame();
-            EXPECT_EQ(view.hoverLoopEdge, 2);
+            EXPECT_EQ(view.loopEdgeHover.part, 2);
             app.InjectMouseMove(RulerPoint(3.5f));
             Frame();
-            EXPECT_EQ(view.hoverLoopEdge, 0);
+            EXPECT_EQ(view.loopEdgeHover.part, 0);
         }
 
         // Zoomed in, the scroll bar's thumb drags the view along; a press beside it brings it there.

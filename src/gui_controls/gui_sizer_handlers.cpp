@@ -39,8 +39,8 @@ namespace tachyon
                 };
                 auto followPointer = [&](const SizerState& state)
                 {
-                    const int2 delta = state.drag.LocalDelta(event, elementStorage);
-                    setSize(state.startSize + toUnits(vertical ? delta.y : delta.x) * sign);
+                    const int2 delta = state.drag.drag.LocalDelta(event, elementStorage);
+                    setSize(state.drag.before + toUnits(vertical ? delta.y : delta.x) * sign);
                 };
                 auto giveFocusBack = [&](const SizerState& state)
                 {
@@ -62,13 +62,13 @@ namespace tachyon
                                 setSize(fitUnits(autoSize));
                             return true;
                         }
-                        state.drag.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ true);
+                        // The focus is taken by hand below, after the one to give back is kept.
+                        state.drag.Press(event, elementStorage, guiStateManager, sizeValue, { .atOnce = true, .focus = false, .capture = false });
                         state.previousFocusID     = guiStateManager.Interaction().GetFocusedID();
                         state.previousTextFocusID = guiStateManager.TextEditorFocus().GetFocusedID();
                         // Scroll-into-view on the drag axis only: the handle is often longer than its parent.
                         guiStateManager.Interaction().SetFocusIDScrollAxis(event.id, vertical ? ScrollAxis::Y : ScrollAxis::X);
                         guiStateManager.TextEditorFocus().Clear();
-                        state.startSize = sizeValue;
                         return true;
                     }
 
@@ -91,9 +91,9 @@ namespace tachyon
                         break;
 
                     case EventType::KeyDown:
-                        if (auto* state = store.Get<SizerState>(event.id); state && IsDragCancelKey(event.state) && state->drag.Cancel(event.id))
+                        if (auto* state = store.Get<SizerState>(event.id); state && state->drag.Cancel(event, guiStateManager))
                         {
-                            setSize(state->startSize);
+                            setSize(state->drag.before);
                             giveFocusBack(*state);
                             return true;
                         }
@@ -169,11 +169,8 @@ namespace tachyon
                     if (event.state.LeftPressed())
                     {
                         auto& state = store.GetOrCreate<SliderState>(event.id);
-                        guiStateManager.Interaction().SetFocusID(event.id);
-                        guiStateManager.TextEditorFocus().Clear();
                         // A press that isn't dragged is a click, which opens the value for typing.
-                        state.drag.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ press == SliderPress::Jump);
-                        state.startValue = *value;
+                        state.drag.Press(event, elementStorage, guiStateManager, *value, { .atOnce = press == SliderPress::Jump, .capture = false });
                         if (press == SliderPress::Jump)
                             setValueFromMouse();
                         return true;
@@ -202,14 +199,14 @@ namespace tachyon
 
                 // Dragging the field's label: the distance maps across the track, as a drag on it.
                 case EventType::LabelDragBegin:
-                    store.GetOrCreate<SliderState>(event.id).startValue = *value;
+                    store.GetOrCreate<SliderState>(event.id).drag.before = *value;
                     return true;
 
                 case EventType::LabelDrag:
                     if (auto* state = store.Get<SliderState>(event.id))
                     {
                         const float delta = float(event.state.scroll.x) * float(LabelDragSpeedScale(event.state)) * range / float(w);
-                        const float newValue = std::clamp(state->startValue + delta, minVal, maxVal);
+                        const float newValue = std::clamp(state->drag.before + delta, minVal, maxVal);
                         if (newValue != *value)
                         {
                             *value = newValue;
@@ -225,15 +222,14 @@ namespace tachyon
                 case EventType::LabelDragCancel:
                     if (auto* state = store.Get<SliderState>(event.id))
                     {
-                        *value = state->startValue;
+                        *value = state->drag.before;
                         if (onChanged) onChanged();
                     }
                     return true;
 
                 case EventType::KeyDown:
-                    if (auto* state = store.Get<SliderState>(event.id); state && IsDragCancelKey(event.state) && state->drag.Cancel(event.id))
+                    if (auto* state = store.Get<SliderState>(event.id); state && state->drag.Cancel(event, guiStateManager, *value))
                     {
-                        *value = state->startValue;
                         if (onChanged) onChanged();
                         return true;
                     }

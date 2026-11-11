@@ -73,8 +73,7 @@ namespace tachyon
                     if (!event.state.LeftPressed())
                         break;
 
-                    guiStateManager.Interaction().SetFocusID(event.id);
-                    guiStateManager.TextEditorFocus().Clear();
+                    TakeFocus(guiStateManager, event.id);
                     guiStateManager.Interaction().SetClicked(event.id);
                     // Menu bar keeps keyboard focus on the trigger (the bar item stays
                     // selected); a standalone dropdown drops focus into its list.

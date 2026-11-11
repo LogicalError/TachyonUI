@@ -154,10 +154,7 @@ namespace tachyon
                     case tachyon::EventType::MouseDown:
                     {
                         if (!event.state.LeftPressed()) return false;
-                        guiStateManager.Interaction().SetFocusID(event.id);
-                        guiStateManager.TextEditorFocus().Clear();
                         drag = {};
-                        drag.press.Press(event, elementStorage);
                         drag.tableID   = tableID;
                         drag.fromCol   = colIdx;
                         drag.toCol     = colIdx;
@@ -172,16 +169,17 @@ namespace tachyon
                                     r = rp->rect;
                             drag.headerRects.push_back(r);
                         }
-                        // Snapshot scroll-X so MouseMove can compensate for scrolling mid-drag.
+                        // Keep scroll-X so MouseMove can compensate for scrolling mid-drag.
                         drag.sectionBodyID = statePtr->SectionBodyID(sectionIdx);
+                        int32_t startScrollX = 0;
                         if (drag.sectionBodyID != tachyon::ID::Invalid())
                         {
                             auto& sm = guiStateManager.GetScrollManagement();
                             const auto h = sm.GetScrollOffsetHandle(drag.sectionBodyID);
                             if (sm.IsScrollOffsetHandleValid(h))
-                                drag.startScrollX = sm.GetScrollOffset(h).x;
+                                startScrollX = sm.GetScrollOffset(h).x;
                         }
-                        guiStateManager.Interaction().SetCaptureID(event.id);
+                        drag.press.Press(event, elementStorage, guiStateManager, startScrollX);
                         return true;
                     }
 
@@ -190,12 +188,12 @@ namespace tachyon
                         if (drag.tableID != tableID || drag.fromCol != colIdx || !drag.press.IsPressed(event.id)) break;
                         // headerRects and the body's rect are in layout space; the cursor too.
                         const int32_t mouseX = event.LocalCursor(elementStorage).x;
-                        drag.offsetX = mouseX - drag.press.pressLocal.x;
+                        drag.offsetX = mouseX - drag.press.drag.pressLocal.x;
                         if (drag.press.Move(event, styleManager.Px(kDragStartDistance)) && !drag.headerRects.empty())
                         {
                             // Auto-scroll near the body's left/right edges, before
                             // resolving the drop target so it uses the new scroll.
-                            int32_t curScrollX = drag.startScrollX;
+                            int32_t curScrollX = drag.press.before;
                             if (drag.sectionBodyID != tachyon::ID::Invalid())
                             {
                                 auto bodyRef = elementStorage.FindElementRefByID(drag.sectionBodyID);
@@ -227,7 +225,7 @@ namespace tachyon
                                 }
                             }
                             // headerRects are from click time; undo the scroll delta on the cursor.
-                            const int32_t adjustedMouseX = mouseX - (curScrollX - drag.startScrollX);
+                            const int32_t adjustedMouseX = mouseX - (curScrollX - drag.press.before);
                             int target = TableHelpers::ComputeColumnInsertionIndex(
                                 adjustedMouseX, drag.fromCol,
                                 std::span<const tachyon::IntRect>(drag.headerRects.data(),
@@ -248,10 +246,7 @@ namespace tachyon
                         if (committed)
                         {
                             if (moveColumn(from, to))
-                            {
-                                guiStateManager.Interaction().SetFocusID(tachyon::ID::Invalid());
-                                guiStateManager.TextEditorFocus().Clear();
-                            }
+                                TakeFocus(guiStateManager, tachyon::ID::Invalid());
                         }
                         else if (isSortable)
                             sortBy();
@@ -260,11 +255,9 @@ namespace tachyon
 
                     case tachyon::EventType::KeyDown:
                     {
-                        if (drag.tableID == tableID && drag.fromCol == colIdx
-                            && IsDragCancelKey(event.state) && drag.press.Cancel(event.id))
+                        if (drag.tableID == tableID && drag.fromCol == colIdx && drag.press.Cancel(event, guiStateManager))
                         {
                             drag = {};
-                            guiStateManager.Interaction().ReleaseCaptureID();
                             return true;
                         }
                         return headerKeys(event);
@@ -281,8 +274,7 @@ namespace tachyon
             {
                 if (event.type == tachyon::EventType::MouseDown && event.state.LeftPressed())
                 {
-                    guiStateManager.Interaction().SetFocusID(event.id);
-                    guiStateManager.TextEditorFocus().Clear();
+                    TakeFocus(guiStateManager, event.id);
                     sortBy();
                     return true;
                 }
@@ -1401,8 +1393,7 @@ namespace tachyon
                 if (!hit) return false;
                 statePtr->selectedRowID  = hit->rowID;
                 statePtr->selectedColumn = hit->columnIdx;
-                guiStateManager.Interaction().SetFocusID(id);
-                guiStateManager.TextEditorFocus().Clear();
+                TakeFocus(guiStateManager, id);
                 guiStateManager.Interaction().SetClicked(hit->rowID);
                 return true;
             };

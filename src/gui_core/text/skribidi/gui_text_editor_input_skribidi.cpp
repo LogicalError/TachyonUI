@@ -97,7 +97,7 @@ namespace tachyon
             if (action != tachyon::KeyAction::KeyDown)
                 return;
 
-            if (key == tachyon::KeyCode::Escape && m_textDragArmed)
+            if (key == tachyon::KeyCode::Escape && m_skribidiContext->text_drag != GesturePhase::Idle)
             {
                 EndTextDragging();
                 return;
@@ -247,14 +247,14 @@ namespace tachyon
         if (m_skribidiContext->active_text_id != m_skribidiContext->editing_text_id)
             return;
 
-        if (m_textDragArmed && !m_skribidiContext->drag_text)
+        if (m_skribidiContext->text_drag == GesturePhase::Pressed)
         {
             const int32_t dragThreshold = int32_t(m_skribidiContext->Px(float(kDragStartDistance)));
             if (IsDragTravel(screenPos - m_textDragStartScreenPos, dragThreshold))
-                m_skribidiContext->drag_text = true;
+                m_skribidiContext->text_drag = GesturePhase::Dragging;
         }
 
-        if (!m_skribidiContext->editor_drag_active)
+        if (m_skribidiContext->selection_drag != GesturePhase::Dragging)
             return;
 
         // Mouse position is in screen space
@@ -304,7 +304,7 @@ namespace tachyon
     {
         if (!m_skribidiContext)
             return false;
-        if (!m_skribidiContext->drag_text)
+        if (m_skribidiContext->text_drag != GesturePhase::Dragging)
             return false;
         if (m_textDragSourceId == ID::Invalid())
             return false;
@@ -407,10 +407,9 @@ namespace tachyon
     {
         m_textDragSourceId = ID::Invalid();
         m_textDragPayload.clear();
-        m_textDragArmed = false;
         m_textDragStartScreenPos = int2 { 0, 0 };
-        m_skribidiContext->drag_text = false;
-        m_skribidiContext->editor_drag_active = false;
+        m_skribidiContext->text_drag = GesturePhase::Idle;
+        m_skribidiContext->selection_drag = GesturePhase::Idle;
     }
 
     bool SkribidiTextSystem::TryGetCaretPositionInternal(ID windowId, tachyon::int2 screenPos, ID targetTextEditorId, skb_editor_t*& outTargetEditor, skb_text_position_t& outPosition)
@@ -566,10 +565,9 @@ namespace tachyon
         {
             m_textDragSourceId = ID::Invalid();
             m_textDragPayload.clear();
-            m_textDragArmed = false;
             m_textDragStartScreenPos = int2 { 0, 0 };
-            m_skribidiContext->drag_text = false;
-            m_skribidiContext->editor_drag_active = false;
+            m_skribidiContext->text_drag = GesturePhase::Idle;
+            m_skribidiContext->selection_drag = GesturePhase::Idle;
             return;
         }
 
@@ -579,7 +577,7 @@ namespace tachyon
 
         if (action == tachyon::MouseAction::MouseUp)
         {
-            if (m_textDragArmed && !m_skribidiContext->drag_text)
+            if (m_skribidiContext->text_drag == GesturePhase::Pressed)
             {
                 tachyon::float2 localPos{ static_cast<float>(screenPos.x), static_cast<float>(screenPos.y) };
                 if (TryGetActiveTextEditorLocalPoint(windowId, screenPos, localPos))
@@ -591,10 +589,9 @@ namespace tachyon
 
                 m_textDragSourceId = ID::Invalid();
                 m_textDragPayload.clear();
-                m_textDragArmed = false;
                 m_textDragStartScreenPos = int2 { 0, 0 };
-                m_skribidiContext->drag_text = false;
-                m_skribidiContext->editor_drag_active = false;
+                m_skribidiContext->text_drag = GesturePhase::Idle;
+                m_skribidiContext->selection_drag = GesturePhase::Idle;
                 return;
             }
 
@@ -635,15 +632,13 @@ namespace tachyon
             {
                 m_textDragSourceId = ActiveElementID();
                 m_textDragPayload = Copy();
-                m_textDragArmed = !m_textDragPayload.empty();
                 m_textDragStartScreenPos = screenPos;
-                m_skribidiContext->drag_text = false;
-                m_skribidiContext->editor_drag_active = false;
+                m_skribidiContext->text_drag = m_textDragPayload.empty() ? GesturePhase::Idle : GesturePhase::Pressed;
+                m_skribidiContext->selection_drag = GesturePhase::Idle;
                 return;
             }
 
-            m_textDragArmed = false;
-            m_skribidiContext->drag_text = false;
+            m_skribidiContext->text_drag = GesturePhase::Idle;
 
             tachyon::float2 localPos{ static_cast<float>(screenPos.x), static_cast<float>(screenPos.y) };
             if (!TryGetActiveTextEditorLocalPoint(windowId, screenPos, localPos))
@@ -656,11 +651,11 @@ namespace tachyon
             // NOT move the caret - skip the click so the caret/selection stays put.
             if (m_skribidiContext->active_read_only && IsActiveEditorPosOnLink(localPos.x, localPos.y))
             {
-                m_skribidiContext->editor_drag_active = false;
+                m_skribidiContext->selection_drag = GesturePhase::Idle;
                 return;
             }
 
-            m_skribidiContext->editor_drag_active = true;
+            m_skribidiContext->selection_drag = GesturePhase::Dragging;
             double time = m_skribidiContext->frameTimeMs / 1000.0;
             skb_editor_process_mouse_click(m_skribidiContext->editor, localPos.x, localPos.y, skb_modifiers, time);
             EnsureCursorVisible(ActiveElementID());

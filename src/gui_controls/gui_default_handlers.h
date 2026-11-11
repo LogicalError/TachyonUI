@@ -2,7 +2,7 @@
 
 #include <gui_core/input/gui_input_state.h>
 #include <gui_core/input/gui_input_handler_func.h>
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 
 #include <gui_core/state/gui_state_manager.h>
 
@@ -53,11 +53,10 @@ namespace tachyon
     /// Per-element state of the sizer handlers (element data store); internal.
     struct SizerState
     {
-        PointerDrag        drag;                              ///< a drag from the press on
+        Gesture<int>       drag;                              ///< a drag from the press on; `before` is the size, put back by Escape
         ID                 previousFocusID     = ID::Invalid(); ///< focus to give back after the drag
         ID                 previousTextFocusID = ID::Invalid();
-        int                startSize = 0;                     ///< put back by Escape
-        DoubleClickTracker clicks;                            ///< a double-click auto-sizes
+        DoubleClickTracker clicks;                           ///< a double-click auto-sizes
     };
 
     /// Sizer handler that drags `sizeValue` within [`minSize`, `maxSize`], calling `onChanged`
@@ -82,9 +81,8 @@ namespace tachyon
     /// Per-element state of MakeSliderHandler and the integer slider (element data store); internal.
     struct SliderState
     {
-        PointerDrag drag;               ///< the press on the bar
-        float startValue = 0.0f;        ///< put back by Escape and a cancelled label drag
-        bool  editMode   = false;       ///< set by a clean click: in-place text editing
+        Gesture<float> drag;            ///< the press on the bar; `before` is the value at it or at a label drag's start, put back by Escape and a cancelled label drag
+        bool  editMode   = false;      ///< set by a clean click: in-place text editing
     };
 
     /// What pressing a slider does: Edit - a click (no drag) opens its value for typing;
@@ -103,7 +101,7 @@ namespace tachyon
     /// Per-element state of a draggable label (element data store); internal.
     struct DragLabelState
     {
-        PointerDrag drag;   ///< the press; a drag once it moves the drag distance
+        Gesture<> drag;     ///< the press; a drag once it moves the drag distance
     };
 
     /// Turns mouse drags on a label into LabelDrag* events sent to the next sibling element.
@@ -119,7 +117,7 @@ namespace tachyon
         int32_t  minWidth;                 ///< CSS px
         int32_t  maxWidth;                 ///< CSS px
         bool* edgeHovered;                 ///< a label's resize edge is hovered
-        bool* edgeDragging;                ///< a label's resize edge is being dragged
+        Gesture<int32_t>* edgeDrag;        ///< a label's resize edge dragged; the width as it was
         std::vector<TextID>* labelTextIDs; ///< for double-click auto-size
         ITextSystem* textSystem;           ///< for measuring label text widths
         const StyleManager* styleManager;  ///< for resolving label padding
@@ -140,9 +138,8 @@ namespace tachyon
     /// Per-element state of MakeScrollbarHandler (element data store); internal.
     struct ScrollbarDragState
     {
-        PointerDrag drag;            ///< a drag from the press on
+        Gesture<int> drag;           ///< a drag from the press on; `before` is the scroll position, put back by Escape
         int thumbGrabOffset = 0;     ///< cursor offset from the thumb's near edge at drag start, pixels
-        int startScroll     = 0;     ///< scroll position before the press; put back by Escape
     };
 
     /// Minimum thumb length in CSS pixels (scale with StyleManager::Px), so the thumb

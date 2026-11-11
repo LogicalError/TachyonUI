@@ -30,8 +30,8 @@ namespace tachyon
     /// Centres and zooms the view on the nodes at `indices` (ones out of range skipped); none
     /// leaves the view as it is. Never past 100%, so a small group shows at its own size.
     void  FrameNodes(NodeView& view, std::span<const int> indices);
-    /// Centres and zooms the view on the selected nodes, or on all of them when none is
-    /// selected (Home, the Fit button).
+    /// Centres and zooms the view on the selected nodes, and in a state machine the states
+    /// a selected transition joins; on all of them when none is selected (Home, the Fit button).
     void  FrameSelectedNodes(NodeView& view);
     /// Pans the view, at the same zoom, by as little as brings node `nodeIdx` inside it with
     /// `margin` pixels to spare; a node larger than the view shows its top-left.
@@ -196,6 +196,54 @@ namespace tachyon
     /// title bar, with the focus in it, from the next RenderNodeView. For a "Rename" menu item.
     void RenameFrame(NodeView& view, int frame);
 
+    /// @name State machines (NodeViewKind::StateMachine)
+    ///@{
+    /// An edit that adds `transition` at `index` (-1, or past the end: last). Its stableID is
+    /// the caller's, kept as a node's.
+    ///
+    ///     CommitNodeViewEdit(view, AddTransitionEdit(view, StateTransition{
+    ///         .stableID = idManager.CreateStaticID(), .from = patrol, .to = chase, .label = "sees player" }));
+    NodeViewEdit AddTransitionEdit(const NodeView& view, StateTransition transition, int index = -1);
+    /// An edit that removes the transitions with these stableIDs (unknown ones are skipped).
+    NodeViewEdit RemoveTransitionsEdit(const NodeView& view, std::span<const ID> transitions);
+    /// An edit that makes `state` (a stableID; Invalid: none) the initial state. Empty when it
+    /// is already.
+    NodeViewEdit SetInitialStateEdit(const NodeView& view, ID state);
+    /// Index of the transition with `stableID` in view.transitions; -1 when there's none.
+    int TransitionIndex(const NodeView& view, ID stableID);
+    /// Index of the node with `stableID` in view.nodes; -1 when there's none.
+    int NodeIndex(const NodeView& view, ID stableID);
+    /// Starts relabelling transition `transition` as a double-click on it does: a field on its
+    /// arrow, with the focus in it, from the next RenderNodeView. For a "Rename" menu item.
+    void RenameTransition(NodeView& view, int transition);
+    /// Starts a transition from state `node` without a drag: it follows the pointer until a
+    /// click on a state (the same one too) adds it; a click elsewhere or Escape drops it. The
+    /// state's menu offers it ("Add transition"); for a key or a menu of the app's.
+    void StartTransition(NodeView& view, int node);
+
+    /// A transition's arrow, in node.pos space, between the states as last laid out.
+    struct TransitionPath
+    {
+        int2  from {}, to {};     ///< where it leaves its state's edge and where its head touches the other's
+        bool  loop = false;       ///< a state to itself: a curve over its top, shaped by c1 and c2 (as RenderLine draws four points)
+        int2  c1 {}, c2 {};
+        int2  labelAt {};         ///< half way along it (a loop's top)
+        bool  valid = false;      ///< false: a state is missing, or not laid out yet
+    };
+    /// The arrow of `transition`: a straight line between the two states' edges, aimed from
+    /// centre to centre; when the states are joined both ways, each arrow runs `gap` pixels to
+    /// its own side, so the pair sits side by side. A loop rises `loopSize` above its state.
+    TransitionPath StateTransitionPath(const NodeView& view, const StateTransition& transition, int32_t gap, int32_t loopSize);
+    /// Where the middle of a label `size` big goes on `path`: half way along it and beside it,
+    /// `margin` clear of the line, on the arrow's right as it runs, so the two of a pair both
+    /// ways sit on opposite sides; over the top of a loop.
+    int2 TransitionLabelCentre(const TransitionPath& path, int2 size, int32_t margin);
+    /// The transition whose arrow passes within `tolerance` of `canvasPos` (node.pos space),
+    /// the closest when several do, or whose label (view.transitionLabelBoxes) holds it; none
+    /// when there's no such transition.
+    std::optional<ID> TransitionAt(const NodeView& view, float2 canvasPos, float tolerance, int32_t gap, int32_t loopSize);
+    ///@}
+
     /// Default lane offsets (grid steps) for wires between the same two nodes, so their
     /// lanes don't coincide: k wires, in input order, get (k-1)/2 counting down by one
     /// (one wire: 0; two: 0,-1; three: 1,0,-1; four: 1,0,-1,-2), so wires running down
@@ -255,6 +303,9 @@ namespace tachyon
     /// A point in node.pos space on the screen, where the view last drew it: the other way
     /// round from NodeViewScreenToCanvas.
     float2 NodeViewCanvasToScreen(const NodeView& view, float2 canvasPos);
+    /// A screen point in node.pos space, where the nodes' boxes are (NodeViewScreenToCanvas
+    /// less the canvas's border and padding, as last laid out).
+    float2 NodeViewScreenToNodePos(const NodeView& view, int2 screen);
 
     /// Stable IDs of nodes whose {pos, lastSize} rect lies fully inside the marquee, compared
     /// in node.pos space (canvas inner-rect relative, before the content transform).

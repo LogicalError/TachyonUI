@@ -72,7 +72,7 @@ namespace tachyon
         const bool disabled = guiStateManager.Construction().IsDisabled();
         if (disabled && (v->gizmoDrag.IsHeld() || v->cameraDrag.IsHeld()))
         {
-            if (v->gizmoDrag.IsHeld()) v->selection = v->before;
+            if (v->gizmoDrag.IsHeld()) v->selection = v->gizmoDrag.before;
             v->gizmoDrag.Reset();
             v->cameraDrag.Reset();
             v->cameraMove = ViewportView::CameraMove::None;
@@ -92,7 +92,7 @@ namespace tachyon
 
         const ElementState state = guiStateManager.GetCurrentState(id);
         if ((state & ElementState::Hover) == ElementState::None && !v->gizmoDrag.IsHeld())
-            v->hoverPart = GizmoPart::None;
+            v->hover.Clear();
 
         // The app's scene, drawn into the image at the view's size. Its camera is read when the
         // frame is recorded, after this frame's input, as the gizmo drawn over it is.
@@ -149,17 +149,13 @@ namespace tachyon
                         else if (event.state.RightPressed())                     { move = Move::Look;  button = MouseButtons::Right; }
                         if (move != Move::None)
                         {
-                            gsm.Interaction().SetFocusID(event.id);
-                            v->cameraDrag.Press(event, es, button, /*atOnce*/ true);
+                            v->cameraDrag.Press(event, es, gsm, v->camera, { .button = button, .atOnce = true });
                             v->cameraMove = move;
-                            v->cameraBefore = v->camera;
-                            gsm.Interaction().SetCaptureID(event.id);
                             return true;
                         }
                         if (!event.state.LeftPressed())
                             return false;
-                        gsm.Interaction().SetFocusID(event.id);
-                        gsm.TextEditorFocus().Clear();
+                        TakeFocus(gsm, event.id);
 
                         // The axes at the top right: look along the one clicked.
                         if (const int axis = HitAxisGizmo(v->camera, pixel, axisCenter, axisRadius, axisReach); axis >= 0)
@@ -169,14 +165,12 @@ namespace tachyon
                         }
                         if (const GizmoPart part = HitGizmo(*v, pixel, size); part != GizmoPart::None)
                         {
-                            v->gizmoDrag.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
+                            v->gizmoDrag.Press(event, es, gsm, v->selection, { .atOnce = true });
                             v->activePart = part;
-                            v->before = v->selection;
                             v->dragFrom = pixel;
-                            gsm.Interaction().SetCaptureID(event.id);
                             return true;
                         }
-                        v->click.Press(event, es);
+                        v->click.Press(event, es, gsm, {}, { .focus = false, .capture = false });
                         return true;
                     }
                     case EventType::MouseMove:
@@ -197,7 +191,7 @@ namespace tachyon
                         }
                         if (v->gizmoDrag.Move(event, 0))
                         {
-                            v->selection = DragGizmo(v->tool, v->activePart, v->before, v->camera, size, v->dragFrom, pixel);
+                            v->selection = DragGizmo(v->tool, v->activePart, v->gizmoDrag.before, v->camera, size, v->dragFrom, pixel);
                             return true;
                         }
                         if (v->click.IsPressed(event.id))
@@ -205,7 +199,7 @@ namespace tachyon
                             v->click.Move(event, dragDistance);
                             return true;
                         }
-                        v->hoverPart = HitGizmo(*v, pixel, size);
+                        v->hover.Track(AnyHeld(v->gizmoDrag, v->cameraDrag, v->click), [&] { return HitGizmo(*v, pixel, size); });
                         return false;
                     }
                     case EventType::MouseUp:
@@ -219,7 +213,7 @@ namespace tachyon
                         if (v->gizmoDrag.IsPressed(event.id) && v->gizmoDrag.Release(event) != PointerDrag::Ended::No)
                         {
                             // Already where it was dropped: the edit, for undo.
-                            const ViewportEdit edit{ v->before, v->selection };
+                            const ViewportEdit edit{ v->gizmoDrag.before, v->selection };
                             v->activePart = GizmoPart::None;
                             if (!edit.empty())
                             {
@@ -272,17 +266,13 @@ namespace tachyon
                         }
                         if (key == KeyCode::Escape)
                         {
-                            if (v->gizmoDrag.IsPressed(event.id))
+                            if (v->gizmoDrag.Cancel(event, gsm, v->selection))
                             {
-                                v->selection = v->before;
-                                v->gizmoDrag.Cancel(event.id);
                                 v->activePart = GizmoPart::None;
                                 return true;
                             }
-                            if (v->cameraDrag.IsPressed(event.id))
+                            if (v->cameraDrag.Cancel(event, gsm, v->camera))
                             {
-                                v->camera = v->cameraBefore;
-                                v->cameraDrag.Cancel(event.id);
                                 v->cameraMove = ViewportView::CameraMove::None;
                                 return true;
                             }
@@ -380,7 +370,7 @@ namespace tachyon
             auto project = [&](float3 p, float2& out) { return ViewportProject(camera, size, p, out); };
             auto pt = [](float2 p) { return int2{ int32_t(std::lround(p.x)), int32_t(std::lround(p.y)) }; };
             auto colorOf = [&](GizmoPart part, int axis) {
-                const bool lit = part == v->activePart || (v->activePart == GizmoPart::None && part == v->hoverPart);
+                const bool lit = part == v->activePart || (v->activePart == GizmoPart::None && part == v->hover.part);
                 return lit ? theme.curveChannelColors[0] : theme.curveChannelColors[size_t(1 + axis)];
             };
 
@@ -462,7 +452,7 @@ namespace tachyon
                     // The middle: a dot to move in the view's plane, or a box to scale all ways.
                     if (v->tool != ViewportTool::Rotate)
                     {
-                        const bool lit = v->activePart == GizmoPart::Center || (v->activePart == GizmoPart::None && v->hoverPart == GizmoPart::Center);
+                        const bool lit = v->activePart == GizmoPart::Center || (v->activePart == GizmoPart::None && v->hover.part == GizmoPart::Center);
                         const float dot = float(styleManager.Px(6));
                         ctx.RenderDisc(pt(center), dot, lit ? theme.curveChannelColors[0] : theme.curveSelectedKeyColor);
                     }

@@ -3,7 +3,7 @@
 #include <gui_core/gui_base_types.h>     // int2, float3x2, color4f
 #include <gui_core/gui_id.h>
 #include <gui_core/input/gui_command_manager.h>          // CommandMode
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 #include <gui_core/graphics/gui_custom_draw_context.h>   // VisualColorStyleIndex
 
 #include <gui_controls/gui_widget_state_types.h>          // DoubleClickTracker
@@ -86,6 +86,28 @@ namespace tachyon
         std::vector<NodeProperty>  properties;              ///< the rows, top to bottom
         /// Internal: inside a collapsed frame, as last drawn: not shown, clicked or selected.
         bool                       hidden       = false;
+        /// In a state machine (NodeViewKind::StateMachine): the state holds a machine of its
+        /// own. It's drawn with a mark, and a double-click on it calls NodeView::onOpenState.
+        bool                       subMachine   = false;
+    };
+
+    /// What a node view edits: a graph of nodes with fields wired output to input, or a state
+    /// machine, where nodes are states joined by transitions and cycles are the point.
+    enum class NodeViewKind : uint8_t
+    {
+        Graph,          ///< nodes with properties and sockets, wired output to input
+        StateMachine    ///< states (nodes without properties) and transitions between them
+    };
+
+    /// A transition of a state machine: from one state to another, or to itself.
+    struct StateTransition
+    {
+        tachyon::ID stableID = tachyon::ID::Invalid();   ///< assigned once on creation, as a node's
+        tachyon::ID from     = tachyon::ID::Invalid();   ///< the state it leaves, by stableID
+        tachyon::ID to       = tachyon::ID::Invalid();   ///< the state it enters (`from` for a loop)
+        std::string label;                               ///< shown on its arrow: an event or a condition
+
+        bool operator==(const StateTransition&) const = default;
     };
 
     /// A frame (a comment box): a titled, colored box behind a group of nodes. Dragging its
@@ -117,7 +139,11 @@ namespace tachyon
     /// A wire being dragged. Committed wires are the reciprocal endpoints on NodeProperty.
     struct PendingConnection
     {
-        bool             active        = false;  ///< a wire drag is in progress
+        /// The socket's press. The drag manager decides when it becomes a drag (its threshold),
+        /// and the wire is real from then on.
+        tachyon::Gesture<> press;
+        /// A wire drag is in progress: the press has become a drag.
+        bool IsActive() const { return press.Phase() == tachyon::GesturePhase::Dragging; }
         /// The socket the wire starts from: an output, or an unwired input when fromInput.
         PropertyEndpoint source        = {};
         bool             fromInput     = false;  ///< dragged from an input, towards an output
@@ -222,6 +248,13 @@ namespace tachyon
         /// A frame added at `index` (or, when !added, taken from there); the frames after it
         /// move up or down one.
         struct Frame       { int index = -1; bool added = true; NodeFrame frame; };
+        /// A transition added at `index` (or, when !added, taken from there); the ones after it
+        /// move up or down one.
+        struct Transition       { int index = -1; bool added = true; StateTransition transition; };
+        /// A transition (index) relabelled or redirected: all of it before and after.
+        struct TransitionChange { int index = -1; StateTransition from, to; };
+        /// The initial state changed (by stableID; Invalid: none).
+        struct Initial          { tachyon::ID from = tachyon::ID::Invalid(), to = tachyon::ID::Invalid(); };
 
         std::vector<Move>     moves;
         std::vector<Rewire>   rewires;
@@ -232,12 +265,17 @@ namespace tachyon
         std::vector<FrameChange> frameChanges;
         /// Applied before frameChanges, as nodes are, and undone after.
         std::vector<Frame>       frames;
+        /// Applied before transitionChanges, and undone after.
+        std::vector<Transition>       transitions;
+        std::vector<TransitionChange> transitionChanges;
+        std::optional<Initial>        initial;
 
         /// True when nothing changed.
         bool empty() const
         {
             return moves.empty() && rewires.empty() && collapses.empty() && lanes.empty() && nodes.empty()
-                && frameChanges.empty() && frames.empty();
+                && frameChanges.empty() && frames.empty() && transitions.empty() && transitionChanges.empty()
+                && !initial;
         }
     };
 
@@ -252,12 +290,13 @@ namespace tachyon
     /// Segment drag via mouse capture rather than DnD, so the resize cursor sticks.
     struct WireSegmentDrag
     {
-        tachyon::PointerDrag press;   ///< the handle's press, a drag from the start
+        /// The handle's press, a drag from the start; the wire's overrides as they were, for the
+        /// edit and for Escape.
+        tachyon::Gesture<WireRouteOverrides> press;
         uint32_t   wireKey    = 0;
         WireHandle role       = WireHandle::None;
         bool       vertical   = false;
         int32_t    startValue  = 0;   ///< lane coordinate at drag start (node.pos space)
-        WireRouteOverrides lanesBefore {}; ///< the wire's overrides at drag start, for the edit
     };
 
 
@@ -267,7 +306,7 @@ namespace tachyon
     /// A press on a frame's title or one of its edges, and what it moves.
     struct FrameDrag
     {
-        tachyon::PointerDrag press;
+        tachyon::Gesture<>   press;      ///< a move's press becomes a drag past the drag distance; a resize's at once
         tachyon::ID          frameID = tachyon::ID::Invalid();
         FrameEdges           edges   = FrameEdges::None;   ///< None: a move, by the title
         /// At the press: the frames it moves (it, and those inside it) and the nodes inside
@@ -281,6 +320,26 @@ namespace tachyon
     struct NodeView
     {
         std::vector<NodeModel>  nodes;   ///< the graph; endpoints and edits refer to nodes by index
+        /// A graph of fields and wires, or a state machine. In a state machine the nodes are
+        /// states: their properties aren't shown, and `transitions` join them instead of wires.
+        NodeViewKind            kind = NodeViewKind::Graph;
+
+        /// @name State machine (NodeViewKind::StateMachine)
+        ///@{
+        /// The arrows between the states. A press on a state's edge and a drag to another
+        /// state (or back onto itself) adds one; each can be selected, relabelled and deleted.
+        std::vector<StateTransition>    transitions;
+        tachyon::ID                     initialState = tachyon::ID::Invalid();   ///< where the machine starts: marked with an arrow in
+        /// The state the machine is in, as the app runs it: highlighted. Invalid: none.
+        tachyon::ID                     activeState  = tachyon::ID::Invalid();
+        std::unordered_set<tachyon::ID> selectedTransitionIDs;   ///< selected transition stableIDs
+        /// A double-click on a state that holds a machine of its own (NodeModel::subMachine):
+        /// open it, typically by showing that machine's view and extending `breadcrumb`.
+        std::function<void(int node)>   onOpenState;
+        /// As onNodeContextMenu, for transition `transition` (an index into transitions):
+        /// a right click on its arrow or label opens it and selects the transition.
+        std::function<void(int transition)> onTransitionContextMenu;
+        ///@}
         /// Frames, drawn behind the nodes and wires, the first at the back.
         std::vector<NodeFrame>  frames;
         /// Selected frame stableIDs. A click on a frame's title selects it as one on a node
@@ -322,6 +381,9 @@ namespace tachyon
         /// Last frame's canvas padding box, in screen pixels (as events have them), for
         /// NodeViewScreenToCanvas and NodeViewCanvasToScreen.
         tachyon::IntRect            lastCanvasRect {};
+        /// Last frame's canvas border box less its content box: node.pos is measured from the
+        /// border box, NodeViewScreenToCanvas's points from the content box.
+        tachyon::int2               lastGridOrigin {};
         tachyon::ID                 revealedFocusID = tachyon::ID::Invalid();   ///< internal: the focus last scrolled into view
         tachyon::ID                 focusedNodeID   = tachyon::ID::Invalid();   ///< internal: the node holding the focus last frame
         /// Command mode set while the canvas has focus.
@@ -346,14 +408,19 @@ namespace tachyon
         /// Double-click-to-collapse, per view so views (and test frames) don't share it.
         DoubleClickTracker              nodeDoubleClick;
 
+        /// What a marquee starts from: the selection before it, put back by Escape, and the
+        /// modifiers held at its press.
+        struct MarqueeStart
+        {
+            std::unordered_set<tachyon::ID> nodes;    ///< the nodes selected
+            std::unordered_set<tachyon::ID> frames;   ///< the frames selected
+            bool shift = false;
+            bool ctrl  = false;
+        };
         /// A press on the empty background: a marquee once it moves the drag distance. Its
-        /// points are screen space (marquee.pressScreen is the start).
-        tachyon::PointerDrag                marquee;
+        /// points are screen space (marquee.drag.pressScreen is the start).
+        tachyon::Gesture<MarqueeStart>      marquee;
         tachyon::int2                       marqueeCurrentScreen {};
-        std::unordered_set<tachyon::ID>     marqueeBaseSelection;     ///< selection snapshot before the drag
-        std::unordered_set<tachyon::ID>     marqueeBaseFrames;        ///< the frames selected before the drag
-        bool                            marqueeShift = false;     ///< modifier snapshot at start
-        bool                            marqueeCtrl  = false;
 
         /// Pinned wire lanes, keyed by WireKey() of the wire's target endpoint.
         std::unordered_map<uint32_t, WireRouteOverrides> wireOverrides;
@@ -363,7 +430,7 @@ namespace tachyon
 
         /// The wire under the mouse (by WireKey), from the last frame: highlighted, removed by
         /// a middle click, and offered for deletion by a right click.
-        std::optional<uint32_t> hoveredWire;
+        tachyon::HoverPart<std::optional<uint32_t>> hoveredWire;
         /// Called once per finished user edit (a whole drag is one), after it is applied.
         std::function<void(const NodeViewEdit&)> onEdit;
         /// A new wire was released over the empty canvas (not on a node), e.g. to offer the
@@ -394,12 +461,33 @@ namespace tachyon
         /// Internal: each frame's box as last drawn, by index (node.pos space): a collapsed one's
         /// node-like box, an empty rect for one hidden in a collapsed frame.
         std::vector<tachyon::IntRect> frameBoxes;
-        tachyon::PointerDrag pan;                 ///< internal: the view dragged (middle, or Alt + left); once dragged, not a click
-        tachyon::PointerDrag menuPress;           ///< internal: a right press; its release without a drag opens a menu
-        tachyon::float3x2    panStart {};         ///< internal: the transform before it; put back by Escape
-        tachyon::PointerDrag nodeDrag;            ///< internal: the press on a node; moves the selection once dragged
-        tachyon::PointerDrag minimapDrag;         ///< internal: a press in the minimap
-        tachyon::float3x2    minimapStart {};     ///< internal: the transform before it; put back by Escape
+        /// Internal: the view dragged (middle, or Alt + left); once dragged, not a click. The
+        /// transform before it, put back by Escape.
+        tachyon::Gesture<tachyon::float3x2> pan;
+        tachyon::Gesture<>   menuPress;           ///< internal: a right press; its release without a drag opens a menu
+        tachyon::Gesture<>   nodeDrag;            ///< internal: the press on a node; moves the selection once dragged
+        /// Internal: a press in the minimap; the transform before it, put back by Escape.
+        tachyon::Gesture<tachyon::float3x2> minimapDrag;
+
+        /// Internal: a transition being drawn from a state's edge, the state it leaves, and
+        /// where the pointer is (screen).
+        tachyon::Gesture<>   transitionDrag;
+        tachyon::ID          transitionFrom = tachyon::ID::Invalid();
+        tachyon::int2        transitionPointer {};
+        /// Internal: a transition started from a menu (StartTransition): it follows the pointer
+        /// until a click on a state finishes it, or a click elsewhere or Escape drops it.
+        bool                 transitionPicking = false;
+        /// Internal: the state whose edge is under the pointer (a transition starts there).
+        tachyon::HoverPart<tachyon::ID> stateEdgeHover;
+        /// Internal: the transition under the pointer, from the last frame: highlighted, and
+        /// what a click selects. Its arrows as last drawn, for hit tests.
+        tachyon::HoverPart<std::optional<tachyon::ID>> hoveredTransition;
+        DoubleClickTracker         transitionClicks;    ///< internal: a double-click on a transition relabels it
+        /// Internal: each transition's label chip as last laid out (node.pos space): a click on
+        /// it is a click on its transition.
+        std::vector<std::pair<tachyon::ID, tachyon::IntRect>> transitionLabelBoxes;
+        std::optional<tachyon::ID> renamingTransition;  ///< internal: the transition whose label is being edited
+        std::optional<tachyon::ID> transitionMenuTransition;   ///< internal: the transition the open menu is for
 
         /// Whether an output -> input wire is allowed; null allows any. Called only for
         /// bounds-checked, cross-node endpoints, so it may index view.nodes directly.

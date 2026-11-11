@@ -210,8 +210,7 @@ namespace tachyon
 		textAtlasManager = nullptr;
 		guiStateManager  = nullptr;
 		view = {};
-		drag_view = false;
-		drag_text = false;
+		text_drag = GesturePhase::Idle;
 		atlas_scale = 0.0f;
 		allow_char = false;
 		show_glyph_bounds = false;
@@ -220,7 +219,7 @@ namespace tachyon
 		active_text_id = TextID::Invalid;
 		pending_select_all_id = TextID::Invalid;
 		pending_selection_element = ID::Invalid();
-		editor_drag_active = false;
+		selection_drag = GesturePhase::Idle;
 		pending_text_id = TextID::Invalid;
 		pending_text_dirty = false;
 		pending_text_committed = false;

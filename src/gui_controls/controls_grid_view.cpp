@@ -39,8 +39,7 @@ namespace tachyon
             {
                 case tachyon::EventType::MouseDown:
                     if (!event.state.LeftPressed()) break;
-                    guiStateManager.Interaction().SetFocusID(event.id);
-                    guiStateManager.TextEditorFocus().Clear();
+                    TakeFocus(guiStateManager, event.id);
                     return true;
 
                 case tachyon::EventType::KeyDown:
@@ -320,8 +319,7 @@ namespace tachyon
                         *selectedIndex = itemIndex;
                     }
 
-                    guiStateManager.Interaction().SetFocusID(containerID);
-                    guiStateManager.TextEditorFocus().Clear();
+                    TakeFocus(guiStateManager, containerID);
                     guiStateManager.Interaction().SetClicked(id);
 
                     // Prime a pending drag (promoted once past the threshold). Inlined rather
@@ -491,8 +489,7 @@ namespace tachyon
                 {
                     case tachyon::EventType::MouseDown:
                         if (!event.state.LeftPressed()) break;
-                        guiStateManager.Interaction().SetFocusID(event.id);
-                        guiStateManager.TextEditorFocus().Clear();
+                        TakeFocus(guiStateManager, event.id);
                         return true;
 
                     case tachyon::EventType::KeyDown:

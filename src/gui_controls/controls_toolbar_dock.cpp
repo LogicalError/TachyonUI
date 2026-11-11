@@ -421,28 +421,27 @@ namespace tachyon
                     if (e.type == EventType::MouseDown && e.state.LeftPressed())
                     {
                         drag = {};
-                        drag.drag.Press(e, elementStorage, MouseButtons::Left, /*atOnce*/ true);
+                        drag.press.Press(e, elementStorage, guiStateManager, windowManager->GetWindowRect(windowIDForHandler),
+                                        { .atOnce = true, .focus = false });
                         drag.windowID         = windowIDForHandler;
                         drag.currentMousePos  = e.state.screenPos;
-                        drag.startRect        = windowManager->GetWindowRect(windowIDForHandler);
                         drag.sourceDockState  = dockState;
-                        guiStateManager.Interaction().SetCaptureID(e.id);
                         return true;
                     }
                     if (drag.windowID != windowIDForHandler)
                         return false;
-                    if (drag.drag.Move(e, 0))
+                    if (drag.press.Move(e, 0))
                     {
                         // An OS window: it moves in screen pixels.
                         drag.currentMousePos = e.state.screenPos;
-                        const int2 delta = drag.drag.ScreenDelta(e.state);
-                        IntRect newRect = drag.startRect;
+                        const int2 delta = drag.press.drag.ScreenDelta(e.state);
+                        IntRect newRect = drag.press.before;
                         newRect.x += delta.x;
                         newRect.y += delta.y;
                         windowManager->SetWindowRect(windowIDForHandler, newRect);
                         return true;
                     }
-                    if (drag.drag.Release(e) != PointerDrag::Ended::No)
+                    if (drag.press.Release(e) != PointerDrag::Ended::No)
                     {
                         guiStateManager.Interaction().ReleaseCaptureID();
                         closeOverlay();
@@ -456,10 +455,9 @@ namespace tachyon
                         }
                         return true;
                     }
-                    if (e.type == EventType::KeyDown && IsDragCancelKey(e.state) && drag.drag.Cancel(e.id))
+                    if (drag.press.Cancel(e, guiStateManager))
                     {
-                        windowManager->SetWindowRect(windowIDForHandler, drag.startRect);
-                        guiStateManager.Interaction().ReleaseCaptureID();
+                        windowManager->SetWindowRect(windowIDForHandler, drag.press.before);
                         closeOverlay();
                         drag.sourceDockState = nullptr;
                         return true;

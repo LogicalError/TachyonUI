@@ -801,7 +801,7 @@ namespace tachyon
 
 			// While dragging selected text from another editor, show insertion caret in hovered destination textbox
 			if (m_textDragSourceId != ID::Invalid() &&
-				m_skribidiContext->drag_text &&
+				m_skribidiContext->text_drag == GesturePhase::Dragging &&
 				entry->elementId != m_textDragSourceId &&
 				IsTextEditor(entry->elementId) &&
 				CanDropDraggedTextInto(entry->elementId) &&

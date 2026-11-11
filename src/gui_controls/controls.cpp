@@ -196,7 +196,7 @@ namespace tachyon
             {
                 handler = MakeGroupDraggableLabelHandler(guiStateManager, elementStorage,
                     { &gs->labelWidth, gs->minWidth, gs->maxWidth,
-                      &gs->edgeHovered, &gs->edgeDragging,
+                      &gs->edgeHovered, &gs->edgeDrag,
                       &gs->labelTextIDs, textSystem,
                       &styleManager, theme.groupDragLabelStyleRef });
             }
@@ -242,7 +242,7 @@ namespace tachyon
             if (gs->resizable)
                 handler = MakeGroupLabelHandler(guiStateManager, elementStorage,
                     { &gs->labelWidth, gs->minWidth, gs->maxWidth,
-                      &gs->edgeHovered, &gs->edgeDragging,
+                      &gs->edgeHovered, &gs->edgeDrag,
                       &gs->labelTextIDs, textSystem,
                       &styleManager, theme.groupLabelStyleRef });
         }
@@ -292,7 +292,7 @@ namespace tachyon
                 style = theme.groupLabelStyleRef; // overflow:visible for edge dragger rendering
                 handler = MakeGroupLabelHandler(guiStateManager, elementStorage,
                     { &gs->labelWidth, gs->minWidth, gs->maxWidth,
-                      &gs->edgeHovered, &gs->edgeDragging,
+                      &gs->edgeHovered, &gs->edgeDrag,
                       &gs->labelTextIDs, textSystem,
                       &styleManager, theme.groupLabelStyleRef });
             }
@@ -1440,8 +1440,7 @@ namespace tachyon
         // Per-element state of the integer slider's drag (element data store).
         struct IntSliderState
         {
-            PointerDrag drag;
-            int         startValue = 0;   // put back by Escape
+            Gesture<int> drag;   // `before`: the value at the press, put back by Escape
         };
 
         // Drag handler for the integer Slider / SliderField. Writes the caller's int
@@ -1469,11 +1468,8 @@ namespace tachyon
                     case tachyon::EventType::MouseDown:
                         if (event.state.LeftPressed())
                         {
-                            gsm.Interaction().SetFocusID(event.id);
-                            gsm.TextEditorFocus().Clear();
                             auto& s = store.GetOrCreate<IntSliderState>(event.id);
-                            s.drag.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
-                            s.startValue = *valuePtr;
+                            s.drag.Press(event, es, gsm, *valuePtr, { .atOnce = true, .capture = false });
                             setFromMouse();
                             return true;
                         }
@@ -1488,11 +1484,8 @@ namespace tachyon
                         break;
                     case tachyon::EventType::KeyDown:
                     {
-                        if (auto* s = store.Get<IntSliderState>(event.id); s && IsDragCancelKey(event.state) && s->drag.Cancel(event.id))
-                        {
-                            *valuePtr = s->startValue;
+                        if (auto* s = store.Get<IntSliderState>(event.id); s && s->drag.Cancel(event, gsm, *valuePtr))
                             return true;
-                        }
                         // Arrows step 1, Page Up / Down a tenth of the range, Home / End to its ends.
                         if (gsm.Interaction().GetFocusedID() != event.id || event.state.consumed)
                             break;

@@ -413,19 +413,19 @@ namespace tachyon
             Open();
             app.InjectMouseMove(KeyAt(1));
             Frame();
-            EXPECT_EQ(view.hoverKey, KeyID(1));
-            EXPECT_EQ(view.hoverHandleKey, ID::Invalid());
+            EXPECT_EQ(view.hover.part.key, KeyID(1));
+            EXPECT_EQ(view.hover.part.handleKey, ID::Invalid());
             app.InjectMouseMove(At(0.2f, 0.9f));
             Frame();
-            EXPECT_EQ(view.hoverKey, ID::Invalid()) << "the empty plot";
+            EXPECT_EQ(view.hover.part.key, ID::Invalid()) << "the empty plot";
 
             app.ClickAt(KeyAt(1));
             Frame();
             app.InjectMouseMove(HandleAt(1, true));
             Frame();
-            EXPECT_EQ(view.hoverHandleKey, KeyID(1));
-            EXPECT_TRUE(view.hoverHandleOut);
-            EXPECT_EQ(view.hoverKey, ID::Invalid()) << "the handle, not the key";
+            EXPECT_EQ(view.hover.part.handleKey, KeyID(1));
+            EXPECT_TRUE(view.hover.part.handleOut);
+            EXPECT_EQ(view.hover.part.key, ID::Invalid()) << "the handle, not the key";
         }
 
         // The curve under the pointer, away from its keys, is hovered; a press on it makes it
@@ -440,16 +440,16 @@ namespace tachyon
             Open();
             app.InjectMouseMove(At(0.7f, 0.2f));
             Frame();
-            EXPECT_EQ(view.hoverChannel, 1);
+            EXPECT_EQ(view.hover.part.channel, 1);
             app.InjectMouseMove(At(0.3f, EvaluateCurve(view.channels[0].curve, 0.3f)));
             Frame();
-            EXPECT_EQ(view.hoverChannel, 0) << "the diagonal";
+            EXPECT_EQ(view.hover.part.channel, 0) << "the diagonal";
             app.InjectMouseMove(At(0.2f, 0.9f));
             Frame();
-            EXPECT_EQ(view.hoverChannel, -1) << "the empty plot";
+            EXPECT_EQ(view.hover.part.channel, -1) << "the empty plot";
             app.InjectMouseMove(KeyAt(1));
             Frame();
-            EXPECT_EQ(view.hoverChannel, -1) << "a key, not its curve";
+            EXPECT_EQ(view.hover.part.channel, -1) << "a key, not its curve";
 
             app.ClickAt(At(0.7f, 0.2f));
             Frame();

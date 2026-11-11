@@ -192,7 +192,7 @@ namespace
             if (!Frames(2)) return -1;
             InjectMouseMove(windowID, { column, (top + bottom) / 2 });
             if (!Frames(3)) return -1;
-            hovered = view.hoveredWire;
+            hovered = view.hoveredWire.part;
             return (top + bottom) / 2;
         }
 

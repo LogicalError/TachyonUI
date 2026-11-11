@@ -429,19 +429,16 @@ namespace tachyon
                     switch (event.type)
                     {
                         case EventType::MouseDown:
-                            if (!cp.press.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ true)) break;
-                            guiStateManager.Interaction().SetFocusID(id);
-                            guiStateManager.TextEditorFocus().Clear();
-                            cp.startH = cp.h; cp.startS = cp.s; cp.startV = cp.v; cp.startA = cp.a;
-                            guiStateManager.Interaction().SetCaptureID(id);
+                            if (!cp.press.Press(event, elementStorage, guiStateManager, { cp.h, cp.s, cp.v, cp.a },
+                                                { .atOnce = true, .focusID = id })) break;
                             apply();
                             return true;
                         case EventType::KeyDown:
                         {
-                            if (IsDragCancelKey(event.state) && cp.press.Cancel(id))
+                            if (cp.press.Cancel(event, guiStateManager))
                             {
-                                cp.h = cp.startH; cp.s = cp.startS; cp.v = cp.startV; cp.a = cp.startA;
-                                guiStateManager.Interaction().ReleaseCaptureID();
+                                const ColorPickerState::HSVA& before = cp.press.before;
+                                cp.h = before.h; cp.s = before.s; cp.v = before.v; cp.a = before.a;
                                 return true;
                             }
                             if (guiStateManager.Interaction().GetFocusedID() != id || cp.press.IsHeld())

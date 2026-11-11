@@ -1,7 +1,7 @@
 #pragma once
 
 #include <gui_core/gui_id.h>
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 #include <gui_core/gui_units.h>
 #include <gui_core/gui_base_types.h>
 #include <gui_core/style/gui_style.h>
@@ -130,14 +130,10 @@ namespace tachyon
         Cell,
     };
 
-    /// Deferred row-click state for the drag-drop path: MouseDown primes it,
-    /// MouseUp applies the selection unless a drag promoted in between. Internal.
-    struct PendingRowClick
-    {
-        tachyon::ID          rowID        = tachyon::ID::Invalid();
-        tachyon::KeyModifier mods         = tachyon::KeyModifier::None;
-        bool             dragPromoted = false;
-    };
+    /// Deferred row click for the drag-drop path: MouseDown presses it on the row (keeping the
+    /// modifiers held then), it becomes a drag once the row's drag starts, and MouseUp applies
+    /// the selection only when it ends as a click. Internal.
+    using PendingRowClick = Gesture<tachyon::KeyModifier>;
 
     /// User-owned, persistent state of one table: column widths, selection, sort, options.
     /// Keep it alive across frames; its `internal` member is not part of the API.
@@ -379,7 +375,9 @@ namespace tachyon
     // column gets a Relative() offset. On drop, onReorderColumns fires.
     /// Column-reorder drag in progress; internal, owned by the application.
     struct ColumnDragState {
-        tachyon::PointerDrag          press;               ///< the header's press; a drag once it moves the drag distance
+        /// The header's press, a drag once it moves the drag distance; keeps the section's
+        /// scroll-X at the press, to correct the cursor for mid-drag scrolling.
+        tachyon::Gesture<int32_t>     press;
         tachyon::ID                   tableID   = tachyon::ID::Invalid();
         int                       fromCol   = -1;
         int                       toCol     = -1;
@@ -391,11 +389,9 @@ namespace tachyon
         int                       maxTarget = 0;
         /// Body of the section being dragged in; drags never leave their section.
         tachyon::ID                   sectionBodyID = tachyon::ID::Invalid();
-        /// Scroll-X at drag start, to correct the cursor for mid-drag scrolling.
-        int32_t                   startScrollX  = 0;
 
         /// The press has moved the drag distance: a column move, not a sort click.
-        bool IsDragging() const { return press.dragging; }
+        bool IsDragging() const { return press.Phase() == tachyon::GesturePhase::Dragging; }
     };
 
     // ---- Persistent tree reorder drop state (survives across frames) ----

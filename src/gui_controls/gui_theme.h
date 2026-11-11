@@ -302,10 +302,17 @@ namespace tachyon
         StyleRef nodeFrameBandStyleRef {};   ///< its title bar's band, over the top of the box
         StyleRef nodeFrameTitleStyleRef {};  ///< the title on it
         StyleRef nodeFrameRenameStyleRef {}; ///< the field over the title bar while renaming
+        StyleRef nodeTransitionLabelStyleRef {};    ///< a state machine transition's label: its text and its chip
+        StyleRef nodeTransitionRenameStyleRef {};   ///< the field over a transition's label while relabelling
+        StyleRef nodeStateActiveStyleRef {};        ///< the ring round the state a machine is in
+        StyleRef nodeStateEdgeStyleRef {};          ///< the ring round a state whose edge is hovered (a transition starts there)
+        StyleRef nodeStateNestedStyleRef {};        ///< the mark on a state that holds a machine of its own
         StyleRef nodeFramePortsStyleRef {};  ///< a collapsed frame's row, a wire in and one out
         StyleRef nodeFramePortStyleRef {};   ///< the name of the input on it
         StyleRef nodeFramePortOutStyleRef {};///< the name of the output on it
         StyleRef nodeHeaderStyleRef {}; ///< node title bar (distinct background, sits at top of node)
+        StyleRef nodeHeaderStateStyleRef {};   ///< a state machine's state: the title bar alone, no line under it
+        StyleRef nodeStateStyleRef {};         ///< a state machine's state: a node box with nothing under its title bar
         StyleRef nodeCategoryStyleRef {}; ///< the category square in a node header
         StyleRef nodeTitleStyleRef {};    ///< a node header's title
         StyleRef nodeCaptionStyleRef {};  ///< a node header's category name, right-aligned
@@ -757,6 +764,10 @@ namespace tachyon
         /// (the plot's color); a selected key and its tangent handles.
         tachyon::VisualColorStyleIndex curveGridColor, curveGridMajorColor, curveZeroColor, curveKeyEdgeColor,
                                        curveSelectedKeyColor, curveHandleColor;
+        /// A state machine's transitions: an arrow, a hovered one, a selected one; and the mark
+        /// of its initial state.
+        tachyon::VisualColorStyleIndex nodeTransitionColor, nodeTransitionHoverColor, nodeTransitionSelectedColor,
+                                       nodeInitialStateColor;
         /// A channel's color by CurveChannelColor, and the same at 55% for the channels not
         /// being edited.
         tachyon::VisualColorStyleIndex curveChannelColors[5] {}, curveChannelFadedColors[5] {};

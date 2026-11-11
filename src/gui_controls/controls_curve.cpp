@@ -548,9 +548,8 @@ namespace tachyon
                 switch (event.type)
                 {
                     case EventType::MouseDown:
-                        if (!v->playheadDrag.Press(event, es, MouseButtons::Left, /*atOnce*/ true))
+                        if (!v->playheadDrag.Press(event, es, gsm, {}, { .atOnce = true, .focus = false }))
                             return false;
-                        gsm.Interaction().SetCaptureID(event.id);
                         moveTo();
                         return true;
                     case EventType::MouseMove:
@@ -824,13 +823,13 @@ namespace tachyon
                 const float2 at{ float(cursor.x), float(cursor.y) };
                 const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                 const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
-                auto restore = [v]() {
-                    for (int c = 0; c < (int)v->channels.size() && c < (int)v->before.size(); ++c)
-                        v->channels[size_t(c)].curve = v->before[size_t(c)];
+                auto restore = [v](const std::vector<Curve>& before) {
+                    for (int c = 0; c < (int)v->channels.size() && c < (int)before.size(); ++c)
+                        v->channels[size_t(c)].curve = before[size_t(c)];
                 };
-                auto finish = [v]() {
+                auto finish = [v](const std::vector<Curve>& before) {
                     // Already where it was dropped: the edit, for undo.
-                    const CurveEdit edit = ChangesSince(*v, v->before);
+                    const CurveEdit edit = ChangesSince(*v, before);
                     if (!edit.empty())
                     {
                         ++v->revision;
@@ -845,15 +844,12 @@ namespace tachyon
                         // The middle button (or Alt + left) drags the view.
                         if (const MouseButtons panButton = PanDragButton(event.state); panButton != MouseButtons::None)
                         {
-                            v->pan.Press(event, es, panButton, /*atOnce*/ true);
-                            v->panFrom = ShownOf(*v);
-                            gsm.Interaction().SetCaptureID(event.id);
+                            v->pan.Press(event, es, gsm, ShownOf(*v), { .button = panButton, .atOnce = true, .focus = false });
                             return true;
                         }
                         if (!event.state.LeftPressed())
                             return false;
-                        gsm.Interaction().SetFocusID(event.id);
-                        gsm.TextEditorFocus().Clear();
+                        TakeFocus(gsm, event.id);
                         // A double click is two at the same spot.
                         const bool second = v->plotClicks.IsDoubleClick(event.id) && Distance(at, v->lastClick) <= reach;
                         v->lastClick = at;
@@ -861,12 +857,10 @@ namespace tachyon
                         // A tangent handle: its slope, as dragged.
                         if (const HandleHit handle = HitHandle(*v, plot, at, reach, handleLength); handle.key >= 0)
                         {
-                            v->tangentDrag.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
+                            v->tangentDrag.Press(event, es, gsm, CurvesOf(*v), { .atOnce = true });
                             v->tangentKey = v->channels[size_t(handle.channel)].curve.keys[size_t(handle.key)].stableID;
                             v->tangentOut = handle.out;
-                            v->before = CurvesOf(*v);
                             v->keyMoved = false;
-                            gsm.Interaction().SetCaptureID(event.id);
                             return true;
                         }
                         // A key: selected (Shift adds, Ctrl toggles), and the selection dragged.
@@ -884,11 +878,9 @@ namespace tachyon
                                 v->selectedKeys = { hit.id };
                             if (!ctrl || !wasSelected)
                             {
-                                v->keyDrag.Press(event, es);
+                                v->keyDrag.Press(event, es, gsm, CurvesOf(*v));
                                 v->keyDragFrom = { plot.Time(at.x), plot.Value(at.y) };
-                                v->before = CurvesOf(*v);
                                 v->keyMoved = false;
-                                gsm.Interaction().SetCaptureID(event.id);
                             }
                             return true;
                         }
@@ -913,39 +905,40 @@ namespace tachyon
                             }
                             return true;
                         }
-                        v->boxSelect.Press(event, es);
+                        v->boxSelect.Press(event, es, gsm, (shift || ctrl) ? v->selectedKeys : std::unordered_set<ID>{});
                         v->boxFrom = v->boxTo = { plot.Time(at.x), plot.Value(at.y) };
-                        v->boxBase = (shift || ctrl) ? v->selectedKeys : std::unordered_set<ID>{};
-                        gsm.Interaction().SetCaptureID(event.id);
                         return true;
                     }
                     case EventType::MouseMove:
                     {
                         // What's under the pointer, for its hover look; not while dragging.
-                        if (!v->pan.IsHeld() && !v->keyDrag.IsHeld() && !v->tangentDrag.IsHeld() && !v->boxSelect.IsHeld())
-                        {
+                        v->hover.Track(AnyHeld(v->pan, v->keyDrag, v->tangentDrag, v->boxSelect), [&] {
+                            CurveView::HoverTarget under;
                             const HandleHit handle = HitHandle(*v, plot, at, reach, handleLength);
-                            v->hoverHandleKey = handle.key >= 0 ? v->channels[size_t(handle.channel)].curve.keys[size_t(handle.key)].stableID : ID::Invalid();
-                            v->hoverHandleOut = handle.out;
+                            under.handleKey = handle.key >= 0 ? v->channels[size_t(handle.channel)].curve.keys[size_t(handle.key)].stableID : ID::Invalid();
+                            under.handleOut = handle.out;
                             const KeyHit key = handle.key >= 0 ? KeyHit{} : HitKey(*v, plot, at, reach);
-                            v->hoverKey = key.id;
-                            v->hoverChannel = handle.key >= 0 || key.key >= 0 ? -1 : HitCurve(*v, plot, at, reach);
-                        }
+                            under.key = key.id;
+                            under.channel = handle.key >= 0 || key.key >= 0 ? -1 : HitCurve(*v, plot, at, reach);
+                            return under;
+                        });
                         if (v->pan.IsPressed(event.id))
                         {
-                            const int2 d = v->pan.ScreenDelta(event.state);
-                            const CurvePlot from{ plot.rect, v->panFrom };
+                            const int2 d = v->pan.drag.ScreenDelta(event.state);
+                            const CurveRange& start = v->pan.before;
+                            const CurvePlot from{ plot.rect, start };
                             const float dt = -float(d.x) / float(std::max(1, plot.rect.w)) * from.TimeSpan();
                             const float dv =  float(d.y) / float(std::max(1, plot.rect.h)) * from.ValueSpan();
-                            v->shown = { v->panFrom.timeMin + dt, v->panFrom.timeMax + dt, v->panFrom.valueMin + dv, v->panFrom.valueMax + dv };
+                            v->shown = { start.timeMin + dt, start.timeMax + dt, start.valueMin + dv, start.valueMax + dv };
                             v->shownSet = true;
                             return true;
                         }
                         if (v->tangentDrag.IsPressed(event.id))
                         {
-                            for (int c = 0; c < (int)v->channels.size() && c < (int)v->before.size(); ++c)
+                            const std::vector<Curve>& before = v->tangentDrag.before;
+                            for (int c = 0; c < (int)v->channels.size() && c < (int)before.size(); ++c)
                             {
-                                Curve curve = v->before[size_t(c)];
+                                Curve curve = before[size_t(c)];
                                 for (CurveKey& k : curve.keys)
                                 {
                                     if (k.stableID != v->tangentKey)
@@ -975,12 +968,12 @@ namespace tachyon
                         {
                             if (!v->keyDrag.Move(event, dragDistance))
                                 return true;
-                            if (v->before.size() != v->channels.size())
+                            if (v->keyDrag.before.size() != v->channels.size())
                             {
                                 v->keyDrag = {};
                                 return true;
                             }
-                            MoveSelected(*v, v->before, plot.Time(at.x) - v->keyDragFrom.x, plot.Value(at.y) - v->keyDragFrom.y);
+                            MoveSelected(*v, v->keyDrag.before, plot.Time(at.x) - v->keyDragFrom.x, plot.Value(at.y) - v->keyDragFrom.y);
                             v->keyMoved = true;
                             return true;
                         }
@@ -991,13 +984,13 @@ namespace tachyon
                             v->boxTo = { plot.Time(at.x), plot.Value(at.y) };
                             const float t0 = std::min(v->boxFrom.x, v->boxTo.x), t1 = std::max(v->boxFrom.x, v->boxTo.x);
                             const float v0 = std::min(v->boxFrom.y, v->boxTo.y), v1 = std::max(v->boxFrom.y, v->boxTo.y);
-                            std::unordered_set<ID> selection = v->boxBase;
+                            std::unordered_set<ID> selection = v->boxSelect.before;
                             for (const CurveChannel& channel : v->channels)
                                 if (channel.visible)
                                     for (const CurveKey& k : channel.curve.keys)
                                         if (k.time >= t0 && k.time <= t1 && k.value >= v0 && k.value <= v1)
                                         {
-                                            if (ctrl && v->boxBase.contains(k.stableID)) selection.erase(k.stableID);
+                                            if (ctrl && v->boxSelect.before.contains(k.stableID)) selection.erase(k.stableID);
                                             else selection.insert(k.stableID);
                                         }
                             v->selectedKeys = std::move(selection);
@@ -1013,17 +1006,17 @@ namespace tachyon
                         {
                             v->tangentDrag.Release(event);
                             if (v->keyMoved)
-                                finish();
+                                finish(v->tangentDrag.before);
                             v->tangentKey = ID::Invalid();
-                            v->before.clear();
+                            v->tangentDrag.before.clear();
                             return true;
                         }
                         if (v->keyDrag.IsPressed(event.id))
                         {
                             v->keyDrag.Release(event);
                             if (v->keyMoved)
-                                finish();
-                            v->before.clear();
+                                finish(v->keyDrag.before);
+                            v->keyDrag.before.clear();
                             return true;
                         }
                         if (const PointerDrag::Ended ended = v->boxSelect.Release(event); ended != PointerDrag::Ended::No)
@@ -1063,20 +1056,15 @@ namespace tachyon
                         const KeyCode key = event.state.lastKey;
                         if (key == KeyCode::Escape)
                         {
-                            if (v->keyDrag.IsPressed(event.id) || v->tangentDrag.IsPressed(event.id))
-                            {
-                                restore();
-                                v->keyDrag.Cancel(event.id);
-                                v->tangentDrag.Cancel(event.id);
-                                v->before.clear();
+                            for (Gesture<std::vector<Curve>>* drag : { &v->keyDrag, &v->tangentDrag })
+                                if (drag->Cancel(event, gsm))
+                                {
+                                    restore(drag->before);
+                                    drag->before.clear();
+                                    return true;
+                                }
+                            if (v->boxSelect.Cancel(event, gsm, v->selectedKeys))
                                 return true;
-                            }
-                            if (v->boxSelect.IsPressed(event.id))
-                            {
-                                v->boxSelect.Cancel(event.id);
-                                v->selectedKeys = v->boxBase;
-                                return true;
-                            }
                             if (!v->selectedKeys.empty())
                             {
                                 v->selectedKeys.clear();
@@ -1120,10 +1108,11 @@ namespace tachyon
             const float handleLength = float(styleManager.Px(40)), handleRadius = float(styleManager.Px(4));
             // The key or handle under the pointer, while it's over the plot: drawn lighter and larger.
             const bool plotHovered = !disabled && (guiStateManager.GetCurrentState(plotID) & ElementState::Hover) != ElementState::None;
-            const ID   hoverKey       = plotHovered ? view.hoverKey : ID::Invalid();
-            const ID   hoverHandleKey = plotHovered ? view.hoverHandleKey : ID::Invalid();
-            const bool hoverHandleOut = view.hoverHandleOut;
-            const int  hoverChannel   = plotHovered && !view.boxSelect.IsHeld() ? view.hoverChannel : -1;
+            const CurveView::HoverTarget hoverTarget = view.hover.Shown(plotHovered);
+            const ID   hoverKey       = hoverTarget.key;
+            const ID   hoverHandleKey = hoverTarget.handleKey;
+            const bool hoverHandleOut = hoverTarget.handleOut;
+            const int  hoverChannel   = view.boxSelect.IsHeld() ? -1 : hoverTarget.channel;
             const float hoverGrow     = float(std::max(1, styleManager.Px(2)));
             const float lineWidth = float(px1) * 2.0f, otherWidth = float(px1) * 1.5f, handleWidth = float(px1) * 1.25f;
             const float dash = float(styleManager.Px(3));

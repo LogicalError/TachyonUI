@@ -299,10 +299,9 @@ namespace tachyon
                     const MouseButtons button = PanDragButton(event.state);
                     if (button == MouseButtons::None)
                         return false;
-                    view.dragScroll.Press(event, es, button);
-                    gsm.Interaction().SetCaptureID(event.id);
-                    view.dragScrollStart  = ViewRangeOf(view).start;
-                    view.dragScrollOffset = vertical ? scrolling.GetScrollOffset(handle).y : 0;
+                    view.dragScroll.Press(event, es, gsm,
+                                          { ViewRangeOf(view).start, vertical ? scrolling.GetScrollOffset(handle).y : 0 },
+                                          { .button = button, .focus = false });
                     return true;
                 }
                 case EventType::MouseMove:
@@ -312,29 +311,30 @@ namespace tachyon
                     if (!view.dragScroll.Move(event, dragDistance))
                         return true;
                     // Screen pixels: the rows move under the pointer as they scroll.
-                    const int2 d = view.dragScroll.ScreenDelta(event.state);
+                    const int2 d = view.dragScroll.drag.ScreenDelta(event.state);
+                    const TimelineView::DragScrollFrom& from = view.dragScroll.before;
                     const float length = LengthOf(view);
                     const TimelineRange now = ViewRangeOf(view);
                     const float span = now.end - now.start;
                     if (span < length)
-                        view.viewStart = std::clamp(view.dragScrollStart - float(d.x) * span / std::max(1.0f, g.width), 0.0f, length - span);
+                        view.viewStart = std::clamp(from.start - float(d.x) * span / std::max(1.0f, g.width), 0.0f, length - span);
                     if (vertical)
                         if (const ElementRect* area = es.GetElementRectPtr(es.FindElementRefByID(body)))
                         {
                             const int32_t most = std::max(0, contentHeight - area->innerRect.h);
                             const int2 offset = scrolling.GetScrollOffset(handle);
-                            scrolling.SetScrollOffset(handle, int2{ offset.x, std::clamp(view.dragScrollOffset + d.y, -most, 0) });
+                            scrolling.SetScrollOffset(handle, int2{ offset.x, std::clamp(from.offset + d.y, -most, 0) });
                         }
                     return true;
                 }
                 case EventType::MouseUp:
                     return view.dragScroll.IsPressed(event.id) && view.dragScroll.Release(event) != PointerDrag::Ended::No;
                 case EventType::KeyDown:
-                    if (!IsDragCancelKey(event.state) || !view.dragScroll.Cancel(event.id))
+                    if (!view.dragScroll.Cancel(event, gsm))
                         return false;
-                    view.viewStart = view.dragScrollStart;
+                    view.viewStart = view.dragScroll.before.start;
                     if (vertical)
-                        scrolling.SetScrollOffset(handle, int2{ scrolling.GetScrollOffset(handle).x, view.dragScrollOffset });
+                        scrolling.SetScrollOffset(handle, int2{ scrolling.GetScrollOffset(handle).x, view.dragScroll.before.offset });
                     return true;
                 default: return false;
             }
@@ -513,8 +513,7 @@ namespace tachyon
                     {
                         if (!event.state.LeftPressed())
                             return false;
-                        gsm.Interaction().SetFocusID(lanesID);
-                        gsm.TextEditorFocus().Clear();
+                        TakeFocus(gsm, lanesID);
                         const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                         const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
                         const TimelineRange loop = v->loopRange;
@@ -529,16 +528,13 @@ namespace tachyon
                             edge = loopEdgeAt();
                         if (edge >= 0)
                         {
-                            v->loopDrag.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
-                            gsm.Interaction().SetCaptureID(event.id);   // the moves, release and Escape come here
-                            v->loopBefore = loop;
+                            // Captured: the moves, release and Escape come here.
+                            v->loopDrag.Press(event, es, gsm, loop, { .atOnce = true, .focus = false });
                             v->loopEdge = edge;
                             v->loopPressTime = SnappedTime(*v, g.TimeAt(x));
                             return true;
                         }
-                        v->scrub.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
-                        gsm.Interaction().SetCaptureID(event.id);
-                        v->scrubBefore = v->playback.time;
+                        v->scrub.Press(event, es, gsm, v->playback.time, { .atOnce = true, .focus = false });
                         v->playback.time = SnappedTime(*v, g.TimeAt(x));
                         playbackChanged();
                         return true;
@@ -548,7 +544,7 @@ namespace tachyon
                         if (v->loopDrag.Move(event, 0))
                         {
                             const float t = SnappedTime(*v, g.TimeAt(x));
-                            TimelineRange r = v->loopBefore;
+                            TimelineRange r = v->loopDrag.before;
                             if (v->loopEdge == 0) r = { std::min(v->loopPressTime, t), std::max(v->loopPressTime, t) };
                             else if (v->loopEdge == 1) r.start = std::min(t, r.end);
                             else r.end = std::max(t, r.start);
@@ -562,8 +558,7 @@ namespace tachyon
                             return true;
                         }
                         // What's under the pointer, for its hover look; not while dragging.
-                        if (!v->loopDrag.IsHeld() && !v->scrub.IsHeld() && !v->dragScroll.IsHeld())
-                            v->hoverLoopEdge = loopEdgeAt();
+                        v->loopEdgeHover.Track(AnyHeld(v->loopDrag, v->scrub, v->dragScroll), loopEdgeAt);
                         return false;
                     }
                     case EventType::MouseUp:
@@ -571,27 +566,24 @@ namespace tachyon
                         if (v->loopDrag.Release(event) != PointerDrag::Ended::No)
                         {
                             // A Shift + click (no drag) leaves no range: as it was.
+                            const TimelineRange before = v->loopDrag.before;
                             if (v->loopRange.empty() && v->loopEdge == 0)
-                                v->loopRange = v->loopBefore;
+                                v->loopRange = before;
                             const TimelineRange now = v->loopRange;
-                            if (!(now == v->loopBefore))
+                            if (!(now == before))
                             {
-                                v->loopRange = v->loopBefore;
-                                CommitTimelineEdit(*v, TimelineEdit{ .loopFrom = v->loopBefore, .loopTo = now });
+                                v->loopRange = before;
+                                CommitTimelineEdit(*v, TimelineEdit{ .loopFrom = before, .loopTo = now });
                             }
                             return true;
                         }
                         return v->scrub.Release(event) != PointerDrag::Ended::No;
                     }
                     case EventType::KeyDown:
-                        if (IsDragCancelKey(event.state) && v->loopDrag.Cancel(event.id))
-                        {
-                            v->loopRange = v->loopBefore;
+                        if (v->loopDrag.Cancel(event, gsm, v->loopRange))
                             return true;
-                        }
-                        if (IsDragCancelKey(event.state) && v->scrub.Cancel(event.id))
+                        if (v->scrub.Cancel(event, gsm, v->playback.time))
                         {
-                            v->playback.time = v->scrubBefore;
                             playbackChanged();
                             return true;
                         }
@@ -613,7 +605,7 @@ namespace tachyon
             // the ruler is hovered; a loop edge within reach, or being dragged, does too.
             const bool rulerHovered = (guiStateManager.GetCurrentState(rulerID) & ElementState::Hover) != ElementState::None;
             const bool scrubbing    = view.scrub.IsHeld();
-            const int  litEdge      = view.loopDrag.IsHeld() ? view.loopEdge : (rulerHovered ? view.hoverLoopEdge : 0);
+            const int  litEdge      = view.loopDrag.IsHeld() ? view.loopEdge : view.loopEdgeHover.Shown(rulerHovered);
             const ElementState pillState = (rulerHovered && litEdge == 0) || scrubbing ? ElementState::Hover : ElementState::None;
             const VisualBoxStyleIndex tick = theme.timelineTickStyleRef.visualBoxStyleIndex, major = theme.timelineTickMajorStyleRef.visualBoxStyleIndex;
             const VisualBoxStyleIndex band = theme.timelineLoopRangeStyleRef.visualBoxStyleIndex, edge = theme.timelineLoopEdgeStyleRef.visualBoxStyleIndex;
@@ -682,8 +674,7 @@ namespace tachyon
                     if (event.type != EventType::MouseDown || !event.state.LeftPressed())
                         return false;
                     v->selectedTrack = rowID;
-                    guiStateManager.Interaction().SetFocusID(lanesID);
-                    guiStateManager.TextEditorFocus().Clear();
+                    TakeFocus(guiStateManager, lanesID);
                     return true;
                 };
             RegisterElement(Element{ .id = rowID, .eventHandler = std::move(rowHandler), .styleRef = theme.timelineRowStyleRef,
@@ -853,21 +844,18 @@ namespace tachyon
                     {
                         if (!event.state.LeftPressed())
                             return false;
-                        gsm.Interaction().SetFocusID(event.id);
-                        gsm.TextEditorFocus().Clear();
+                        TakeFocus(gsm, event.id);
                         if (track >= 0)
                             v->selectedTrack = v->tracks[size_t(track)].stableID;
                         // A clip: its body moves it, its ends trim it (not on a locked track).
                         if (const TimelineView::ClipPart part = clipPartAt(float(at.x));
                             part != TimelineView::ClipPart::None && !v->tracks[size_t(track)].locked)
                         {
-                            v->clipDrag.press.Press(event, es);
-                            v->clipDrag.track     = track;
-                            v->clipDrag.part      = part;
-                            v->clipDrag.pressTime = g.TimeAt(float(at.x));
-                            v->clipDrag.before    = v->tracks;
-                            v->clipDrag.moved     = false;
-                            gsm.Interaction().SetCaptureID(event.id);
+                            v->clipDrag.Press(event, es, gsm, v->tracks, { .focus = false });
+                            v->clipTrack     = track;
+                            v->clipPart      = part;
+                            v->clipPressTime = g.TimeAt(float(at.x));
+                            v->clipMoved     = false;
                             return true;
                         }
                         const Hit hit = hitAt(float(at.x));
@@ -885,35 +873,35 @@ namespace tachyon
                                 v->selectedKeys = std::unordered_set<ID>(hit.ids.begin(), hit.ids.end());
                             if (!ctrl || !allSelected)
                             {
-                                v->keyDrag.press.Press(event, es);
-                                v->keyDrag.pressTime = g.TimeAt(float(at.x));
-                                v->keyDrag.before = v->tracks;
-                                v->keyDrag.moved = false;
+                                v->keyDrag.Press(event, es, gsm, v->tracks, { .focus = false, .capture = false });
+                                v->keyPressTime = g.TimeAt(float(at.x));
+                                v->keyMoved = false;
                             }
                             return true;
                         }
-                        v->boxSelect.Press(event, es);
+                        v->boxSelect.Press(event, es, gsm, (shift || ctrl) ? v->selectedKeys : std::unordered_set<ID>{},
+                                           { .focus = false, .capture = false });
                         v->boxFrom = v->boxTo = g.TimeAt(float(at.x));
                         v->boxFromRow = v->boxToRow = std::clamp(row, 0, std::max(0, (int)rows.size() - 1));
-                        v->boxBase = (shift || ctrl) ? v->selectedKeys : std::unordered_set<ID>{};
                         return true;
                     }
                     case EventType::MouseMove:
                     {
                         // What's under the pointer, for its hover look; not while dragging.
-                        if (!v->keyDrag.press.IsHeld() && !v->boxSelect.IsHeld() && !v->dragScroll.IsHeld() && !v->clipDrag.press.IsHeld())
-                        {
+                        v->hover.Track(AnyHeld(v->keyDrag, v->boxSelect, v->dragScroll, v->clipDrag), [&] {
+                            TimelineView::LaneHover under;
                             const Hit hovered = hitAt(float(at.x));
-                            v->hoverTrack = hovered.ids.empty() ? -1 : track;
-                            v->hoverTime  = hovered.time;
-                            v->hoverClipPart  = clipPartAt(float(at.x));
-                            v->hoverClipTrack = v->hoverClipPart != TimelineView::ClipPart::None ? track : -1;
-                        }
-                        if (v->clipDrag.press.IsPressed(event.id))
+                            under.track    = hovered.ids.empty() ? -1 : track;
+                            under.time     = hovered.time;
+                            under.clipPart = clipPartAt(float(at.x));
+                            under.clipTrack = under.clipPart != TimelineView::ClipPart::None ? track : -1;
+                            return under;
+                        });
+                        if (v->clipDrag.IsPressed(event.id))
                         {
-                            if (!v->clipDrag.press.Move(event, dragDistance))
+                            if (!v->clipDrag.Move(event, dragDistance))
                                 return true;
-                            const int t = v->clipDrag.track;
+                            const int t = v->clipTrack;
                             if (v->clipDrag.before.size() != v->tracks.size() || t < 0 || !v->clipDrag.before[size_t(t)].clip)
                             {
                                 v->clipDrag = {};
@@ -921,10 +909,10 @@ namespace tachyon
                             }
                             const TimelineClip& from = *v->clipDrag.before[size_t(t)].clip;
                             TimelineClip clip = from;
-                            const float delta     = SnappedDelta(*v, g.TimeAt(float(at.x)) - v->clipDrag.pressTime);
+                            const float delta     = SnappedDelta(*v, g.TimeAt(float(at.x)) - v->clipPressTime);
                             const float source    = SourceLengthOf(from);
                             const float minLength = std::max(FrameOf(*v), 0.01f);
-                            switch (v->clipDrag.part)
+                            switch (v->clipPart)
                             {
                                 case TimelineView::ClipPart::Body:
                                     clip.start = std::max(0.0f, from.start + delta);
@@ -946,21 +934,21 @@ namespace tachyon
                                 default: break;
                             }
                             v->tracks[size_t(t)].clip = clip;
-                            v->clipDrag.moved = true;
+                            v->clipMoved = true;
                             return true;
                         }
-                        if (v->keyDrag.press.IsPressed(event.id))
+                        if (v->keyDrag.IsPressed(event.id))
                         {
-                            if (!v->keyDrag.press.Move(event, dragDistance))
+                            if (!v->keyDrag.Move(event, dragDistance))
                                 return true;
                             if (v->keyDrag.before.size() != v->tracks.size())
                             {
                                 v->keyDrag = {};
                                 return true;
                             }
-                            const float delta = SnappedDelta(*v, g.TimeAt(float(at.x)) - v->keyDrag.pressTime);
+                            const float delta = SnappedDelta(*v, g.TimeAt(float(at.x)) - v->keyPressTime);
                             v->tracks = MovedKeys(*v, v->keyDrag.before, delta);
-                            v->keyDrag.moved = true;
+                            v->keyMoved = true;
                             return true;
                         }
                         if (v->boxSelect.IsPressed(event.id))
@@ -971,8 +959,8 @@ namespace tachyon
                             v->boxToRow = std::clamp(row, 0, std::max(0, (int)rows.size() - 1));
                             const float t0 = std::min(v->boxFrom, v->boxTo), t1 = std::max(v->boxFrom, v->boxTo);
                             const int r0 = std::min(v->boxFromRow, v->boxToRow), r1 = std::max(v->boxFromRow, v->boxToRow);
-                            std::unordered_set<ID> selection = v->boxBase;
-                            auto take = [&](ID id) { if (ctrl && v->boxBase.contains(id)) selection.erase(id); else selection.insert(id); };
+                            std::unordered_set<ID> selection = v->boxSelect.before;
+                            auto take = [&](ID id) { if (ctrl && v->boxSelect.before.contains(id)) selection.erase(id); else selection.insert(id); };
                             for (int r = r0; r <= r1 && r < (int)rows.size(); ++r)
                             {
                                 const int t = rows[size_t(r)];
@@ -990,10 +978,10 @@ namespace tachyon
                     }
                     case EventType::MouseUp:
                     {
-                        if (v->clipDrag.press.IsPressed(event.id))
+                        if (v->clipDrag.IsPressed(event.id))
                         {
-                            v->clipDrag.press.Release(event);
-                            if (v->clipDrag.moved)
+                            v->clipDrag.Release(event);
+                            if (v->clipMoved)
                             {
                                 // Already where it's dropped: the edit, for undo.
                                 const TimelineEdit edit = ChangesSince(*v, v->clipDrag.before);
@@ -1003,10 +991,10 @@ namespace tachyon
                             v->clipDrag = {};
                             return true;
                         }
-                        if (v->keyDrag.press.IsPressed(event.id))
+                        if (v->keyDrag.IsPressed(event.id))
                         {
-                            v->keyDrag.press.Release(event);
-                            if (v->keyDrag.moved)
+                            v->keyDrag.Release(event);
+                            if (v->keyMoved)
                             {
                                 // Already where it's dropped: the edit, for undo.
                                 const TimelineEdit edit = ChangesSince(*v, v->keyDrag.before);
@@ -1029,28 +1017,16 @@ namespace tachyon
                         return WheelOverTime(*v, event, g, float(at.x), wheelMode);
                     case EventType::KeyDown:
                     {
-                        if (IsDragCancelKey(event.state))
-                        {
-                            if (v->clipDrag.press.Cancel(event.id))
+                        for (Gesture<std::vector<TimelineTrack>>* drag : { &v->clipDrag, &v->keyDrag })
+                            if (drag->Cancel(event, gsm))
                             {
-                                if (v->clipDrag.before.size() == v->tracks.size())
-                                    v->tracks = v->clipDrag.before;
-                                v->clipDrag = {};
+                                if (drag->before.size() == v->tracks.size())
+                                    v->tracks = drag->before;
+                                *drag = {};
                                 return true;
                             }
-                            if (v->keyDrag.press.Cancel(event.id))
-                            {
-                                if (v->keyDrag.before.size() == v->tracks.size())
-                                    v->tracks = v->keyDrag.before;
-                                v->keyDrag = {};
-                                return true;
-                            }
-                            if (v->boxSelect.Cancel(event.id))
-                            {
-                                v->selectedKeys = v->boxBase;
-                                return true;
-                            }
-                        }
+                        if (v->boxSelect.Cancel(event, gsm, v->selectedKeys))
+                            return true;
                         if (gsm.Interaction().GetFocusedID() != event.id || event.state.consumed)
                             return false;
                         const float frame = FrameOf(*v);
@@ -1148,14 +1124,15 @@ namespace tachyon
             std::vector<RowDraw> drawn;
             drawn.reserve(rows.size());
             const bool lanesHovered = (guiStateManager.GetCurrentState(lanesID) & ElementState::Hover) != ElementState::None;
+            const TimelineView::LaneHover laneHover = view.hover.Shown(lanesHovered);
             for (const int t : rows)
             {
                 const TimelineTrack& track = view.tracks[size_t(t)];
                 RowDraw row{ track.kind, view.selectedTrack == track.stableID, {}, {}, track.clip, {}, std::nullopt };
-                if (lanesHovered && t == view.hoverTrack)
-                    row.hovered = view.hoverTime;
-                if (lanesHovered && t == view.hoverClipTrack)
-                    row.clipHovered = view.hoverClipPart;
+                if (t == laneHover.track)
+                    row.hovered = laneHover.time;
+                if (t == laneHover.clipTrack)
+                    row.clipHovered = laneHover.clipPart;
                 for (const TimelineKey& key : track.keys) row.keys.push_back({ key.time, view.selectedKeys.contains(key.stableID) });
                 for (const TimelineEvent& e : track.events) row.events.push_back({ e.time, view.selectedKeys.contains(e.stableID) });
                 if (track.kind == TimelineTrackKind::Group)
@@ -1283,7 +1260,8 @@ namespace tachyon
         if (!disabled)
         {
             const ElementStorage& es = elementStorage;
-            scrollHandler = [&es, v](ElementEvent&& event) -> bool
+            GUIStateManager& gsm = guiStateManager;
+            scrollHandler = [&gsm, &es, v](ElementEvent&& event) -> bool
             {
                 if (event.rect == nullptr)
                     return false;
@@ -1306,24 +1284,18 @@ namespace tachyon
                         if (x < thumbFrom || x > thumbTo)
                             v->viewStart = std::clamp((x - float(inner.x)) * perPixel - span * 0.5f, 0.0f, length - span);
                         if (v->viewLength <= 0.0f) v->viewLength = span;
-                        v->pan.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
-                        v->panBefore = v->viewStart;
+                        v->pan.Press(event, es, gsm, v->viewStart, { .atOnce = true, .focus = false, .capture = false });
                         return true;
                     }
                     case EventType::MouseMove:
                         if (!v->pan.Move(event, 0))
                             return false;
-                        v->viewStart = std::clamp(v->panBefore + float(v->pan.LocalDelta(event, es).x) * perPixel, 0.0f, length - span);
+                        v->viewStart = std::clamp(v->pan.before + float(v->pan.drag.LocalDelta(event, es).x) * perPixel, 0.0f, length - span);
                         return true;
                     case EventType::MouseUp:
                         return v->pan.Release(event) != PointerDrag::Ended::No;
                     case EventType::KeyDown:
-                        if (IsDragCancelKey(event.state) && v->pan.Cancel(event.id))
-                        {
-                            v->viewStart = v->panBefore;
-                            return true;
-                        }
-                        return false;
+                        return v->pan.Cancel(event, gsm, v->viewStart);
                     default: return false;
                 }
             };

@@ -406,7 +406,7 @@ namespace tachyon
             const int2 screenMousePos = ctx->frameMousePos;
             const ID activeWindowId = ctx->guiStateManager ? ctx->guiStateManager->Interaction().GetActiveWindowID() : ID::Invalid();
             ID dropTarget = ID::Invalid();
-            if (ctx->drag_text &&
+            if (ctx->text_drag == GesturePhase::Dragging &&
                 (ctx->frameMouseButtons & MouseButtons::Left) != MouseButtons::None &&
                 TryGetTextDragHoverTarget(activeWindowId, screenMousePos, dropTarget) &&
                 dropTarget == ActiveElementID())
@@ -531,7 +531,7 @@ namespace tachyon
 
         if (textId == TextID::Invalid)
         {
-            m_skribidiContext->editor_drag_active = false;
+            m_skribidiContext->selection_drag = GesturePhase::Idle;
         }
     }
 
