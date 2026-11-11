@@ -238,6 +238,12 @@ Each `TimelineTrack` has a `stableID` you give it once, its `name`, and a `kind`
   or deleted.
   - `IsTrackLocked(view, track)` says whether a track is, itself or through a group.
 - Give each key and event a `stableID` too. The selection goes by them.
+- An audio track's `clip` plays part of a sound:
+  - `start` and `length`: where it sits on the timeline and how long it plays, in seconds
+  - `offset`: how far into the sound it starts; trimming its start moves this on
+  - `sourceLength`: the whole sound's length, which `peaks` cover; 0 means `offset + length`
+  - For example, `{ .start = 2.0f, .length = 3.0f, .offset = 1.0f, .sourceLength = 6.0f }`
+    plays seconds 1 to 4 of a 6-second sound, from 2 s on the timeline.
 
 ```cpp
 TimelineTrack position{ .stableID = ids.Create(), .name = "Position", .depth = 1 };
@@ -298,7 +304,13 @@ TimelineEditor(animation);
   - a click on the empty lanes clears the selection
   - a drag on the empty lanes selects the keys in a box
   - a drag on a selected key moves all the selected keys, by whole frames while snapping
+  - an event's label counts as the event: a click selects it, a drag moves it
+  - a drag on a clip moves it; a drag on either of its ends trims it, no further than the
+    sound goes (an unlocked track only)
   - Escape during a drag puts them back
+- Whatever a press would take shows it's hovered first: a key, an event and its label, a
+  clip or its end, a loop range's end, the playhead's time while over the ruler, the scroll
+  bar's thumb.
 - Over the ruler and the lanes:
   - the wheel zooms round the pointer, or scrolls along the time, as `SetWheelMode` says;
     a pinch zooms

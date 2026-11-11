@@ -2,6 +2,8 @@
 
 #include <gui_core/gui_id.h>
 #include <gui_core/graphics/gui_primitive_renderer.h>
+#include <gui_core/style/gui_gradient_manager.h>
+#include <gui_core/style/gui_style_manager.h>
 #include <gui_core/text/gui_text_atlas_manager.h>
 #include <gui_core/windows/gui_window_flags.h>
 
@@ -40,18 +42,19 @@ namespace tachyon
         class NullWindowContext : public IWindowContext
         {
         public:
-            NullWindowContext(ID id, OSWindowHandle handle, WindowFlags flags)
-                : m_id(id), m_handle(handle), m_flags(flags) {}
+            NullWindowContext(ID id, OSWindowHandle handle, WindowFlags flags, uint64_t& recorded)
+                : m_id(id), m_handle(handle), m_flags(flags), m_recorded(recorded) {}
 
             ID             GetID() const override { return m_id; }
             OSWindowHandle GetWindowHandle() const override { return m_handle; }
             bool IsTransparent() const override { return (m_flags & WindowFlags::Transparent) != WindowFlags::None; }
-            void RenderWindowFrame(GraphicsContext*, IntRect, bool) override {}
+            void RenderWindowFrame(GraphicsContext*, IntRect, bool) override { ++m_recorded; }
 
         private:
             ID             m_id;
             OSWindowHandle m_handle;
             WindowFlags    m_flags;
+            uint64_t&      m_recorded;
         };
     }
 
@@ -103,7 +106,7 @@ namespace tachyon
 
     IWindowContext* NullGraphicsContext::CreateWindowContext(void*, OSWindowHandle osHandle, ID id, int2, WindowFlags windowFlags, OnGuiFunc)
     {
-        return new NullWindowContext(id, osHandle, windowFlags);
+        return new NullWindowContext(id, osHandle, windowFlags, m_recorded[id]);
     }
 
     void NullGraphicsContext::DestroyWindowContext(IWindowContext* context)
@@ -116,6 +119,19 @@ namespace tachyon
     }
 
     ImageSet* NullGraphicsContext::GetImageSet() const { return m_imageSet; }
-    ImageIndex NullGraphicsContext::RegisterImage(Image* image) { return m_imageSet->Add(image); }
-    void NullGraphicsContext::UnregisterImage(ImageIndex index) { m_imageSet->Remove(index); }
+    ImageIndex NullGraphicsContext::RegisterImage(Image* image) { MarkContentChanged(); return m_imageSet->Add(image); }
+    void NullGraphicsContext::UnregisterImage(ImageIndex index) { MarkContentChanged(); m_imageSet->Remove(index); }
+
+    void NullGraphicsContext::PrepareFrame(StyleManager& styleManager, GradientManager& gradientManager, float)
+    {
+        styleManager.ResetVisualColorStylesModified();
+        styleManager.ResetVisualBoxStylesModified();
+        gradientManager.ClearPageTableChanged();
+    }
+
+    uint64_t NullGraphicsContext::RecordedFrames(ID window) const
+    {
+        const auto it = m_recorded.find(window);
+        return it != m_recorded.end() ? it->second : 0;
+    }
 }

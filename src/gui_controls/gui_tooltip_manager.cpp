@@ -1,6 +1,7 @@
 #include <gui_controls/gui_tooltip_manager.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace tachyon
 {
@@ -121,6 +122,16 @@ namespace tachyon
             return true;
         }
         return false;
+    }
+
+    float TooltipManager::NextChangeTime() const
+    {
+        float at = INFINITY;
+        if (m_activeTargetID != ID::Invalid() && !m_isReady && !m_suppressHover && !m_triggeredByFocus)
+            at = m_targetStartTime + delaySeconds;
+        if (m_lingerID != ID::Invalid() && m_currentTime < m_lingerUntil)
+            at = std::min(at, m_lingerUntil);
+        return at;
     }
 
     void TooltipManager::EndFrame()

@@ -114,6 +114,46 @@ namespace tachyon
         // + dock content wrapper, as the inspector panel uses it.
         // The unordered_map overload: renaming a key (committed with Enter) moves
         // its value to the new key.
+        // A field inside a list or a dictionary has the focus: the list's label shows focus,
+        // its title too (the text that shows it), as a plain field's label does.
+        TEST_F(DictionaryFieldTest, ALabelShowsFocusWhileAFieldInItsCollectionHasIt)
+        {
+            std::vector<std::string> strings{ "apple", "pear" };
+            std::vector<float> floats{ 1.5f };
+            std::vector<std::pair<std::string, int>> dictionary{ { "key", 7 } };
+            const ID stringsID = app.idManager.CreateStaticID(), floatsID = app.idManager.CreateStaticID();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow({ 800, 900 });
+                    app.Label("Strings", "2 items");   // the title and caption, as the Inspector has them
+                    app.Field(stringsID, strings, LayoutOverride{}.FlexGrow(1));
+                    app.Label("Floats", "1 item");   // the title and caption, as the Inspector has them
+                    app.Field(floatsID, floats, LayoutOverride{}.FlexGrow(1));
+                    app.Label("Entries", "1 entry");   // the title and caption, as the Inspector has them
+                    app.Field(dictionary, LayoutOverride{}.FlexGrow(1));
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            frame();
+            for (const auto& [label, inside] : { std::pair{ "Strings", "apple" }, std::pair{ "Floats", "1.5" }, std::pair{ "Entries", "key" } })
+            {
+                const ID field = app.FindByText(inside);
+                ASSERT_NE(field, ID::Invalid()) << inside;
+                app.ClickAt(app.CenterOf(field));
+                frame();
+                frame();
+                frame();
+                // The state the title is drawn in.
+                const ElementRef title = app.elementStorage.FindElementRefByID(app.FindByText(label));
+                ASSERT_TRUE(title.IsValid()) << label;
+                EXPECT_NE(app.elementStorage.GetElementUnsafe(title).state & ElementState::Focused, ElementState::None)
+                    << label << ", focused: " << app.TextOf(app.guiStateManager.Interaction().GetFocusedID());
+                app.InjectKey(KeyCode::Escape);
+                frame();
+            }
+        }
+
         TEST_F(DictionaryFieldTest, MapOverload_RenamingAKeyKeepsItsValue)
         {
             std::unordered_map<std::string, int> map = { { "ab", 7 } };

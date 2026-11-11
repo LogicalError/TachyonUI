@@ -61,6 +61,11 @@ namespace tachyon
         /// path (a file that's only in memory).
         IconID Get(const std::filesystem::path& file, std::filesystem::file_time_type modified, uint32_t pixels);
 
+        /// Called on the reading thread each time a file was read, with a thumbnail or without:
+        /// ask for a frame there (GUIApplication::RequestRedraw), so a view that waits for
+        /// input shows it.
+        void SetOnRead(std::function<void()> onRead);
+
         /// How many are kept, read or still being read.
         size_t Count() const { return m_entries.size(); }
         /// How many of those are still being read.
@@ -109,6 +114,7 @@ namespace tachyon
         std::condition_variable m_wake;
         std::vector<Job>        m_jobs;   ///< the newest at the back, read first: what's on screen now
         std::vector<Done>       m_done;
+        std::function<void()>   m_onRead;
         bool                    m_stop = false;
         std::thread             m_thread;   ///< started by the first file to read
     };

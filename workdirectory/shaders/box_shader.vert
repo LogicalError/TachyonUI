@@ -62,16 +62,14 @@ void main()
 	outSurface.boxSize   = snappedSize;
 	outSurface.axisScale = vec2(scaleX, scaleY);
 	outSurface.transformScale = sqrt(scaleX * scaleY);
-	outSurface.styleIndex.x = box.styleIndex;    // "from" state
-	outSurface.styleIndex.y = box.styleIndexTo;  // "to" state
-	outSurface.styleIndex.z = 0;
-	outSurface.styleIndex.w = 0;
+	// The state styles mixed, each with its share.
+	for (int i = 0; i < 4; i++)
+	{
+		outSurface.styleIndex[i]   = int(box.styles[i] & 0xFFFFFFu);
+		outSurface.blendFactors[i] = float(box.styles[i] >> 24) / 255.0;
+	}
 
 	outSurface.textureIndex = box.textureIndex;
-	outSurface.blendFactors.x = 1.0 - box.blendT; // "from" weight
-	outSurface.blendFactors.y = box.blendT;       // "to" weight
-	outSurface.blendFactors.z = 0;
-	outSurface.blendFactors.w = 0;
 
 	outSurface.colorIndex = int(box.colorIndex);
 

@@ -46,6 +46,7 @@ namespace
         app.windowID = app.idManager.CreateStaticID();
         app.buttonID = app.idManager.CreateStaticID();
         EXPECT_TRUE(app.theme.FindStyle("button")) << "the built-in theme is loaded";
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run()) << "the built-in shaders made the pipelines";
 
         const tachyon::IntRect rect = app.windowManager->GetWindowRect(app.windowID);

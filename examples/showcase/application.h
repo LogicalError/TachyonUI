@@ -532,6 +532,7 @@ namespace tachyon
             int     settingsMotionIndex = 0; // 0 = as the OS, 1 = reduced, 2 = full
             int     settingsAccentIndex = 0; // into kAccentPresets; 0 = the palette's own blue
             int     settingsWheelIndex = int(DefaultWheelMode());   // a WheelMode: 0 zooms, 1 scrolls
+            int     settingsRedrawIndex = int(RedrawMode::WhenNeeded); // a RedrawMode
             float   settingsFontScalePct = 100.0f; // percent; 100 = unscaled
 
             // Misc dummy page values
@@ -601,6 +602,8 @@ namespace tachyon
         void ApplyMotionSetting();
         /// The wheel mode settingsWheelIndex says.
         void ApplyWheelSetting();
+        /// The redraw mode settingsRedrawIndex says.
+        void ApplyRedrawSetting();
         /// The accent settingsAccentIndex picks: none for the palette's own.
         void ApplyAccentSetting();
         /// The Appearance settings read from the saved UI state, applied (--theme wins).
@@ -695,6 +698,13 @@ namespace tachyon
         void OpenFileAsDocument(DocumentSet& set, std::string_view fileName, IconID icon);
         /// State on the left, the active document in `documents`, frame time on the right.
         void RenderStatusBar(const DocumentSet& documents);
+        /// The frame timings the status bar and the Profiler show, and whether they take new
+        /// ones this frame. A readout of the frame time changes with every frame drawn, so it
+        /// would ask for the next one forever: unless every frame is drawn anyway, it takes
+        /// new numbers at most twice a second, and the frame after sees the same ones.
+        std::array<FrameTimingSample, kFrameHistoryCount> frameTimings{};
+        bool                                              frameTimingsFresh = true;
+        std::chrono::steady_clock::time_point             frameTimingsAt{};
         /// Quits, or asks first (in `from`, else the window with the focus) while a document in
         /// any window has unsaved changes.
         void RequestExit(ID from = ID::Invalid());

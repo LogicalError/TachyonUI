@@ -1,5 +1,7 @@
-// TransitionManager: each kind of change has its timing, and a change mid-transition carries
-// on from what is on screen. Toggles blend their on / off; reduced motion makes it all instant.
+// TransitionManager: each channel (hover, press, focus, selected, invalid) runs on its own
+// timing, and a change mid-transition carries on from what is on screen. A box mixes the
+// styles of the states its running channels are between. Toggles blend their on / off;
+// reduced motion makes it all instant.
 
 #include <gtest/gtest.h>
 
@@ -23,15 +25,19 @@ namespace tachyon
         const ID kElement = [] { ID id; id.value.integer = 1; return id; }();
         constexpr float kHoverIn  = TransitionManager::kHoverIn.duration;
         constexpr float kHoverOut = TransitionManager::kHoverOut.duration;
+        using C = TransitionChannel;
 
         // How much of `state`'s style the blend shows: 0 none of it, 1 only it.
         float Amount(const TransitionState& r, ElementState state)
         {
-            const uint32_t style = ComputeGPUStyleIndex(kBox, state);
-            float amount = 0.0f;
-            if (r.fromStyleIndex == style) amount += 1.0f - r.blendT;
-            if (r.toStyleIndex == style)   amount += r.blendT;
-            return amount;
+            return r.styles.WeightOf(ComputeGPUStyleIndex(kBox, state));
+        }
+        float Total(const TransitionState& r)
+        {
+            float total = 0.0f;
+            for (int i = 0; i < r.styles.count; ++i)
+                total += r.styles.weights[size_t(i)];
+            return total;
         }
 
         TEST(Easing, CurvesRunFromStartToEnd)
@@ -54,22 +60,18 @@ namespace tachyon
             EXPECT_GT(Easing::EaseInOut(0.8f), 0.8f) << "slow to end";
         }
 
-        TEST(TransitionManager, EachChangeHasItsTiming)
+        TEST(TransitionManager, EachChannelHasItsTiming)
         {
-            using S = ElementState;
-            auto timing = [](S from, S to) { return TransitionManager::TimingFor(from, to); };
-            EXPECT_EQ(timing(S::None, S::Hover), TransitionManager::kHoverIn);
-            EXPECT_EQ(timing(S::Hover, S::None), TransitionManager::kHoverOut);
-            EXPECT_EQ(timing(S::Hover, S::Hover | S::Active).duration, 0.0f) << "press";
-            EXPECT_EQ(timing(S::Hover | S::Active, S::Hover), TransitionManager::kRelease);
-            EXPECT_EQ(timing(S::None, S::Focused), TransitionManager::kFocus);
-            EXPECT_EQ(timing(S::Focused, S::None), TransitionManager::kFocus);
-            EXPECT_EQ(timing(S::None, S::Selected).duration, 0.0f) << "selection";
-            EXPECT_EQ(timing(S::Hover, S::Disabled).duration, 0.0f);
-            EXPECT_EQ(timing(S::None, S::Hover | S::Active).duration, 0.0f) << "the press counts over the hover";
-            EXPECT_EQ(timing(S::Hover, S::Focused), TransitionManager::kHoverOut) << "the hover counts over the focus";
-            EXPECT_EQ(timing(S::Focused, S::Focused | S::Invalid), TransitionManager::kInvalid) << "the halo grows in";
-            EXPECT_EQ(timing(S::Invalid, S::None).duration, 0.0f) << "and goes at once";
+            auto timing = [](C channel, bool on) { return TransitionManager::TimingFor(channel, on); };
+            EXPECT_EQ(timing(C::Hover, true), TransitionManager::kHoverIn);
+            EXPECT_EQ(timing(C::Hover, false), TransitionManager::kHoverOut);
+            EXPECT_EQ(timing(C::Active, true).duration, 0.0f) << "a press";
+            EXPECT_EQ(timing(C::Active, false), TransitionManager::kRelease);
+            EXPECT_EQ(timing(C::Focused, true), TransitionManager::kFocus);
+            EXPECT_EQ(timing(C::Focused, false), TransitionManager::kFocus);
+            EXPECT_EQ(timing(C::Selected, true).duration, 0.0f) << "a selection, unless it's a toggle's";
+            EXPECT_EQ(timing(C::Invalid, true), TransitionManager::kInvalid) << "the halo grows in";
+            EXPECT_EQ(timing(C::Invalid, false).duration, 0.0f) << "and goes at once";
             EXPECT_EQ(TransitionManager::kToggle.easing, Easing::EaseInOut);
             EXPECT_EQ(TransitionManager::kHoverIn.easing, Easing::EaseOut);
         }
@@ -79,8 +81,10 @@ namespace tachyon
             TransitionManager transitions;
             transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.0f);
             EXPECT_FLOAT_EQ(Amount(transitions.Resolve(kElement, kBox, ElementState::Hover, 0.0f), ElementState::Hover), 0.0f);
-            const float halfway = Amount(transitions.Resolve(kElement, kBox, ElementState::Hover, kHoverIn / 2), ElementState::Hover);
-            EXPECT_NEAR(halfway, Easing::EaseOut(0.5f), 1e-4f);
+            const TransitionState halfway = transitions.Resolve(kElement, kBox, ElementState::Hover, kHoverIn / 2);
+            EXPECT_NEAR(Amount(halfway, ElementState::Hover), Easing::EaseOut(0.5f), 1e-4f);
+            EXPECT_NEAR(Total(halfway), 1.0f, 1e-5f);
+            EXPECT_EQ(halfway.current, ComputeGPUStyleIndex(kBox, ElementState::Hover)) << "the state it ends in";
             EXPECT_FLOAT_EQ(Amount(transitions.Resolve(kElement, kBox, ElementState::Hover, kHoverIn), ElementState::Hover), 1.0f);
         }
 
@@ -95,15 +99,20 @@ namespace tachyon
             EXPECT_FLOAT_EQ(Amount(transitions.Resolve(kElement, kBox, ElementState::None, kHoverOut), ElementState::None), 1.0f);
         }
 
-        // A press shows at once, even mid-hover.
-        TEST(TransitionManager, AnInstantChangeEndsTheRunningOne)
+        // A press shows at once, mid-hover too; the hover carries on under it.
+        TEST(TransitionManager, APressShowsAtOnceAndTheHoverCarriesOn)
         {
             TransitionManager transitions;
             const ElementState pressed = ElementState::Hover | ElementState::Active;
             transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.0f);
-            transitions.OnStateChange(kElement, ElementState::Hover, pressed, kHoverIn * 0.3f);
-            EXPECT_FLOAT_EQ(Amount(transitions.Resolve(kElement, kBox, pressed, kHoverIn * 0.3f), pressed), 1.0f);
-            EXPECT_FALSE(transitions.Find(kElement, kHoverIn * 0.3f).has_value());
+            const float now = kHoverIn * 0.3f;
+            const float hovered = Amount(transitions.Resolve(kElement, kBox, ElementState::Hover, now), ElementState::Hover);
+            transitions.OnStateChange(kElement, ElementState::Hover, pressed, now);
+            const TransitionState r = transitions.Resolve(kElement, kBox, pressed, now);
+            EXPECT_NEAR(Amount(r, pressed) + Amount(r, ElementState::Active), 1.0f, 1e-5f) << "all pressed";
+            EXPECT_NEAR(Amount(r, pressed), hovered, 1e-4f) << "the hover where it was";
+            EXPECT_FALSE(transitions.Value(kElement, C::Active, now).has_value());
+            EXPECT_TRUE(transitions.Value(kElement, C::Hover, now).has_value());
         }
 
         // Hovering out before the hover blend finished runs back from where it got to,
@@ -130,6 +139,16 @@ namespace tachyon
             EXPECT_FLOAT_EQ(Amount(transitions.Resolve(kElement, kBox, ElementState::None, now + left + 1e-4f), ElementState::Hover), 0.0f);
         }
 
+        // The same change again while it runs (the hover seen twice): it carries on, not from the start.
+        TEST(TransitionManager, TheSameChangeAgainCarriesOn)
+        {
+            TransitionManager transitions;
+            transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.0f);
+            const float now = kHoverIn * 0.5f;
+            transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, now);
+            EXPECT_NEAR(*transitions.Value(kElement, C::Hover, now), Easing::EaseOut(0.5f), 1e-4f);
+        }
+
         // In and out several times quickly: never a jump.
         TEST(TransitionManager, RepeatedReversalsNeverJump)
         {
@@ -148,40 +167,113 @@ namespace tachyon
             }
         }
 
-        // A third state mid-blend can only start from one of the two styles: the one the
-        // blend is closer to.
-        TEST(TransitionManager, AThirdStateStartsFromTheNearerStyle)
+        // Focus coming in mid-hover: each runs on its own, and the box mixes the four states
+        // between them, each by how far both are.
+        TEST(TransitionManager, TwoChannelsBlendOnTheirOwn)
         {
-            const ElementState focused = ElementState::Hover | ElementState::Focused;
-            for (const float at : { 0.05f, 0.8f })
-            {
-                TransitionManager transitions;
-                transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.0f);
-                const float now = kHoverIn * at;
-                transitions.OnStateChange(kElement, ElementState::Hover, focused, now);
-                const TransitionState r = transitions.Resolve(kElement, kBox, focused, now);
-                const ElementState nearer = Easing::EaseOut(at) < 0.5f ? ElementState::None : ElementState::Hover;
-                EXPECT_FLOAT_EQ(Amount(r, nearer), 1.0f) << "at " << at;
-            }
+            TransitionManager transitions;
+            const ElementState both = ElementState::Hover | ElementState::Focused;
+            transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.0f);
+            const float start = kHoverIn * 0.3f;
+            const float h0 = Easing::EaseOut(0.3f);
+            transitions.OnStateChange(kElement, ElementState::Hover, both, start);
+            const TransitionState r = transitions.Resolve(kElement, kBox, both, start);
+            EXPECT_NEAR(Amount(r, ElementState::Hover), h0, 1e-4f) << "the hover where it was, no focus yet";
+            EXPECT_NEAR(Amount(r, ElementState::None), 1.0f - h0, 1e-4f);
+
+            const float now = start + TransitionManager::kFocus.duration / 2;
+            const float h = Easing::EaseOut(std::min(1.0f, now / kHoverIn));
+            const float f = Easing::EaseOut(0.5f);
+            const TransitionState mid = transitions.Resolve(kElement, kBox, both, now);
+            EXPECT_NEAR(Amount(mid, both), h * f, 1e-4f);
+            EXPECT_NEAR(Amount(mid, ElementState::Focused), (1.0f - h) * f, 1e-4f);
+            EXPECT_NEAR(Amount(mid, ElementState::Hover), h * (1.0f - f), 1e-4f);
+            EXPECT_NEAR(Total(mid), 1.0f, 1e-5f);
+
+            EXPECT_FLOAT_EQ(Amount(transitions.Resolve(kElement, kBox, both, start + 1.0f), both), 1.0f) << "both done";
+        }
+
+        // Three channels at once would mix eight states: the four with the most share are
+        // drawn, scaled to add up to all of it.
+        TEST(TransitionManager, AtMostFourStyles)
+        {
+            TransitionManager transitions;
+            const ElementState all = ElementState::Hover | ElementState::Focused | ElementState::Selected;
+            transitions.OnStateSeen(kElement, ElementState::None, ElementState::Selected, 0.0f);
+            transitions.Purge(0.0f);
+            transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover | ElementState::Focused, 0.01f);
+            transitions.OnStateSeen(kElement, all, ElementState::Selected, 0.01f);
+            const TransitionState r = transitions.Resolve(kElement, kBox, all, 0.04f);
+            EXPECT_EQ(r.styles.count, StyleBlend::kMaxStyles);
+            EXPECT_NEAR(Total(r), 1.0f, 1e-5f);
+            for (int i = 1; i < r.styles.count; ++i)
+                EXPECT_LE(r.styles.weights[size_t(i)], r.styles.weights[0]) << "the heaviest first";
+        }
+
+        // Turning disabled ends what runs: it shows its disabled look at once.
+        TEST(TransitionManager, DisablingEndsWhatRuns)
+        {
+            TransitionManager transitions;
+            transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.0f);
+            transitions.OnStateChange(kElement, ElementState::Hover, ElementState::Hover | ElementState::Disabled, 0.01f);
+            EXPECT_FALSE(transitions.IsRunning(kElement));
+        }
+
+        // One in the middle done: the others keep their own, the one moved into its place too.
+        TEST(TransitionManager, LettingOneGoInTheMiddleKeepsTheOthers)
+        {
+            TransitionManager transitions;
+            auto element = [](uint64_t n) { ID id; id.value.integer = n; return id; };
+            transitions.OnStateChange(element(1), ElementState::None, ElementState::Focused, 0.0f);   // 100 ms
+            transitions.OnStateChange(element(2), ElementState::None, ElementState::Hover, 0.0f);     // 70 ms
+            transitions.OnStateChange(element(3), ElementState::None, ElementState::Hover, 0.05f);
+            transitions.Purge(0.08f);
+            EXPECT_FALSE(transitions.IsRunning(element(2)));
+            EXPECT_NEAR(*transitions.Value(element(1), C::Focused, 0.08f), Easing::EaseOut(0.8f), 1e-4f);
+            EXPECT_NEAR(*transitions.Value(element(3), C::Hover, 0.08f), Easing::EaseOut(0.03f / kHoverIn), 1e-4f);
+            EXPECT_FALSE(transitions.Value(element(3), C::Focused, 0.08f).has_value());
+        }
+
+        // Disabled is one style whatever else it's in: nothing to mix.
+        TEST(TransitionManager, DisabledIsOneStyle)
+        {
+            TransitionManager transitions;
+            transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.0f);
+            const TransitionState r = transitions.Resolve(kElement, kBox, ElementState::Hover | ElementState::Disabled, kHoverIn / 2);
+            EXPECT_EQ(r.styles.count, 1);
+            EXPECT_FLOAT_EQ(Amount(r, ElementState::Disabled), 1.0f);
         }
 
         TEST(TransitionManager, ReducedMotionMakesEveryChangeInstant)
         {
             TransitionManager transitions;
             transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.0f);
-            ASSERT_TRUE(transitions.Find(kElement, 0.01f).has_value());
+            ASSERT_TRUE(transitions.IsRunning(kElement));
             transitions.SetReducedMotion(true);
-            EXPECT_FALSE(transitions.Find(kElement, 0.01f).has_value()) << "the running one ends";
+            EXPECT_FALSE(transitions.IsRunning(kElement)) << "the running one ends";
             transitions.OnStateChange(kElement, ElementState::Hover, ElementState::None, 0.02f);
-            EXPECT_FALSE(transitions.Find(kElement, 0.02f).has_value());
+            EXPECT_FALSE(transitions.IsRunning(kElement));
             transitions.OnStateSeen(kElement, ElementState::None, ElementState::Selected, 0.03f);
             transitions.Purge(0.03f);
             transitions.OnStateSeen(kElement, ElementState::Selected, ElementState::Selected, 0.04f);
-            EXPECT_FALSE(transitions.Find(kElement, 0.04f).has_value()) << "a toggle too";
+            EXPECT_FALSE(transitions.IsRunning(kElement)) << "a toggle too";
 
             transitions.SetReducedMotion(false);
             transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.05f);
-            EXPECT_TRUE(transitions.Find(kElement, 0.06f).has_value());
+            EXPECT_TRUE(transitions.IsRunning(kElement));
+        }
+
+        // Done: the element has nothing running, and Purge lets its slot go.
+        TEST(TransitionManager, AFinishedTransitionIsLetGo)
+        {
+            TransitionManager transitions;
+            transitions.OnStateChange(kElement, ElementState::None, ElementState::Hover, 0.0f);
+            EXPECT_TRUE(transitions.HasRunning());
+            transitions.Purge(kHoverIn / 2);
+            EXPECT_TRUE(transitions.HasRunning());
+            transitions.Purge(kHoverIn);
+            EXPECT_FALSE(transitions.HasRunning());
+            EXPECT_FALSE(transitions.IsRunning(kElement));
         }
 
         // An element that animates its Selected blends when it flips between frames; the first
@@ -190,24 +282,22 @@ namespace tachyon
         {
             TransitionManager transitions;
             transitions.OnStateSeen(kElement, ElementState::Selected, ElementState::Selected, 0.0f);
-            EXPECT_FALSE(transitions.Find(kElement, 0.0f).has_value()) << "first seen";
+            EXPECT_FALSE(transitions.IsRunning(kElement)) << "first seen";
             transitions.Purge(0.0f);
 
             transitions.OnStateSeen(kElement, ElementState::None, ElementState::Selected, 0.1f);
-            const auto blend = transitions.Find(kElement, 0.1f + TransitionManager::kToggle.duration / 2);
-            ASSERT_TRUE(blend.has_value());
-            EXPECT_EQ(blend->fromState, ElementState::Selected);
-            EXPECT_EQ(blend->toState, ElementState::None);
-            EXPECT_NEAR(blend->t, Easing::EaseInOut(0.5f), 1e-4f);
+            const auto on = transitions.Value(kElement, C::Selected, 0.1f + TransitionManager::kToggle.duration / 2);
+            ASSERT_TRUE(on.has_value());
+            EXPECT_NEAR(*on, 1.0f - Easing::EaseInOut(0.5f), 1e-4f) << "half way off";
             transitions.Purge(0.1f);
 
             transitions.OnStateSeen(kElement, ElementState::None, ElementState::Selected, 0.12f);
-            EXPECT_TRUE(transitions.Find(kElement, 0.12f).has_value()) << "same value: carries on";
+            EXPECT_TRUE(transitions.IsRunning(kElement)) << "same value: carries on";
             transitions.Purge(0.12f);
             transitions.Purge(0.13f);   // a frame it wasn't built
             transitions.Purge(0.5f);
             transitions.OnStateSeen(kElement, ElementState::Selected, ElementState::Selected, 0.5f);
-            EXPECT_FALSE(transitions.Find(kElement, 0.5f).has_value()) << "not built the frame before";
+            EXPECT_FALSE(transitions.IsRunning(kElement)) << "not built the frame before";
         }
 
         // Invalid is watched for every element: turning invalid runs kInvalid, turning valid
@@ -218,23 +308,40 @@ namespace tachyon
             transitions.OnStateSeen(kElement, ElementState::Hover, ElementState::Invalid, 0.0f);
             transitions.Purge(0.0f);
             transitions.OnStateSeen(kElement, ElementState::Hover | ElementState::Invalid, ElementState::Invalid, 0.1f);
-            const auto blend = transitions.Find(kElement, 0.1f + TransitionManager::kInvalid.duration / 2);
-            ASSERT_TRUE(blend.has_value());
-            EXPECT_EQ(blend->fromState, ElementState::Hover);
-            EXPECT_EQ(blend->toState, ElementState::Hover | ElementState::Invalid);
-            EXPECT_NEAR(blend->t, Easing::EaseOut(0.5f), 1e-4f);
+            const auto grown = transitions.Value(kElement, C::Invalid, 0.1f + TransitionManager::kInvalid.duration / 2);
+            ASSERT_TRUE(grown.has_value());
+            EXPECT_NEAR(*grown, Easing::EaseOut(0.5f), 1e-4f);
+            EXPECT_FALSE(transitions.Value(kElement, C::Hover, 0.1f).has_value()) << "only invalid changed";
             EXPECT_TRUE(transitions.IsWatched(kElement));
             transitions.Purge(0.1f);
 
             transitions.OnStateSeen(kElement, ElementState::Hover, ElementState::Invalid, 0.12f);
-            EXPECT_FALSE(transitions.Find(kElement, 0.12f).has_value()) << "valid again: at once";
+            EXPECT_FALSE(transitions.IsRunning(kElement)) << "valid again: at once";
             transitions.Purge(0.12f);
 
             transitions.OnStateSeen(kElement, ElementState::Selected, ElementState::Invalid, 0.13f);
-            EXPECT_FALSE(transitions.Find(kElement, 0.13f).has_value()) << "Selected isn't watched here";
+            EXPECT_FALSE(transitions.IsRunning(kElement)) << "Selected isn't watched here";
             transitions.Purge(0.13f);
             transitions.Purge(0.14f);
             EXPECT_FALSE(transitions.IsWatched(kElement)) << "forgotten once not built";
+        }
+
+        // Many elements: each keeps its own, and letting some go leaves the others as they were.
+        TEST(TransitionManager, ManyElementsKeepTheirOwn)
+        {
+            TransitionManager transitions;
+            auto element = [](uint64_t n) { ID id; id.value.integer = n; return id; };
+            for (uint64_t n = 1; n <= 20; ++n)
+                transitions.OnStateChange(element(n), ElementState::None, ElementState::Hover, float(n) * 0.005f);
+            transitions.Purge(0.071f);   // the first few done
+            for (uint64_t n = 1; n <= 20; ++n)
+            {
+                const float start = float(n) * 0.005f;
+                EXPECT_EQ(transitions.IsRunning(element(n)), 0.071f - start < kHoverIn) << n;
+                if (transitions.IsRunning(element(n)))
+                    EXPECT_NEAR(Amount(transitions.Resolve(element(n), kBox, ElementState::Hover, 0.071f), ElementState::Hover),
+                                Easing::EaseOut((0.071f - start) / kHoverIn), 1e-4f) << n;
+            }
         }
 
         // ---- In the controls ----
@@ -285,12 +392,12 @@ namespace tachyon
 
             float Now() const { return app.guiStateManager.Interaction().GetFrameTime(); }
 
-            // The blend of the part that turns on or off, if it's blending.
-            std::optional<TransitionManager::Blend> PartBlend()
+            // How far on the part that turns on or off is, while it's turning.
+            std::optional<float> PartOn()
             {
                 const std::vector<ID> parts = TogglingParts(app);
                 EXPECT_EQ(parts.size(), 1u);
-                return parts.empty() ? std::nullopt : app.transitionManager.Find(parts[0], Now());
+                return parts.empty() ? std::nullopt : app.transitionManager.Value(parts[0], TransitionChannel::Selected, Now());
             }
         };
 
@@ -302,39 +409,37 @@ namespace tachyon
                 value = false;
                 Frame();
                 Frame();
-                EXPECT_FALSE(PartBlend().has_value()) << int(k);
+                EXPECT_FALSE(PartOn().has_value()) << int(k);
 
                 value = true;
                 Frame();
-                auto blend = PartBlend();
-                ASSERT_TRUE(blend.has_value()) << int(k);
-                EXPECT_EQ(blend->toState & ElementState::Selected, ElementState::Selected);
-                EXPECT_FLOAT_EQ(blend->t, 0.0f);
+                auto on = PartOn();
+                ASSERT_TRUE(on.has_value()) << int(k);
+                EXPECT_FLOAT_EQ(*on, 0.0f);
 
                 app.AdvanceTime(60);
                 Frame();
-                blend = PartBlend();
-                ASSERT_TRUE(blend.has_value()) << int(k);
-                EXPECT_GT(blend->t, 0.0f);
-                EXPECT_LT(blend->t, 1.0f);
+                on = PartOn();
+                ASSERT_TRUE(on.has_value()) << int(k);
+                EXPECT_GT(*on, 0.0f);
+                EXPECT_LT(*on, 1.0f);
 
                 app.AdvanceTime(61);
                 Frame();
-                EXPECT_FALSE(PartBlend().has_value()) << int(k) << ": done after 120 ms";
+                EXPECT_FALSE(PartOn().has_value()) << int(k) << ": done after 120 ms";
                 app.AdvanceTime(1000);
             }
         }
 
-        // Records each box with both its styles and the blend between them.
+        // Records each box with the styles it mixes.
         class BlendRecorder : public GUITest::StubGUIRenderer
         {
         public:
-            struct Drawn { IntRect rect; uint32_t from, to; float t; };
+            struct Drawn { IntRect rect; StyleBlend blend; };
             std::vector<Drawn> drawn;
-            void RenderBox(IntRect rect, IntRect, uint32_t from, uint32_t to, float t,
-                           VisualColorStyleIndex, ImageIndex, IntRect) override
+            void RenderBox(IntRect rect, IntRect, const StyleBlend& blend, VisualColorStyleIndex, ImageIndex, IntRect) override
             {
-                drawn.push_back({ rect, from, to, t });
+                drawn.push_back({ rect, blend });
             }
         };
 
@@ -357,40 +462,43 @@ namespace tachyon
                 return r.drawn.empty() ? BlendRecorder::Drawn{} : r.drawn[0];
             };
             const VisualBoxStyleIndex knobStyle = app.theme.switchKnobStyleRef.visualBoxStyleIndex;
+            const uint32_t offStyle = GUIRenderer::StyleIndex(knobStyle, ElementState::None);
+            const uint32_t onStyle  = GUIRenderer::StyleIndex(knobStyle, ElementState::Selected);
 
             Frame();
             Frame();
             const BlendRecorder::Drawn off = knob();
-            EXPECT_EQ(off.from, off.to);
-            EXPECT_EQ(off.to, GUIRenderer::StyleIndex(knobStyle, ElementState::None));
+            EXPECT_EQ(off.blend.count, 1);
+            EXPECT_FLOAT_EQ(off.blend.WeightOf(offStyle), 1.0f);
 
             value = true;
             Frame();
             app.AdvanceTime(60);
             Frame();
             const BlendRecorder::Drawn midway = knob();
-            EXPECT_EQ(midway.from, GUIRenderer::StyleIndex(knobStyle, ElementState::None));
-            EXPECT_EQ(midway.to, GUIRenderer::StyleIndex(knobStyle, ElementState::Selected));
-            EXPECT_GT(midway.t, 0.0f);
-            EXPECT_LT(midway.t, 1.0f);
+            EXPECT_EQ(midway.blend.count, 2);
+            const float t = midway.blend.WeightOf(onStyle);
+            EXPECT_GT(t, 0.0f);
+            EXPECT_LT(t, 1.0f);
+            EXPECT_NEAR(midway.blend.WeightOf(offStyle), 1.0f - t, 1e-5f);
 
             app.AdvanceTime(100);
             Frame();
             const BlendRecorder::Drawn on = knob();
-            EXPECT_EQ(on.from, on.to);
-            EXPECT_EQ(on.to, GUIRenderer::StyleIndex(knobStyle, ElementState::Selected));
+            EXPECT_EQ(on.blend.count, 1);
+            EXPECT_FLOAT_EQ(on.blend.WeightOf(onStyle), 1.0f);
             EXPECT_GT(on.rect.x, off.rect.x);
             EXPECT_GT(midway.rect.x, off.rect.x) << "on its way";
             EXPECT_LT(midway.rect.x, on.rect.x);
             const float travelled = float(midway.rect.x - off.rect.x) / float(on.rect.x - off.rect.x);
-            EXPECT_NEAR(travelled, midway.t, 0.15f) << "the knob moves with the color";
+            EXPECT_NEAR(travelled, t, 0.15f) << "the knob moves with the color";
         }
 
         TEST_F(ToggleTransitionTest, AControlShownOnDoesNotBlend)
         {
             value = true;
             Frame();
-            EXPECT_FALSE(PartBlend().has_value());
+            EXPECT_FALSE(PartOn().has_value());
         }
 
         TEST_F(ToggleTransitionTest, ReducedMotionTurnsOnAtOnce)
@@ -400,13 +508,13 @@ namespace tachyon
             Frame();
             value = true;
             Frame();
-            EXPECT_FALSE(PartBlend().has_value());
+            EXPECT_FALSE(PartOn().has_value());
 
             app.SetReducedMotion(false);
             EXPECT_FALSE(app.IsReducedMotion());
             value = false;
             Frame();
-            EXPECT_TRUE(PartBlend().has_value());
+            EXPECT_TRUE(PartOn().has_value());
 
             app.SetReducedMotion(std::nullopt);
             EXPECT_FALSE(app.IsReducedMotion()) << "a headless app has no OS setting";
@@ -441,12 +549,10 @@ namespace tachyon
             ASSERT_TRUE(nextRef.IsValid());
             EXPECT_EQ(app.elementStorage.GetElementUnsafe(nextRef).state & ElementState::Invalid, ElementState::None)
                 << "valid again after EndInvalid";
-            const auto blend = app.transitionManager.Find(field, Now());
-            ASSERT_TRUE(blend.has_value());
-            EXPECT_NE(blend->toState & ElementState::Invalid, ElementState::None);
+            EXPECT_TRUE(app.transitionManager.Value(field, TransitionChannel::Invalid, Now()).has_value());
             app.AdvanceTime(151);
             frame();
-            EXPECT_FALSE(app.transitionManager.Find(field, Now()).has_value());
+            EXPECT_FALSE(app.transitionManager.Value(field, TransitionChannel::Invalid, Now()).has_value());
         }
     }
 }

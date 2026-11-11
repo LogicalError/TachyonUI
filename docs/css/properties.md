@@ -81,7 +81,7 @@ border-color: var(--accent);
 | `background-color` | color or gradient | state |
 | `color` | color or gradient, for text | state |
 | `-tachyon-icon-color` | color or gradient, for the icon. Unset: the text color. | state |
-| `-tachyon-state-layer` | `none` (default) or `content` | |
+| `-tachyon-state-layer` | `none` (default), or `content` or `light` with its hovered and pressed strengths | |
 
 `-tachyon-state-layer: content` makes the hovered and pressed backgrounds come from the
 text color. With it:
@@ -91,10 +91,18 @@ text color. With it:
   or disabled.
 - Replaces any `background-color` in `:hover` and `:active` rules.
 - Gradient or image backgrounds are left alone.
+- Two percentages after `content` make it stronger or weaker, hovered then pressed.
+  - Over a saturated fill, such as the accent or the danger red, 8% barely shows.
+  - Only the hovered one given: pressed stays 14%.
+- `light` instead of `content` uses white, whatever the text color: hover brightens.
+  - For example, a red button with dark text, which `content` would darken.
 
 ```css
 .button       { color: var(--text-1); background-color: var(--bg-control); -tachyon-state-layer: content; }
 .button:hover { border-color: var(--line-strong); }   /* the background comes from the layer */
+
+.primary      { color: var(--on-accent); background-color: var(--accent); -tachyon-state-layer: content 18% 30%; }
+.danger       { color: var(--on-danger); background-color: var(--danger); -tachyon-state-layer: light 18% 30%; }
 ```
 
 ## Opacity

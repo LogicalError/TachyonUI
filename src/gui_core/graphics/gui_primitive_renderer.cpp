@@ -172,6 +172,7 @@ void PrimitiveRenderTarget::Reset()
     currentKind = -1;
     nextOrder   = 0;
     currentOpacity = 1.0f;
+    recaptured  = false;
 }
 
 
@@ -180,8 +181,22 @@ void PrimitiveRenderTarget::SetTransform(tachyon::float3x2 transform)
     currentTransform = transform;
 }
 
-void PrimitiveRenderTarget::RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, uint32_t fromStyleIndex, uint32_t toStyleIndex, float blendT, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex, tachyon::IntRect snappedPx)
+void PrimitiveRenderTarget::RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, const tachyon::StyleBlend& styles, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex, tachyon::IntRect snappedPx)
 {
+    // Each style with its share in 8 bits; the shares add up to 255, the rounding going to the first.
+    uint32_t packed[4] = { 0, 0, 0, 0 };
+    int shares = 0;
+    const int count = std::clamp(int(styles.count), 1, tachyon::StyleBlend::kMaxStyles);
+    for (int i = 0; i < count; ++i)
+    {
+        assert(styles.styles[size_t(i)] < (1u << 24) && "a GPU style index takes 24 bits");
+        const int share = std::clamp(int(std::lround(styles.weights[size_t(i)] * 255.0f)), 0, 255);
+        shares += share;
+        packed[i] = (styles.styles[size_t(i)] & 0xFFFFFFu) | (uint32_t(share) << 24);
+    }
+    const int first = std::clamp(int(packed[0] >> 24) + (255 - shares), 0, 255);
+    packed[0] = (packed[0] & 0xFFFFFFu) | (uint32_t(first) << 24);
+
     Append(PrimitiveKind::Box, BoxPrimitive
                     {
                         .transform0   = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -192,10 +207,8 @@ void PrimitiveRenderTarget::RenderBox(tachyon::IntRect rect, tachyon::IntRect cl
                         .pos          = { rect.x, rect.y }, .size = { rect.w, rect.h },
 
                         .textureIndex = textureIndex,
-                        .styleIndex   = fromStyleIndex,
                         .colorIndex   = int16_t(colorStyleIndex),
-                        .styleIndexTo = toStyleIndex,
-                        .blendT       = blendT,
+                        .styles       = { packed[0], packed[1], packed[2], packed[3] },
                         .snappedPx    = { SaturateInt16(snappedPx.x), SaturateInt16(snappedPx.y),
                                           SaturateInt16(snappedPx.x + snappedPx.w), SaturateInt16(snappedPx.y + snappedPx.h) }
                     });
@@ -501,11 +514,13 @@ void PrimitiveRenderer::ReleaseTarget(tachyon::ID id)
     if (currentTarget  == &it->second) currentTarget  = nullptr;
     if (resizingTarget == &it->second) resizingTarget = nullptr;
     idTargets.erase(it);
+    m_lastDraws.erase(id);
 }
 
 void PrimitiveRenderer::ReleaseAllTargets()
 {
     idTargets.clear();
+    m_lastDraws.clear();
     currentTarget  = nullptr;
     resizingTarget = nullptr;
 }
@@ -520,14 +535,44 @@ bool PrimitiveRenderer::BeginWindow(tachyon::ID id)
         if (resizingTarget != &target)
             return false;
     }
-    currentTarget = &target;
+    currentTarget   = &target;
+    m_currentWindow = id;
     return true;
 }
 
 void PrimitiveRenderer::EndWindow()
 {
     assert(currentTarget != nullptr);
-    currentTarget = nullptr;
+    NoteDraws(m_currentWindow, *currentTarget);
+    currentTarget   = nullptr;
+    m_currentWindow = tachyon::ID::Invalid();
+}
+
+bool PrimitiveRenderer::DrawsChanged(tachyon::ID window) const
+{
+    const auto it = m_lastDraws.find(window);
+    return it == m_lastDraws.end() || it->second.changed;
+}
+
+// Whether two targets hold the same draws: their primitives byte for byte, passes and replays.
+static bool SameDraws(const PrimitiveRenderTarget& a, const PrimitiveRenderTarget& b)
+{
+    if (a.currentKind != b.currentKind || a.renderPasses != b.renderPasses || a.replays != b.replays)
+        return false;
+    for (size_t k = 0; k < kPrimitiveKindCount; ++k)
+        if (a.streams[k].cpu != b.streams[k].cpu)
+            return false;
+    return true;
+}
+
+void PrimitiveRenderer::NoteDraws(tachyon::ID window, const PrimitiveRenderTarget& target)
+{
+    DrawSnapshot& last = m_lastDraws[window];
+    const bool same = last.seen && !target.recaptured && SameDraws(last.draws, target);
+    last.changed = !same;
+    last.seen    = true;
+    if (!same)
+        last.draws = target;
 }
 
 void PrimitiveRenderer::BeginScopeCapture(tachyon::ID scopeId)
@@ -536,7 +581,8 @@ void PrimitiveRenderer::BeginScopeCapture(tachyon::ID scopeId)
     assert(m_captureSaved == nullptr && "nested scope capture is not supported");
     m_captureSaved = currentTarget;
     ScopeCapture& cap = scopeCaptures[scopeId];
-    ReleaseResident(cap);        // the old primitives' GPU copy
+    // The old primitives aside, to tell at the end whether they changed.
+    std::swap(cap.previous, cap.target);
     cap.target.Reset();
     cap.lastUsedFrame = m_frame;
     currentTarget = &cap.target; // redirect emit calls into the capture
@@ -549,6 +595,13 @@ void PrimitiveRenderer::EndScopeCapture(tachyon::ID scopeId)
     cap.target.FinishRenderPass();
     currentTarget  = m_captureSaved;
     m_captureSaved = nullptr;
+    // The same as before: its GPU copy stays, and its window hasn't changed for it.
+    if (!SameDraws(cap.previous, cap.target) || cap.target.renderPasses.empty())
+    {
+        ReleaseResident(cap);   // the old primitives' GPU copy
+        currentTarget->recaptured = true;
+    }
+    cap.previous.Reset();
     // Drawn into the window this frame too, where it was captured.
     currentTarget->AddReplay(scopeId, tachyon::int2{ 0, 0 }, cap.target.nextOrder);
 }
@@ -586,10 +639,10 @@ void PrimitiveRenderer::ClearScopeCaptures()
     scopeCaptures.clear();
 }
 
-void PrimitiveRenderer::RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, uint32_t fromStyleIndex, uint32_t toStyleIndex, float blendT, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex, tachyon::IntRect snappedPx)
+void PrimitiveRenderer::RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, const tachyon::StyleBlend& styles, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex, tachyon::IntRect snappedPx)
 {
     assert(currentTarget != nullptr);
-    currentTarget->RenderBox(rect, clipRect, fromStyleIndex, toStyleIndex, blendT, colorStyleIndex, textureIndex, snappedPx);
+    currentTarget->RenderBox(rect, clipRect, styles, colorStyleIndex, textureIndex, snappedPx);
 }
 
 void PrimitiveRenderer::RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int bpp, int mode, tachyon::VisualColorStyleIndex textColorIndex, tachyon::IntRect clipRect, tachyon::ImageIndex textureIndex, float shadowBlur)

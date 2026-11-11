@@ -51,6 +51,7 @@ namespace tachyon
         PersistValue("motion", showcase.settingsMotionIndex);
         PersistValue("accent", showcase.settingsAccentIndex);
         PersistValue("wheel", showcase.settingsWheelIndex);
+        PersistValue("redraw", showcase.settingsRedrawIndex);
         PersistThemeVariables("themeVariables");
         PersistShortcuts("shortcuts", commandManager);
         AddBuiltInLayouts();
@@ -86,16 +87,23 @@ namespace tachyon
         showcase.settingsMotionIndex  = std::clamp(showcase.settingsMotionIndex, 0, 2);
         showcase.settingsAccentIndex  = std::clamp(showcase.settingsAccentIndex, 0, int(std::size(kAccentPresets)) - 1);
         showcase.settingsWheelIndex   = std::clamp(showcase.settingsWheelIndex, 0, 1);
+        showcase.settingsRedrawIndex  = std::clamp(showcase.settingsRedrawIndex, 0, int(RedrawMode::WhenNeeded));
         // Loaded before the first frame; one that won't load leaves the theme as it is.
         RequestReloadTheme(showcase.settingsThemePath, showcase.settingsFontScalePct / 100.0f);
         ApplyMotionSetting();
         ApplyAccentSetting();
         ApplyWheelSetting();
+        ApplyRedrawSetting();
     }
 
     void Application::ApplyWheelSetting()
     {
         SetWheelMode(WheelMode(showcase.settingsWheelIndex));
+    }
+
+    void Application::ApplyRedrawSetting()
+    {
+        SetRedrawMode(RedrawMode(showcase.settingsRedrawIndex));
     }
 
     void Application::ApplyAccentSetting()
@@ -1845,6 +1853,8 @@ namespace tachyon
         upload->body = std::format("build-0.8.3-win64.zip \u00B7 {}%", int(done * 100.0f));
         if (done >= 1.0f)
             upload->title = "Uploaded build";
+        else
+            RequestRedrawIn(0.2f);   // the next percent, while it uploads
     }
 
     void Application::SetUpDocuments(DocumentSet& documents)
@@ -1978,8 +1988,7 @@ namespace tachyon
     // Status bar: state on the left, frame time on the right.
     void Application::RenderStatusBar(const DocumentSet& documents)
     {
-        std::array<FrameTimingSample, kFrameHistoryCount> history{};
-        GetFrameTimingHistory(history);
+        const std::array<FrameTimingSample, kFrameHistoryCount>& history = frameTimings;
         constexpr int kAveraged = 60;
         float totalMs = 0.0f;
         for (int i = kFrameHistoryCount - kAveraged; i < kFrameHistoryCount; ++i)
@@ -1997,6 +2006,16 @@ namespace tachyon
     void Application::OnGUI()
     {
         ApplyPendingLayout();
+        // The readouts of the frame timings: new numbers each frame only when every frame is drawn.
+        {
+            const auto now = std::chrono::steady_clock::now();
+            frameTimingsFresh = GetRedrawMode() == RedrawMode::Always || now - frameTimingsAt >= std::chrono::milliseconds(500);
+            if (frameTimingsFresh)
+            {
+                frameTimingsAt = now;
+                GetFrameTimingHistory(frameTimings);
+            }
+        }
         // The animation plays whichever of its panels shows, Timeline or Curves.
         if (!animationSeeded)
             SeedAnimation();

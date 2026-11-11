@@ -48,6 +48,10 @@ namespace tachyon
         /// OS giving or taking a menu's window the focus would close the menu.
         uint32_t GetFocusChangeCount() const override;
         void PollEvents(std::function<void(OSWindowHandle, IWindowContext*)> cleanup) override;
+        void WaitForEvents(float timeoutSecs) override { m_os.WaitForEvents(timeoutSecs); }
+        void Wake() override { m_os.Wake(); }
+        uint64_t GetEventCount() const override { return m_os.GetEventCount(); }
+        bool TakeWindowsExposed() override { return m_os.TakeWindowsExposed(); }
         int2 GetScreenMousePos() override;
         std::optional<color4b> ReadScreenPixel(int2 screenPos) override { return m_os.ReadScreenPixel(screenPos); }
         bool TakeCloseRequest(OSWindowHandle window) override { return m_os.TakeCloseRequest(window); }

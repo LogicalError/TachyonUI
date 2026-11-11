@@ -110,6 +110,13 @@ namespace tachyon
         if (Dropdown(idManager.AllocateDynamicID("settingsWheelMenu"), showcase.settingsWheelIndex, wheelNames))
             ApplyWheelSetting();
 
+        // A RedrawMode, in its order: how often the windows are drawn.
+        Label("Redraw");
+        SetTooltip("Only when needed sleeps while nothing changes. Every frame keeps drawing, as a game does.");
+        static constexpr std::string_view redrawNames[] = { "Every frame", "When something changed", "Only when needed" };
+        if (Dropdown(idManager.AllocateDynamicID("settingsRedrawMenu"), showcase.settingsRedrawIndex, redrawNames))
+            ApplyRedrawSetting();
+
         Label("Autosave");
         Switch(showcase.settingsAutosave, showcase.settingsAutosave ? "On" : "Off");
 

@@ -183,7 +183,12 @@ namespace tachyon
     void Application::RenderProfilerTreePanel()
     {
         auto& collector = Diagnostics::MainThreadCollector();
-        if (!profilerPaused)
+        // Recording and not paused, it's a live view: a frame after each one, with its numbers.
+        // Otherwise new numbers only when the status bar takes them (see frameTimingsFresh).
+        const bool live = Diagnostics::IsProfilingEnabled() && !profilerPaused;
+        if (live)
+            RequestRedraw();
+        if (!profilerPaused && (live || frameTimingsFresh))
         {
             const auto latest = Diagnostics::LastFrameSamples(collector);
             pausedSamples.assign(latest.begin(), latest.end());
@@ -295,8 +300,9 @@ namespace tachyon
                 frameGraphStylesInit = true;
             }
 
-            std::array<GUIApplication::FrameTimingSample, GUIApplication::kFrameHistoryCount> hist{};
-            GetFrameTimingHistory(hist);
+            std::array<GUIApplication::FrameTimingSample, GUIApplication::kFrameHistoryCount> hist = frameTimings;
+            if (live)
+                GetFrameTimingHistory(hist);
             constexpr int N = int(GUIApplication::kFrameHistoryCount);
             const int H = styleManager.Px(kFrameGraphHeight);   // bg padding is 0, so inner height == border height
 

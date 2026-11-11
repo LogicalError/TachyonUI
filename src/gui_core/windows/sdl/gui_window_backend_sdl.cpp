@@ -15,6 +15,8 @@
 
 #include <SDL3/SDL.h>
 #include <cassert>
+#include <climits>
+#include <cmath>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -119,6 +121,9 @@ namespace tachyon
         // A watch, not a filter: SDL has one process-wide filter, and a host may use it.
         // Watches also run inside OS modal loops (resize on Windows).
         SDL_AddEventWatch(&SDLWindowBackend::BackendEventWatch, this);
+        m_wakeEvent = SDL_RegisterEvents(1);
+        if (m_wakeEvent == 0)
+            m_wakeEvent = SDL_EVENT_USER;   // out of event types: the generic one still wakes SDL
 
         UpdateMouseState();
     }
@@ -1365,6 +1370,24 @@ namespace tachyon
         return FromSDL(focus);
     }
 
+    void SDLWindowBackend::WaitForEvents(float timeoutSecs)
+    {
+        if (!m_sdlInitialized || !m_options.pumpEvents || timeoutSecs <= 0.0f)
+            return;
+        // Leaves the event in the queue (event: nullptr); the watches have seen it already.
+        const float ms = std::ceil(timeoutSecs * 1000.0f);
+        SDL_WaitEventTimeout(nullptr, ms >= float(INT32_MAX) ? INT32_MAX : Sint32(ms));
+    }
+
+    void SDLWindowBackend::Wake()
+    {
+        if (!m_sdlInitialized)
+            return;
+        SDL_Event event{};
+        event.type = m_wakeEvent;
+        SDL_PushEvent(&event);
+    }
+
     void SDLWindowBackend::PollEvents(std::function<void(OSWindowHandle, IWindowContext*)> cleanup)
     {
         if (!m_sdlInitialized) return;
@@ -1993,6 +2016,7 @@ namespace tachyon
     bool SDLWindowBackend::BackendEventWatch(void* userdata, SDL_Event* event)
     {
         auto* backend = static_cast<SDLWindowBackend*>(userdata);
+        ++backend->m_events;
 
         // A modal window stays in front; its blocked owners get no events (see the per-window watch).
         if (SDL_Window* modal = backend->ModalBlockerFor(event))
@@ -2003,6 +2027,12 @@ namespace tachyon
 
         switch (event->type)
         {
+            case SDL_EVENT_WINDOW_EXPOSED:
+            case SDL_EVENT_WINDOW_SHOWN:
+            case SDL_EVENT_WINDOW_RESTORED:
+                backend->m_exposed = true;
+                break;
+
             case SDL_EVENT_QUIT:
                 // Only when the GUI runs the event loop; otherwise quitting is the host's call.
                 // Windows that confirm closing are asked instead.

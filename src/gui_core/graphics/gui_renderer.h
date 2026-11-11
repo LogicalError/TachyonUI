@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_base_types.h>      // IntRect, int2, float2, color4b, color4f, float3x2
 #include <gui_core/graphics/gui_image.h>  // ImageIndex (default args)
@@ -39,6 +40,40 @@ namespace tachyon
         float gradientScale   = 1.0f; ///< fraction of gradient to cover
     };
 
+    /// A box's look as a mix of up to four of its state styles (flat GPU style indices, as
+    /// GUIRenderer::StyleIndex gives them), each with its share; the shares add up to 1, the
+    /// heaviest first. One style, all of it, for a box that isn't changing state.
+    struct StyleBlend
+    {
+        static constexpr int kMaxStyles = 4;
+        std::array<uint32_t, kMaxStyles> styles {};
+        std::array<float, kMaxStyles>    weights { 1.0f, 0.0f, 0.0f, 0.0f };
+        uint8_t                          count = 1;
+
+        static StyleBlend Single(uint32_t style) { StyleBlend b; b.styles[0] = style; return b; }
+        /// `from` mixed with `to`, `t` (0 to 1) of the way to `to`.
+        static StyleBlend Between(uint32_t from, uint32_t to, float t)
+        {
+            if (from == to || t >= 1.0f) return Single(to);
+            if (t <= 0.0f)               return Single(from);
+            StyleBlend b;
+            b.count   = 2;
+            b.styles  = t >= 0.5f ? std::array<uint32_t, kMaxStyles>{ to, from } : std::array<uint32_t, kMaxStyles>{ from, to };
+            b.weights = t >= 0.5f ? std::array<float, kMaxStyles>{ t, 1.0f - t } : std::array<float, kMaxStyles>{ 1.0f - t, t };
+            return b;
+        }
+        bool IsBlending() const { return count > 1; }
+        /// The share of `style`; 0 when it isn't in the mix.
+        float WeightOf(uint32_t style) const
+        {
+            float w = 0.0f;
+            for (int i = 0; i < count; ++i)
+                if (styles[size_t(i)] == style)
+                    w += weights[size_t(i)];
+            return w;
+        }
+    };
+
 	class GUIRenderer
     {
     public:
@@ -52,15 +87,23 @@ namespace tachyon
         /// are dropped: what is under the drawing shows through it.
         virtual void SetOpacity(float /*opacity*/) {}
 
-        /// Draws a styled box, blended from `fromStyleIndex` to `toStyleIndex` (flat GPU style
-        /// indices) by `blendT` in [0, 1]. `colorStyleIndex` overrides the background (Invalid:
-        /// none). `snappedPx` is the box in window pixels snapped relative to its parent
-        /// (SnapToParent); empty snaps the transformed rect to the pixel grid.
-        virtual void RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect,
-                               uint32_t fromStyleIndex, uint32_t toStyleIndex, float blendT,
+        /// Draws a styled box, `styles` mixed. `colorStyleIndex` overrides the background
+        /// (Invalid: none). `snappedPx` is the box in window pixels snapped relative to its
+        /// parent (SnapToParent); empty snaps the transformed rect to the pixel grid.
+        virtual void RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, const StyleBlend& styles,
                                tachyon::VisualColorStyleIndex colorStyleIndex = {},
                                tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid,
                                tachyon::IntRect snappedPx = {}) = 0;
+        /// As above, blended from `fromStyleIndex` to `toStyleIndex` (flat GPU style indices)
+        /// by `blendT` in [0, 1].
+        void RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect,
+                       uint32_t fromStyleIndex, uint32_t toStyleIndex, float blendT,
+                       tachyon::VisualColorStyleIndex colorStyleIndex = {},
+                       tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid,
+                       tachyon::IntRect snappedPx = {})
+        {
+            RenderBox(rect, clipRect, StyleBlend::Between(fromStyleIndex, toStyleIndex, blendT), colorStyleIndex, textureIndex, snappedPx);
+        }
 
         /// The flat GPU style index of `boxStyleIndex` in `state`, as RenderBox takes it.
         static uint32_t StyleIndex(VisualBoxStyleIndex boxStyleIndex, tachyon::ElementState state);
@@ -125,6 +168,9 @@ namespace tachyon
 
         virtual bool BeginWindow(ID id) = 0;
         virtual void EndWindow() = 0;
+        /// Whether the window's draws this frame differ from its last frame's (as of its
+        /// EndWindow); true when the renderer can't tell.
+        virtual bool DrawsChanged(ID /*window*/) const { return true; }
 
         // Draw caching: a subtree's primitives are captured once and replayed translated.
         // Called between BeginWindow and EndWindow; the defaults do nothing.

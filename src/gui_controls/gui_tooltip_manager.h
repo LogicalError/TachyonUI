@@ -43,6 +43,10 @@ namespace tachyon
         /// True while a tooltip is shown.
         bool IsVisible() const { return m_isVisible; }
 
+        /// The frame time the tooltip next changes at by itself: the hovered element's delay
+        /// running out, or the one left no longer lingering. INFINITY when nothing waits.
+        float NextChangeTime() const;
+
     private:
         ID    m_activeTargetID   = ID::Invalid();
         std::vector<ID> m_targetAncestors;

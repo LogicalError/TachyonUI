@@ -30,6 +30,8 @@ list(APPEND GUI_FILES
   gui_core/frame/gui_frame_pipeline.cpp
   gui_core/frame/gui_frame_clock.h
   gui_core/frame/gui_frame_clock.cpp
+  gui_core/frame/gui_redraw.h
+  gui_core/frame/gui_redraw.cpp
 
 
   # Diagnostics
@@ -120,6 +122,7 @@ list(APPEND GUI_FILES
   gui_core/windows/gui_window_registry.h
   gui_core/windows/gui_window_flags.h
   gui_core/windows/gui_window_backend.h
+  gui_core/windows/gui_window_backend.cpp
   gui_core/windows/gui_layered_fade.h
   gui_core/windows/gui_layered_fade.cpp
   gui_core/windows/gui_os_window_manager.cpp

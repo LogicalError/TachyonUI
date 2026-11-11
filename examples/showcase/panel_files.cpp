@@ -343,6 +343,8 @@ namespace tachyon
     {
         p.fileIcons      = std::make_unique<FileIcons>(*textSystem, 48);
         p.fileThumbnails = std::make_unique<FileThumbnails>(*textSystem);
+        // A thumbnail read while the app sleeps: draw it.
+        p.fileThumbnails->SetOnRead([this] { RequestRedraw(); });
         if (p.files)
             return;   // made already: its files, folders and search stay
 

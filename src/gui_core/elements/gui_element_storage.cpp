@@ -95,6 +95,8 @@ namespace tachyon
             IndexElement(m_lastAddedID, newChildRef);
 
         m_elementCount++;
+        if ((GetElementUnsafe(newChildRef).flags & ElementFlags::Animated) != ElementFlags::None)
+            m_anyAnimated = true;
         return AddResult{ .ref = newChildRef };
     }
 

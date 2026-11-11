@@ -153,9 +153,9 @@ void main()
     currentStyle.dashSize        = 0.0;
     currentStyle.dashOffset      = 0.0;
     
-    // Blend geometry (cornerRadius, borderWidth) across "from" and "to" states.
-    // When not transitioning: blendFactors[0]==0 and blendFactors[1]==1, so only slot 1 runs.
-    for (int i = 0; i < 2; i++)
+    // Blend geometry (cornerRadius, borderWidth) across the states mixed, by their shares.
+    // When not transitioning only slot 0 has a share.
+    for (int i = 0; i < 4; i++)
         if (inSurface.blendFactors[i] > 0.0)
             AddPreStyle(currentStyle, inSurface.blendFactors[i], inSurface.styleIndex[i]);
     
@@ -226,22 +226,28 @@ void main()
     // Distances are in units of the box's smaller side, so its middle is half a unit deep.
     float edgeDepth = saturate(-outer_distance * 2.0);
 
-    // Blend colors across "from" and "to" states (BlendStateColor); one state alone as it is.
-    vec4 borders[2], backgrounds[2];
-    for (int i = 0; i < 2; i++)
-        if (inSurface.blendFactors[i] > 0.0)
-            StateColors(uv, sdfUv, uvsize, edgeDepth, inSurface.styleIndex[i], weights, borders[i], backgrounds[i]);
-    if (inSurface.blendFactors[0] > 0.0 && inSurface.blendFactors[1] > 0.0)
+    // Blend colors across the states mixed (BlendStateColor), each into what the ones before
+    // made by its share of all so far; one state alone as it is.
+    float shareSoFar = 0.0;
+    for (int i = 0; i < 4; i++)
     {
-        float t = inSurface.blendFactors[1] / (inSurface.blendFactors[0] + inSurface.blendFactors[1]);
-        currentStyle.borderColor     = BlendStateColor(borders[0], borders[1], t);
-        currentStyle.backgroundColor = BlendStateColor(backgrounds[0], backgrounds[1], t);
-    }
-    else
-    {
-        int only = inSurface.blendFactors[1] > 0.0 ? 1 : 0;
-        currentStyle.borderColor     = borders[only];
-        currentStyle.backgroundColor = backgrounds[only];
+        float share = inSurface.blendFactors[i];
+        if (share <= 0.0)
+            continue;
+        vec4 border, background;
+        StateColors(uv, sdfUv, uvsize, edgeDepth, inSurface.styleIndex[i], weights, border, background);
+        if (shareSoFar <= 0.0)
+        {
+            currentStyle.borderColor     = border;
+            currentStyle.backgroundColor = background;
+        }
+        else
+        {
+            float t = share / (shareSoFar + share);
+            currentStyle.borderColor     = BlendStateColor(currentStyle.borderColor, border, t);
+            currentStyle.backgroundColor = BlendStateColor(currentStyle.backgroundColor, background, t);
+        }
+        shareSoFar += share;
     }
 
     // Per-element ColorStyle override: replaces the box style's background entirely so

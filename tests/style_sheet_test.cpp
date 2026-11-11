@@ -1927,5 +1927,25 @@ namespace tachyon
         EXPECT_EQ(s.GetStyle("a")->stateLayer, StateLayer::Content);
         EXPECT_EQ(s.GetStyle("b")->stateLayer, StateLayer::None);
         EXPECT_TRUE(ParseStyleSheet(".a { -tachyon-state-layer: accent; }").HasErrors());
+        EXPECT_EQ(s.GetStyle("a")->stateLayerHover, 8) << "the spec's strengths unless given";
+        EXPECT_EQ(s.GetStyle("a")->stateLayerPressed, 14);
+    }
+    // Its strengths, hovered and pressed, in percent: stronger over a saturated fill.
+    TEST(StyleSheet, StateLayerTakesItsStrengths)
+    {
+        auto s = ParseStyleSheet(".a { -tachyon-state-layer: content 16% 28%; } .b { -tachyon-state-layer: content 20%; }");
+        ASSERT_FALSE(s.HasErrors()) << s.errors[0].message;
+        EXPECT_EQ(s.GetStyle("a")->stateLayer, StateLayer::Content);
+        EXPECT_EQ(s.GetStyle("a")->stateLayerHover, 16);
+        EXPECT_EQ(s.GetStyle("a")->stateLayerPressed, 28);
+        EXPECT_EQ(s.GetStyle("b")->stateLayerHover, 20);
+        EXPECT_EQ(s.GetStyle("b")->stateLayerPressed, 14) << "pressed as the spec has it";
+        EXPECT_TRUE(ParseStyleSheet(".a { -tachyon-state-layer: content 120%; }").HasErrors());
+        EXPECT_TRUE(ParseStyleSheet(".a { -tachyon-state-layer: content strong; }").HasErrors());
+        EXPECT_TRUE(ParseStyleSheet(".a { -tachyon-state-layer: none 10%; }").HasErrors()) << "nothing to strengthen";
+        auto light = ParseStyleSheet(".a { -tachyon-state-layer: light 18% 30%; }");
+        ASSERT_FALSE(light.HasErrors()) << light.errors[0].message;
+        EXPECT_EQ(light.GetStyle("a")->stateLayer, StateLayer::Light) << "white over the fill: brighter";
+        EXPECT_EQ(light.GetStyle("a")->stateLayerHover, 18);
     }
 }

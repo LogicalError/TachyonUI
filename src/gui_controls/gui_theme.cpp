@@ -859,6 +859,7 @@ namespace tachyon
         }
         tabBarStyleRef                    = registerCSS("tab-bar");
         tabStyleRef                       = registerCSS("tab");
+        tabPanelFocusedStyleRef           = registerCSS("tab-panel-focused");
         tabOverflowStyleRef               = registerCSS("tab-overflow");
         tabContentStyleRef                = registerCSS("tab-content");
         tabCloseStyleRef                  = registerCSS("tab-close");
@@ -1087,6 +1088,7 @@ namespace tachyon
         dockWindowBodyStyleRef            = registerCSS("dock-window-body");
         titleBarTabBarStyleRef            = registerCSS("title-bar-tab-bar");
         titleBarTabStyleRef               = registerCSS("title-bar-tab");
+        titleBarTabPanelFocusedStyleRef   = registerCSS("title-bar-tab-panel-focused");
         titleBarGripStyleRef              = registerCSS("title-bar-grip");
         titleBarTitleStyleRef             = registerCSS("title-bar-title");
         titleBarTextButtonStyleRef        = registerCSS("title-bar-text-button");

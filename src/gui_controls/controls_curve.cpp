@@ -78,6 +78,39 @@ namespace tachyon
             return {};
         }
 
+        // The visible curve passing within `reach` of a point, the active one first; -1 for none.
+        // The curve is sampled across the reach so steep parts are caught as well as flat ones.
+        int HitCurve(const CurveView& view, const CurvePlot& plot, float2 pos, float reach)
+        {
+            constexpr int kSamples = 8;
+            auto segmentDistance = [](float2 p, float2 a, float2 b) {
+                const float2 ab{ b.x - a.x, b.y - a.y };
+                const float lengthSq = ab.x * ab.x + ab.y * ab.y;
+                const float t = lengthSq > 0.0f ? std::clamp(((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / lengthSq, 0.0f, 1.0f) : 0.0f;
+                return Distance(p, float2{ a.x + ab.x * t, a.y + ab.y * t });
+            };
+            const int count = (int)view.channels.size();
+            for (int n = 0; n < count; ++n)
+            {
+                const int c = n == 0 ? view.activeChannel : (n <= view.activeChannel ? n - 1 : n);
+                if (c < 0 || c >= count || !view.channels[size_t(c)].visible)
+                    continue;
+                const Curve& curve = view.channels[size_t(c)].curve;
+                if (curve.keys.empty())
+                    continue;
+                float2 previous{};
+                for (int s = 0; s <= kSamples; ++s)
+                {
+                    const float x = pos.x - reach + 2.0f * reach * float(s) / float(kSamples);
+                    const float2 point{ x, plot.Y(EvaluateCurve(curve, plot.Time(x))) };
+                    if (s > 0 && segmentDistance(pos, previous, point) <= reach)
+                        return c;
+                    previous = point;
+                }
+            }
+            return -1;
+        }
+
         // Whether key `index` shows a handle on a side: only where a Bezier segment takes its
         // slope, the one before it arriving and its own leaving.
         bool HasHandle(const Curve& curve, size_t index, bool out)
@@ -410,7 +443,9 @@ namespace tachyon
         auto row = [&](std::string_view key, StyleRef style, int depth, std::function<void()> onClick, bool selected) {
             if (selected) BeginSelected();
             const ElementRef ref = RegisterControl(
-                Element{ .id = idManager.AllocateDynamicID(key), .eventHandler = MakeButtonHandler(std::move(onClick)), .styleRef = style },
+                // Hovered and focused while its name, value or eye is too.
+                Element{ .id = idManager.AllocateDynamicID(key), .eventHandler = MakeButtonHandler(std::move(onClick)), .styleRef = style,
+                         .flags = ElementFlags::PropagatesDescendantState },
                 LayoutOverride::Auto().NoShrink());
             if (selected) EndSelected();
             VERIFY(elementStorage.BeginChildren());
@@ -485,7 +520,7 @@ namespace tachyon
                            const auto& keys = v->channels[size_t(c)].curve.keys;
                            return std::any_of(keys.begin(), keys.end(), [id](const CurveKey& k) { return k.stableID == id; });
                        });
-                   }, theme.iconButtonStyleRef);
+                   }, theme.timelineRowButtonStyleRef);   // as the timeline's eyes: dim, bright when hovered
             VERIFY(elementStorage.EndChildren());
         }
         EndVertical();
@@ -549,6 +584,10 @@ namespace tachyon
         const VisualBoxStyleIndex pillBox = theme.curvePlayheadStyleRef.visualBoxStyleIndex;
         const int2 pillPad{ styleManager.Px(6), styleManager.Px(1) };
         const int32_t px1 = std::max(1, styleManager.Px(1));
+        // A press anywhere on the ruler moves the playhead, so its pill lights up while the
+        // ruler is hovered or dragged.
+        const ElementState pillState = view.playheadDrag.IsHeld() || (guiStateManager.GetCurrentState(rulerID) & ElementState::Hover) != ElementState::None
+                                     ? ElementState::Hover : ElementState::None;
         VERIFY(elementStorage.AddCustomDraw(ref, [=, this](CustomDrawContext& ctx)
         {
             // In screen space, as the plot's place is.
@@ -570,7 +609,7 @@ namespace tachyon
             const int32_t w = pillSize.maxWidth + 2 * pillPad.x, h = pillSize.maxHeight + 2 * pillPad.y;
             const IntRect box{ int32_t(x) - w / 2, r.y + (r.h - h) / 2, w, h };
             ctx.RenderQuad(IntRect{ int32_t(x), r.y, px1, r.h }, r, theme.curveHandleColor);
-            ctx.RenderBox(box, pillBox);
+            ctx.RenderBox(box, pillBox, pillState);
             ctx.RenderText(pill, IntRect{ box.x + pillPad.x, box.y + pillPad.y, pillSize.maxWidth, pillSize.maxHeight });
         }));
     }
@@ -625,7 +664,7 @@ namespace tachyon
                        GUIContent{ name }, [v, m = m](bool) { CommitCurveEdit(*v, SetCurveTangentModeEdit(*v, m)); });
             EndToggleGroup();
             Button(idManager.AllocateDynamicID("curve_frame_all"), { theme.curveFrameAllIcon, "Frame all", "Frame all (A)" },
-                   [v]() { FrameAll(*v); }, theme.controls->button);
+                   [v]() { FrameAll(*v); }, theme.controls->button, LayoutOverride{}.NoGrow());   // its icon and text, no wider
         }
         else if (channelCount > 1 && !tree)
         {
@@ -853,6 +892,10 @@ namespace tachyon
                             }
                             return true;
                         }
+                        // A press on a curve makes it the active one; a drag from there still
+                        // draws a box.
+                        if (const int curveHit = HitCurve(*v, plot, at, reach); curveHit >= 0)
+                            v->activeChannel = curveHit;
                         // A double click: a key on the active channel, on its curve when near it.
                         if (second && v->activeChannel < (int)v->channels.size())
                         {
@@ -878,6 +921,16 @@ namespace tachyon
                     }
                     case EventType::MouseMove:
                     {
+                        // What's under the pointer, for its hover look; not while dragging.
+                        if (!v->pan.IsHeld() && !v->keyDrag.IsHeld() && !v->tangentDrag.IsHeld() && !v->boxSelect.IsHeld())
+                        {
+                            const HandleHit handle = HitHandle(*v, plot, at, reach, handleLength);
+                            v->hoverHandleKey = handle.key >= 0 ? v->channels[size_t(handle.channel)].curve.keys[size_t(handle.key)].stableID : ID::Invalid();
+                            v->hoverHandleOut = handle.out;
+                            const KeyHit key = handle.key >= 0 ? KeyHit{} : HitKey(*v, plot, at, reach);
+                            v->hoverKey = key.id;
+                            v->hoverChannel = handle.key >= 0 || key.key >= 0 ? -1 : HitCurve(*v, plot, at, reach);
+                        }
                         if (v->pan.IsPressed(event.id))
                         {
                             const int2 d = v->pan.ScreenDelta(event.state);
@@ -1065,6 +1118,13 @@ namespace tachyon
             const int32_t px1 = std::max(1, styleManager.Px(1)), px4 = styleManager.Px(4);
             const float keySize = float(styleManager.Px(8)), selectedSize = float(styleManager.Px(11)), edge = float(std::max(1, styleManager.Px(1)));
             const float handleLength = float(styleManager.Px(40)), handleRadius = float(styleManager.Px(4));
+            // The key or handle under the pointer, while it's over the plot: drawn lighter and larger.
+            const bool plotHovered = !disabled && (guiStateManager.GetCurrentState(plotID) & ElementState::Hover) != ElementState::None;
+            const ID   hoverKey       = plotHovered ? view.hoverKey : ID::Invalid();
+            const ID   hoverHandleKey = plotHovered ? view.hoverHandleKey : ID::Invalid();
+            const bool hoverHandleOut = view.hoverHandleOut;
+            const int  hoverChannel   = plotHovered && !view.boxSelect.IsHeld() ? view.hoverChannel : -1;
+            const float hoverGrow     = float(std::max(1, styleManager.Px(2)));
             const float lineWidth = float(px1) * 2.0f, otherWidth = float(px1) * 1.5f, handleWidth = float(px1) * 1.25f;
             const float dash = float(styleManager.Px(3));
             const VisualBoxStyleIndex readoutBox = theme.curveReadoutStyleRef.visualBoxStyleIndex;
@@ -1090,7 +1150,8 @@ namespace tachyon
                 }
 
                 // The curves: the others thinner and faded, the active one on top; before the
-                // first key and after the last dashed.
+                // first key and after the last dashed. The one under the pointer is drawn in
+                // full color and a little thicker.
                 const int count = (int)v->channels.size();
                 for (int n = 0; n < count; ++n)
                 {
@@ -1099,9 +1160,10 @@ namespace tachyon
                         continue;
                     const CurveChannel& channel = v->channels[size_t(c)];
                     const bool active = c == v->activeChannel || count == 1;
-                    const VisualColorStyleIndex color = active ? theme.curveChannelColors[size_t(channel.color)]
-                                                               : theme.curveChannelFadedColors[size_t(channel.color)];
-                    const float width = active ? lineWidth : otherWidth;
+                    const bool curveHovered = c == hoverChannel;
+                    const VisualColorStyleIndex color = active || curveHovered ? theme.curveChannelColors[size_t(channel.color)]
+                                                                               : theme.curveChannelFadedColors[size_t(channel.color)];
+                    const float width = (active ? lineWidth : otherWidth) + (curveHovered ? float(px1) : 0.0f);
                     DrawCurve(ctx, plot, channel.curve, LineStyle{ .colorStyleIndex = color, .lineWidth = width },
                               LineStyle{ .colorStyleIndex = color, .lineWidth = width, .dashSize = dash });
 
@@ -1123,17 +1185,27 @@ namespace tachyon
                                 const float2 end = HandleEnd(plot, k, out, handleLength);
                                 ctx.RenderLine(int2{ int32_t(p.x), int32_t(p.y) }, int2{ int32_t(end.x), int32_t(end.y) },
                                                LineStyle{ .colorStyleIndex = theme.curveHandleColor, .lineWidth = handleWidth });
-                                ctx.RenderCircle(end, handleRadius, LineStyle{ .colorStyleIndex = theme.curveHandleColor, .lineWidth = handleWidth });
+                                // Hovered: filled, a little larger.
+                                if (k.stableID == hoverHandleKey && out == hoverHandleOut)
+                                {
+                                    const float r = handleRadius + hoverGrow / 2.0f;
+                                    ctx.RenderQuad(IntRect{ int32_t(end.x - r), int32_t(end.y - r), int32_t(2 * r), int32_t(2 * r) }, outer, theme.curveHandleColor, r);
+                                }
+                                else
+                                    ctx.RenderCircle(end, handleRadius, LineStyle{ .colorStyleIndex = theme.curveHandleColor, .lineWidth = handleWidth });
                             }
-                            const float s = selectedSize;
+                            const float s = selectedSize + (k.stableID == hoverKey ? hoverGrow : 0.0f);
                             ctx.RenderQuad(IntRect{ int32_t(p.x - s / 2), int32_t(p.y - s / 2), int32_t(s), int32_t(s) }, outer, theme.curveHandleColor, s / 4.0f);
                             const float t = s - 4.0f * edge;
                             ctx.RenderQuad(IntRect{ int32_t(p.x - t / 2), int32_t(p.y - t / 2), int32_t(t), int32_t(t) }, outer, theme.curveSelectedKeyColor, t / 4.0f);
                         }
                         else
                         {
-                            const float s = keySize + 2.0f * edge;
-                            ctx.RenderQuad(IntRect{ int32_t(p.x - s / 2), int32_t(p.y - s / 2), int32_t(s), int32_t(s) }, outer, theme.curveKeyEdgeColor, s / 4.0f);
+                            // Hovered: a light edge, a little larger.
+                            const bool hovered = k.stableID == hoverKey;
+                            const float s = keySize + 2.0f * edge + (hovered ? hoverGrow : 0.0f);
+                            ctx.RenderQuad(IntRect{ int32_t(p.x - s / 2), int32_t(p.y - s / 2), int32_t(s), int32_t(s) }, outer,
+                                           hovered ? theme.curveHandleColor : theme.curveKeyEdgeColor, s / 4.0f);
                             ctx.RenderQuad(IntRect{ int32_t(p.x - keySize / 2), int32_t(p.y - keySize / 2), int32_t(keySize), int32_t(keySize) },
                                            outer, active ? theme.curveChannelColors[size_t(channel.color)] : theme.curveChannelFadedColors[size_t(channel.color)],
                                            keySize / 4.0f);
@@ -1181,6 +1253,12 @@ namespace tachyon
                     view.activeChannel = hit.channel;
                     if (!view.selectedKeys.contains(hit.id))
                         view.selectedKeys = { hit.id };
+                }
+                // On a curve: it becomes the active one and a key added lands on it.
+                else if (const int curveHit = HitCurve(view, plot, p, float(styleManager.Px(7))); curveHit >= 0)
+                {
+                    view.activeChannel = curveHit;
+                    view.menuAt.y = EvaluateCurve(view.channels[size_t(curveHit)].curve, view.menuAt.x);
                 }
             }
             view.menuOpen = true;

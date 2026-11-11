@@ -575,6 +575,109 @@ namespace tachyon
         // The lanes
         // ---------------------------------------------------------------------
 
+        // The key, event or summary key under the pointer is the hovered one, for its hover look.
+        TEST_F(TimelineEditorTest, TheKeyUnderThePointerIsHovered)
+        {
+            Settle();
+            app.InjectMouseMove(LanesPoint(2.0f, 1));
+            Frame();
+            ASSERT_GE(view.hoverTrack, 0);
+            EXPECT_EQ(view.tracks[size_t(view.hoverTrack)].stableID, position);
+            EXPECT_FLOAT_EQ(view.hoverTime, 2.0f);
+            app.InjectMouseMove(LanesPoint(3.0f, 1));
+            Frame();
+            EXPECT_EQ(view.hoverTrack, -1) << "the empty lane";
+            app.InjectMouseMove(LanesPoint(5.0f, 5));
+            Frame();
+            EXPECT_FLOAT_EQ(view.hoverTime, 5.0f) << "an event, as a key";
+        }
+
+        // ---------------------------------------------------------------------
+        // The sound's clip and the events' labels
+        // ---------------------------------------------------------------------
+
+        const TimelineClip& Clip(const TimelineView& view) { return *view.tracks[5].clip; }
+
+        // Its body drags it along, onto frames, as one edit; Escape puts it back.
+        TEST_F(TimelineEditorTest, DraggingTheClipMovesIt)
+        {
+            Settle();
+            Drag(LanesPoint(3.0f, 4), LanesPoint(4.0f, 4));
+            EXPECT_NEAR(Clip(view).start, 1.5f, 0.05f);
+            EXPECT_FLOAT_EQ(Clip(view).start * 30.0f, std::round(Clip(view).start * 30.0f)) << "on a frame";
+            EXPECT_FLOAT_EQ(Clip(view).length, 6.0f) << "as long";
+            EXPECT_EQ(edits.size(), 1u);
+
+            const float before = Clip(view).start;
+            app.InjectMouseMove(LanesPoint(3.0f, 4));
+            app.InjectMouseDown(LanesPoint(3.0f, 4));
+            Frame();
+            app.InjectMouseMove(LanesPoint(4.0f, 4), MouseButtons::Left);
+            Frame();
+            app.InjectKey(KeyCode::Escape);
+            Frame();
+            app.InjectMouseUp(LanesPoint(4.0f, 4));
+            Frame();
+            EXPECT_FLOAT_EQ(Clip(view).start, before) << "put back";
+            EXPECT_EQ(edits.size(), 1u);
+        }
+
+        // Its ends trim it: the end shortens it, the start plays the sound from further in.
+        // Neither goes past the sound's own ends.
+        TEST_F(TimelineEditorTest, DraggingTheClipsEndsTrimsIt)
+        {
+            Settle();
+            Drag(LanesPoint(6.5f, 4), LanesPoint(5.5f, 4));
+            EXPECT_FLOAT_EQ(Clip(view).start, 0.5f);
+            EXPECT_NEAR(Clip(view).length, 5.0f, 0.05f);
+
+            Drag(LanesPoint(0.5f, 4), LanesPoint(1.5f, 4));
+            EXPECT_NEAR(Clip(view).start, 1.5f, 0.05f);
+            EXPECT_NEAR(Clip(view).offset, 1.0f, 0.05f) << "the sound from a second in";
+            EXPECT_NEAR(Clip(view).length, 4.0f, 0.05f) << "the end stays";
+            EXPECT_FLOAT_EQ(Clip(view).sourceLength, 6.0f) << "the whole sound, remembered";
+
+            const float end = Clip(view).start + Clip(view).length;
+            Drag(LanesPoint(end, 4), LanesPoint(7.9f, 4));
+            EXPECT_NEAR(Clip(view).length, 5.0f, 0.05f) << "no further than the sound goes";
+            Drag(LanesPoint(Clip(view).start, 4), LanesPoint(0.1f, 4));
+            EXPECT_NEAR(Clip(view).offset, 0.0f, 0.05f) << "no earlier than the sound starts";
+            EXPECT_NEAR(Clip(view).start, 0.5f, 0.05f);
+            EXPECT_EQ(edits.size(), 4u);
+        }
+
+        // What part of the clip is under the pointer, for its hover look.
+        TEST_F(TimelineEditorTest, TheClipsPartsShowHover)
+        {
+            Settle();
+            app.InjectMouseMove(LanesPoint(3.0f, 4));
+            Frame();
+            EXPECT_EQ(view.hoverClipTrack, 5);
+            EXPECT_EQ(view.hoverClipPart, TimelineView::ClipPart::Body);
+            app.InjectMouseMove(LanesPoint(0.5f, 4));
+            Frame();
+            EXPECT_EQ(view.hoverClipPart, TimelineView::ClipPart::Start);
+            app.InjectMouseMove(LanesPoint(6.5f, 4));
+            Frame();
+            EXPECT_EQ(view.hoverClipPart, TimelineView::ClipPart::End);
+            app.InjectMouseMove(LanesPoint(7.5f, 4));
+            Frame();
+            EXPECT_EQ(view.hoverClipPart, TimelineView::ClipPart::None);
+        }
+
+        // An event's label is the event too: hovering it, and dragging it by it.
+        TEST_F(TimelineEditorTest, AnEventsLabelIsTheEvent)
+        {
+            Settle();
+            const int2 label = LanesPoint(5.0f, 5) + int2{ app.styleManager.Px(20), 0 };
+            app.InjectMouseMove(label);
+            Frame();
+            EXPECT_EQ(view.hoverTrack, 6);
+            EXPECT_FLOAT_EQ(view.hoverTime, 5.0f);
+            Drag(label, label + int2{ LanesPoint(6.0f, 5).x - LanesPoint(5.0f, 5).x, 0 });
+            EXPECT_NEAR(view.tracks[6].events[1].time, 6.0f, 0.05f);
+        }
+
         // A click selects a key; Shift adds, Ctrl toggles; on the empty lanes it clears. A
         // group's summary key selects the keys at its time.
         TEST_F(TimelineEditorTest, ClicksSelectKeys)
@@ -756,6 +859,22 @@ namespace tachyon
             EXPECT_EQ(edits.size(), 3u);
             ApplyTimelineEdit(view, edits[2], /*undo*/ true);
             EXPECT_NEAR(view.loopRange.end, 6.0f, 1.0f / 60.0f);
+        }
+
+        // The loop edge under the pointer on the ruler, for its hover look.
+        TEST_F(TimelineEditorTest, TheRulersLoopEdgesShowHover)
+        {
+            view.loopRange = { 2.0f, 5.0f };
+            Settle();
+            app.InjectMouseMove(RulerPoint(2.0f));
+            Frame();
+            EXPECT_EQ(view.hoverLoopEdge, 1);
+            app.InjectMouseMove(RulerPoint(5.0f));
+            Frame();
+            EXPECT_EQ(view.hoverLoopEdge, 2);
+            app.InjectMouseMove(RulerPoint(3.5f));
+            Frame();
+            EXPECT_EQ(view.hoverLoopEdge, 0);
         }
 
         // Zoomed in, the scroll bar's thumb drags the view along; a press beside it brings it there.

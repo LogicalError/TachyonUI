@@ -4,6 +4,7 @@
 #include <gui_core/gui_easing.h>
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 
 namespace tachyon
@@ -43,6 +44,13 @@ namespace tachyon
             return std::to_string(int(secs / 3600.0f)) + " h";
         }
 
+        // Seconds until Ago(secs) says something else: the next minute, or hour.
+        float UntilAgoChanges(float secs)
+        {
+            const float unit = secs < 3600.0f ? 60.0f : 3600.0f;
+            return unit - std::fmod(std::max(0.0f, secs), unit);
+        }
+
         // It goes by itself: not an error, and no progress bar short of the end.
         bool HidesItself(const ToastDesc& desc)
         {
@@ -58,6 +66,7 @@ namespace tachyon
         toast.id      = idManager.CreateStaticID();
         toast.shownAt = guiStateManager.Interaction().GetFrameTime();
         m_toasts.push_back(std::move(toast));
+        RequestRedraw();   // shown from a handler or outside a frame: drawn without waiting for input
         return m_toasts.back().handle;
     }
 
@@ -73,7 +82,10 @@ namespace tachyon
     {
         for (ShownToast& shown : m_toasts)
             if (shown.handle == toast && shown.leftAt < 0.0f)
+            {
                 shown.leftAt = guiStateManager.Interaction().GetFrameTime();
+                RequestRedraw();   // its slide out
+            }
     }
 
     void GUIApplication::Toasts()
@@ -103,7 +115,12 @@ namespace tachyon
                     toast.shownFor += dt;
                 if (toast.shownFor >= kToastHideSecs)
                     toast.leftAt = now;
+                else if (!hovered)
+                    ScheduleFrameAt(now + (kToastHideSecs - toast.shownFor));   // time to go
             }
+            // Its age, by the minute.
+            if (toast.leftAt < 0.0f)
+                ScheduleFrameAt(now + UntilAgoChanges(now - toast.shownAt + std::max(0.0f, toast.desc.age)));
         }
         if (m_toasts.empty())
         {

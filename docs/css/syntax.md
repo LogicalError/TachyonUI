@@ -111,8 +111,16 @@ States combine:
 
 When a control changes state, its look moves from the old slot to the new one:
 
-- The box (background and border) blends from the old slot to the new one.
-- Text, icons and shadows switch at once.
+- The box (background, border and shadow) blends from the old slot to the new one.
+- Text and icons switch at once.
+- Each part of the state moves on its own: the hover, the press, the focus and the selected
+  bit each have their own timing (below).
+  - When two move at once, the box mixes the slots between them by how far each is.
+  - For example, tabbing to a button the mouse just left: the hover fades out over 140 ms
+    while the focus comes in over 100 ms, so for a moment the box shows a little of
+    `:hover`, a little of `:focus` and some of the plain slot.
+  - At most four slots are mixed; when more parts move at once, the four with the most
+    share are shown.
 
 Easing is the curve a blend follows over its time:
 
@@ -136,7 +144,8 @@ Easing is the curve a blend follows over its time:
     which keeps lightness and saturation.
   - Greys and shades of one hue blend in sRGB.
   - A transparent end adds only its alpha.
-- A change that reverses mid-blend continues from what's shown, with the new timing.
+- A change that reverses mid-blend continues from what's shown, with the new timing. For
+  example, a hover that leaves halfway in fades out from halfway, and is done sooner.
 - A part blends its on/off flip only with `ElementFlags::AnimatesSelected`.
   - Other selection changes are instant.
 

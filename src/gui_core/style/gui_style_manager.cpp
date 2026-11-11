@@ -215,7 +215,7 @@ namespace tachyon
         // Each hovered or pressed slot (not text selection, not disabled) gets its text color over
         // the background of the same slot without hover and press: what a dark button lightens
         // by and a primary one (dark text on the accent) darkens by.
-        constexpr float kHover = 0.08f, kPressed = 0.14f;
+        const float kHover = float(style.stateLayerHover) / 100.0f, kPressed = float(style.stateLayerPressed) / 100.0f;
         const int hoverOrPress = int(ElementState::Hover | ElementState::Active);
         for (int i = 0; i < int(ElementState::Disabled); ++i)
         {
@@ -223,18 +223,20 @@ namespace tachyon
                 continue;
             const StyleState& base = style.states[i & ~hoverOrPress];
             StyleState&       slot = style.states[i];
-            if (!IsSolid(base.backgroundColor) || !IsSolid(slot.textColor) || slot.textColor.gradient.stopCount == 0)
+            const bool light = style.stateLayer == StateLayer::Light;
+            if (!IsSolid(base.backgroundColor) || (!light && (!IsSolid(slot.textColor) || slot.textColor.gradient.stopCount == 0)))
                 continue;
             const color4b under = base.backgroundColor.gradient.stopCount != 0 ? base.backgroundColor.GetFirstColor() : color4b{ 0, 0, 0, 0 };
             const float strength = (i & int(ElementState::Active)) != 0 ? kPressed : kHover;
-            slot.backgroundColor = ColorStyle::Create(Over(under, slot.textColor.GetFirstColor(), strength));
+            const color4b layer = light ? color4b{ 255, 255, 255, 255 } : slot.textColor.GetFirstColor();
+            slot.backgroundColor = ColorStyle::Create(Over(under, layer, strength));
         }
     }
 
     StyleRef StyleManager::RegisterImpl(const Style &given, StyleUnits units, bool distinct) noexcept
     {
         Style style = units == StyleUnits::Pixels ? given : ToPixels(given);
-        if (style.stateLayer == StateLayer::Content)
+        if (style.stateLayer != StateLayer::None)
             ApplyStateLayer(style);
 
         LayoutStyle layoutStyle

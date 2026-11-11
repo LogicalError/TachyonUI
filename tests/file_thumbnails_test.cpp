@@ -121,6 +121,24 @@ namespace tachyon
         EXPECT_NE(shell.threads[0], std::this_thread::get_id());
     }
 
+    // Each read tells the app, from the reading thread, so a sleeping app draws it.
+    TEST(FileThumbnailsTest, TellsWhenOneIsRead)
+    {
+        StubTextSystem textSystem;
+        FakeShell shell;
+        FileThumbnails thumbnails(textSystem, 8, shell.Reader());
+        std::atomic<int> told { 0 };
+        std::thread::id on;
+        thumbnails.SetOnRead([&] { on = std::this_thread::get_id(); ++told; });
+        thumbnails.Get("C:/cat.jpg", kMonday, 32);
+        thumbnails.Get("C:/plain.txt", kMonday, 32);
+        ASSERT_TRUE(Settle(thumbnails));
+        for (auto end = std::chrono::steady_clock::now() + 5s; told < 2 && std::chrono::steady_clock::now() < end;)
+            std::this_thread::sleep_for(1ms);
+        EXPECT_EQ(told, 2) << "one with a picture, one without: both done";
+        EXPECT_NE(on, std::this_thread::get_id());
+    }
+
     // A file the shell has no thumbnail for stays without one, and isn't asked about again.
     TEST(FileThumbnailsTest, AFileWithoutOneHasNone)
     {

@@ -111,6 +111,7 @@ namespace
             }
             app.SetReducedMotion(reduced);
             app.windowID = app.idManager.CreateStaticID();
+            app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
             ASSERT_TRUE(app.Run());
             ASSERT_GT(Distance(app.before, app.settled), 60) << "test setup: dark and light differ";
             if (reduced)
@@ -140,6 +141,7 @@ namespace
         }
         app.fontScaleTo = 1.5f;
         app.windowID = app.idManager.CreateStaticID();
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         EXPECT_FALSE(app.crossfadingJustAfter);
         app.Cleanup();
@@ -158,6 +160,7 @@ namespace
         app.accentTo = kAccentPresets[3].colors;   // orange: #F59E4B in the dark palette
         app.windowID = app.idManager.CreateStaticID();
         app.barID    = app.idManager.CreateStaticID();
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         EXPECT_TRUE(app.crossfadingJustAfter);
         EXPECT_FALSE(app.crossfadingAtEnd);
@@ -178,6 +181,7 @@ namespace
         }
         app.fontScaleTo = 1.5f;
         app.windowID = app.idManager.CreateStaticID();
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         EXPECT_FALSE(app.crossfadingJustAfter);
         app.Cleanup();
@@ -196,6 +200,7 @@ namespace
         // frame's clock, so it can't run out before the frame ends however slow it is.
         app.quitAt = app.switchAt + 1;
         app.windowID = app.idManager.CreateStaticID();
+        app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());
         EXPECT_TRUE(app.IsThemeCrossfading()) << "test setup: still crossfading";
         app.Cleanup();

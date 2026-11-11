@@ -1,6 +1,9 @@
 #pragma once
 
+#include <algorithm>
 #include <chrono>
+#include <climits>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -15,6 +18,7 @@
 #include <initializer_list>
 #include <limits>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include <gui_core/frame/gui_frame_clock.h>
@@ -56,6 +60,7 @@
 #include <gui_core/gui_id_manager.h>
 
 #include <gui_controls/gui_transition_manager.h>
+#include <gui_core/frame/gui_redraw.h>
 #include <gui_controls/gui_type_dimensions.h>
 #include <gui_controls/gui_default_handlers.h>
 #include <gui_controls/gui_tooltip_manager.h>
@@ -542,6 +547,27 @@ namespace tachyon
         /// See UpdateFrame.
         void         PresentFrame();
 
+        /// How often Run draws a frame; RedrawMode::WhenNeeded by default, which sleeps while
+        /// nothing changes. Switch it any time: Always for an app that animates all the time,
+        /// WhenChanged to build every frame but draw only the windows that changed.
+        void       SetRedrawMode(RedrawMode mode) { m_redrawMode = mode; RequestRedraw(); }
+        RedrawMode GetRedrawMode() const { return m_redrawMode; }
+        /// Asks for a frame, for a change the UI can't see by itself: data from another thread,
+        /// a value the app animates. Safe from any thread; wakes a sleeping Run.
+        void  RequestRedraw();
+        /// Asks for a frame `seconds` from now (a clock's next tick). Safe from any thread.
+        void  RequestRedrawIn(float seconds);
+        /// Whether a frame is needed now. Always true except in WhenNeeded, where it's true
+        /// after input, while something animates or the last frame's draws changed, and when a
+        /// redraw asked for is due. A host's loop can skip RecordFrame and PresentFrame, or
+        /// sleep, while it's false:
+        ///
+        ///     while (app.UpdateFrame()) { if (app.NeedsFrame()) { app.RecordFrame(); app.PresentFrame(); } else Sleep(app.SecondsUntilFrame()); }
+        bool  NeedsFrame() const;
+        /// Seconds until a frame is needed: 0 when NeedsFrame is true, INFINITY when nothing is
+        /// due (only input or a request will need one).
+        float SecondsUntilFrame() const;
+
         ///@}
 
         /// @name Event handlers and control building blocks
@@ -904,6 +930,7 @@ namespace tachyon
         /// while a progress bar is short of 1).
         ToastID     ShowToast(ToastDesc desc);
         /// A shown toast's description, to change (its progress, its body); null once it's gone.
+        /// A change outside a frame shows at the next one: call RequestRedraw after it.
         ToastDesc*  FindToast(ToastID toast);
         /// Takes a toast away, as its close button does.
         void        DismissToast(ToastID toast);
@@ -3104,6 +3131,22 @@ namespace tachyon
         float       m_displayScale { 1.0f };
         FrameClock  m_frameClock;   ///< animation time, vsync-paced
         bool        m_themeReloadPending { false };
+
+        // ---- Redrawing only when needed (SetRedrawMode) ----
+        RedrawMode     m_redrawMode     = RedrawMode::WhenNeeded;
+        RedrawRequests m_redrawRequests;                 ///< RequestRedraw, RequestRedrawIn
+        bool           m_moreFrames     = true;          ///< the last frame asks for another: something animates, or its draws changed
+        uint64_t       m_seenEvents     = 0;             ///< the backend's event count when the last frame began
+        int64_t        m_timerAt        = INT64_MAX;     ///< the library's next timer (a tooltip's delay), steady-clock ns
+        float          m_buildTimerAt   = INFINITY;      ///< ScheduleFrameAt during this build, frame-clock seconds
+        int64_t        m_frameTickNanos = 0;             ///< steady-clock ns the frame clock last ticked at
+        bool           m_recordedAny    = false;         ///< the last RecordFrame recorded a window
+        std::thread::id m_uiThread;                      ///< Initialize's: a request from any other wakes the backend
+        /// A frame at frame-clock time `frameSecs`, for a control that changes by itself later
+        /// (a toast hiding). Call while building.
+        void ScheduleFrameAt(float frameSecs) { m_buildTimerAt = std::min(m_buildTimerAt, frameSecs); }
+        /// After the build: whether something asks for another frame, and the library's next timer.
+        void NoteFrameNeeds(float elapsedTimeSecs);
 
         tachyon::ElementRef RegisterElementInternal(tachyon::Element&& element, LayoutOverride&& constraints, bool updateState = true);
 
