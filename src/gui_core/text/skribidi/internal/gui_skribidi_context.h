@@ -1,5 +1,6 @@
 #include <gui_core/text/skribidi/gui_text_system_skribidi.h>
 #include <gui_core/text/skribidi/internal/gui_default_fonts_skribidi.h>
+#include <gui_core/input/gui_gesture.h>
 
 #include <skribidi/skb_editor.h>
 #include <skribidi/skb_image_atlas.h>
@@ -358,7 +359,10 @@ namespace tachyon
 		bool                    pending_text_valid = false;
 		std::string             pending_text;
 		skb_editor_t*			editor = nullptr;
-		bool					editor_drag_active = false;
+		// The left press on the active editor that selects: Dragging from the press on (every
+		// move extends the selection) until the release, Idle otherwise. Never Pressed: the
+		// editor itself tells a click from a drag.
+		GesturePhase			selection_drag = GesturePhase::Idle;
 		const ITextValidator*	active_validator = nullptr;   // the focused field's (none: any text)
 		TextEditBehavior		text_edit_behavior = TextEditBehavior::None;
 		bool                    active_is_multiline = false;
@@ -430,8 +434,10 @@ namespace tachyon
 		bool show_glyph_details = false;
 		bool show_caret_details = false;
 		bool initialized = false;
-		bool drag_view = false;
-		bool drag_text = false;
+		// The left press on the active editor's selected text that moves it: Pressed until the
+		// pointer travels the drag distance (a release then places the caret), Dragging after
+		// (the text follows the pointer to a drop), Idle once released or on Escape.
+		GesturePhase text_drag = GesturePhase::Idle;
 	};
 
 

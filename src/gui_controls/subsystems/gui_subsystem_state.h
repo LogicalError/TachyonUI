@@ -7,7 +7,7 @@
 
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_base_types.h>
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 #include <gui_core/text/gui_text_system.h>   // IconID
 
 // Plain state holders for several controls (no frame callbacks or logic).
@@ -99,13 +99,12 @@ namespace tachyon
     class ToolbarWindowDragSubsystem
     {
     public:
-        PointerDrag       drag;                            ///< the thumb's press, a drag from the start
+        Gesture<IntRect>  press;                           ///< the thumb's press, a drag from the start; the window before it, put back by Escape
         ID                windowID        = ID::Invalid();
         int2              currentMousePos {};              ///< screen pixels
-        IntRect           startRect {};                    ///< the window before the drag; put back by Escape
         ToolbarDockState* sourceDockState = nullptr;
 
-        bool Active() const { return drag.id != ID::Invalid(); }
+        bool Active() const { return press.IsHeld(); }
     };
 
     /// Last frame's screen rects of menu triggers and popups, written by AddPostLayout

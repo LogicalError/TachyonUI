@@ -104,6 +104,7 @@ namespace tachyon
         bool            enableAudio      = true;
 		ViewMode        viewMode         = ViewMode::Default;   // View mode toolbar buttons toggle these flags
         CommandMode     nodeViewMode = CommandMode::Default;   // the node view's shortcuts; copied into each NodeView's commandMode
+        CommandMode     stateMachineMode = CommandMode::Default;   // the state machines' shortcuts (Delete)
         // The transform tool the left toolbar picks (the showcase's own, not a library mode).
 
         std::vector<StyleRef> boxStyleRefs;
@@ -283,6 +284,12 @@ namespace tachyon
             // Each NodeView is an independent graph with its own pan/zoom and drag state.
             NodeView nodeView;
             bool     nodeFramesSeeded = false;   // the "Inputs" frame, put round its nodes once they're laid out
+            // The StateMachine panel: an enemy's behaviour, and the machine its Combat state holds.
+            NodeView enemyMachine;
+            NodeView combatMachine;
+            bool     combatOpen = false;            // Combat's machine is the one shown
+            bool     stateMachinesSeeded = false;
+            uint32_t stateMachineSteps = 0;         // Step takes the transitions out of a state in turn
             // The values of the nodes added from the canvas menu, by their stableID.
             struct GraphNodeValues
             {
@@ -633,6 +640,12 @@ namespace tachyon
         void SeedLevels();
         void RenderHierarchyPanel(HierarchyPanel& panel);
         void RenderNodeViewPanel();
+        /// The StateMachine panel: the enemy's machine, or Combat's once opened; Step and Restart.
+        void RenderStateMachinePanel();
+        void SeedStateMachines();
+        /// Removes the shown machine's selected states, their transitions with them, and its
+        /// selected transitions, as one edit.
+        void DeleteSelectedStates();
         /// A reroute (NodeModel::reroute) in `color`, unwired, its dot on the grid point
         /// nearest `at` (node.pos space).
         NodeModel RerouteNode(float2 at, color4f color);

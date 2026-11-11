@@ -114,6 +114,8 @@ list(APPEND GUI_FILES
   gui_core/input/gui_input_handler_func.h
   gui_core/input/gui_pointer_drag.h
   gui_core/input/gui_pointer_drag.cpp
+  gui_core/input/gui_gesture.h
+  gui_core/input/gui_gesture.cpp
   gui_core/input/gui_input_handler_broadcaster.h
   gui_core/input/gui_command_manager.h
 

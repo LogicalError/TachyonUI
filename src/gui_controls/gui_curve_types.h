@@ -2,7 +2,7 @@
 
 #include <gui_core/gui_base_types.h>
 #include <gui_core/gui_id.h>
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 #include <gui_controls/gui_widget_state_types.h>   // DoubleClickTracker
 
 #include <cstdint>
@@ -174,25 +174,28 @@ namespace tachyon
         CurveRange        shown;                ///< the part of the plot in view
         bool              shownSet = false;     ///< false until the editor first opens: then `range`
         std::unordered_set<std::string> collapsedGroups;   ///< the tree's closed groups, by path
-        PointerDrag       playheadDrag;         ///< the ruler pressed
+        Gesture<>         playheadDrag;         ///< the ruler pressed
         bool              popupOpen = false;    ///< the field's editor window is open
         ID                popupID = ID::Invalid();
-        PointerDrag       keyDrag;              ///< moving the selected keys
+        Gesture<std::vector<Curve>> keyDrag;    ///< moving the selected keys; the curves as they were
         float2            keyDragFrom {};       ///< the time and value under the press
-        std::vector<Curve> before;              ///< the curves as they were, for Escape and the edit
         bool              keyMoved = false;
-        PointerDrag       tangentDrag;          ///< a handle
+        Gesture<std::vector<Curve>> tangentDrag;   ///< a handle; the curves as they were
         ID                tangentKey = ID::Invalid();
-        ID                hoverKey       = ID::Invalid();   ///< the key under the pointer, for its hover look
-        ID                hoverHandleKey = ID::Invalid();   ///< the key whose handle is under the pointer ...
-        bool              hoverHandleOut = false;           ///< ... and which side
-        int               hoverChannel   = -1;              ///< the channel whose curve is under the pointer, away from keys and handles
         bool              tangentOut = false;   ///< the leaving side's handle
-        PointerDrag       boxSelect;
+        /// What's under the pointer, for its hover look: a key, else a handle, else a curve.
+        struct HoverTarget
+        {
+            ID   key       = ID::Invalid();     ///< a key
+            ID   handleKey = ID::Invalid();     ///< the key whose handle it is ...
+            bool handleOut = false;             ///< ... and which side
+            int  channel   = -1;                ///< the channel whose curve it is, away from keys and handles
+            bool operator==(const HoverTarget&) const = default;
+        };
+        HoverPart<HoverTarget> hover;
+        Gesture<std::unordered_set<ID>> boxSelect;   ///< the selection to go back to: before a Shift / Ctrl box, else none
         float2            boxFrom {}, boxTo {};  ///< in time and value
-        std::unordered_set<ID> boxBase;         ///< the selection before a Shift / Ctrl box
-        PointerDrag       pan;                  ///< the right button held over the plot
-        CurveRange        panFrom;
+        Gesture<CurveRange> pan;                ///< the middle button (or Alt + left) held over the plot; the view as it was
         ID                menuKey = ID::Invalid();   ///< the key a right click opened the menu for
         float2            menuAt {};             ///< where the right click was, in time and value
         bool              menuOpen = false;      ///< the plot's menu was open last frame

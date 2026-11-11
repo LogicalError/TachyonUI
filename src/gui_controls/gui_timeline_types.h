@@ -2,7 +2,7 @@
 
 #include <gui_core/gui_base_types.h>     // color4f
 #include <gui_core/gui_id.h>
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 
 #include <cstdint>
 #include <functional>
@@ -185,48 +185,44 @@ namespace tachyon
 
         /// @name Internal: kept between frames while the user works
         ///@{
-        struct KeyDrag
-        {
-            PointerDrag press;
-            float       pressTime = 0.0f;              ///< the time under the press
-            std::vector<TimelineTrack> before;          ///< the tracks as they were (all of them)
-            bool        moved = false;
-        };
-        KeyDrag           keyDrag;
+        Gesture<std::vector<TimelineTrack>> keyDrag;   ///< moving the selected keys; the tracks as they were (all of them)
+        float             keyPressTime = 0.0f;          ///< the time under the key drag's press
+        bool              keyMoved = false;
         /// A clip's parts: its body moves it, its ends trim it.
         enum class ClipPart : uint8_t { None, Body, Start, End };
-        struct ClipDrag
+        Gesture<std::vector<TimelineTrack>> clipDrag;  ///< moving or trimming a clip; the tracks as they were
+        int               clipTrack = -1;               ///< the track whose clip is dragged ...
+        ClipPart          clipPart  = ClipPart::None;   ///< ... and by which part
+        float             clipPressTime = 0.0f;         ///< the time under the clip drag's press
+        bool              clipMoved = false;
+        /// What's under the pointer on the lanes, for its hover look.
+        struct LaneHover
         {
-            PointerDrag press;
-            int         track = -1;
-            ClipPart    part  = ClipPart::None;
-            float       pressTime = 0.0f;               ///< the time under the press
-            std::vector<TimelineTrack> before;          ///< the tracks as they were
-            bool        moved = false;
+            int      track = -1;                 ///< the track whose key, event or summary key it is ...
+            float    time  = 0.0f;               ///< ... and its time
+            int      clipTrack = -1;             ///< the track whose clip it is ...
+            ClipPart clipPart  = ClipPart::None; ///< ... and which part
+            bool operator==(const LaneHover&) const = default;
         };
-        ClipDrag          clipDrag;
-        int               hoverClipTrack = -1;          ///< the track whose clip is under the pointer ...
-        ClipPart          hoverClipPart  = ClipPart::None;   ///< ... and which part, for its hover look
-        int               hoverTrack = -1;              ///< the track whose key, event or summary key is under the pointer ...
-        float             hoverTime  = 0.0f;            ///< ... and its time, for its hover look
-        PointerDrag       boxSelect;
+        HoverPart<LaneHover> hover;
+        Gesture<std::unordered_set<ID>> boxSelect;     ///< the selection to go back to: before a Shift / Ctrl box, else none
         float             boxFrom = 0.0f;              ///< the box's anchor: time and row
         int               boxFromRow = 0;
         float             boxTo = 0.0f;
         int               boxToRow = 0;
-        std::unordered_set<ID> boxBase;                 ///< the selection before a Shift / Ctrl box
-        PointerDrag       loopDrag;
-        TimelineRange     loopBefore;
+        Gesture<TimelineRange> loopDrag;                ///< the loop range as it was
         int               loopEdge = 0;                 ///< 0 a new range, 1 its start, 2 its end, 3 the whole of it
         float             loopPressTime = 0.0f;
-        int               hoverLoopEdge = 0;            ///< the loop edge under the pointer on the ruler: 0 none, 1 start, 2 end
-        PointerDrag       scrub;                        ///< on the ruler
-        float             scrubBefore = 0.0f;
-        PointerDrag       pan;                          ///< the scroll bar's thumb
-        float             panBefore = 0.0f;
-        PointerDrag       dragScroll;                   ///< the middle button (or Alt + left) held over the ruler or lanes
-        float             dragScrollStart = 0.0f;       ///< the view's start at its press
-        int               dragScrollOffset = 0;         ///< the rows' scroll at its press
+        HoverPart<int>    loopEdgeHover;                ///< the loop edge under the pointer on the ruler: 0 none, 1 start, 2 end
+        Gesture<float>    scrub;                        ///< on the ruler; the playhead as it was
+        Gesture<float>    pan;                          ///< the scroll bar's thumb; the view's start as it was
+        /// Where a drag scroll started from: the view's start and the rows' scroll.
+        struct DragScrollFrom
+        {
+            float start  = 0.0f;
+            int   offset = 0;
+        };
+        Gesture<DragScrollFrom> dragScroll;             ///< the middle button (or Alt + left) held over the ruler or lanes
         int               zoom = 0;                     ///< the zoom slider, 0 (all of it) to 100
         int               zoomShown = 0;                ///< the slider as last drawn, to tell its moves
         int               lanesWidth = 0;               ///< the lanes' width last frame, in pixels

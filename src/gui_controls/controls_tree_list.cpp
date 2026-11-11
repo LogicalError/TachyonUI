@@ -293,8 +293,7 @@ namespace tachyon
             {
                 case tachyon::EventType::MouseDown:
                     if (!event.state.LeftPressed()) break;
-                    guiStateManager.Interaction().SetFocusID(event.id);
-                    guiStateManager.TextEditorFocus().Clear();
+                    TakeFocus(guiStateManager, event.id);
                     return true;
                 case tachyon::EventType::KeyDown:
                 {
@@ -371,8 +370,7 @@ namespace tachyon
                     if (selectedIndex) *selectedIndex = itemIndex;
                     auto& scrollManagement = guiStateManager.GetScrollManagement(); 
                     scrollManagement.MakeElementVisibleHierarchically(elementStorage, event.elementRef);
-                    guiStateManager.Interaction().SetFocusID(containerID);
-                    guiStateManager.TextEditorFocus().Clear();
+                    TakeFocus(guiStateManager, containerID);
                     guiStateManager.Interaction().SetClicked(id);
                     return true;
                 }
@@ -412,8 +410,7 @@ namespace tachyon
                 if (selectedIndex) *selectedIndex = itemIndex;
                 auto& scrollManagement = guiStateManager.GetScrollManagement(); 
                 scrollManagement.MakeElementVisibleHierarchically(elementStorage, event.elementRef);
-                guiStateManager.Interaction().SetFocusID(containerID);
-                guiStateManager.TextEditorFocus().Clear();
+                TakeFocus(guiStateManager, containerID);
                 guiStateManager.Interaction().SetClicked(id);
                 return true;
             }
@@ -479,8 +476,7 @@ namespace tachyon
                             // Skip the knob itself in case it is ever flagged as a control.
                             if (firstControl != ID::Invalid() && firstControl != event.id)
                             {
-                                guiStateManager.Interaction().SetFocusID(firstControl);
-                                guiStateManager.TextEditorFocus().Clear();
+                                TakeFocus(guiStateManager, firstControl);
                             }
                         }
                         // Don't consume - the drag system also wants to see MouseUp.
@@ -515,8 +511,7 @@ namespace tachyon
                     if (selectedIndex) *selectedIndex = itemIndex;
                     auto& scrollManagement = guiStateManager.GetScrollManagement(); 
                     scrollManagement.MakeElementVisibleHierarchically(elementStorage, event.elementRef);
-                    guiStateManager.Interaction().SetFocusID(containerID);
-                    guiStateManager.TextEditorFocus().Clear();
+                    TakeFocus(guiStateManager, containerID);
                     guiStateManager.Interaction().SetClicked(rowID);
                     return true;
                 }

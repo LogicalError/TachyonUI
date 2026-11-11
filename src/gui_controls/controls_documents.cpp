@@ -270,7 +270,7 @@ namespace tachyon
             if (index >= 0)
                 m_documentDrag = { set.documents[size_t(index)].get(), &set,
                                    measured ? drag.originalRects[size_t(drag.draggedIndex)].w : 0,
-                                   measured ? drag.press.pressScreen.x - drag.originalRects[size_t(drag.draggedIndex)].x : 0 };
+                                   measured ? drag.press.drag.pressScreen.x - drag.originalRects[size_t(drag.draggedIndex)].x : 0 };
         }
         // Another bar's tab over this one: a phantom where it would go, the tabs moving apart.
         int phantomAt = -1;

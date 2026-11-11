@@ -56,6 +56,11 @@ namespace tachyon
         for (int n = 0; n < int(view.nodes.size()); ++n)
             if (view.selectedNodeIDs.contains(view.nodes[size_t(n)].stableID))
                 selected.push_back(n);
+        for (const StateTransition& t : view.transitions)
+            if (view.selectedTransitionIDs.contains(t.stableID))
+                for (const ID state : { t.from, t.to })
+                    if (const int n = NodeIndex(view, state); n >= 0 && std::find(selected.begin(), selected.end(), n) == selected.end())
+                        selected.push_back(n);
         if (selected.empty())
             FrameAllNodes(view);
         else
@@ -315,7 +320,7 @@ namespace tachyon
             for (int& n : view.ordering)
                 n = shifted(n);
             // What hovered or was grabbed last frame named wires by the old indices.
-            view.hoveredWire.reset();
+            view.hoveredWire.Clear();
             view.wireMenuWire.reset();
             view.wireHandleCache.clear();
         }
@@ -407,6 +412,16 @@ namespace tachyon
             edit.nodes.push_back(RemovalOf(graph, n));
             EraseNode(graph, edit.nodes.back());
         }
+        // In a state machine, the transitions into or out of a removed state go with it, and
+        // so does its being the initial one.
+        std::unordered_set<ID> removed;
+        for (const int n : order)
+            removed.insert(view.nodes[size_t(n)].stableID);
+        for (int t = (int)view.transitions.size() - 1; t >= 0; --t)
+            if (const StateTransition& tr = view.transitions[size_t(t)]; removed.contains(tr.from) || removed.contains(tr.to))
+                edit.transitions.push_back({ .index = t, .added = false, .transition = tr });
+        if (removed.contains(view.initialState))
+            edit.initial = NodeViewEdit::Initial{ view.initialState, ID::Invalid() };
         return edit;
     }
 
@@ -622,6 +637,216 @@ namespace tachyon
         view.renameFocused = false;
     }
 
+    NodeViewEdit AddTransitionEdit(const NodeView& view, StateTransition transition, int index)
+    {
+        NodeViewEdit edit;
+        const int count = (int)view.transitions.size();
+        edit.transitions.push_back({ .index = (index < 0 || index > count) ? count : index, .added = true, .transition = std::move(transition) });
+        return edit;
+    }
+
+    NodeViewEdit RemoveTransitionsEdit(const NodeView& view, std::span<const ID> transitions)
+    {
+        // Last first, so each one's index is still its own when it goes.
+        NodeViewEdit edit;
+        for (int t = (int)view.transitions.size() - 1; t >= 0; --t)
+            if (std::find(transitions.begin(), transitions.end(), view.transitions[size_t(t)].stableID) != transitions.end())
+                edit.transitions.push_back({ .index = t, .added = false, .transition = view.transitions[size_t(t)] });
+        return edit;
+    }
+
+    NodeViewEdit SetInitialStateEdit(const NodeView& view, ID state)
+    {
+        NodeViewEdit edit;
+        if (state != view.initialState)
+            edit.initial = NodeViewEdit::Initial{ view.initialState, state };
+        return edit;
+    }
+
+    int TransitionIndex(const NodeView& view, ID stableID)
+    {
+        for (int t = 0; t < (int)view.transitions.size(); ++t)
+            if (view.transitions[size_t(t)].stableID == stableID) return t;
+        return -1;
+    }
+
+    int NodeIndex(const NodeView& view, ID stableID)
+    {
+        for (int n = 0; n < (int)view.nodes.size(); ++n)
+            if (view.nodes[size_t(n)].stableID == stableID) return n;
+        return -1;
+    }
+
+    void RenameTransition(NodeView& view, int transition)
+    {
+        if (transition < 0 || transition >= (int)view.transitions.size())
+            return;
+        view.renamingTransition = view.transitions[size_t(transition)].stableID;
+        view.renameText         = view.transitions[size_t(transition)].label;
+        view.renameFocused      = false;
+    }
+
+    void StartTransition(NodeView& view, int node)
+    {
+        if (node < 0 || node >= (int)view.nodes.size())
+            return;
+        const NodeModel& state = view.nodes[size_t(node)];
+        view.transitionFrom    = state.stableID;
+        view.transitionPicking = true;
+        // From the state's middle until the pointer moves.
+        const float2 centre = NodeViewCanvasToScreen(view, { float(state.pos.x + view.lastGridOrigin.x) + float(state.lastSize.x) * 0.5f,
+                                                             float(state.pos.y + view.lastGridOrigin.y) + float(state.lastSize.y) * 0.5f });
+        view.transitionPointer = { int32_t(std::lround(centre.x)), int32_t(std::lround(centre.y)) };
+    }
+
+    namespace
+    {
+        // Where the ray from `inside` towards `outside` leaves `box` (inside it).
+        float2 BoxExit(IntRect box, float2 inside, float2 outside)
+        {
+            const float2 d{ outside.x - inside.x, outside.y - inside.y };
+            float t = 1.0f;
+            if (d.x > 0.0f) t = std::min(t, (float(box.x + box.w) - inside.x) / d.x);
+            if (d.x < 0.0f) t = std::min(t, (float(box.x) - inside.x) / d.x);
+            if (d.y > 0.0f) t = std::min(t, (float(box.y + box.h) - inside.y) / d.y);
+            if (d.y < 0.0f) t = std::min(t, (float(box.y) - inside.y) / d.y);
+            t = std::clamp(t, 0.0f, 1.0f);
+            return { inside.x + d.x * t, inside.y + d.y * t };
+        }
+
+        int2 Rounded(float2 p) { return { int32_t(std::lround(p.x)), int32_t(std::lround(p.y)) }; }
+
+        float SegmentDistance(float2 p, float2 a, float2 b)
+        {
+            const float2 ab{ b.x - a.x, b.y - a.y };
+            const float lengthSq = ab.x * ab.x + ab.y * ab.y;
+            const float t = lengthSq > 0.0f ? std::clamp(((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / lengthSq, 0.0f, 1.0f) : 0.0f;
+            const float dx = p.x - (a.x + ab.x * t), dy = p.y - (a.y + ab.y * t);
+            return std::sqrt(dx * dx + dy * dy);
+        }
+
+        // A curve as RenderLine draws one from four points: two quadratic halves, a to the
+        // middle of b and c, and on from there to d.
+        float2 DrawnCurve(float2 a, float2 b, float2 c, float2 d, float t)
+        {
+            const float2 m{ (b.x + c.x) * 0.5f, (b.y + c.y) * 0.5f };
+            const bool second = t >= 0.5f;
+            const float s = second ? t * 2.0f - 1.0f : t * 2.0f;
+            const float2 p0 = second ? m : a, p1 = second ? c : b, p2 = second ? d : m;
+            const float u = 1.0f - s;
+            return { u * u * p0.x + 2.0f * u * s * p1.x + s * s * p2.x, u * u * p0.y + 2.0f * u * s * p1.y + s * s * p2.y };
+        }
+
+        float2 F(int2 p) { return { float(p.x), float(p.y) }; }
+    }
+
+    TransitionPath StateTransitionPath(const NodeView& view, const StateTransition& transition, int32_t gap, int32_t loopSize)
+    {
+        TransitionPath path;
+        const int a = NodeIndex(view, transition.from), b = NodeIndex(view, transition.to);
+        if (a < 0 || b < 0)
+            return path;
+        const NodeModel& from = view.nodes[size_t(a)];
+        const NodeModel& to   = view.nodes[size_t(b)];
+        if (from.lastSize.x <= 0 || from.lastSize.y <= 0 || to.lastSize.x <= 0 || to.lastSize.y <= 0)
+            return path;
+        const IntRect boxA{ from.pos.x, from.pos.y, from.lastSize.x, from.lastSize.y };
+        const IntRect boxB{ to.pos.x, to.pos.y, to.lastSize.x, to.lastSize.y };
+        path.valid = true;
+        if (a == b)
+        {
+            // Over the top: out of its right half, back into its left half.
+            path.loop    = true;
+            path.from    = { boxA.x + boxA.w * 5 / 8, boxA.y };
+            path.to      = { boxA.x + boxA.w * 3 / 8, boxA.y };
+            path.c1      = { path.from.x + loopSize, boxA.y - loopSize * 2 };
+            path.c2      = { path.to.x - loopSize, boxA.y - loopSize * 2 };
+            path.labelAt = { boxA.x + boxA.w / 2, boxA.y - loopSize * 2 };
+            return path;
+        }
+        const float2 ca{ float(boxA.x) + float(boxA.w) * 0.5f, float(boxA.y) + float(boxA.h) * 0.5f };
+        const float2 cb{ float(boxB.x) + float(boxB.w) * 0.5f, float(boxB.y) + float(boxB.h) * 0.5f };
+        float2 d{ cb.x - ca.x, cb.y - ca.y };
+        const float length = std::sqrt(d.x * d.x + d.y * d.y);
+        if (length <= 0.0f)
+        {
+            path.valid = false;
+            return path;
+        }
+        d = { d.x / length, d.y / length };
+        // Joined both ways: each to its own right of the way it goes, so they don't overlap.
+        const bool both = std::any_of(view.transitions.begin(), view.transitions.end(), [&](const StateTransition& t) {
+            return t.from == transition.to && t.to == transition.from;
+        });
+        const float side = both ? float(gap) : 0.0f;
+        const float2 n{ -d.y * side, d.x * side };
+        const float2 sa{ ca.x + n.x, ca.y + n.y }, sb{ cb.x + n.x, cb.y + n.y };
+        path.from    = Rounded(BoxExit(boxA, sa, sb));
+        path.to      = Rounded(BoxExit(boxB, sb, sa));
+        path.labelAt = { (path.from.x + path.to.x) / 2, (path.from.y + path.to.y) / 2 };
+        return path;
+    }
+
+    int2 TransitionLabelCentre(const TransitionPath& path, int2 size, int32_t margin)
+    {
+        const float halfW = float(size.x) * 0.5f, halfH = float(size.y) * 0.5f;
+        if (path.loop)
+        {
+            // Over the curve's top, which is the middle of its controls (see DrawnCurve).
+            const float peak = float(path.c1.y + path.c2.y) * 0.5f;
+            return { (path.from.x + path.to.x) / 2, int32_t(std::lround(peak - float(margin) - halfH)) };
+        }
+        const float2 mid{ float(path.from.x + path.to.x) * 0.5f, float(path.from.y + path.to.y) * 0.5f };
+        float2 d{ float(path.to.x - path.from.x), float(path.to.y - path.from.y) };
+        const float length = std::sqrt(d.x * d.x + d.y * d.y);
+        if (length <= 0.0f)
+            return { int32_t(mid.x), int32_t(mid.y) };
+        d = { d.x / length, d.y / length };
+        // The arrow's right as it runs, and how far the label reaches that way from its middle.
+        const float2 n{ -d.y, d.x };
+        const float reach = std::fabs(n.x) * halfW + std::fabs(n.y) * halfH + float(margin);
+        return { int32_t(std::lround(mid.x + n.x * reach)), int32_t(std::lround(mid.y + n.y * reach)) };
+    }
+
+    std::optional<ID> TransitionAt(const NodeView& view, float2 canvasPos, float tolerance, int32_t gap, int32_t loopSize)
+    {
+        // A label first: it lies beside its arrow, maybe over another.
+        for (const auto& [id, box] : view.transitionLabelBoxes)
+            if (canvasPos.x >= float(box.x) && canvasPos.y >= float(box.y)
+                && canvasPos.x < float(box.x + box.w) && canvasPos.y < float(box.y + box.h))
+                return id;
+        std::optional<ID> best;
+        float bestDistance = tolerance;
+        for (const StateTransition& t : view.transitions)
+        {
+            const TransitionPath path = StateTransitionPath(view, t, gap, loopSize);
+            if (!path.valid)
+                continue;
+            float distance = 0.0f;
+            if (path.loop)
+            {
+                // The curve, as a few segments.
+                constexpr int kSegments = 12;
+                distance = INFINITY;
+                float2 previous = F(path.from);
+                for (int s = 1; s <= kSegments; ++s)
+                {
+                    const float2 point = DrawnCurve(F(path.from), F(path.c1), F(path.c2), F(path.to), float(s) / float(kSegments));
+                    distance = std::min(distance, SegmentDistance(canvasPos, previous, point));
+                    previous = point;
+                }
+            }
+            else
+                distance = SegmentDistance(canvasPos, F(path.from), F(path.to));
+            if (distance <= bestDistance)
+            {
+                bestDistance = distance;
+                best = t.stableID;
+            }
+        }
+        return best;
+    }
+
     void ApplyNodeViewEdit(NodeView& view, const NodeViewEdit& edit, bool undo)
     {
         // Undo walks the changes backwards, so one that builds on another is undone first.
@@ -656,11 +881,34 @@ namespace tachyon
             if (backwards) for (auto it = edit.frames.rbegin(); it != edit.frames.rend(); ++it) apply(*it);
             else           for (const auto& change : edit.frames)                            apply(change);
         };
+        // Transitions as frames: added or taken out first, their changes after.
+        auto transitions = [&](bool backwards)
+        {
+            auto apply = [&](const NodeViewEdit::Transition& change) {
+                const int count = (int)view.transitions.size();
+                if (change.added != backwards)
+                    view.transitions.insert(view.transitions.begin() + std::clamp(change.index, 0, count), change.transition);
+                else if (change.index >= 0 && change.index < count)
+                {
+                    view.selectedTransitionIDs.erase(view.transitions[size_t(change.index)].stableID);
+                    view.transitions.erase(view.transitions.begin() + change.index);
+                }
+            };
+            if (backwards) for (auto it = edit.transitions.rbegin(); it != edit.transitions.rend(); ++it) apply(*it);
+            else           for (const auto& change : edit.transitions)                                 apply(change);
+        };
         if (!undo)
         {
             nodes(false);
             frames(false);
+            transitions(false);
         }
+        each(edit.transitionChanges, [&](const NodeViewEdit::TransitionChange& c, const StateTransition& transition)
+        {
+            if (c.index >= 0 && c.index < (int)view.transitions.size()) view.transitions[size_t(c.index)] = transition;
+        });
+        if (edit.initial)
+            view.initialState = undo ? edit.initial->from : edit.initial->to;
         each(edit.frameChanges, [&](const NodeViewEdit::FrameChange& c, const NodeFrame& frame)
         {
             if (c.frame >= 0 && c.frame < (int)view.frames.size()) view.frames[size_t(c.frame)] = frame;
@@ -686,6 +934,7 @@ namespace tachyon
         });
         if (undo)
         {
+            transitions(true);
             frames(true);
             nodes(true);
         }
@@ -954,6 +1203,12 @@ namespace tachyon
     float2 NodeViewScreenToCanvas(const NodeView& view, int2 screen)
     {
         return NodeViewScreenToCanvas(view.transform, IntRect{ .position = view.lastCanvasRect.position, .size = view.lastInnerSize }, screen);
+    }
+
+    float2 NodeViewScreenToNodePos(const NodeView& view, int2 screen)
+    {
+        const float2 p = NodeViewScreenToCanvas(view, screen);
+        return { p.x - float(view.lastGridOrigin.x), p.y - float(view.lastGridOrigin.y) };
     }
 
     float2 NodeViewCanvasToScreen(const NodeView& view, float2 canvasPos)

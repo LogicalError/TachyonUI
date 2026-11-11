@@ -437,7 +437,7 @@ namespace tachyon
             const int2 further = Screen(Pixel(float3{ 1, 0, 0 } * (length * 1.6f)));
             app.InjectMouseMove(onX);
             Frame();
-            EXPECT_EQ(view.hoverPart, GizmoPart::X) << "the arrow under the pointer";
+            EXPECT_EQ(view.hover.part, GizmoPart::X) << "the arrow under the pointer";
             DragWith(onX, further, MouseButtons::Left);
             EXPECT_GT(view.selection.position.x, length * 0.5f);
             EXPECT_NEAR(view.selection.position.y, 0.0f, 1e-4f);

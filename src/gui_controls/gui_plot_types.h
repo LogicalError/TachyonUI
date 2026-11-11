@@ -4,7 +4,7 @@
 // dragged along it (a Levels control's black, gray and white points).
 
 #include <gui_controls/gui_curve_types.h>
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 #include <gui_core/gui_base_types.h>
 
 #include <functional>
@@ -81,13 +81,11 @@ namespace tachyon
 
         /// @name Internal: kept between frames while the user works
         ///@{
-        PointerDrag        handleDrag;
-        PointerDrag        panDrag;               ///< the view dragged (middle, or Alt + left)
+        Gesture<std::vector<float>> handleDrag;   ///< a handle dragged; the handles as they were, for Escape and the edit
+        Gesture<float>     panDrag;               ///< the view dragged (middle, or Alt + left); its left end as it was
         float              shownXMin = 0.0f, shownXMax = 1.0f;   ///< the part of the x range in view, once zoomed
         bool               shownSet = false;      ///< false: all of the x range
-        float              panFromMin = 0.0f;     ///< shownXMin when the drag began
         int                activeHandle = 0;      ///< the one dragged last; the arrow keys move it
-        std::vector<float> before;                ///< the handles as they were, for Escape and the edit
         IntRect            plotRect {};           ///< the plot last frame, in screen pixels
         float              hoverX = 0.0f;         ///< where the pointer is, along x
         bool               hovered = false;

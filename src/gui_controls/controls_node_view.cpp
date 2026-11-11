@@ -66,6 +66,165 @@ namespace tachyon
                 view.onEdit(edit);
         }
 
+        // Joins `from` to `to` (stableIDs) with a new transition as one edit, unless they're
+        // joined that way already.
+        void AddTransitionIfNew(NodeView& view, ID from, ID to, IDManager& ids)
+        {
+            const bool joined = std::any_of(view.transitions.begin(), view.transitions.end(),
+                [&](const StateTransition& t) { return t.from == from && t.to == to; });
+            if (!joined)
+                CommitNodeViewEdit(view, AddTransitionEdit(view, StateTransition{ .stableID = ids.CreateStaticID(), .from = from, .to = to }));
+        }
+
+        // The state whose band holds `p` (node.pos space): the ring `band` wide round its box,
+        // outside it, where a press starts a transition. The frontmost when several do; -1 for
+        // none, or when `p` is in a state's box (that state's, to move it).
+        int StateBandAt(const NodeView& view, float2 p, float band)
+        {
+            if (NodeAtCanvasPos(view, p) >= 0)
+                return -1;
+            for (auto it = view.ordering.rbegin(); it != view.ordering.rend(); ++it)
+            {
+                const int n = *it;
+                if (n < 0 || n >= (int)view.nodes.size()) continue;
+                const NodeModel& node = view.nodes[size_t(n)];
+                if (node.hidden || node.lastSize.x <= 0 || node.lastSize.y <= 0) continue;
+                const float x0 = float(node.pos.x) - band, y0 = float(node.pos.y) - band;
+                const float x1 = float(node.pos.x + node.lastSize.x) + band, y1 = float(node.pos.y + node.lastSize.y) + band;
+                if (p.x >= x0 && p.y >= y0 && p.x <= x1 && p.y <= y1)
+                    return n;
+            }
+            return -1;
+        }
+
+        // A transition's label as registered this frame, and its size.
+        // chip: node.pos space; state: Hover while it or its arrow is under the pointer, Selected
+        // with its transition, so a label shows which arrow it belongs to.
+        struct TransitionLabel { ID transition; TextID text; int2 size; IntRect chip; ElementState state; };
+
+        // A state machine's marks and arrows, in the canvas's own draw (content-box space:
+        // node.pos + gridOrigin). The states are the nodes, drawn as nodes are.
+        //   - the initial state: a dot and a short arrow into its left edge
+        //   - the state the machine is in: a ring round it
+        //   - a state holding a machine: two small stacked boxes at its bottom right
+        //   - a state whose edge is hovered (or being drawn from): a ring round it
+        //   - each transition: an arrow, lit hovered, in the accent selected, its label on it
+        //   - a transition being drawn: dashed, to the state under the pointer, or the pointer
+        void DrawStateMachine(CustomDrawContext& ctx, const GUITheme& theme, const StyleManager& styles, const NodeView& view,
+                              int2 gridOrigin, std::span<const TransitionLabel> labels, int32_t gap, int32_t loop,
+                              bool canvasHovered, int2 pointer, ID pointedState, ID bandLit, int32_t band)
+        {
+            auto box = [&](const NodeModel& node) {
+                return IntRect{ node.pos.x + gridOrigin.x, node.pos.y + gridOrigin.y, node.lastSize.x, node.lastSize.y };
+            };
+            const int32_t ring = styles.Px(3);
+            auto around = [&](IntRect r, int32_t by) { return IntRect{ r.x - by, r.y - by, r.w + 2 * by, r.h + 2 * by }; };
+            // An arrowhead with its tip on `tip`, pointing away from `from`.
+            auto head = [&](float2 tip, float2 from, VisualColorStyleIndex color) {
+                float2 d{ tip.x - from.x, tip.y - from.y };
+                const float length = std::sqrt(d.x * d.x + d.y * d.y);
+                if (length <= 0.0f) return;
+                d = { d.x / length, d.y / length };
+                const float l = styles.Px(10.0f), w = styles.Px(5.0f);
+                const float2 base{ tip.x - d.x * l, tip.y - d.y * l };
+                ctx.RenderTriangle(tip, { base.x - d.y * w, base.y + d.x * w }, { base.x + d.y * w, base.y - d.x * w }, color);
+            };
+            auto f = [](int2 p) { return float2{ float(p.x), float(p.y) }; };
+
+            for (const NodeModel& node : view.nodes)
+            {
+                if (node.hidden || node.lastSize.x <= 0 || node.lastSize.y <= 0) continue;
+                const IntRect b = box(node);
+                if (node.stableID == view.activeState)
+                    ctx.RenderBox(around(b, ring), theme.nodeStateActiveStyleRef.visualBoxStyleIndex);
+                // The band a transition is drawn from, along its middle: faint while the pointer
+                // is on the state or round it, lit on the band itself.
+                if (node.stableID == pointedState)
+                    ctx.RenderBox(around(b, band / 2), theme.nodeStateEdgeStyleRef.visualBoxStyleIndex,
+                                  node.stableID == bandLit ? ElementState::Hover : ElementState::None);
+                if (node.stableID == view.initialState)
+                {
+                    const int32_t reach = styles.Px(28), radius = styles.Px(4);
+                    const int2 into{ b.x, b.y + b.h / 2 };
+                    const int2 start{ b.x - reach, into.y };
+                    ctx.RenderDisc(start, float(radius), theme.nodeInitialStateColor);
+                    ctx.RenderLine(start, { into.x - styles.Px(8), into.y }, LineStyle{ .colorStyleIndex = theme.nodeInitialStateColor, .lineWidth = styles.Px(2.0f) });
+                    head(f(into), f(start), theme.nodeInitialStateColor);
+                }
+                if (node.subMachine)
+                {
+                    const int32_t s = styles.Px(7), o = styles.Px(3), m = styles.Px(6);
+                    const IntRect back{ b.x + b.w - m - s, b.y + b.h - m - s - o, s, s };
+                    ctx.RenderBox(back, theme.nodeStateNestedStyleRef.visualBoxStyleIndex);
+                    ctx.RenderBox(IntRect{ back.x - o, back.y + o, s, s }, theme.nodeStateNestedStyleRef.visualBoxStyleIndex);
+                }
+            }
+
+            const std::optional<ID> hovered = view.hoveredTransition.Shown(canvasHovered);
+            for (const StateTransition& t : view.transitions)
+            {
+                TransitionPath path = StateTransitionPath(view, t, gap, loop);
+                if (!path.valid) continue;
+                for (int2* p : { &path.from, &path.to, &path.c1, &path.c2, &path.labelAt })
+                    *p = *p + gridOrigin;
+                const bool selected = view.selectedTransitionIDs.contains(t.stableID);
+                const bool lit = hovered == t.stableID;
+                const VisualColorStyleIndex color = selected ? theme.nodeTransitionSelectedColor
+                                                  : lit      ? theme.nodeTransitionHoverColor : theme.nodeTransitionColor;
+                const LineStyle style{ .colorStyleIndex = color, .lineWidth = styles.Px(lit || selected ? 3.0f : 2.0f) };
+                // The line stops short of the tip, under the head.
+                if (path.loop)
+                {
+                    ctx.RenderLine(path.from, path.c1, path.c2, path.to, style);
+                    head(f(path.to), f(path.c2), color);
+                }
+                else
+                {
+                    ctx.RenderLine(path.from, path.to, style);
+                    head(f(path.to), f(path.from), color);
+                }
+            }
+            // The labels over every arrow: beside their own, as laid out (node.pos space), the
+            // text centred in each.
+            for (const TransitionLabel& label : labels)
+            {
+                const IntRect chip{ label.chip.x + gridOrigin.x, label.chip.y + gridOrigin.y, label.chip.w, label.chip.h };
+                ctx.RenderBox(chip, theme.nodeTransitionLabelStyleRef.visualBoxStyleIndex, label.state);
+                ctx.RenderText(label.text, IntRect{ chip.x + (chip.w - label.size.x) / 2, chip.y + (chip.h - label.size.y) / 2,
+                                                    label.size.x, label.size.y });
+            }
+
+            // The transition being drawn: dashed, to the state under the pointer, or to it.
+            if (view.transitionDrag.Phase() == GesturePhase::Dragging || view.transitionPicking)
+            {
+                const int from = NodeIndex(view, view.transitionFrom);
+                if (from < 0) return;
+                const IntRect a = box(view.nodes[size_t(from)]);
+                const float2 ca{ float(a.x) + float(a.w) * 0.5f, float(a.y) + float(a.h) * 0.5f };
+                float2 to = f(pointer);
+                const int target = NodeAtCanvasPos(view, float2{ float(pointer.x - gridOrigin.x), float(pointer.y - gridOrigin.y) });
+                if (target >= 0 && target != from)
+                {
+                    // Onto the edge of the state it would join: where the line from that state's
+                    // centre towards this one leaves it.
+                    const IntRect b = box(view.nodes[size_t(target)]);
+                    const float2 cb{ float(b.x) + float(b.w) * 0.5f, float(b.y) + float(b.h) * 0.5f };
+                    const float2 d{ ca.x - cb.x, ca.y - cb.y };
+                    float t = 1.0f;
+                    if (d.x > 0.0f) t = std::min(t, (float(b.x + b.w) - cb.x) / d.x);
+                    if (d.x < 0.0f) t = std::min(t, (float(b.x) - cb.x) / d.x);
+                    if (d.y > 0.0f) t = std::min(t, (float(b.y + b.h) - cb.y) / d.y);
+                    if (d.y < 0.0f) t = std::min(t, (float(b.y) - cb.y) / d.y);
+                    t = std::clamp(t, 0.0f, 1.0f);
+                    to = { cb.x + d.x * t, cb.y + d.y * t };
+                }
+                const LineStyle dashed{ .colorStyleIndex = theme.nodeTransitionHoverColor, .lineWidth = styles.Px(2.0f), .dashSize = styles.Px(5.0f) };
+                const int2 tip{ int32_t(std::lround(to.x)), int32_t(std::lround(to.y)) };
+                ctx.RenderLine({ int32_t(std::lround(ca.x)), int32_t(std::lround(ca.y)) }, tip, dashed);
+                head(to, ca, theme.nodeTransitionHoverColor);
+            }
+        }
+
         // The dragged wire was released nowhere: pulled off an input, it is a disconnect.
         void CancelConnection(NodeView& view)
         {
@@ -120,25 +279,46 @@ namespace tachyon
         //
         // A drag that ended without a Drop on us (e.g. released in empty space) leaves
         // a stale pending wire; clear it.
-        if (view.pendingConnection.active && !guiStateManager.Drag().IsDragging())
+        if (view.pendingConnection.IsActive() && !guiStateManager.Drag().IsDragging())
             CancelConnection(view);
         view.pendingConnection.target = {};
 
+        // A state machine: its nodes are states, without fields, and transitions join them.
+        const bool    stateMachine    = view.kind == NodeViewKind::StateMachine;
+        const int32_t transitionGap   = styleManager.Px(6);    // a pair both ways: each this far to its side
+        const int32_t transitionLoop  = styleManager.Px(24);   // how far a loop rises over its state
+        const float   transitionReach = float(styleManager.Px(7)) / std::max(NodeViewZoom(view), 0.01f);   // node.pos units
+        const float   stateBand       = float(styleManager.Px(12)) / std::max(NodeViewZoom(view), 0.01f);   // node.pos units
+        if (view.renamingTransition && TransitionIndex(view, *view.renamingTransition) < 0)
+            view.renamingTransition.reset();
+        std::erase_if(view.selectedTransitionIDs, [&view](ID id) { return TransitionIndex(view, id) < 0; });
+
         ID canvasID = idManager.AllocateDynamicID();
+        // The canvas places its nodes by pan and zoom (view.transform), never by scrolling: a
+        // scroll (a field bringing its caret into view) would move the nodes away from what the
+        // canvas draws itself, its wires and arrows. Whatever scrolled it is undone here.
+        {
+            auto& scrolling = guiStateManager.GetScrollManagement();
+            const auto handle = scrolling.GetScrollOffsetHandle(canvasID);
+            if (scrolling.IsScrollOffsetHandleValid(handle) && scrolling.GetScrollOffset(handle) != int2{ 0, 0 })
+                scrolling.SetScrollOffset(handle, int2{ 0, 0 });
+        }
         const ID wireMenuID   = idManager.AllocateDynamicID("wire-menu");     // owns the wire context menu
         const ID canvasMenuID = idManager.AllocateDynamicID("canvas-menu");   // the canvas's (onCanvasContextMenu)
         const ID nodeMenuID   = idManager.AllocateDynamicID("node-menu");     // a node's (onNodeContextMenu)
         const ID frameMenuID  = idManager.AllocateDynamicID("frame-menu");    // a frame's (onFrameContextMenu)
+        const ID transitionMenuID = idManager.AllocateDynamicID("transition-menu");   // a transition's
 
         // Opens one of the view's context menus at `screen`; the others close.
         auto openMenu = [this, &view](ID menuID, int2 screen, std::optional<uint32_t> wire,
                                       std::optional<float2> canvasPos, std::optional<ID> node,
-                                      std::optional<ID> frame = std::nullopt)
+                                      std::optional<ID> frame = std::nullopt, std::optional<ID> transition = std::nullopt)
         {
             view.wireMenuWire   = wire;
             view.canvasMenuPos  = canvasPos;
             view.nodeMenuNode   = node;
             view.frameMenuFrame = frame;
+            view.transitionMenuTransition = transition;
             OpenContextMenu(menuID, screen);
         };
 
@@ -188,8 +368,14 @@ namespace tachyon
             // it. The app's node menu is for its nodes.
             if (open && it->reroute)
                 MenuItem("Remove reroute", [&view, node] { CommitNodeViewEdit(view, RemoveRerouteEdit(view, node)); });
-            else if (open && view.onNodeContextMenu)
-                view.onNodeContextMenu(node);
+            else
+            {
+                // A state's own first: a transition from it, as a drag from its band draws.
+                if (open && view.kind == NodeViewKind::StateMachine)
+                    MenuItem("Add transition", [&view, node] { StartTransition(view, node); });
+                if (open && view.onNodeContextMenu)
+                    view.onNodeContextMenu(node);
+            }
             if (there)
                 EndContextMenu();
             if (!open)
@@ -209,6 +395,26 @@ namespace tachyon
             if (!open)
                 view.frameMenuFrame.reset();
         }
+        // A transition's: relabel it, delete it, and the app's items after.
+        if (view.transitionMenuTransition)
+        {
+            const int  t    = TransitionIndex(view, *view.transitionMenuTransition);
+            const bool open = t >= 0 && BeginContextMenu(transitionMenuID);
+            if (open)
+            {
+                MenuItem("Rename", [&view, t] { RenameTransition(view, t); });
+                MenuItem("Delete transition", [&view, id = *view.transitionMenuTransition] {
+                    const ID only[] = { id };
+                    CommitNodeViewEdit(view, RemoveTransitionsEdit(view, only));
+                });
+                if (view.onTransitionContextMenu)
+                    view.onTransitionContextMenu(t);
+            }
+            if (t >= 0)
+                EndContextMenu();
+            if (!open)
+                view.transitionMenuTransition.reset();
+        }
 
         // Edit-mode wiring: while this canvas has focus, set the command
         // manager to the view's mode; restore Default when focus leaves.
@@ -225,7 +431,8 @@ namespace tachyon
         tachyon::Element canvas
         {
             .id = canvasID,
-            .eventHandler = [this, &view, canvasID, wireMenuID, canvasMenuID, nodeMenuID, frameMenuID, openMenu](ElementEvent&& event)->bool
+            .eventHandler = [this, &view, canvasID, wireMenuID, canvasMenuID, nodeMenuID, frameMenuID, transitionMenuID, openMenu,
+                             stateMachine, transitionGap, transitionLoop, transitionReach, stateBand](ElementEvent&& event)->bool
             {
                 switch (event.type)
                 {
@@ -235,42 +442,89 @@ namespace tachyon
                         // that doesn't move removes the wire under the mouse, at the release.
                         if (const MouseButtons panButton = PanDragButton(event.state); panButton != MouseButtons::None)
                         {
-                            this->guiStateManager.Interaction().SetFocusID(canvasID);
-                            view.pan.Press(event, elementStorage, panButton);
-                            view.panStart = view.transform;
+                            view.pan.Press(event, elementStorage, this->guiStateManager, view.transform,
+                                           { .button = panButton, .focusID = canvasID, .capture = false });
                             return true;
                         }
                         // A right click opens a menu, at the release.
-                        if (view.menuPress.Press(event, elementStorage, MouseButtons::Right))
-                        {
-                            this->guiStateManager.Interaction().SetFocusID(canvasID);
+                        if (view.menuPress.Press(event, elementStorage, this->guiStateManager, {},
+                                                 { .button = MouseButtons::Right, .focusID = canvasID, .capture = false }))
                             return true;
-                        }
                         if (!event.state.LeftDown())
                             return false;
-                        this->guiStateManager.Interaction().SetFocusID(canvasID);
-                        if (view.marquee.Press(event, elementStorage))
+                        TakeFocus(this->guiStateManager, canvasID);
+                        // A transition from a menu, waiting for a state: a press off the states drops it.
+                        if (view.transitionPicking)
                         {
-                            // Begin marquee. Only SCREEN positions are captured here; the
-                            // screen->CANVAS_LAY conversion is done from the LIVE canvas
-                            // rect each MouseMove (see screenToCanvasLay below).
-                            view.marqueeCurrentScreen = event.state.screenPos;
-                            view.marqueeBaseSelection = view.selectedNodeIDs;
-                            view.marqueeBaseFrames    = view.selectedFrameIDs;
-                            view.marqueeShift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
-                            view.marqueeCtrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
+                            view.transitionPicking = false;
+                            view.transitionFrom    = ID::Invalid();
+                            return true;
                         }
+                        // The band round a state: a transition drawn from it.
+                        if (stateMachine)
+                            if (const int s = StateBandAt(view, NodeViewScreenToNodePos(view, event.state.screenPos), stateBand); s >= 0)
+                            {
+                                view.transitionDrag.Press(event, elementStorage, this->guiStateManager, {}, { .focus = false });
+                                view.transitionFrom    = view.nodes[size_t(s)].stableID;
+                                view.transitionPointer = event.state.screenPos;
+                                return true;
+                            }
+                        // A state machine's arrow: selected (Shift adds it, Ctrl toggles it); a
+                        // double-click relabels it.
+                        if (stateMachine)
+                            if (const std::optional<ID> t = TransitionAt(view, NodeViewScreenToNodePos(view, event.state.screenPos),
+                                                                         transitionReach, transitionGap, transitionLoop))
+                            {
+                                if (view.transitionClicks.IsDoubleClick(*t))
+                                {
+                                    RenameTransition(view, TransitionIndex(view, *t));
+                                    return true;
+                                }
+                                const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
+                                const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
+                                if (shift)
+                                    view.selectedTransitionIDs.insert(*t);
+                                else if (ctrl)
+                                {
+                                    if (!view.selectedTransitionIDs.erase(*t)) view.selectedTransitionIDs.insert(*t);
+                                }
+                                else
+                                {
+                                    view.selectedTransitionIDs = { *t };
+                                    view.selectedNodeIDs.clear();
+                                    view.selectedFrameIDs.clear();
+                                }
+                                return true;
+                            }
+                        // Begin marquee. Only SCREEN positions are captured here; the
+                        // screen->CANVAS_LAY conversion is done from the LIVE canvas rect each
+                        // MouseMove (see screenToCanvasLay below).
+                        if (view.marquee.Press(event, elementStorage, this->guiStateManager,
+                                               { view.selectedNodeIDs, view.selectedFrameIDs,
+                                                 (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None,
+                                                 (event.state.modifiers & KeyModifier::Control) != KeyModifier::None },
+                                               { .focus = false, .capture = false }))
+                            view.marqueeCurrentScreen = event.state.screenPos;
                         return true;
                     }
                     case tachyon::EventType::MouseMove:
                     {
+                        if (view.transitionPicking)
+                            view.transitionPointer = event.state.screenPos;
+                        // A transition being drawn follows the pointer.
+                        if (view.transitionDrag.IsPressed(event.id))
+                        {
+                            view.transitionDrag.Move(event, styleManager.Px(kDragStartDistance));
+                            view.transitionPointer = event.state.screenPos;
+                            return true;
+                        }
                         // A right press moved past the drag distance opens no menu at its release.
                         if (view.menuPress.IsPressed(event.id))
                         {
                             view.menuPress.Move(event, styleManager.Px(kDragStartDistance));
                             return true;
                         }
-                        if (view.pan.IsPressed(event.id) && (event.state.buttons & view.pan.button) != MouseButtons::None)
+                        if (view.pan.IsPressed(event.id) && (event.state.buttons & view.pan.drag.button) != MouseButtons::None)
                         {
                             // Pans from the first move; past the drag distance the release isn't a click.
                             view.pan.Move(event, styleManager.Px(kDragStartDistance));
@@ -290,7 +544,7 @@ namespace tachyon
                                     view.nodes,
                                     event.rect->innerRect,
                                     view.transform,
-                                    view.marquee.pressScreen,
+                                    view.marquee.drag.pressScreen,
                                     view.marqueeCurrentScreen);
                                 std::erase_if(hit, [&view](ID id) {   // not what a collapsed frame hides
                                     return std::any_of(view.nodes.begin(), view.nodes.end(),
@@ -300,7 +554,7 @@ namespace tachyon
                                 // drawn: a collapsed one by its box, a hidden one not at all.
                                 std::unordered_set<ID> framesHit;
                                 {
-                                    const float2 a = NodeViewScreenToCanvas(view.transform, event.rect->innerRect, view.marquee.pressScreen);
+                                    const float2 a = NodeViewScreenToCanvas(view.transform, event.rect->innerRect, view.marquee.drag.pressScreen);
                                     const float2 b = NodeViewScreenToCanvas(view.transform, event.rect->innerRect, view.marqueeCurrentScreen);
                                     const float2 lo{ std::min(a.x, b.x), std::min(a.y, b.y) }, hi{ std::max(a.x, b.x), std::max(a.y, b.y) };
                                     for (size_t f = 0; f < view.frames.size() && f < view.frameBoxes.size(); ++f)
@@ -316,32 +570,58 @@ namespace tachyon
                                 auto apply = [&](std::unordered_set<ID>& selection, const std::unordered_set<ID>& base,
                                                  const std::unordered_set<ID>& inside)
                                 {
-                                    if (view.marqueeShift || view.marqueeCtrl)
+                                    const NodeView::MarqueeStart& start = view.marquee.before;
+                                    if (start.shift || start.ctrl)
                                     {
                                         selection = base;
                                         for (ID id : inside)
-                                            if (!view.marqueeCtrl || !selection.erase(id)) selection.insert(id);
+                                            if (!start.ctrl || !selection.erase(id)) selection.insert(id);
                                     }
                                     else
                                         selection = inside;
                                 };
-                                apply(view.selectedNodeIDs, view.marqueeBaseSelection, hit);
-                                apply(view.selectedFrameIDs, view.marqueeBaseFrames, framesHit);
+                                apply(view.selectedNodeIDs, view.marquee.before.nodes, hit);
+                                apply(view.selectedFrameIDs, view.marquee.before.frames, framesHit);
                             }
                             return true;
                         }
+                        // A state's band, or a state machine's arrow, under the pointer, for their
+                        // hover looks.
+                        if (stateMachine)
+                            view.stateEdgeHover.Track(AnyHeld(view.marquee, view.pan, view.transitionDrag), [&] {
+                                const int s = StateBandAt(view, NodeViewScreenToNodePos(view, event.state.screenPos), stateBand);
+                                return s >= 0 ? view.nodes[size_t(s)].stableID : ID::Invalid();
+                            });
+                        if (stateMachine)
+                            view.hoveredTransition.Track(AnyHeld(view.marquee, view.pan, view.transitionDrag), [&] {
+                                return TransitionAt(view, NodeViewScreenToNodePos(view, event.state.screenPos),
+                                                    transitionReach, transitionGap, transitionLoop);
+                            });
                         return false;
                     }
                     case tachyon::EventType::MouseUp:
                     {
+                        // A transition let go over a state (or back over its own) joins them,
+                        // unless they're joined that way already.
+                        if (view.transitionDrag.IsPressed(event.id))
+                        {
+                            if (view.transitionDrag.Release(event) == PointerDrag::Ended::Drag)
+                            {
+                                const int target = NodeAtCanvasPos(view, NodeViewScreenToNodePos(view, event.state.screenPos));
+                                if (target >= 0 && !view.nodes[size_t(target)].hidden)
+                                    AddTransitionIfNew(view, view.transitionFrom, view.nodes[size_t(target)].stableID, idManager);
+                            }
+                            view.transitionFrom = ID::Invalid();
+                            return true;
+                        }
                         // A middle click that didn't drag the view: the wire under the mouse goes.
-                        const MouseButtons panButton = view.pan.button;
+                        const MouseButtons panButton = view.pan.drag.button;
                         if (const PointerDrag::Ended panned = view.pan.Release(event); panned != PointerDrag::Ended::No)
                         {
-                            if (panned == PointerDrag::Ended::Click && panButton == MouseButtons::Middle && view.hoveredWire)
+                            if (panned == PointerDrag::Ended::Click && panButton == MouseButtons::Middle && view.hoveredWire.part)
                             {
-                                CommitNodeViewEdit(view, DisconnectEdit(view, WireInput(*view.hoveredWire)));
-                                view.hoveredWire.reset();
+                                CommitNodeViewEdit(view, DisconnectEdit(view, WireInput(*view.hoveredWire.part)));
+                                view.hoveredWire.Clear();
                             }
                             return true;
                         }
@@ -355,9 +635,18 @@ namespace tachyon
                             const float2 at = NodeViewScreenToCanvas(view.transform,
                                 IntRect{ .position = event.rect->innerRect.position, .size = view.lastInnerSize }, event.state.screenPos);
                             const int n = NodeAtCanvasPos(view, at);
-                            if (n < 0 && view.hoveredWire)
+                            // A state machine's arrow: its menu, the transition selected.
+                            if (stateMachine && n < 0)
+                                if (const std::optional<ID> t = TransitionAt(view, NodeViewScreenToNodePos(view, event.state.screenPos), transitionReach, transitionGap, transitionLoop))
+                                {
+                                    if (!view.selectedTransitionIDs.contains(*t))
+                                        view.selectedTransitionIDs = { *t };
+                                    openMenu(transitionMenuID, event.state.screenPos, std::nullopt, std::nullopt, std::nullopt, std::nullopt, *t);
+                                    return true;
+                                }
+                            if (n < 0 && view.hoveredWire.part)
                             {
-                                openMenu(wireMenuID, event.state.screenPos, view.hoveredWire, std::nullopt, std::nullopt);
+                                openMenu(wireMenuID, event.state.screenPos, view.hoveredWire.part, std::nullopt, std::nullopt);
                                 view.wireMenuPos = at;
                                 return true;
                             }
@@ -394,10 +683,11 @@ namespace tachyon
                         if (const PointerDrag::Ended ended = view.marquee.Release(event); ended != PointerDrag::Ended::No)
                         {
                             // Bare click on empty background - clear selection.
-                            if (ended == PointerDrag::Ended::Click && !view.marqueeShift && !view.marqueeCtrl)
+                            if (ended == PointerDrag::Ended::Click && !view.marquee.before.shift && !view.marquee.before.ctrl)
                             {
                                 view.selectedNodeIDs.clear();
                                 view.selectedFrameIDs.clear();
+                                view.selectedTransitionIDs.clear();
                             }
                             return true;
                         }
@@ -444,20 +734,21 @@ namespace tachyon
                     case tachyon::EventType::KeyDown:
                     {
                         // Escape during a marquee or a pan puts the selection or the view back.
-                        if (IsDragCancelKey(event.state))
+                        if (view.transitionDrag.Cancel(event, guiStateManager)
+                            || (view.transitionPicking && IsDragCancelKey(event.state)))
                         {
-                            if (view.marquee.Cancel(event.id))
-                            {
-                                view.selectedNodeIDs  = view.marqueeBaseSelection;
-                                view.selectedFrameIDs = view.marqueeBaseFrames;
-                                return true;
-                            }
-                            if (view.pan.Cancel(event.id))
-                            {
-                                view.transform = view.panStart;
-                                return true;
-                            }
+                            view.transitionPicking = false;
+                            view.transitionFrom    = ID::Invalid();
+                            return true;
                         }
+                        if (view.marquee.Cancel(event, guiStateManager))
+                        {
+                            view.selectedNodeIDs  = view.marquee.before.nodes;
+                            view.selectedFrameIDs = view.marquee.before.frames;
+                            return true;
+                        }
+                        if (view.pan.Cancel(event, guiStateManager, view.transform))
+                            return true;
                         // With the canvas focused, the keys do what the mouse does: Home frames the
                         // selected nodes, or all of them; the arrows move the selected nodes a grid step (Shift: four), or pan
                         // the view when none is selected; + and - zoom; Ctrl+A selects every node,
@@ -665,6 +956,8 @@ namespace tachyon
                             {
                                 if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
                                 // Arm the drag; pendingConnection activates only once it passes the threshold.
+                                view.pendingConnection = {};
+                                view.pendingConnection.press.Press(event, elementStorage, guiStateManager, {}, { .focus = false, .capture = false });
                                 guiStateManager.Drag().Begin(
                                     sockID, kSocketPayload, EncodeEndpoint(self),
                                     event.state.screenPos, std::any(),
@@ -678,7 +971,7 @@ namespace tachyon
                                 // Post-threshold: the pending wire is real and tracks the cursor.
                                 if (guiStateManager.Drag().GetDraggedID() == sockID)
                                 {
-                                    view.pendingConnection.active        = true;
+                                    view.pendingConnection.press.Move(event, 0);
                                     view.pendingConnection.source        = self;
                                     view.pendingConnection.currentScreen = event.state.screenPos;
                                     return true;
@@ -723,6 +1016,8 @@ namespace tachyon
                                 if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
                                 auto& prop = view.nodes[self.nodeIdx].properties[self.propIdx];
                                 const bool wired = prop.input.has_value() && prop.input->valid();
+                                view.pendingConnection = {};
+                                view.pendingConnection.press.Press(event, elementStorage, guiStateManager, {}, { .focus = false, .capture = false });
                                 guiStateManager.Drag().Begin(
                                     sockID, wired ? kSocketPayload : kInputSocketPayload, EncodeEndpoint(wired ? *prop.input : self),
                                     event.state.screenPos, std::any(), DragVisualizer{});
@@ -737,7 +1032,7 @@ namespace tachyon
                                 // source and the loose end handed to the dragged wire, which
                                 // starts at the source output and follows the cursor. An unwired
                                 // one's wire starts here.
-                                if (!view.pendingConnection.active)
+                                if (!view.pendingConnection.IsActive())
                                 {
                                     auto& prop = view.nodes[self.nodeIdx].properties[self.propIdx];
                                     if (prop.input.has_value() && prop.input->valid())
@@ -751,7 +1046,7 @@ namespace tachyon
                                         view.pendingConnection.source    = self;
                                         view.pendingConnection.fromInput = true;
                                     }
-                                    view.pendingConnection.active = true;
+                                    view.pendingConnection.press.Move(event, 0);
                                 }
                                 view.pendingConnection.currentScreen = event.state.screenPos;
                                 return true;
@@ -813,7 +1108,7 @@ namespace tachyon
                                         ConnectionAllowed(view, view.pendingConnection.source, self);
                 if (dropTarget)
                     view.pendingConnection.target = self;
-                highlight = dropTarget || (!readonly && connected && hovered && !view.pendingConnection.active);
+                highlight = dropTarget || (!readonly && connected && hovered && !view.pendingConnection.IsActive());
             }
 
             // A pin on the node's edge: filled when connected, a ring when not, with an
@@ -865,6 +1160,116 @@ namespace tachyon
             nodeBottomChromeV = nodeLS->borderWidths.bottom + nodeLS->padding.bottom;
             socketInsetL  += nodeLS->borderWidths.left  + nodeLS->padding.left;
             socketInsetR  += nodeLS->borderWidths.right + nodeLS->padding.right;
+        }
+        // A state's border (.node-state), top and bottom alike: its header fills the rest.
+        int32_t nodeBorderV = 0;
+        if (const tachyon::LayoutStyle* stateLS = styleManager.GetLayoutStyle(theme.nodeStateStyleRef.layoutStyleIndex))
+            nodeBorderV = stateLS->borderWidths.top;
+
+        // A field over a title or a label being renamed, the focus in it (view.renameText).
+        // Enter keeps the new text, as does going elsewhere; Escape keeps the old one. True
+        // once it's done, with `keep` saying which. The key is taken: the focus goes back to
+        // the canvas, where Enter would otherwise collapse a frame and Escape clear the selection.
+        auto renameField = [&](const char* name, StyleRef style, IntRect rect, bool& keep) -> bool
+        {
+            const ID fieldID = idManager.AllocateDynamicID(name);
+            const ID focused = guiStateManager.Interaction().GetFocusedID();
+            keep = view.renameFocused && focused != fieldID;
+            bool cancel = false;
+            if (inputManager && view.renameFocused && focused == fieldID)
+            {
+                const auto& events = inputManager->GetRecordedEvents();
+                for (size_t e = 0; e < events.size(); ++e)
+                {
+                    if (events[e].type != EventType::KeyDown || events[e].consumed) continue;
+                    switch (events[e].state.lastKey)
+                    {
+                        case KeyCode::Return: case KeyCode::Return2: case KeyCode::KeyPadEnter:
+                            keep = true; inputManager->ConsumeEvent(e); break;
+                        case KeyCode::Escape:
+                            cancel = true; inputManager->ConsumeEvent(e); break;
+                        default: break;
+                    }
+                }
+            }
+            if (cancel || keep)
+            {
+                keep = keep && !cancel;
+                if (focused == fieldID)
+                    guiStateManager.Interaction().SetFocusID(canvasID);
+                return true;
+            }
+            if (!view.renameFocused)
+            {
+                // Without scrolling to it: it opens where it was asked for, and the canvas's
+                // scroll would move the nodes away from what the canvas draws itself (wires,
+                // arrows), which its pan and zoom place instead.
+                guiStateManager.Interaction().SetFocusIDNoScroll(fieldID);
+                view.renameFocused = true;
+            }
+            Field(fieldID, view.renameText, TextEditBehavior::ContinuousUpdate, style,
+                  LayoutOverride{}.FixedSize(Pixels{ rect.w }, Pixels{ rect.h }).Absolute(rect.x, rect.y));
+            return false;
+        };
+
+        // ---- State machine: the transitions' labels, and the field relabelling one ----
+        std::vector<TransitionLabel> transitionLabels;
+        const int2    labelPad{ styleManager.Px(6), styleManager.Px(1) };   // the chip round a label's text
+        const int32_t labelMargin = styleManager.Px(4);                     // between a label and its arrow
+        view.transitionLabelBoxes.clear();
+        if (stateMachine)
+        {
+            // The transition under the pointer last frame, its arrow or its label.
+            const std::optional<ID> hoveredTransition =
+                view.hoveredTransition.Shown(guiStateManager.Interaction().GetHoveredID() == canvasID);
+            for (const StateTransition& t : view.transitions)
+            {
+                if (t.label.empty() || view.renamingTransition == t.stableID)
+                    continue;
+                ElementState labelState = ElementState::None;
+                if (hoveredTransition == t.stableID)                labelState |= ElementState::Hover;
+                if (view.selectedTransitionIDs.contains(t.stableID)) labelState |= ElementState::Selected;
+                [[maybe_unused]] const bool pushedLabel = idManager.PushParent(t.stableID);
+                const ID labelID = idManager.AllocateDynamicID("transition-label");
+                if (pushedLabel)
+                    (void)idManager.PopParent();
+                const TextID text = textSystem->RegisterText(labelID, t.label, theme.nodeTransitionLabelStyleRef, labelState);
+                const TextMeasurement m = textSystem->MeasureText(text, TextWrapContext{});
+                const TransitionPath path = StateTransitionPath(view, t, transitionGap, transitionLoop);
+                if (!path.valid)
+                    continue;
+                const int2 size{ m.maxWidth + 2 * labelPad.x, m.maxHeight + 2 * labelPad.y };
+                const int2 centre = TransitionLabelCentre(path, size, labelMargin);
+                const IntRect chip{ centre.x - size.x / 2, centre.y - size.y / 2, size.x, size.y };
+                transitionLabels.push_back({ t.stableID, text, { m.maxWidth, m.maxHeight }, chip, labelState });
+                view.transitionLabelBoxes.push_back({ t.stableID, chip });
+            }
+            if (view.renamingTransition)
+            {
+                const int t = TransitionIndex(view, *view.renamingTransition);
+                const StateTransition& transition = view.transitions[size_t(t)];
+                const TransitionPath path = StateTransitionPath(view, transition, transitionGap, transitionLoop);
+                // Exactly where the label is: its chip round the text as typed so far (an
+                // empty one a few characters wide), growing as it's typed.
+                const TextID measured = textSystem->RegisterText(idManager.AllocateDynamicID("transition-rename-measure"),
+                                                                 view.renameText.empty() ? std::string("    ") : view.renameText,
+                                                                 theme.nodeTransitionLabelStyleRef, ElementState::None);
+                const TextMeasurement m = textSystem->MeasureText(measured, TextWrapContext{});
+                const int2 size{ m.maxWidth + 2 * labelPad.x, m.maxHeight + 2 * labelPad.y };
+                const int2 centre = TransitionLabelCentre(path, size, labelMargin);
+                bool keep = false;
+                if (renameField("transition-rename", theme.nodeTransitionRenameStyleRef,
+                                IntRect{ centre.x - size.x / 2, centre.y - size.y / 2, size.x, size.y }, keep))
+                {
+                    if (keep && view.renameText != transition.label)
+                    {
+                        StateTransition relabelled = transition;
+                        relabelled.label = view.renameText;
+                        CommitNodeViewEdit(view, NodeViewEdit{ .transitionChanges = { { t, transition, relabelled } } });
+                    }
+                    view.renamingTransition.reset();
+                }
+            }
         }
 
         // ---- Frames: behind the wires and the nodes ----
@@ -1037,7 +1442,8 @@ namespace tachyon
                     if (index < 0) return;
                     FrameDrag& drag = view.frameDrag;
                     drag = FrameDrag{ .frameID = frameID, .edges = edges };
-                    drag.press.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ edges != FrameEdges::None);
+                    // The canvas has the focus already; the moves, release and Escape come here.
+                    drag.press.Press(event, elementStorage, guiStateManager, {}, { .atOnce = edges != FrameEdges::None, .focus = false });
                     drag.frames.push_back({ index, view.frames[size_t(index)] });
                     if (edges == FrameEdges::None)
                     {
@@ -1061,7 +1467,6 @@ namespace tachyon
                                 if (nodes.insert(n).second)
                                     drag.nodes.push_back({ n, view.nodes[size_t(n)].pos });
                     }
-                    guiStateManager.Interaction().SetCaptureID(event.id);
                 };
                 // The frames and nodes as they were at the press: Escape, or before a move.
                 auto restore = [&view]
@@ -1141,7 +1546,7 @@ namespace tachyon
                             {
                                 // A right press is the canvas's: a pan, or this frame's menu.
                                 if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
-                                guiStateManager.Interaction().SetFocusID(canvasID);
+                                TakeFocus(guiStateManager, canvasID);
                                 const int index = frameIndex(frameID);
                                 if (index < 0) return false;
                                 // The chevron at the title's left collapses or expands it.
@@ -1181,7 +1586,7 @@ namespace tachyon
                                 if (!drag.press.Move(event, styleManager.Px(kDragStartDistance))) return true;
                                 // Everything moves by the frame's own step, so what's inside keeps
                                 // its place in it, on the grid when the frame is.
-                                const int2 raw   = drag.press.LocalDelta(event, elementStorage);
+                                const int2 raw   = drag.press.drag.LocalDelta(event, elementStorage);
                                 const int2 start = drag.frames[0].second.pos;
                                 const int2 to    = snap ? int2{ SnapToGrid(start.x + raw.x, frameGrid), SnapToGrid(start.y + raw.y, frameGrid) }
                                                         : int2{ start.x + raw.x, start.y + raw.y };
@@ -1204,7 +1609,7 @@ namespace tachyon
                                 return true;
                             }
                             case EventType::KeyDown:
-                                if (!IsDragCancelKey(event.state) || !drag.press.Cancel(titleID)) return false;
+                                if (!drag.press.Cancel(event, guiStateManager)) return false;
                                 restore();
                                 view.frameDrag = {};
                                 return true;
@@ -1226,50 +1631,16 @@ namespace tachyon
 
                 if (view.renamingFrame == frameID)
                 {
-                    // Renaming: a field over the title bar, the focus in it. Enter keeps the new
-                    // title, as does going elsewhere; Escape keeps the old one.
-                    const ID fieldID = idManager.AllocateDynamicID("frame-rename");
-                    const ID focused = guiStateManager.Interaction().GetFocusedID();
-                    bool keep = view.renameFocused && focused != fieldID, cancel = false;
-                    // The key is taken: the focus goes back to the canvas, where Enter would
-                    // otherwise collapse the frame and Escape clear the selection.
-                    if (inputManager && view.renameFocused && focused == fieldID)
+                    bool keep = false;
+                    if (renameField("frame-rename", theme.nodeFrameRenameStyleRef, IntRect{ frame.pos.x, frame.pos.y, box.w, frameBar }, keep))
                     {
-                        const auto& events = inputManager->GetRecordedEvents();
-                        for (size_t e = 0; e < events.size(); ++e)
-                        {
-                            if (events[e].type != EventType::KeyDown || events[e].consumed) continue;
-                            switch (events[e].state.lastKey)
-                            {
-                                case KeyCode::Return: case KeyCode::Return2: case KeyCode::KeyPadEnter:
-                                    keep = true; inputManager->ConsumeEvent(e); break;
-                                case KeyCode::Escape:
-                                    cancel = true; inputManager->ConsumeEvent(e); break;
-                                default: break;
-                            }
-                        }
-                    }
-                    if (cancel || keep)
-                    {
-                        if (keep && !cancel && view.renameText != frame.title)
+                        if (keep && view.renameText != frame.title)
                         {
                             NodeFrame renamed = frame;
                             renamed.title = view.renameText;
                             CommitNodeViewEdit(view, NodeViewEdit{ .frameChanges = { { f, frame, renamed } } });
                         }
                         view.renamingFrame.reset();
-                        if (focused == fieldID)
-                            guiStateManager.Interaction().SetFocusID(canvasID);
-                    }
-                    else
-                    {
-                        if (!view.renameFocused)
-                        {
-                            guiStateManager.Interaction().SetFocusID(fieldID);
-                            view.renameFocused = true;
-                        }
-                        Field(fieldID, view.renameText, TextEditBehavior::ContinuousUpdate, theme.nodeFrameRenameStyleRef,
-                              LayoutOverride{}.FixedSize(Pixels{ box.w }, Pixels{ frameBar }).Absolute(frame.pos.x, frame.pos.y));
                     }
                 }
 
@@ -1298,13 +1669,13 @@ namespace tachyon
                             {
                                 case EventType::MouseDown:
                                     if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
-                                    guiStateManager.Interaction().SetFocusID(canvasID);
+                                    TakeFocus(guiStateManager, canvasID);
                                     press(event, edges);
                                     return true;
                                 case EventType::MouseMove:
                                 {
                                     if (!drag.press.IsPressed(gripID) || drag.frames.empty() || !drag.press.Move(event, 0)) return false;
-                                    const int2 d = drag.press.LocalDelta(event, elementStorage);
+                                    const int2 d = drag.press.drag.LocalDelta(event, elementStorage);
                                     const NodeFrame& start = drag.frames[0].second;
                                     int2 size = start.size;
                                     if ((uint8_t(edges) & uint8_t(FrameEdges::Right))  != 0) size.x += d.x;
@@ -1322,7 +1693,7 @@ namespace tachyon
                                         finish();
                                     return true;
                                 case EventType::KeyDown:
-                                    if (!IsDragCancelKey(event.state) || !drag.press.Cancel(gripID)) return false;
+                                    if (!drag.press.Cancel(event, guiStateManager)) return false;
                                     restore();
                                     view.frameDrag = {};
                                     return true;
@@ -1402,31 +1773,27 @@ namespace tachyon
                         // The wire's lanes as they were before the drag (Escape puts them back).
                         auto restoreLanes = [&]
                         {
-                            if (drag.lanesBefore == WireRouteOverrides{}) view.wireOverrides.erase(wireKey);
-                            else                                          view.wireOverrides[wireKey] = drag.lanesBefore;
+                            if (drag.press.before == WireRouteOverrides{}) view.wireOverrides.erase(wireKey);
+                            else                                             view.wireOverrides[wireKey] = drag.press.before;
                         };
                         switch (event.type)
                         {
                             case EventType::MouseDown:
                             {
                                 if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
-                                guiStateManager.Interaction().SetFocusID(canvasID);
                                 const auto lanes = view.wireOverrides.find(wireKey);
-                                drag = WireSegmentDrag{
-                                    .wireKey = wireKey, .role = role,
-                                    .vertical = vertical,
-                                    .startValue = startValue,
-                                    .lanesBefore = lanes != view.wireOverrides.end() ? lanes->second : WireRouteOverrides{} };
-                                drag.press.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ true);
+                                drag = WireSegmentDrag{ .wireKey = wireKey, .role = role, .vertical = vertical, .startValue = startValue };
                                 // The canvas has the focus; Escape comes here with the capture.
-                                guiStateManager.Interaction().SetCaptureID(event.id);
+                                drag.press.Press(event, elementStorage, guiStateManager,
+                                                 lanes != view.wireOverrides.end() ? lanes->second : WireRouteOverrides{},
+                                                 { .atOnce = true, .focusID = canvasID });
                                 return true;
                             }
                             case EventType::MouseMove:
                             {
                                 if (!mine || !drag.press.Move(event, 0)) return false;
                                 // The handle is inside the canvas: its layout space is node.pos space.
-                                const int2 d = drag.press.LocalDelta(event, elementStorage);
+                                const int2 d = drag.press.drag.LocalDelta(event, elementStorage);
                                 const int32_t newVal = drag.startValue + (vertical ? d.x : d.y);
                                 WireRouteOverrides& o = view.wireOverrides[wireKey];
                                 switch (role)
@@ -1446,15 +1813,15 @@ namespace tachyon
                                     const auto lanes = view.wireOverrides.find(wireKey);
                                     const WireRouteOverrides after = lanes != view.wireOverrides.end() ? lanes->second : WireRouteOverrides{};
                                     NodeViewEdit edit;
-                                    if (!(after == drag.lanesBefore))
-                                        edit.lanes.push_back({ wireKey, drag.lanesBefore, after });
+                                    if (!(after == drag.press.before))
+                                        edit.lanes.push_back({ wireKey, drag.press.before, after });
                                     drag = {};
                                     CommitNodeViewEdit(view, edit);
                                 }
                                 return true;
                             }
                             case EventType::KeyDown:
-                                if (mine && IsDragCancelKey(event.state) && drag.press.Cancel(event.id))
+                                if (mine && drag.press.Cancel(event, guiStateManager))
                                 {
                                     restoreLanes();
                                     drag = {};
@@ -1575,15 +1942,40 @@ namespace tachyon
             Element outer
             {
                 .id = outerID,
-                .eventHandler = [this, &view, n, outerID](ElementEvent&& event)->bool
+                .eventHandler = [this, &view, n, outerID, canvasID](ElementEvent&& event)->bool
                 {
                     switch (event.type)
                     {
                         case EventType::MouseDown:
                         {
                             if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
+                            // A title or label being renamed is left: the focus goes back to the
+                            // canvas, so its field keeps what was typed and closes.
+                            if (view.renamingFrame || view.renamingTransition)
+                                TakeFocus(guiStateManager, canvasID);
 
-                            if (view.nodeDoubleClick.IsDoubleClick(outerID) && !view.nodes[n].reroute)
+                            // A state: a click finishes a transition started from a menu; a
+                            // double-click opens the machine it holds (states don't collapse).
+                            // Transitions start on the band round it, the canvas's.
+                            if (view.kind == NodeViewKind::StateMachine)
+                            {
+                                if (view.transitionPicking)
+                                {
+                                    AddTransitionIfNew(view, view.transitionFrom, outerID, idManager);
+                                    view.transitionPicking = false;
+                                    view.transitionFrom    = ID::Invalid();
+                                    return true;
+                                }
+                                if ((event.state.modifiers & (KeyModifier::Shift | KeyModifier::Control)) == KeyModifier::None)
+                                    view.selectedTransitionIDs.clear();
+                                if (view.nodeDoubleClick.IsDoubleClick(outerID))
+                                {
+                                    if (view.nodes[n].subMachine && view.onOpenState)
+                                        view.onOpenState(n);
+                                    return true;
+                                }
+                            }
+                            else if (view.nodeDoubleClick.IsDoubleClick(outerID) && !view.nodes[n].reroute)
                             {
                                 NodeViewEdit edit;
                                 edit.collapses.push_back({ n, view.nodes[n].collapsed, !view.nodes[n].collapsed });
@@ -1621,9 +2013,8 @@ namespace tachyon
                                 if (view.selectedNodeIDs.count(other.stableID) || other.stableID == outerID)
                                     other.startPos = other.pos;
                             }
-                            view.nodeDrag.Press(event, elementStorage);
                             // The moves, the release and Escape come here wherever the pointer goes.
-                            guiStateManager.Interaction().SetCaptureID(outerID);
+                            view.nodeDrag.Press(event, elementStorage, guiStateManager, {}, { .focus = false });
                             return true;
                         }
                         case EventType::MouseUp:
@@ -1663,24 +2054,35 @@ namespace tachyon
                         }
                         case EventType::MouseMove:
                         {
+                            if (view.transitionPicking)
+                                view.transitionPointer = event.state.screenPos;
+                            // Inside a state is off its band.
+                            if (view.kind == NodeViewKind::StateMachine)
+                                view.stateEdgeHover.Track(AnyHeld(view.nodeDrag, view.marquee, view.transitionDrag), [] { return ID::Invalid(); });
                             if (!view.nodeDrag.IsPressed(outerID)) return false;
                             if (!view.nodeDrag.Move(event, styleManager.Px(kDragStartDistance))) return true;
 
                             // The node is inside the canvas: its layout space is node.pos space.
-                            const int2 idelta = view.nodeDrag.LocalDelta(event, elementStorage);
+                            const int2 idelta = view.nodeDrag.drag.LocalDelta(event, elementStorage);
                             // Move every node in the selection by the same delta;
-                            // always include the dragged node (see MouseDown).
+                            // always include the dragged node (see MouseDown). Onto the grid here
+                            // already, as the next layout would put them: what's drawn from their
+                            // places meanwhile (a state machine's arrows) lands where they do.
+                            const int32_t grid = view.snapToGrid ? theme.nodeGridSize : 0;
                             for (auto& other : view.nodes)
                             {
-                                if (view.selectedNodeIDs.count(other.stableID) || other.stableID == outerID)
-                                    other.pos = { other.startPos.x + idelta.x, other.startPos.y + idelta.y };
+                                if (!view.selectedNodeIDs.count(other.stableID) && other.stableID != outerID)
+                                    continue;
+                                other.pos = { other.startPos.x + idelta.x, other.startPos.y + idelta.y };
+                                if (grid > 0)
+                                    other.pos = { SnapToGrid(other.pos.x, grid), SnapToGrid(other.pos.y, grid) };
                             }
                             return true;
                         }
                         case EventType::KeyDown:
                         {
                             // Escape during a move puts the nodes back.
-                            if (!IsDragCancelKey(event.state) || !view.nodeDrag.Cancel(outerID)) return false;
+                            if (!view.nodeDrag.Cancel(event, guiStateManager)) return false;
                             for (auto& other : view.nodes)
                                 if (view.selectedNodeIDs.count(other.stableID) || other.stableID == outerID)
                                     other.pos = other.startPos;
@@ -1690,7 +2092,7 @@ namespace tachyon
                     }
                     return false;
                 },
-                .styleRef = node.reroute ? theme.nodeRerouteStyleRef : theme.nodeStyleRef,
+                .styleRef = node.reroute ? theme.nodeRerouteStyleRef : stateMachine ? theme.nodeStateStyleRef : theme.nodeStyleRef,
                 .flags    = ElementFlags::PropagatesDescendantState,
                 .state    = outerState
             };
@@ -1721,7 +2123,7 @@ namespace tachyon
             {
                 const int32_t pitch = 2 * grid;
                 int32_t rowTop = pitch;   // below the header slot
-                for (int p = 0; p < (int)node.properties.size(); ++p)
+                for (int p = 0; p < (stateMachine ? 0 : (int)node.properties.size()); ++p)
                 {
                     const NodeProperty& prop = node.properties[size_t(p)];
                     const int32_t span = prop.rowSpan > 0 ? prop.rowSpan : 1;
@@ -1787,14 +2189,17 @@ namespace tachyon
             Element header
             {
                 .id       = headerID,
-                .styleRef = theme.nodeHeaderStyleRef,
+                .styleRef = stateMachine ? theme.nodeHeaderStateStyleRef : theme.nodeHeaderStyleRef,
                 .flags    = ElementFlags::NoInput,
                 .state    = outerState
             };
             // Top chrome + header == one row pitch (2*grid), so rows start on a grid line.
             const int32_t rowPitch = 2 * grid;
             LayoutOverride headerLayout = LayoutOverride{}.Auto();
-            if (rowPitch > nodeTopChromeV)
+            // A state is its header alone: one row pitch, its border included.
+            if (stateMachine && rowPitch > 2 * nodeBorderV)
+                headerLayout = LayoutOverride{}.Height(Pixels{ rowPitch - 2 * nodeBorderV });
+            else if (rowPitch > nodeTopChromeV)
                 headerLayout = LayoutOverride{}.Height(Pixels{ rowPitch - nodeTopChromeV });
             auto headerRes = elementStorage.Add(std::move(header), std::move(headerLayout));
             VERIFY(headerRes.status);
@@ -1830,7 +2235,7 @@ namespace tachyon
                 // the node share one width.
                 const ID nodeLabelGroupID = idManager.AllocateDynamicID("node-labelgroup");
 
-                const int propCount = (int)node.properties.size();
+                const int propCount = stateMachine ? 0 : (int)node.properties.size();   // a state has no fields
                 for (int p = 0; p < propCount; ++p)
                 {
                     NodeProperty& prop = node.properties[p];
@@ -1920,7 +2325,7 @@ namespace tachyon
                 // Collapsed: all inputs overlap on the left edge, outputs on the right,
                 // overlaying the header (absolute, ignored by flex). Readonly, but still
                 // laid out so wires end at the right spot.
-                const int propCount = (int)node.properties.size();
+                const int propCount = stateMachine ? 0 : (int)node.properties.size();
                 // Straddle the left/right border like expanded rows, centred on the
                 // header slot (top chrome + header = one row pitch).
                 const int leftX  = -socketInsetL;
@@ -1985,11 +2390,30 @@ namespace tachyon
             {
                 view.lastInnerSize  = ctx.ElementInnerRect().size;
                 view.lastCanvasRect = ctx.ElementInnerRect();
+                view.lastGridOrigin = ctx.ElementRect().position - ctx.ElementInnerRect().position;
                 // The nodes were centered for last frame's size. A cached panel around the
                 // view only rebuilds when its own size changes, so ask for the redraw.
                 if (view.lastInnerSize.x != centeredFor.x || view.lastInnerSize.y != centeredFor.y)
                     RebuildCachedScopesAbove(canvasID);
             }));
+
+        // A state machine: the state the pointer is on or round (its band shows faintly), and
+        // the state whose band is lit, under the pointer or being drawn from (the hand: a
+        // transition is pulled out of it, where inside a state the move cursor shows).
+        ID pointedState = ID::Invalid(), bandLit = ID::Invalid();
+        if (stateMachine)
+        {
+            const ID hoveredID = guiStateManager.Interaction().GetHoveredID();
+            const bool onCanvas = hoveredID == canvasID;
+            bandLit = view.transitionDrag.IsHeld() || view.transitionPicking ? view.transitionFrom : view.stateEdgeHover.Shown(onCanvas);
+            pointedState = bandLit;
+            if (pointedState == ID::Invalid() && NodeIndex(view, hoveredID) >= 0)
+                pointedState = hoveredID;
+            if (bandLit != ID::Invalid())
+                guiStateManager.Cursor().Request(MouseCursor::Pointer);
+        }
+        const int litState = NodeIndex(view, bandLit);
+        const ElementRef litRef = litState >= 0 && litState < (int)nodeRefs.size() ? nodeRefs[size_t(litState)] : ElementRef::Invalid();
 
         // Axis lines + wires draw in the canvas's OWN (pre-children) pass, so they sit
         // behind the nodes and keep drawing when a node is culled off-screen. An
@@ -1998,6 +2422,7 @@ namespace tachyon
         // Endpoints are CANVAS_LAY, so they pan/zoom with the sockets and clip to the viewport.
         VERIFY(elementStorage.AddCustomDraw(canvasRes.ref,
             [this, &view, socketRefs = std::move(socketRefs), nodeRefs = std::move(nodeRefs), drawnFrames = std::move(drawnFrames),
+             transitionLabels = std::move(transitionLabels), transitionGap, transitionLoop, pointedState, bandLit, stateBand,
              canvasHovered = guiStateManager.Interaction().GetHoveredID() == canvasID,
              handleHoveredWire, mouseScreen = windowManager->GetScreenMousePos()](tachyon::CustomDrawContext& ctx)
             {
@@ -2040,6 +2465,16 @@ namespace tachyon
                     ctx.RenderBox(tachyon::IntRect{ title.x, title.y, frame.size.x, frame.size.y },
                                   theme.nodeFrameStyleRef.visualBoxStyleIndex, frame.state, frame.fill);
                     ctx.RenderBox(title, theme.nodeFrameBandStyleRef.visualBoxStyleIndex, frame.state, frame.band);
+                }
+
+                // A state machine: transitions between the states in place of wires.
+                if (view.kind == NodeViewKind::StateMachine)
+                {
+                    DrawStateMachine(ctx, theme, styleManager, view, gridOrigin, transitionLabels, transitionGap, transitionLoop,
+                                     canvasHovered, ctx.ScreenToCurrent(view.transitionPointer), pointedState, bandLit,
+                                     int32_t(std::lround(stateBand * NodeViewZoom(view))));
+                    view.wireHandleCache.clear();
+                    return;
                 }
 
                 // Socket rects are laid out even for culled nodes. Local space = CANVAS_LAY.
@@ -2086,7 +2521,7 @@ namespace tachyon
                 const PendingConnection& pending = view.pendingConnection;
                 const PropertyEndpoint pendingOut = pending.fromInput ? pending.target : pending.source;
                 const PropertyEndpoint pendingIn  = pending.fromInput ? pending.source : pending.target;
-                const bool pendingConnects = pending.active && pending.target.valid();
+                const bool pendingConnects = pending.IsActive() && pending.target.valid();
                 const auto laneOffsets = pendingConnects
                     ? ComputeWireLaneOffsets(view, pendingOut, pendingIn)
                     : ComputeWireLaneOffsets(view);
@@ -2166,18 +2601,19 @@ namespace tachyon
 
                 // The wire under the mouse: over a lane handle that handle's, over the bare
                 // canvas the nearest within a few pixels; none while something is dragged.
-                view.hoveredWire.reset();
-                if (!view.pendingConnection.active && !view.wireDrag.press.IsHeld() && !view.marquee.IsHeld())
-                {
+                const bool held = view.pendingConnection.IsActive() || AnyHeld(view.wireDrag.press, view.marquee);
+                if (held)
+                    view.hoveredWire.Clear();
+                view.hoveredWire.Track(held, [&]() -> std::optional<uint32_t> {
                     if (handleHoveredWire)
-                        view.hoveredWire = handleHoveredWire;
-                    else if (canvasHovered)
-                        view.hoveredWire = WireAt(drawn, ctx.ScreenToCurrent(mouseScreen),
-                                                  float(styleManager.Px(5)) / NodeViewZoom(view));
-                }
+                        return handleHoveredWire;
+                    if (canvasHovered)
+                        return WireAt(drawn, ctx.ScreenToCurrent(mouseScreen), float(styleManager.Px(5)) / NodeViewZoom(view));
+                    return std::nullopt;
+                });
                 for (size_t w = 0; w < drawn.size(); ++w)
                 {
-                    const bool hovered = view.hoveredWire == drawn[w].wireKey;
+                    const bool hovered = view.hoveredWire.part == drawn[w].wireKey;
                     const tachyon::LineStyle wireStyle{ .colorStyleIndex = drawnColors[w],
                                                            .lineWidth = styleManager.Px(hovered ? 4.f : 2.f) };
                     drawWire(drawn[w].points, drawn[w].curved, wireStyle);
@@ -2186,7 +2622,7 @@ namespace tachyon
                 // The wire being dragged: dashed, routed like the connection it would make. It
                 // runs from the socket it was dragged from (an output, or an input) to the
                 // cursor, or to the socket it's over.
-                if (pending.active)
+                if (pending.IsActive())
                 {
                     const PropertyEndpoint src = pending.source;
                     const PropertyEndpoint tgt = pending.target;
@@ -2249,16 +2685,45 @@ namespace tachyon
                 view.wireHandleCache = std::move(handleCache);
             }));
 
+        // On the band round a state, over the states: a dot on the band's ring, nearest the
+        // pointer, where a drag would draw a transition from, and a dashed stub on to the
+        // pointer, which shows even where the cursor covers the dot. The ring is the band's middle, as DrawStateMachine draws it.
+        if (stateMachine && litRef.IsValid() && !view.transitionDrag.IsHeld() && !view.transitionPicking)
+            VERIFY(elementStorage.AddCustomDrawAfter(canvasRes.ref,
+                [this, litRef, half = int32_t(std::lround(stateBand * NodeViewZoom(view))) / 2,
+                 mouseScreen = windowManager->GetScreenMousePos()](tachyon::CustomDrawContext& ctx)
+                {
+                    const IntRect box = ctx.GetElementRect(litRef);
+                    const IntRect ring{ box.x - half, box.y - half, box.w + 2 * half, box.h + 2 * half };
+                    const int2 mouse = ctx.ScreenToCurrent(mouseScreen);
+                    // The nearest point of the ring: the pointer held to it, or, inside it, moved
+                    // out to its nearest side.
+                    int2 dot{ std::clamp(mouse.x, ring.x, ring.x + ring.w), std::clamp(mouse.y, ring.y, ring.y + ring.h) };
+                    if (dot == mouse)
+                    {
+                        const int32_t left = mouse.x - ring.x, right = ring.x + ring.w - mouse.x;
+                        const int32_t top = mouse.y - ring.y, bottom = ring.y + ring.h - mouse.y;
+                        const int32_t least = std::min({ left, right, top, bottom });
+                        if      (least == left)  dot.x = ring.x;
+                        else if (least == right) dot.x = ring.x + ring.w;
+                        else if (least == top)   dot.y = ring.y;
+                        else                     dot.y = ring.y + ring.h;
+                    }
+                    ctx.RenderLine(dot, mouse, LineStyle{ .colorStyleIndex = theme.nodeTransitionSelectedColor,
+                                                          .lineWidth = styleManager.Px(2.0f), .dashSize = styleManager.Px(3.0f) });
+                    ctx.RenderDisc(dot, styleManager.Px(4.0f), theme.nodeTransitionSelectedColor);
+                }));
+
         // Marquee rectangle - drawn after the nodes so it sits on top of them.
         VERIFY(elementStorage.AddCustomDrawAfter(canvasRes.ref,
             [this, &view](tachyon::CustomDrawContext& ctx)
             {
-                if (!view.marquee.dragging) return;
+                if (view.marquee.Phase() != GesturePhase::Dragging) return;
 
                 // Marquee corners are screen-space inputs; ScreenToCurrent brings them into
                 // the current (CANVAS_LAY) space so the rectangle tracks the cursor 1:1 at any zoom.
                 auto toLay = [&](int2 screen) { return ctx.ScreenToCurrent(screen); };
-                const int2 startLay   = toLay(view.marquee.pressScreen);
+                const int2 startLay   = toLay(view.marquee.drag.pressScreen);
                 const int2 currentLay = toLay(view.marqueeCurrentScreen);
                 const int x0 = std::min(startLay.x, currentLay.x);
                 const int y0 = std::min(startLay.y, currentLay.y);
@@ -2336,22 +2801,15 @@ namespace tachyon
                 {
                     if (event.type == EventType::KeyDown)
                     {
-                        if (!IsDragCancelKey(event.state) || !view.minimapDrag.Cancel(event.id))
-                            return false;
-                        view.transform = view.minimapStart;
-                        return true;
+                        return view.minimapDrag.Cancel(event, guiStateManager, view.transform);
                     }
                     if (view.minimapDrag.Release(event) != PointerDrag::Ended::No)
                         return true;
                     if (view.minimapScale <= 0.0f)
                         return false;
-                    if (view.minimapDrag.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ true))
-                    {
-                        view.minimapStart = view.transform;
-                        // Escape comes here with the capture.
-                        guiStateManager.Interaction().SetCaptureID(event.id);
-                    }
-                    else if (!view.minimapDrag.Move(event, 0))
+                    // A press starts it (Escape comes here with the capture); a move goes on with it.
+                    if (!view.minimapDrag.Press(event, elementStorage, guiStateManager, view.transform, { .atOnce = true, .focus = false })
+                        && !view.minimapDrag.Move(event, 0))
                         return false;
                     const int2 local = event.LocalCursor(elementStorage) - event.rect->innerRect.position;
                     SetNodeViewCenter(view, float2{ view.minimapOrigin.x + float(local.x) / view.minimapScale,

@@ -169,11 +169,11 @@ namespace
         const int mid[] = { 1 };
         const NodeViewEdit edit = RemoveNodesEdit(view, mid);
         ASSERT_EQ(edit.nodes.size(), 1u);
-        view.hoveredWire  = WireKey(3, 0);
+        view.hoveredWire.part  = WireKey(3, 0);
         view.wireMenuWire = WireKey(3, 0);
         view.wireHandleCache.push_back(CachedWireHandle{ .wireKey = WireKey(3, 0) });
         ApplyNodeViewEdit(view, edit);
-        EXPECT_FALSE(view.hoveredWire) << "they named wires by the old numbers";
+        EXPECT_FALSE(view.hoveredWire.part) << "they named wires by the old numbers";
         EXPECT_FALSE(view.wireMenuWire);
         EXPECT_TRUE(view.wireHandleCache.empty());
 

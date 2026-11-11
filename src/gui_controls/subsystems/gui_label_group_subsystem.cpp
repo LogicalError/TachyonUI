@@ -77,7 +77,7 @@ namespace tachyon
         {
             // If no label in the group was hovered this frame and we're not
             // dragging the edge, the mouse has left the group - clear edge state.
-            if (!gs.anyLabelHovered && !gs.edgeDragging)
+            if (!gs.anyLabelHovered && !gs.edgeDrag.IsHeld())
                 gs.edgeHovered = false;
 
             // Non-resizable groups auto-fit to the widest label, picked up next frame.
@@ -105,7 +105,7 @@ namespace tachyon
         if ((labelState & tachyon::ElementState::Hover) != tachyon::ElementState::None)
         {
             groupState->anyLabelHovered = true;
-            if (groupState->edgeHovered || groupState->edgeDragging)
+            if (groupState->edgeHovered || groupState->edgeDrag.IsHeld())
                 m_guiStateManager.Cursor().Request(tachyon::MouseCursor::ColResize);
         }
 
@@ -117,7 +117,7 @@ namespace tachyon
             [state, labelIndex, storage = &m_elementStorage, lineColor,
              edgeWidth = m_elementStorage.GetStyleManager().Px(4)](tachyon::CustomDrawContext& ctx)
             {
-                if (!state->edgeHovered && !state->edgeDragging)
+                if (!state->edgeHovered && !state->edgeDrag.IsHeld())
                     return;
                 const auto outer = ctx.ElementRect();
                 const auto inner = ctx.ElementInnerRect();

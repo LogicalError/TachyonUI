@@ -123,9 +123,8 @@ namespace tachyon
         const bool disabled = guiStateManager.Construction().IsDisabled();
         if (disabled && v->handleDrag.IsHeld())
         {
-            ApplyPlotEdit(view, PlotEdit{ v->before, v->before });
+            ApplyPlotEdit(view, PlotEdit{ v->handleDrag.before, v->handleDrag.before });
             v->handleDrag.Reset();
-            v->before.clear();
         }
 
         const bool changed = view.revision != view.revisionSeen;
@@ -232,7 +231,7 @@ namespace tachyon
                         if (v->panDrag.Move(event, 0))
                         {
                             const float span = f.xMax - f.xMin;
-                            ShowX(*v, v->panFromMin - float(v->panDrag.ScreenDelta(event.state).x) * span / float(std::max(1, f.rect.w)), span);
+                            ShowX(*v, v->panDrag.before - float(v->panDrag.drag.ScreenDelta(event.state).x) * span / float(std::max(1, f.rect.w)), span);
                             return true;
                         }
                         if (v->handleDrag.Move(event, 0))
@@ -247,23 +246,19 @@ namespace tachyon
                         // The middle button (or Alt + left) drags the view, over a handle too.
                         if (const MouseButtons panButton = PanDragButton(event.state); panButton != MouseButtons::None)
                         {
-                            gsm.Interaction().SetFocusID(event.id);
-                            v->panDrag.Press(event, es, panButton, /*atOnce*/ true);
-                            v->panFromMin = f.xMin;
-                            gsm.Interaction().SetCaptureID(event.id);
+                            v->panDrag.Press(event, es, gsm, f.xMin, { .button = panButton, .atOnce = true });
                             return true;
                         }
                         if (!event.state.LeftPressed())
                             return false;
-                        gsm.Interaction().SetFocusID(event.id);
-                        gsm.TextEditorFocus().Clear();
                         const int hit = HitHandle(*v, f, at, reach, band);
                         if (hit < 0)
+                        {
+                            TakeFocus(gsm, event.id);
                             return true;
+                        }
                         v->activeHandle = hit;
-                        v->before = HandleXs(*v);
-                        v->handleDrag.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
-                        gsm.Interaction().SetCaptureID(event.id);
+                        v->handleDrag.Press(event, es, gsm, HandleXs(*v), { .atOnce = true });
                         return true;
                     }
                     case EventType::MouseScroll:
@@ -294,8 +289,8 @@ namespace tachyon
                         if (v->handleDrag.Release(event) == PointerDrag::Ended::No)
                             return false;
                         // Already where it was dropped: the edit, for undo.
-                        const PlotEdit edit{ v->before, HandleXs(*v) };
-                        v->before.clear();
+                        const PlotEdit edit{ v->handleDrag.before, HandleXs(*v) };
+                        v->handleDrag.before.clear();
                         if (!edit.empty())
                         {
                             ++v->revision;
@@ -309,10 +304,9 @@ namespace tachyon
                         if (gsm.Interaction().GetFocusedID() != event.id || event.state.consumed)
                             return false;
                         const KeyCode key = event.state.lastKey;
-                        if (key == KeyCode::Escape && v->panDrag.IsPressed(event.id))
+                        if (v->panDrag.Cancel(event, gsm))
                         {
-                            ShowX(*v, v->panFromMin, f.xMax - f.xMin);
-                            v->panDrag.Cancel(event.id);
+                            ShowX(*v, v->panDrag.before, f.xMax - f.xMin);
                             return true;
                         }
                         if (key == KeyCode::KeyA && event.state.modifiers == KeyModifier::None)
@@ -320,15 +314,14 @@ namespace tachyon
                             v->shownSet = false;   // all of it
                             return true;
                         }
-                        if (key == KeyCode::Escape)
+                        if (v->handleDrag.Cancel(event, gsm))
                         {
-                            if (!v->handleDrag.IsPressed(event.id))
-                                return false;
-                            ApplyPlotEdit(*v, PlotEdit{ v->before, v->before });
-                            v->handleDrag.Cancel(event.id);
-                            v->before.clear();
+                            ApplyPlotEdit(*v, PlotEdit{ v->handleDrag.before, v->handleDrag.before });
+                            v->handleDrag.before.clear();
                             return true;
                         }
+                        if (key == KeyCode::Escape)
+                            return false;
                         if ((key == KeyCode::Left || key == KeyCode::Right) && !v->handles.empty() && !v->handleDrag.IsHeld())
                         {
                             const bool shift = (event.state.modifiers & KeyModifier::Shift) != KeyModifier::None;

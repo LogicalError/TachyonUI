@@ -5,7 +5,7 @@
 
 #include <gui_core/gui_math3d.h>
 #include <gui_core/input/gui_input_enums.h>
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 #include <gui_core/gui_base_types.h>
 
 #include <functional>
@@ -118,15 +118,13 @@ namespace tachyon
 
         /// @name Internal: kept between frames while the user works
         ///@{
-        PointerDrag       gizmoDrag;
+        Gesture<ViewportTransform> gizmoDrag;             ///< a gizmo part dragged; the selection as it began
         GizmoPart         activePart = GizmoPart::None;   ///< the part dragged
-        GizmoPart         hoverPart  = GizmoPart::None;   ///< the part under the pointer
-        ViewportTransform before;                         ///< the selection as the drag began
+        HoverPart<GizmoPart> hover;                       ///< the part under the pointer
         float2            dragFrom {};                    ///< the press, in view pixels
-        PointerDrag       cameraDrag;
+        Gesture<ViewportCamera> cameraDrag;               ///< the camera moved by a drag; as it was, for Escape
         enum class CameraMove : uint8_t { None, Pan, Orbit, Look, Dolly } cameraMove = CameraMove::None;
-        ViewportCamera    cameraBefore;                   ///< for Escape
-        PointerDrag       click;                          ///< a left press off the gizmo: a pick if it doesn't move
+        Gesture<>         click;                          ///< a left press off the gizmo: a pick if it doesn't move
         uint8_t           flyKeys = 0;                    ///< the fly keys held, by FlyKey bit
         bool              flyFast = false;                ///< Shift held while flying
         IntRect           viewRect {};                    ///< the view last frame, in screen pixels

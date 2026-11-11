@@ -214,7 +214,6 @@ namespace tachyon
         void NoteSelectionBeforeEdit();
         std::string m_textDragPayload;
         ID m_skipNextSelectAllId = ID::Invalid();
-        bool m_textDragArmed = false;
         int2 m_textDragStartScreenPos = int2 { 0, 0 };
         ID          m_valueEditElementId = ID::Invalid(); ///< the focused value field (ValueEditText)
         std::string m_valueEditText;                      ///< the text it edits

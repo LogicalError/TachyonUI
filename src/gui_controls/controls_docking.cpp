@@ -149,7 +149,7 @@ namespace tachyon
 
             // Grab offset: distance from tab left edge to mouse at drag start
             int grabOffset = drag.draggedIndex < (int)drag.originalRects.size()
-                ? drag.press.pressScreen.x - drag.originalRects[drag.draggedIndex].x
+                ? drag.press.drag.pressScreen.x - drag.originalRects[drag.draggedIndex].x
                 : 0;
             return static_cast<int16_t>(mousePos.x - grabOffset - estimatedX);
         }

@@ -280,13 +280,13 @@ namespace tachyon
             const tachyon::int2 at = CanvasPoint() + tachyon::int2{ 3, 5 };
             app.InjectMouseMove(at);
             Frame();
-            view.hoveredWire = WireKey(1, 0);
+            view.hoveredWire.part = WireKey(1, 0);
             app.DragFrom(at, { at.x + 40, at.y }, MouseButtons::Middle);
             Frame();
             EXPECT_TRUE(wired()) << "a drag pans";
             app.InjectMouseMove(at);
             Frame();
-            view.hoveredWire = WireKey(1, 0);
+            view.hoveredWire.part = WireKey(1, 0);
             app.ClickAt(at, MouseButtons::Middle);
             Frame();
             EXPECT_FALSE(wired()) << "a click removes it";
@@ -308,7 +308,7 @@ namespace tachyon
                 const tachyon::int2 at = CanvasPoint() + tachyon::int2{ 3, 5 };
                 app.InjectMouseMove(at);
                 Frame();
-                view.hoveredWire = WireKey(1, 0);
+                view.hoveredWire.part = WireKey(1, 0);
                 app.ClickAt(at, MouseButtons::Right);
                 Frame();
                 Frame();
@@ -378,7 +378,7 @@ namespace tachyon
             bool stillDragging = true;
             view.onWireDroppedOnCanvas = [&](PropertyEndpoint from, bool fromOutput, float2 at) {
                 drops.push_back({ from, fromOutput, at });
-                stillDragging = view.pendingConnection.active;
+                stillDragging = view.pendingConnection.IsActive();
             };
             view.onEdit = [&](const NodeViewEdit&) { edits++; };
             const tachyon::int2 to = CanvasPoint();
@@ -394,7 +394,7 @@ namespace tachyon
             EXPECT_EQ(NodeAtCanvasPos(view, drops[0].at), -1);
             EXPECT_FALSE(stillDragging) << "the wire is done with when the app hears of it";
             EXPECT_EQ(edits, 0) << "nothing changed";
-            EXPECT_FALSE(view.pendingConnection.active);
+            EXPECT_FALSE(view.pendingConnection.IsActive());
         }
 
         // An unwired input starts a new wire too; released on the canvas, the app hears it
@@ -425,7 +425,7 @@ namespace tachyon
             Frame();
             app.InjectMouseMove({ (in.x + out.x) / 2, (in.y + out.y) / 2 }, MouseButtons::Left);
             Frame();
-            EXPECT_TRUE(view.pendingConnection.active);
+            EXPECT_TRUE(view.pendingConnection.IsActive());
             EXPECT_TRUE(view.pendingConnection.fromInput);
             EXPECT_EQ(view.pendingConnection.source, (PropertyEndpoint{ 1, 0 }));
             app.InjectMouseMove(out, MouseButtons::Left);
@@ -440,7 +440,7 @@ namespace tachyon
             ASSERT_EQ(edits[0].rewires.size(), 1u);
             EXPECT_EQ(edits[0].rewires[0].input, (PropertyEndpoint{ 1, 0 }));
             EXPECT_EQ(edits[0].rewires[0].to, (PropertyEndpoint{ 0, 0 }));
-            EXPECT_FALSE(view.pendingConnection.active);
+            EXPECT_FALSE(view.pendingConnection.IsActive());
         }
 
         // Dropped on a node's body, a wire from an input connects to the node's output.
@@ -501,7 +501,7 @@ namespace tachyon
             app.InjectMouseMove(out, MouseButtons::Left);
             Frame();
             Frame();
-            EXPECT_TRUE(view.pendingConnection.active);
+            EXPECT_TRUE(view.pendingConnection.IsActive());
             EXPECT_FALSE(view.pendingConnection.target.valid());
             EXPECT_EQ(app.guiStateManager.Drag().GetValidatedTargetID(), tachyon::ID::Invalid()) << "nothing takes it there";
             app.InjectMouseUp(out);
@@ -562,7 +562,7 @@ namespace tachyon
             view.onEdit = [&](const NodeViewEdit&) { edits++; };
             Drag(SocketOf(nodeB), CanvasPoint());
             Settle();
-            EXPECT_FALSE(view.pendingConnection.active);
+            EXPECT_FALSE(view.pendingConnection.IsActive());
             EXPECT_FALSE(view.nodes[1].properties[0].input->valid());
             EXPECT_EQ(edits, 0);
         }
@@ -856,7 +856,7 @@ namespace tachyon
             const tachyon::int2 middle{ square.x + square.w / 2, square.y + square.h / 2 };
             app.InjectMouseMove(middle);
             Frame();
-            view.hoveredWire = WireKey(2, 0);
+            view.hoveredWire.part = WireKey(2, 0);
             app.ClickAt(middle, MouseButtons::Right);
             Frame();
             Frame();
@@ -1333,7 +1333,7 @@ namespace tachyon
 
             app.InjectMouseMove({ from.x - 80, from.y + 40 }, MouseButtons::Left);
             Frame();
-            EXPECT_TRUE(view.marquee.dragging)
+            EXPECT_TRUE((view.marquee.Phase() == GesturePhase::Dragging))
                 << "dragging past the 4px threshold engages the marquee";
         }
 
@@ -1374,7 +1374,7 @@ namespace tachyon
                 EXPECT_NEAR(view.transform.r0.z, startX + 50.0f, 0.5f);
             }
             EXPECT_EQ(view.nodes[0].pos, positionBefore) << "the node stays put";
-            EXPECT_FALSE(view.marquee.dragging) << "no marquee either";
+            EXPECT_FALSE((view.marquee.Phase() == GesturePhase::Dragging)) << "no marquee either";
         }
 
         TEST_F(NodeViewControlTest, ScrollZoomsTransform)
@@ -1543,7 +1543,7 @@ namespace tachyon
             app.InjectMouseMove({ from.x + 2, from.y + 1 }, MouseButtons::Left);
             Frame();
             EXPECT_TRUE(view.nodeDrag.IsPressed(nodeB));
-            EXPECT_FALSE(view.nodeDrag.dragging) << "under the drag distance it isn't a move yet";
+            EXPECT_EQ(view.nodeDrag.Phase(), GesturePhase::Pressed) << "under the drag distance it isn't a move yet";
             app.InjectMouseUp({ from.x + 2, from.y + 1 });
             Settle();
             EXPECT_EQ(view.nodes[1].pos, before);
@@ -1603,7 +1603,7 @@ namespace tachyon
             Frame();
             app.InjectMouseMove({ from.x + 30, from.y + 30 }, MouseButtons::Left);
             Frame();
-            ASSERT_TRUE(view.marquee.dragging);
+            ASSERT_TRUE((view.marquee.Phase() == GesturePhase::Dragging));
             ASSERT_TRUE(view.selectedNodeIDs.empty()) << "test setup: the marquee selects what it covers, nothing";
 
             app.InjectKey(KeyCode::Escape);

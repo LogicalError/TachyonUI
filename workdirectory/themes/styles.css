@@ -1044,6 +1044,13 @@
     description: "Corner radii of a node's header: --radius-md minus --border, so it follows the border's inner curve";
     range: 0px 24px;
 }
+@property --radius-state {
+    syntax: "<corners>";
+    category: "Sizes";
+    label: "State corners";
+    description: "Corner radii of a state machine's state, all header: --radius-md minus --border, as a node header's top";
+    range: 0px 24px;
+}
 @property --font-size {
     syntax: "<length>";
     category: "Sizes";
@@ -1089,6 +1096,7 @@
     --radius-md-mid: 0px 0px 0px 0px;
     --radius-md-last: 0px 4px 4px 0px;
     --radius-node-top: 5px 5px 0px 0px;
+    --radius-state: 5px 5px 5px 5px;
     --font-size: 12px;
     --font-size-sm: 11px;
     --font-size-tooltip: 12px;
@@ -2427,7 +2435,9 @@
 }
 
 /* ---- node (single node container in the node-view) ----------------------- */
-.node {
+/* .node-state: a state machine's state, its title bar alone: no room under it, and the title
+   bar's color, so nothing shows below the title. */
+.node, .node-state {
     border-width: var(--border);
     border-radius: var(--radius-lg);
     border-color: var(--line-node);
@@ -2448,15 +2458,17 @@
 }
 /* Hover = neutral light-grey border; active/focus/selected = accent blue.
    The background never changes in any state - only the border. */
-.node:hover  { border-color: var(--text-3); }
-.node:active { border-color: var(--accent); }
-.node:focus  { border-color: var(--accent); }
-.node::highlight(selected) { border-color: var(--accent); }
+.node-state { padding: 0px; background-color: var(--bg-control); cursor: move; }
+.node:hover, .node-state:hover   { border-color: var(--text-3); }
+.node:active, .node-state:active { border-color: var(--accent); }
+.node:focus, .node-state:focus   { border-color: var(--accent); }
+.node::highlight(selected), .node-state::highlight(selected) { border-color: var(--accent); }
 
 /* ---- node-header (title bar at the top of a node) ------------------------ */
 /* A static title bar: category square, title, and the category name on the   */
 /* right. It never reacts to state; the node's border carries all feedback.   */
-.node-header {
+/* .node-header-state: a state machine's state is its header alone, without the line under it. */
+.node-header, .node-header-state {
     border-width: 0px 0px 1px 0px;
     border-color: var(--line-node);
     border-radius: var(--radius-node-top);
@@ -2472,6 +2484,7 @@
     color: var(--text-1);
     font-size: var(--font-size);
 }
+.node-header-state { border-width: 0px; border-radius: var(--radius-state); }
 /* The node's category color comes from C++ (Element.colorStyleIndex). */
 .node-category {
     width: 8px;
@@ -2784,6 +2797,57 @@
     border-radius: var(--radius-lg) var(--radius-lg) 0px 0px;
     background-color: var(--frame-band);
 }
+/* State machines: a transition's label on its arrow, the field that edits it, the ring round
+   the state the machine is in, the ring round a state whose edge starts a transition, and the
+   mark of a state holding a machine of its own. */
+.node-transition-label {
+    font-size: 11px;
+    color: var(--text-2);
+    background-color: var(--bg-control);   /* solid, and off the canvas, so no line shows through it */
+    border-width: 1px;
+    border-color: var(--line-subtle);
+    border-radius: var(--radius-md);
+    padding: 1px 6px;
+    margin: 0px;
+    text-wrap: nowrap;
+}
+/* Lit with its arrow, so a crowded machine still shows which label is whose. */
+.node-transition-label:hover { color: var(--text-1); border-color: var(--text-2); background-color: var(--bg-active); }
+.node-transition-label::highlight(selected) { color: var(--text-1); border-color: var(--accent); }
+/* Over the label's chip exactly: the chip's size, its text where the chip's is. */
+.node-transition-rename {
+    font-size: 11px;
+    color: var(--text-1);
+    background-color: var(--bg-input);
+    border-width: 1px;
+    border-color: var(--accent);
+    border-radius: var(--radius-md);
+    padding: 0px 5px;
+    margin: 0px;
+    overflow: hidden;
+    text-wrap: nowrap;
+    vertical-align: middle;
+}
+.node-state-active {
+    border-width: 2px;
+    border-color: var(--accent);
+    border-radius: var(--radius-lg);
+    background-color: transparent;
+}
+.node-state-edge {
+    border-width: 2px;
+    border-style: dashed;
+    border-color: var(--line-strong);
+    border-radius: var(--radius-lg);
+    background-color: transparent;
+}
+.node-state-edge:hover { border-style: solid; border-color: var(--accent); }
+.node-state-nested {
+    border-width: 1px;
+    border-color: var(--text-3);
+    border-radius: 2px;
+    background-color: transparent;
+}
 .node-frame-title {
     -tachyon-icon-size: 12px;   /* the chevron: a click on it collapses or expands the frame */
     border-width: 0px;
@@ -2844,6 +2908,11 @@
     font-weight: 600;
     cursor: text;
 }
+
+/* The selection in the rename fields, as in the other text fields: without it, it's drawn in
+   the field's own colors, so it can't be seen (nor the caret, which shows only without one). */
+.node-frame-rename::selection, .node-transition-rename::selection { color: var(--text-1); background-color: var(--selection); }
+.node-frame-rename:not(:focus)::selection, .node-transition-rename:not(:focus)::selection { background-color: var(--selection-inactive); }   /* the app in the background */
 
 .node-socket {
     width: 12px;
@@ -8361,8 +8430,8 @@
 /* ==== Shadows and focus rings ===============================================
    The palette sets the values (--shadow-*, --focus-ring, --selected-ring). The
    focus ring shows only while focus came from the keyboard (:focus-visible). */
-.node                      { box-shadow: var(--shadow-node); }
-.node::highlight(selected) { box-shadow: var(--selected-ring), var(--shadow-node); }
+.node, .node-state         { box-shadow: var(--shadow-node); }
+.node::highlight(selected), .node-state::highlight(selected) { box-shadow: var(--selected-ring), var(--shadow-node); }
 .button, .toggle, .menu-trigger { box-shadow: var(--shadow-control); }
 .group-button::highlight(selected), .group-toggle::highlight(selected) {
     box-shadow: var(--shadow-chip);

@@ -274,8 +274,7 @@ namespace tachyon
                     if (event.type == tachyon::EventType::MouseDown && event.state.LeftPressed())
                     {
                         // A click focuses the tab, so the arrow keys go on from it.
-                        guiStateManager.Interaction().SetFocusID(event.id);
-                        guiStateManager.TextEditorFocus().Clear();
+                        TakeFocus(guiStateManager, event.id);
                         if (selectedIndex)
                             *selectedIndex = capturedIndex;
                         guiStateManager.Interaction().SetClicked(id);

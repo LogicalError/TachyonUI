@@ -20,6 +20,7 @@ list(APPEND GUI_CORE_TEST_FILES
   progress_test.cpp
   progress_composites_test.cpp
   node_view_frame_test.cpp
+  node_view_state_machine_test.cpp
   timeline_test.cpp
   timeline_editor_test.cpp
   theme_variables_test.cpp
@@ -131,6 +132,7 @@ list(APPEND GUI_CORE_TEST_FILES
   text_shadow_test.cpp
   text_paint_test.cpp
   pointer_drag_test.cpp
+  gesture_test.cpp
   link_cursor_test.cpp
   upload_worker_test.cpp
   frame_waits_test.cpp

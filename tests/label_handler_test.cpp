@@ -90,14 +90,14 @@ namespace tachyon
         // when the press is near the right edge.
         int32_t sharedWidth = 100;
         bool edgeHovered = false;
-        bool edgeDragging = false;
+        Gesture<int32_t> edgeDrag;
         std::vector<TextID> labelTextIDs;
         LabelGroupVisualState gv{
             .sharedWidth   = &sharedWidth,
             .minWidth      = 40,
             .maxWidth      = 300,
             .edgeHovered   = &edgeHovered,
-            .edgeDragging  = &edgeDragging,
+            .edgeDrag      = &edgeDrag,
             .labelTextIDs  = &labelTextIDs,
             .textSystem    = nullptr,
             .styleManager  = nullptr,

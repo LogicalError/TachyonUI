@@ -399,6 +399,12 @@ namespace tachyon
         showcase.textBox2 = "Multiline\nEditable\ntext2...";
 
         nodeViewMode = commandManager.RegisterMode("NodeView");
+        stateMachineMode = commandManager.RegisterMode("StateMachine");
+        commandManager.RegisterCommand(stateMachineMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None,
+                                       [this]() { DeleteSelectedStates(); }, "Delete States");
+        commandManager.RegisterCommand(stateMachineMode, showcase.frameSelectedIcon, tachyon::KeyCode::KeyF, tachyon::KeyModifier::None,
+                                       [this]() { FrameSelectedNodes(showcase.combatOpen ? showcase.combatMachine : showcase.enemyMachine); },
+                                       "Frame Selected");
         commandManager.RegisterCommand(
             nodeViewMode,
             tachyon::KeyCode::Home,
@@ -466,7 +472,7 @@ namespace tachyon
             "Pan View (hold)");
 
         // NodeView - graph navigation
-        commandManager.RegisterCommand(nodeViewMode, showcase.frameSelectedIcon, tachyon::KeyCode::KeyF,  tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Frame Selected"); }, "Frame Selected");
+        commandManager.RegisterCommand(nodeViewMode, showcase.frameSelectedIcon, tachyon::KeyCode::KeyF,  tachyon::KeyModifier::None, [this]() { FrameSelectedNodes(showcase.nodeView); }, "Frame Selected");
         commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::KeyA,  tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Frame All"); }, "Frame All");
         commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::Space, tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Search Nodes"); }, "Search Nodes");
         commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::KeyG,  tachyon::KeyModifier::Control, [this]() { GroupSelection(); }, "Group Selection");
@@ -1486,6 +1492,7 @@ namespace tachyon
         const std::string name(title);
         if (title == "Viewport")  return CreatePanel(panels, name, showcase.panelViewportIcon, [this] { RenderViewportPanel(); });
         if (title == "NodeView")  return CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderNodeViewPanel(); });
+        if (title == "StateMachine") return CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderStateMachinePanel(); });
         if (title == "BoxTest")   return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderBoxTestPanel(); });
         if (title == "Inspector") return CreateInspectorPanel(panels, name);
         if (title == "Hierarchy") return CreateHierarchyPanel(panels, name);
@@ -1568,7 +1575,7 @@ namespace tachyon
                 Split("LeftPinned", 320,
                     Tabs({ "Hierarchy" }),
                     Split("RightPinned", 540,
-                        Tabs({ "NodeView", "Viewport", "Settings" }),
+                        Tabs({ "NodeView", "StateMachine", "Viewport", "Settings" }),
                         Tabs({ "Profiler", "Inspector", "Reorderable", "Misc", "BoxTest", "TreeTable", "Table", "FrozenTable", "Sketch" }))),
                 Split("LeftPinned", 500, Tabs({ "Files" }), Tabs({ "Log", "Timeline", "Curves" })),
                 120, 160));
@@ -1578,7 +1585,7 @@ namespace tachyon
                 Split("RightPinned", 360,
                     Split("BottomPinned", 220, Tabs({ "Viewport" }), Tabs({ "Log", "Files" })),
                     Tabs({ "Inspector" }))));
-        presets.AddBuiltIn("Graph", Split("RightPinned", 420, Tabs({ "NodeView" }), Tabs({ "Inspector" })));
+        presets.AddBuiltIn("Graph", Split("RightPinned", 420, Tabs({ "NodeView", "StateMachine" }), Tabs({ "Inspector" })));
         presets.AddBuiltIn("Tables", Split("RightPinned", 420, Tabs({ "Table", "TreeTable", "FrozenTable" }), Tabs({ "Inspector" })));
         presets.AddBuiltIn("Viewport", Tabs({ "Viewport" }));
         presets.AddBuiltIn("Animation", Split("BottomPinned", 300, Tabs({ "Viewport" }), Tabs({ "Timeline", "Curves" })));

@@ -28,8 +28,7 @@ namespace tachyon
             {
                 case tachyon::EventType::MouseDown:
                     if (!event.state.LeftPressed()) break;
-                    guiStateManager.Interaction().SetFocusID(event.id);
-                    guiStateManager.TextEditorFocus().Clear();
+                    TakeFocus(guiStateManager, event.id);
                     return true;
 
                 case tachyon::EventType::MouseScroll:
@@ -436,14 +435,11 @@ namespace tachyon
             // ---- MouseUp: resolve a deferred click selection, if any ----
             if (event.type == tachyon::EventType::MouseUp && event.state.LeftReleased())
             {
-                if (dragDropEnabled
-                    && state->internal.pendingRowClick.rowID == rowID
-                    && !state->internal.pendingRowClick.dragPromoted)
-                {
-                    applyClickSelection(rowID, state->internal.pendingRowClick.mods);
-                }
+                PendingRowClick& pending = state->internal.pendingRowClick;
+                if (pending.Release(event) == PointerDrag::Ended::Click && dragDropEnabled)
+                    applyClickSelection(rowID, pending.before);
                 // Always clear on any LeftReleased - the click is over.
-                state->internal.pendingRowClick = {};
+                pending = {};
                 return false;
             }
 
@@ -527,9 +523,10 @@ namespace tachyon
                     {
                         if ((event.state.buttons & tachyon::MouseButtons::Left) == tachyon::MouseButtons::None) break;
                         guiStateManager.Drag().UpdateFromInput(event.state);
-                        // A real drag cancels the deferred click selection.
+                        // A real drag cancels the deferred click selection: the drag manager has
+                        // decided it, so the press is a drag at any distance.
                         if (guiStateManager.Drag().GetDraggedID() == rowID)
-                            state->internal.pendingRowClick.dragPromoted = true;
+                            state->internal.pendingRowClick.Move(event, 0);
                         return guiStateManager.Drag().GetDraggedID() == rowID;
                     }
                     case tachyon::EventType::DragEnter:
@@ -642,16 +639,14 @@ namespace tachyon
             // Plain click cancels rename (not on its activation frame).
             if (!(*m_renameSub).firstFrame) (*m_renameSub).Cancel();
 
-            guiStateManager.Interaction().SetFocusID(containerID);
-            guiStateManager.TextEditorFocus().Clear();
+            TakeFocus(guiStateManager, containerID);
             guiStateManager.Interaction().SetClicked(rowID);
 
             if (dragDropEnabled)
             {
                 // Defer selection to MouseUp so a drag doesn't select the source row.
-                state->internal.pendingRowClick.rowID        = rowID;
-                state->internal.pendingRowClick.mods         = event.state.modifiers;
-                state->internal.pendingRowClick.dragPromoted = false;
+                state->internal.pendingRowClick.Press(event, elementStorage, guiStateManager, event.state.modifiers,
+                                                      { .focus = false, .capture = false });
 
                 // Prime a drag (inlined: Chain stops at our `return true`).
                 uintptr_t payloadValue = dd->getPayload ? dd->getPayload(rowID) : 0;

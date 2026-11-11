@@ -6,7 +6,7 @@
 #include <vector>
 
 #include <gui_core/gui_id.h>
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 #include <gui_core/style/gui_style.h>
 #include <gui_core/style/gui_color_conversions.h>
 
@@ -71,10 +71,11 @@ namespace tachyon
 
         /// What a press on the square or a strip changes.
         enum class DragTarget { None, Square, Hue, Alpha };
-        /// The press on the square or a strip, a drag from the start.
-        tachyon::PointerDrag press;
-        /// The color before it; put back by Escape.
-        float startH = 0.0f, startS = 0.0f, startV = 0.0f, startA = 1.0f;
+        /// The working color as HSV+A, the part a press on the square or a strip changes.
+        struct HSVA { float h = 0.0f, s = 0.0f, v = 0.0f, a = 1.0f; };
+        /// The press on the square or a strip, a drag from the start; the color before it is
+        /// put back by Escape.
+        tachyon::Gesture<HSVA> press;
 
         static constexpr int kNumGradientSliders = 4;
         tachyon::VisualColorStyleIndex gradientStyles[kNumGradientSliders] = {};

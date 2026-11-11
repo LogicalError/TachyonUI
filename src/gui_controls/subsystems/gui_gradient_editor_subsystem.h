@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <gui_core/input/gui_pointer_drag.h>
+#include <gui_core/input/gui_gesture.h>
 #include <gui_core/gui_id.h>
 #include <gui_core/style/gui_style.h>
 #include <gui_core/style/gui_style_gradient.h>
@@ -46,12 +46,16 @@ namespace tachyon
         enum class CloseRequest { None, Ok, Cancel } closeRequest = CloseRequest::None;
         std::vector<tachyon::GradientF> savedPresets;      ///< "Save preset", for the session
 
-        tachyon::PointerDrag press;                     ///< the press on a stop, a drag from the start
+        /// What a stop's drag changes, as it was at the press; put back by Escape.
+        struct DragSnapshot
+        {
+            tachyon::GradientF gradient {};
+            int                selectedStop = 0;
+        };
+        tachyon::Gesture<DragSnapshot> press;           ///< the press on a stop, a drag from the start
         int           dragStopIndex          = -1;      ///< the dragged stop, or -1
         float         dragGrab               = 0.0f;    ///< cursor minus the stop's offset at the press, so it doesn't jump
         bool          dragOff                = false;   ///< dragged well below the bar: removed on release
-        tachyon::GradientF beforeDrag {};               ///< the gradient before the drag; put back by Escape
-        int           selectedBeforeDrag     = 0;
 
         tachyon::VisualColorStyleIndex previewGradientStyle = tachyon::VisualColorStyleIndex::Invalid;
         tachyon::VisualColorStyleIndex stopEdgeColor        = tachyon::VisualColorStyleIndex::Invalid;

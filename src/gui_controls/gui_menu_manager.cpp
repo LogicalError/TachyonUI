@@ -344,8 +344,7 @@ namespace tachyon
             RequestCloseAll();
         } else
         {
-            guiStateManager.Interaction().SetFocusID(currentItemID);
-            guiStateManager.TextEditorFocus().Clear();
+            TakeFocus(guiStateManager, currentItemID);
             OpenSubmenu(depth, currentItemID);
         }
         return true;

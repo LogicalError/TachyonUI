@@ -46,9 +46,8 @@ namespace tachyon
 
     static void LabelDragPress(GUIStateManager& guiStateManager, const ElementStorage& elementStorage, DragLabelState& state, const ElementEvent& event)
     {
-        guiStateManager.Interaction().SetFocusID(event.id);
-        guiStateManager.TextEditorFocus().Clear();
-        state.drag.Press(event, elementStorage);
+        // The capture is taken once it becomes a drag.
+        state.drag.Press(event, elementStorage, guiStateManager, {}, { .capture = false });
     }
 
     // Past the drag distance, each move sends LabelDrag (LabelDragBegin first) with scroll.x the
@@ -57,7 +56,7 @@ namespace tachyon
     {
         if (!state.drag.IsPressed(event.id))
             return false;
-        const bool wasDragging = state.drag.dragging;
+        const bool wasDragging = state.drag.IsDragging(event.id);
         if (!state.drag.Move(event, elementStorage.GetStyleManager().Px(kDragStartDistance)))
             return true;
         if (!wasDragging)
@@ -68,7 +67,7 @@ namespace tachyon
             DispatchToNextSibling(elementStorage, event.id, EventType::LabelDragBegin, beginState);
         }
         InputState dragState = event.state;
-        dragState.scroll = { float(state.drag.ScreenDelta(event.state).x), 0.0f };
+        dragState.scroll = { float(state.drag.drag.ScreenDelta(event.state).x), 0.0f };
         DispatchToNextSibling(elementStorage, event.id, EventType::LabelDrag, dragState);
         return true;
     }
@@ -91,13 +90,10 @@ namespace tachyon
     static bool LabelDragCancel(GUIStateManager& guiStateManager, const ElementStorage& elementStorage, DragLabelState& state, const ElementEvent& event)
     {
         const bool wasDragging = state.drag.IsDragging(event.id);
-        if (!IsDragCancelKey(event.state) || !state.drag.Cancel(event.id))
+        if (!state.drag.Cancel(event, guiStateManager))
             return false;
         if (wasDragging)
-        {
             DispatchToNextSibling(elementStorage, event.id, EventType::LabelDragCancel, event.state);
-            guiStateManager.Interaction().ReleaseCaptureID();
-        }
         return true;
     }
 
@@ -164,8 +160,6 @@ namespace tachyon
 
     struct LabelGroupResizeState
     {
-        PointerDrag        drag;            // a drag from the press on
-        int32_t            startWidth = 0;  // put back by Escape
         DoubleClickTracker clicks;          // a double-click fits the widest label
     };
 
@@ -210,51 +204,39 @@ namespace tachyon
                 *gv.sharedWidth = std::clamp(ToGroupWidth(gv, maxTextWidth, true), gv.minWidth, gv.maxWidth);
             return true;
         }
-        state.drag.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ true);
-        state.startWidth = *gv.sharedWidth;
-        *gv.edgeDragging = true;
-        guiStateManager.Interaction().SetCaptureID(event.id);
+        gv.edgeDrag->Press(event, elementStorage, guiStateManager, *gv.sharedWidth, { .atOnce = true, .focus = false });
         return true;
     }
 
-    static void EdgeResizeFollow(const ElementStorage& elementStorage, const LabelGroupVisualState& gv,
-                                 const LabelGroupResizeState& state, const ElementEvent& event)
+    static void EdgeResizeFollow(const ElementStorage& elementStorage, const LabelGroupVisualState& gv, const ElementEvent& event)
     {
-        const int32_t delta = state.drag.LocalDelta(event, elementStorage).x;
-        *gv.sharedWidth = std::clamp(state.startWidth + ToGroupWidth(gv, delta), gv.minWidth, gv.maxWidth);
+        const int32_t delta = gv.edgeDrag->drag.LocalDelta(event, elementStorage).x;
+        *gv.sharedWidth = std::clamp(gv.edgeDrag->before + ToGroupWidth(gv, delta), gv.minWidth, gv.maxWidth);
     }
 
-    static bool EdgeResizeMove(const ElementStorage& elementStorage, const LabelGroupVisualState& gv,
-                               LabelGroupResizeState& state, const ElementEvent& event)
+    static bool EdgeResizeMove(const ElementStorage& elementStorage, const LabelGroupVisualState& gv, const ElementEvent& event)
     {
-        if (!state.drag.Move(event, 0))
+        if (!gv.edgeDrag->Move(event, 0))
             return false;
-        EdgeResizeFollow(elementStorage, gv, state, event);
+        EdgeResizeFollow(elementStorage, gv, event);
         return true;
     }
 
     static bool EdgeResizeRelease(GUIStateManager& guiStateManager, const ElementStorage& elementStorage, const LabelGroupVisualState& gv,
-                                  LabelGroupResizeState& state, const ElementEvent& event)
+                                  const ElementEvent& event)
     {
-        if (!state.drag.IsPressed(event.id))
+        if (!gv.edgeDrag->IsPressed(event.id))
             return false;
-        EdgeResizeFollow(elementStorage, gv, state, event);
-        if (state.drag.Release(event) == PointerDrag::Ended::No)
+        EdgeResizeFollow(elementStorage, gv, event);
+        if (gv.edgeDrag->Release(event) == PointerDrag::Ended::No)
             return false;
-        *gv.edgeDragging = false;
         guiStateManager.Interaction().ReleaseCaptureID();
         return true;
     }
 
-    static bool EdgeResizeCancel(GUIStateManager& guiStateManager, const LabelGroupVisualState& gv,
-                                 LabelGroupResizeState& state, const ElementEvent& event)
+    static bool EdgeResizeCancel(GUIStateManager& guiStateManager, const LabelGroupVisualState& gv, const ElementEvent& event)
     {
-        if (!IsDragCancelKey(event.state) || !state.drag.Cancel(event.id))
-            return false;
-        *gv.sharedWidth  = state.startWidth;
-        *gv.edgeDragging = false;
-        guiStateManager.Interaction().ReleaseCaptureID();
-        return true;
+        return gv.edgeDrag->Cancel(event, guiStateManager, *gv.sharedWidth);
     }
 
     // Hovering the right edge shows the resize cursor.
@@ -275,7 +257,7 @@ namespace tachyon
             switch (event.type)
             {
                 case EventType::MouseMove:
-                    if (auto* state = store.Get<LabelGroupResizeState>(event.id); state && EdgeResizeMove(elementStorage, gv, *state, event))
+                    if (EdgeResizeMove(elementStorage, gv, event))
                         return true;
                     return EdgeHover(guiStateManager, elementStorage, gv, event);
 
@@ -287,14 +269,10 @@ namespace tachyon
                     return true;
 
                 case EventType::MouseUp:
-                    if (auto* state = store.Get<LabelGroupResizeState>(event.id))
-                        return EdgeResizeRelease(guiStateManager, elementStorage, gv, *state, event);
-                    break;
+                    return EdgeResizeRelease(guiStateManager, elementStorage, gv, event);
 
                 case EventType::KeyDown:
-                    if (auto* state = store.Get<LabelGroupResizeState>(event.id))
-                        return EdgeResizeCancel(guiStateManager, gv, *state, event);
-                    break;
+                    return EdgeResizeCancel(guiStateManager, gv, event);
 
                 default:
                     break;
@@ -318,13 +296,10 @@ namespace tachyon
             switch (event.type)
             {
                 case EventType::MouseMove:
-                    if (auto* s = store.Get<GroupDraggableLabelState>(event.id))
-                    {
-                        if (EdgeResizeMove(elementStorage, gv, s->resize, event))
-                            return true;
-                        if (LabelDragMove(guiStateManager, elementStorage, s->drag, event))
-                            return true;
-                    }
+                    if (EdgeResizeMove(elementStorage, gv, event))
+                        return true;
+                    if (auto* s = store.Get<GroupDraggableLabelState>(event.id); s && LabelDragMove(guiStateManager, elementStorage, s->drag, event))
+                        return true;
                     return EdgeHover(guiStateManager, elementStorage, gv, event);
 
                 case EventType::MouseDown:
@@ -338,15 +313,17 @@ namespace tachyon
                     break;
 
                 case EventType::MouseUp:
+                    if (EdgeResizeRelease(guiStateManager, elementStorage, gv, event))
+                        return true;
                     if (auto* s = store.Get<GroupDraggableLabelState>(event.id))
-                        return EdgeResizeRelease(guiStateManager, elementStorage, gv, s->resize, event) ||
-                               LabelDragRelease(guiStateManager, elementStorage, s->drag, event);
+                        return LabelDragRelease(guiStateManager, elementStorage, s->drag, event);
                     break;
 
                 case EventType::KeyDown:
+                    if (EdgeResizeCancel(guiStateManager, gv, event))
+                        return true;
                     if (auto* s = store.Get<GroupDraggableLabelState>(event.id))
-                        return EdgeResizeCancel(guiStateManager, gv, s->resize, event) ||
-                               LabelDragCancel(guiStateManager, elementStorage, s->drag, event);
+                        return LabelDragCancel(guiStateManager, elementStorage, s->drag, event);
                     break;
 
                 default:

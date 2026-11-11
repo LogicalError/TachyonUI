@@ -90,10 +90,10 @@ namespace tachyon
     //
     // OnPreConstruct: clears the transient anyLabelHovered flag and the
     //                 labelTextIDs scratch vector. labelWidth/min/max and
-    //                 edgeHovered/edgeDragging are PERSISTENT and must
+    //                 edgeHovered/edgeDrag are PERSISTENT and must
     //                 survive the reset.
     // OnPostConstruct: clears edgeHovered ONLY when neither
-    //                  anyLabelHovered nor edgeDragging is true.
+    //                  anyLabelHovered nor edgeDrag is held.
     // ---------------------------------------------------------------------
 
     TEST(LabelGroupSubsystemTest, OnPreConstructResetsTransientsButKeepsPersistent)
@@ -148,7 +148,7 @@ namespace tachyon
             sub.BeginGroup(groupID, 120, 40, 500);
             auto* s = sub.GetActiveGroup();
             s->anyLabelHovered = anyHovered;
-            s->edgeDragging    = dragging;
+            s->edgeDrag.drag.id = dragging ? groupID : tachyon::ID::Invalid();   // a press held, or none
             s->edgeHovered     = edgeHovered;
             sub.EndGroup();
         };

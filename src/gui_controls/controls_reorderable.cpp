@@ -113,9 +113,9 @@ namespace tachyon
                     if (childRange.Empty()) break;
 
                     drag = {};
-                    drag.press.Press(event, elementStorage);
-                    drag.cursorLocal  = drag.press.pressLocal;
-                    drag.cursorScreen = drag.press.pressScreen;
+                    drag.press.Press(event, elementStorage, guiStateManager, {}, { .focus = false });
+                    drag.cursorLocal  = drag.press.drag.pressLocal;
+                    drag.cursorScreen = drag.press.drag.pressScreen;
                     drag.isWrapped = isWrapped;
                     drag.groupID = groupID;
                     drag.draggedIndex = itemIndex;
@@ -144,8 +144,6 @@ namespace tachyon
                         const auto& childElem = elementStorage.GetElementUnsafe(childRef);
                         drag.originalIDs.push_back(childElem.id);
                     }
-
-                    guiStateManager.Interaction().SetCaptureID(id);
                     return true;
                 }
 
@@ -284,8 +282,7 @@ namespace tachyon
                             LabelBinding::FindFirstControlInSubtree(elementStorage, rowRef);
                         if (firstControl != ID::Invalid())
                         {
-                            guiStateManager.Interaction().SetFocusID(firstControl);
-                            guiStateManager.TextEditorFocus().Clear();
+                            TakeFocus(guiStateManager, firstControl);
                         }
                     };
 
@@ -353,10 +350,9 @@ namespace tachyon
                 case tachyon::EventType::KeyDown:
                 {
                     // Escape: the items go back to their places (the reorder is only applied on release).
-                    if (drag.draggedIndex == itemIndex && IsDragCancelKey(event.state) && drag.press.Cancel(id))
+                    if (drag.draggedIndex == itemIndex && drag.press.Cancel(event, guiStateManager))
                     {
                         drag = {};
-                        guiStateManager.Interaction().ReleaseCaptureID();
                         return true;
                     }
                     break;

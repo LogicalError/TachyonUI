@@ -5,6 +5,7 @@
 
 #include <gui_core/gui_id.h>
 #include <gui_core/elements/gui_element.h>
+#include <gui_core/input/gui_gesture.h>
 #include <gui_core/text/gui_text_system.h>
 
 namespace tachyon
@@ -34,7 +35,7 @@ namespace tachyon
             int32_t maxWidth   = 500;   ///< CSS px
             bool    resizable  = true;  ///< false: the width fits the widest label instead
             bool    edgeHovered     = false;   ///< a label's resize edge is hovered
-            bool    edgeDragging    = false;   ///< a label's resize edge is being dragged
+            Gesture<int32_t> edgeDrag;         ///< a label's resize edge dragged; the width as it was, put back by Escape
             bool    anyLabelHovered = false; ///< transient: set during construction if any label has hover
             std::vector<tachyon::TextID> labelTextIDs; ///< transient: rebuilt each frame for auto-size
             int32_t maxLabelWidthThisFrame = 0;    ///< transient: widest label (pixels), for auto-width

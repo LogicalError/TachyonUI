@@ -421,14 +421,13 @@ namespace tachyon
                         const int hit = hitStop();
                         if (hit >= 0)
                         {
-                            ge.beforeDrag         = g;
-                            ge.selectedBeforeDrag = ge.selectedStop;
+                            // Focused above already; the text editor keeps its own focus.
+                            ge.press.Press(event, elementStorage, guiStateManager, { g, ge.selectedStop },
+                                           { .atOnce = true, .focus = false });
                             ge.selectedStop  = hit;
-                            ge.press.Press(event, elementStorage, MouseButtons::Left, /*atOnce*/ true);
                             ge.dragStopIndex = hit;
                             ge.dragGrab      = t - g.stops[size_t(hit)].offset;
                             ge.dragOff       = false;
-                            guiStateManager.Interaction().SetCaptureID(barID);
                             return true;
                         }
                         // A click on the bar adds a stop with the gradient's color there, blending on
@@ -472,13 +471,12 @@ namespace tachyon
                         break;
                     case EventType::KeyDown:
                         // Escape during a drag puts the gradient back.
-                        if (IsDragCancelKey(event.state) && ge.press.Cancel(barID))
+                        if (ge.press.Cancel(event, guiStateManager))
                         {
-                            g = ge.beforeDrag;
-                            ge.selectedStop  = ge.selectedBeforeDrag;
+                            g = ge.press.before.gradient;
+                            ge.selectedStop  = ge.press.before.selectedStop;
                             ge.dragStopIndex = -1;
                             ge.dragOff       = false;
-                            guiStateManager.Interaction().ReleaseCaptureID();
                             return true;
                         }
                         if (event.state.lastKey == KeyCode::Delete && count > 2)

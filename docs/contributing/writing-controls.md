@@ -655,29 +655,40 @@ For a control that opens a popup, such as a list, a picker or a menu:
 
 ## Press and drag
 
-A press on an element can become a click or a drag. To tell them apart, keep a
-`PointerDrag` (`gui_core/input/gui_pointer_drag.h`) in the control's state, and pass it the
-events of the element that is pressed:
+A press on an element can become a click or a drag. Keep a `Gesture`
+(`gui_core/input/gui_gesture.h`) in the control's state for each thing a press can do, and
+pass it the events of the element that is pressed. Its phases nest inside the element's
+hover:
 
-- `Press` when the button goes down. It records where the pointer is.
-  - the handler returns true
-  - if the press came without the mouse capture, set the capture, so the moves, the
-    release and Escape still reach the element when the pointer leaves it
+- Idle: nothing pressed
+- Pressed: the button is down, but the pointer hasn't moved far; it may still be a click
+- Dragging: it has moved `Px(kDragStartDistance)`, or it drags from the press on
 
-  For example, a node in `NodeView`:
+`Gesture<T>` keeps a `T`, the value the drag changes, as it was at the press, in `before`.
+Escape puts it back, and the release can commit it as one undo step. `Gesture<>` keeps nothing.
+
+- `Press` when the button goes down. It records where the pointer is and keeps the value.
+  It also does what almost every press does, as its `PressOptions` say:
+  - takes the keyboard focus, and a text editor that had it lets go (`.focus = false` for
+    none, `.focusID` for another element)
+  - takes the mouse capture, so the moves, the release and Escape still reach the element
+    when the pointer leaves it (`.capture = false` when the press doesn't need it)
+  - `.button` for another button than the left one, `.atOnce` for elements that can only
+    be dragged, like sizers and scrollbar thumbs
+
+  For example, the curve editor's keys, and its view dragged with the middle button:
 
   ```cpp
-  view.nodeDrag.Press(event, elementStorage);
-  // The moves, the release and Escape come here wherever the pointer goes.
-  guiStateManager.Interaction().SetCaptureID(outerID);
-  return true;
+  v->keyDrag.Press(event, es, gsm, CurvesOf(*v));
+  v->pan.Press(event, es, gsm, ShownOf(*v), { .button = panButton, .atOnce = true, .focus = false });
   ```
 
-- `Move` returns true for a move that is part of a drag:
-  - once the pointer has moved `Px(kDragStartDistance)` in a straight line from the press
-    (`IsDragTravel`)
-  - or from the press on, for elements that can only be dragged, like sizers and scrollbar
-    thumbs. Press those with `Press(..., atOnce = true)`.
+- `TakeFocus(gsm, id)` focuses an element for a press that starts no gesture (a click on
+  a row, say).
+
+- `Move` returns true for a move that is part of a drag: once the pointer has moved
+  `Px(kDragStartDistance)` in a straight line from the press (`IsDragTravel`), or from the
+  press on with `.atOnce`.
 
   For example, a node in `NodeView`:
 
@@ -685,36 +696,32 @@ events of the element that is pressed:
   if (!view.nodeDrag.Move(event, styleManager.Px(kDragStartDistance))) return true;
   ```
 
-  And the integer `SliderField`, which drags from the press on:
+- `Release` says whether the press ended as a click or a drag. `before` is still there, for
+  the commit.
+
+  For example, the plot's handles:
 
   ```cpp
-  s.drag.Press(event, es, MouseButtons::Left, /*atOnce*/ true);
+  if (v->handleDrag.Release(event) == PointerDrag::Ended::No)
+      return false;
+  const PlotEdit edit{ v->handleDrag.before, HandleXs(*v) };
   ```
 
-- `Release` says whether the press ended as a click or a drag.
-
-  For example, `SelectableText`:
-
-  ```cpp
-  if (press && press->Release(ev) == PointerDrag::Ended::Click)
-  {
-      // a click on a link, not the end of a text selection drag
-  }
-  ```
-
-- `IsDragCancelKey` is true for Escape going down. Then `Cancel` drops the press:
-  - put back the value saved at the press
-  - the moves and the release that follow are ignored
+- `Cancel` takes Escape going down on the pressed element. It drops the press and its
+  capture, and gives the value back; the moves and the release that follow are ignored.
 
   For example, the integer `SliderField`:
 
   ```cpp
-  if (auto* s = store.Get<IntSliderState>(event.id); s && IsDragCancelKey(event.state) && s->drag.Cancel(event.id))
-  {
-      *valuePtr = s->startValue;
+  if (auto* s = store.Get<IntSliderState>(event.id); s && s->drag.Cancel(event, gsm, *valuePtr))
       return true;
-  }
   ```
+
+- `Reset` drops a press and its value, for example when the control is disabled under it.
+
+- The press itself is the `PointerDrag` in `drag`, for where it began and how far it moved.
+  Use a bare `PointerDrag` only where a press only tells a click from a drag, with no focus,
+  capture or value to put back (`SelectableText`).
 
 - `LocalDelta` is the distance moved in the element's layout space. It follows a zoomed
   canvas.
@@ -723,7 +730,7 @@ events of the element that is pressed:
 
   ```cpp
   // The node is inside the canvas: its layout space is node.pos space.
-  const int2 idelta = view.nodeDrag.LocalDelta(event, elementStorage);
+  const int2 idelta = view.nodeDrag.drag.LocalDelta(event, elementStorage);
   ```
 
 - `ScreenDelta` is the distance moved in screen pixels, for moving an OS window.
@@ -732,10 +739,25 @@ events of the element that is pressed:
 
   ```cpp
   // An OS window: it moves in screen pixels.
-  const int2 delta = drag.drag.ScreenDelta(e.state);
+  const int2 delta = drag.press.drag.ScreenDelta(e.state);
   ```
 
 Also:
+
+- The part of a drawn control under the pointer (a key, a handle, a clip's end) shows it's
+  hovered. Keep a `HoverPart<Part>`: on each move, `Track` runs the hit test unless one of the
+  control's presses is held (`AnyHeld`), so the part being dragged stays lit; draw with
+  `Shown(elementHovered)`.
+
+  For example, the curve editor:
+
+  ```cpp
+  v->hover.Track(AnyHeld(v->pan, v->keyDrag, v->tangentDrag, v->boxSelect), [&] {
+      CurveView::HoverTarget under;
+      // ... the key, handle or curve under the pointer
+      return under;
+  });
+  ```
 
 - A drag can be tracked outside element events, for a group or for the whole app. Drop
   such a drag when `InputManager::IsDragAbandoned` says the release won't arrive.
@@ -851,7 +873,7 @@ Do it the same way as similar controls:
 
 | Feature | When | How |
 | --- | --- | --- |
-| Drag to change | Numbers, sliders, colors | A `PointerDrag` (see Press and drag). Escape during the drag puts the value back. |
+| Drag to change | Numbers, sliders, colors | A `Gesture` (see Press and drag). Escape during the drag puts the value back. |
 | Edit as text | A value that can also be typed, like a slider's number | A click starts typing. Enter keeps the text, Escape cancels. |
 | Context menu | Actions besides the control's main one | `BeginContextMenu(id)`. It opens on a right-click, Shift+F10 or the Menu key. |
 | Move in a list | Items the user puts in order: rows, tabs, columns | Drag the item, or press Alt + an arrow key on the focused item. A reorderable group does both. |
