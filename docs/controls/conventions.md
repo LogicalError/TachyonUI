@@ -121,6 +121,18 @@ They are defined in `src/gui_core/layout/gui_constraints.h`.
   - the halo grows in over 150 ms
   - fields also get an error icon
   - `SetErrorTooltip` gives the reason
+- `BeginShownState(states)` / `EndShownState()`:
+  - drawn as hovered, pressed or focused (`ElementState::Hover`, `Active`, `Focused`), whatever the
+    pointer and the keyboard do
+  - only the look changes: input works as usual
+  - for a preview or a screenshot of a control's states side by side
+  - a focus ring also needs the focus visible: `guiStateManager.Interaction().SetFocusVisible(true)`
+
+```cpp
+BeginShownState(ElementState::Hover | ElementState::Active);   // looks pressed
+Button("Apply", [] {});
+EndShownState();
+```
 
 ```cpp
 BeginDisabled();

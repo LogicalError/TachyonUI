@@ -40,6 +40,9 @@ namespace tachyon
             WindowRenderToImage   = 1u << 18, ///< no OS window; see WindowFlags::RenderToImage
             WindowCustomTitleBar  = 1u << 19, ///< draws its own title bar; see WindowFlags::CustomTitleBar
             WindowConfirmClose    = 1u << 21, ///< closing it asks the app first: GUIApplication::CloseRequested
+            /// With WindowRenderToImage: the windows opened in it (menus, tooltips, pickers,
+            /// dialogs) and theirs render to images too, instead of opening as OS windows.
+            WindowImagePopups     = 1u << 25,
 
         Shadows                   = 1u << 15, ///< OS drop shadow for windows (elements use CSS box-shadow)
         PropagatesDescendantState = 1u << 16, ///< Hover/Focused when any descendant is

@@ -93,4 +93,37 @@ namespace tachyon
         backend.SetFocus(nullptr);
         EXPECT_EQ(backend.GetFocusChangeCount(), before + 2);
     }
+
+    // An image window opened from the image window with the focus (WindowImagePopups) takes
+    // it, as an OS popup does, unless it can't have it; the host's input to the window that
+    // opened it doesn't take it back, but for a press.
+    TEST_F(ImageWindowBackendFocusTest, AnImagePopupTakesTheFocusFromTheWindowItOpensFrom)
+    {
+        const OSWindowHandle image = backend.CreateWindow("image", IntRect{ 0, 0, 900, 600 }, WindowFlags::RenderToImage, nullptr);
+        backend.SetFocus(image);
+        const uint32_t before = backend.GetFocusChangeCount();
+
+        const OSWindowHandle tip = backend.CreateWindow("tooltip", IntRect{ 10, 10, 80, 20 },
+                                                        WindowFlags::RenderToImage | WindowFlags::PopupMenu | WindowFlags::NotFocusable, image);
+        EXPECT_EQ(backend.GetActiveWindow(), image) << "a tooltip takes no focus";
+        EXPECT_EQ(backend.GetFocusChangeCount(), before);
+
+        const OSWindowHandle menu = backend.CreateWindow("menu", IntRect{ 400, 300, 200, 100 },
+                                                         WindowFlags::RenderToImage | WindowFlags::PopupMenu, image);
+        EXPECT_EQ(backend.GetActiveWindow(), menu);
+        EXPECT_EQ(backend.GetFocusChangeCount(), before + 1);
+        EXPECT_TRUE(backend.HasFocusWithin(image)) << "the menu is the image window's";
+        EXPECT_TRUE(backend.HasFocusWithin(menu));
+        EXPECT_FALSE(backend.HasFocusWithin(tip));
+
+        const OSWindowHandle submenu = backend.CreateWindow("submenu", IntRect{ 600, 300, 200, 100 },
+                                                            WindowFlags::RenderToImage | WindowFlags::PopupMenu, menu);
+        EXPECT_EQ(backend.GetActiveWindow(), submenu);
+        EXPECT_TRUE(backend.HasFocusWithin(image)) << "and the submenu, through the menu";
+
+        backend.SetWindowVisible(submenu, false);
+        EXPECT_EQ(backend.GetActiveWindow(), menu) << "a closed submenu gives the focus back";
+        EXPECT_TRUE(backend.DestroyWindow(menu));
+        EXPECT_EQ(backend.GetActiveWindow(), image) << "and so does a menu gone";
+    }
 }

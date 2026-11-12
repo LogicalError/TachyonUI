@@ -94,7 +94,7 @@ States combine:
 ```css
 .text-style        { background-color: var(--bg-control); border-color: var(--line-strong); }
 .text-style:hover  { background-color: var(--bg-active); }
-.text-style:active { border-color: var(--accent); background-color: var(--bg-pressed); }
+.text-style:active { background-color: var(--bg-pressed); }
 .text-style:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .text-style::highlight(selected) { color: var(--text-1); background-color: var(--accent-soft); }
 

@@ -98,8 +98,8 @@ body{margin:0}
 </div>
 <div aria-hidden="true" style="position: absolute; left: 12px; right: 12px; top: 0; bottom: 0; pointer-events: none">
 <div style="position: absolute; left: 55.875%; top: 0; bottom: 0; width: 0">
-<span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: {{t.accent}}"></span>
-<span style="position: absolute; left: -22px; top: 4px; width: 44px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: {{t.accent}}; color: {{t.onAccent}}; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500">4.47</span>
+<span style="position: absolute; left: 0; top: 0; bottom: 0; width: 1px; background: {{t.t1}}"></span>
+<span style="position: absolute; left: -22px; top: 4px; width: 44px; height: 18px; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: {{t.t1}}; color: {{t.panel}}; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500">4.47</span>
 </div>
 </div>
 </div>
@@ -116,17 +116,17 @@ class Component extends DCLogic {
   renderVals() {
     const isLight = (this.props.theme ?? 'dark') === 'light';
     const t = isLight ? {
-      app: '#E6E8EC', panel: '#FBFBFC', header: '#F3F4F6', active: '#E4E7EC', hover: '#EAECF0', input: '#FFFFFF', control: '#FFFFFF',
+      app: '#E6E8EC', panel: '#FBFBFC', header: '#F3F4F6', active: '#E4E7EC', hover: '#E9E9EB', input: '#FFFFFF', control: '#FFFFFF',
       border: '#DADDE3', line: '#E3E6EB', rowLine: '#EEF0F3', ctlBorder: '#CDD2DA', track: '#D5D9E0', thumb: '#FFFFFF', scroll: '#C9CED6',
       t1: '#1A1D23', t2: '#464C57', t3: '#5F6673', accent: '#2F6FEB', onAccent: '#FFFFFF', soft: 'rgba(47,111,235,0.12)',
       outside: 'rgba(16,24,40,0.05)', key: '#5F6673', keyBorder: '#FFFFFF', summary: '#9AA1AD',
-      warnSoft: 'rgba(217,154,43,0.18)', warnText: '#9A6512',
+      warnSoft: 'rgba(217,154,43,0.18)', warnText: '#8E5D11',
       clipBg: 'rgba(15,165,150,0.10)', clipBorder: 'rgba(15,165,150,0.55)', clipText: '#0B7A6F', wave: 'rgba(15,165,150,0.70)',
       event: '#D9771A', eventSoft: 'rgba(217,119,26,0.14)', chips: ['#2F6FEB', '#7C5CE0', '#D99A2B']
     } : {
-      app: '#0B0C0F', panel: '#121418', header: '#16191E', active: '#23272F', hover: '#1A1D23', input: '#0D0F12', control: '#1E2128',
+      app: '#0B0C0F', panel: '#121418', header: '#16191E', active: '#23272F', hover: '#232529', input: '#0D0F12', control: '#1E2128',
       border: '#1C1F25', line: '#23272F', rowLine: '#181B20', ctlBorder: '#2E333D', track: '#2A2F39', thumb: '#E8EAEF', scroll: '#2E333D',
-      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8A92A2', accent: '#6B9BFF', onAccent: '#0B0C0F', soft: 'rgba(107,155,255,0.16)',
+      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8E96A7', accent: '#6B9BFF', onAccent: '#0B0C0F', soft: 'rgba(107,155,255,0.16)',
       outside: 'rgba(0,0,0,0.28)', key: '#C9CED8', keyBorder: '#121418', summary: '#6B7280',
       warnSoft: 'rgba(229,180,84,0.18)', warnText: '#E5B454',
       clipBg: 'rgba(52,209,191,0.10)', clipBorder: 'rgba(52,209,191,0.45)', clipText: '#5FE0D1', wave: 'rgba(52,209,191,0.65)',

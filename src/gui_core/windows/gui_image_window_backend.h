@@ -12,7 +12,9 @@ namespace tachyon
     /// Adds windows that render to an image (WindowFlags::RenderToImage) to another
     /// window backend. They have no OS window: the backend keeps their rect and
     /// attached context, and everything else goes to the wrapped backend. The host
-    /// feeds their input; SetPointer and SetFocus say where it goes.
+    /// feeds their input; SetPointer and SetFocus say where it goes. An image window
+    /// opened from the one with the focus takes it, as an OS popup does, unless it's
+    /// WindowFlags::NotFocusable.
     class ImageWindowBackend final : public IWindowBackend
     {
     public:
@@ -29,6 +31,9 @@ namespace tachyon
         /// The image window with keyboard focus, reported as the active window. Null:
         /// the OS decides again.
         void SetFocus(OSWindowHandle window);
+        /// True when the image window with the focus is `window` or one opened from it
+        /// (a menu, a picker), however deep.
+        bool HasFocusWithin(OSWindowHandle window) const;
 
         void SetGraphicsContext(GraphicsContext* graphicsContext) override { IWindowBackend::SetGraphicsContext(graphicsContext); m_os.SetGraphicsContext(graphicsContext); }
         OSWindowHandle CreateWindow(std::string_view title, int2 size, WindowFlags windowFlags, OSWindowHandle parentOSHandle) override;

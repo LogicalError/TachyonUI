@@ -155,14 +155,20 @@ A layer is one shadow:
 The focus ring is the outline that shows which control has keyboard focus:
 
 - It is the `box-shadow` of the `:focus-visible` rule.
-- `:focus-visible` takes exactly one `box-shadow` layer and nothing else.
+- It shows only when the focus came from the keyboard, never after a click.
+- `:focus-visible` takes one `box-shadow` layer, or two inset outlines, and nothing else.
 - It can't combine with other states.
-- It's drawn over the state's shadows when focus came from the keyboard.
-- An inset ring (an outline inside the box) must be `inset 0 0 0 <width> <color>`.
+- An inset ring is an outline drawn over the box from its outer edge, so a 1px one covers a
+  1px border: the control's own border turns that color.
+  - It must be `inset 0 0 0 <width> <color>`.
+  - A variable can hold it.
+- Two inset outlines: the first is drawn over the second.
+  - For a control filled with the accent: its edge in the accent, a line of another color inside it.
+- An outer ring (not inset) is drawn round the box, over the state's shadows.
 
 ```css
-.button:focus-visible { box-shadow: var(--focus-ring); }              /* 0 0 0 3px #6B9BFF4D */
-.menu-item:focus-visible { box-shadow: inset 0 0 0 1px var(--accent); }
+.button:focus-visible { box-shadow: var(--focus-ring); }              /* inset 0 0 0 1px #6B9BFF */
+.dialog-button-primary:focus-visible { box-shadow: var(--focus-ring), inset 0 0 0 2px var(--bg-panel); }
 ```
 
 ## Text and fonts

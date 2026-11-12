@@ -143,6 +143,7 @@ namespace tachyon
             return b;
         };
         out.focusRing = shadow(in.focusRing);
+        out.focusRingUnder = shadow(in.focusRingUnder);
         for (StyleState& state : out.states)
         {
             state.textStyle = ScaledTextStyle(state.textStyle, s);
@@ -323,6 +324,7 @@ namespace tachyon
                 .borderDashOffset     = (uint16_t)std::clamp((int)style.borderDashOffset, 0, 65535),
                 .shadowIndex          = RegisterShadows(styleState.boxShadow,
                                                         (ElementState(i) & ElementState::Focused) != ElementState::None ? style.focusRing : BoxShadow{},
+                                                        (ElementState(i) & ElementState::Focused) != ElementState::None ? style.focusRingUnder : BoxShadow{},
                                                         style.borderRadius, styleState.opacity),
             };
             visualBoxHash = Hash::Combine(visualBoxHash, visualBoxStyle[i].GetHashCode());
@@ -829,8 +831,8 @@ namespace tachyon
         return extras ? extras->opacity : -1.0f;
     }
 
-    uint16_t StyleManager::RegisterShadows(const BoxShadow (&layers)[kMaxBoxShadows], const BoxShadow& ring, BoxCorners radius,
-                                           float opacity) noexcept
+    uint16_t StyleManager::RegisterShadows(const BoxShadow (&layers)[kMaxBoxShadows], const BoxShadow& ring, const BoxShadow& ringUnder,
+                                           BoxCorners radius, float opacity) noexcept
     {
         auto visual = [this](const BoxShadow& b) {
             if (b.IsNone()) return VisualShadow{};
@@ -847,14 +849,18 @@ namespace tachyon
             any |= !layers[i].IsNone();
         }
         if (!any) return 0;
+        // An inset ring is an outline: a border-only box with the element's corners (already
+        // in pixels).
+        auto outline = [&](const BoxShadow& b) {
+            const VisualBoxStyleIndex box = RegisterOutline(BoxEdges(uint16_t(std::max<int>(1, b.spread))), radius, b.color);
+            return 1u + uint32_t(int(box) - 1) * Style::kStateCount;
+        };
         if (ring.inset)
-        {
-            // The outline is a border-only box with the element's corners (already in pixels).
-            const VisualBoxStyleIndex box = RegisterOutline(BoxEdges(uint16_t(std::max<int>(1, ring.spread))), radius, ring.color);
-            s.insetRing = 1u + uint32_t(int(box) - 1) * Style::kStateCount;
-        }
+            s.insetRing = outline(ring);
         else
             s.ring = visual(ring);
+        if (ringUnder.inset && !ringUnder.IsNone())
+            s.insetRingUnder = outline(ringUnder);
 
         for (size_t i = 0; i < m_visualShadowStyles.size(); ++i)
             if (m_visualShadowStyles[i] == s)

@@ -1833,20 +1833,25 @@ namespace tachyon
     // A toast of each kind, as a build tool might send them.
     void Application::ShowDemoToasts()
     {
-        ShowToast(ToastDesc{ .severity = Severity::Success, .title = "Build succeeded", .body = "Windows x64 \u00B7 1 m 42 s",
+        // Shown again: the last ones make way.
+        for (const ToastID toast : showcase.demoToasts)
+            DismissToast(toast);
+        showcase.demoToasts.clear();
+        showcase.demoToasts.push_back(ShowToast(ToastDesc{ .severity = Severity::Success, .title = "Build succeeded", .body = "Windows x64 \u00B7 1 m 42 s",
                              .actions = { { "Open folder", {} }, { "Run", {} } },
-                             .age = 4.0f * 60.0f });
-        ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Shader compile failed",
+                             .age = 4.0f * 60.0f }));
+        showcase.demoToasts.push_back(ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Shader compile failed",
                              .body = "Terrain.shader:118 \u2014 undeclared identifier 'uv2'", .monospaceBody = true,
                              .actions = { { "Show log", {} }, { "Copy error", {} } },
-                             .age = 2.0f * 60.0f });
-        ShowToast(ToastDesc{ .severity = Severity::Warning, .title = "3 textures exceed 4K", .body = "They will be downscaled on import.",
+                             .age = 2.0f * 60.0f }));
+        showcase.demoToasts.push_back(ShowToast(ToastDesc{ .severity = Severity::Warning, .title = "3 textures exceed 4K", .body = "They will be downscaled on import.",
                              .actions = { { "Review", {} }, { "Ignore", {} } },
-                             .age = 60.0f });
+                             .age = 60.0f }));
         showcase.uploadStart = guiStateManager.Interaction().GetFrameTime();
         showcase.uploadToast = ShowToast(ToastDesc{ .severity = Severity::Info, .title = "Uploading build",
                                                     .body = "build-0.8.3-win64.zip \u00B7 0%", .progress = 0.0f,
                                                     .actions = { { "Cancel", {} } } });
+        showcase.demoToasts.push_back(showcase.uploadToast);
     }
 
     // The upload's progress, over about 20 s.
@@ -2029,6 +2034,11 @@ namespace tachyon
         AdvanceTimeline(animation.playback,
                         TimelineOptions{ .duration = animation.duration, .fps = animation.fps, .loopRange = animation.loopRange },
                         frameTime);
+        if (!m_captureDir.empty())
+        {
+            RenderCapture();
+            return;
+        }
         auto&& sizeConstraints = LayoutOverride::FixedSize(1700, 900);
         
         {

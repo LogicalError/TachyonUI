@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Light editor — Settings and Table</title>
+<title>Light editor, Settings and Table</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -40,19 +40,19 @@ a{color:#2459C9}a:hover{color:#1A4296}
 </nav>
 <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
 <div style="flex-shrink: 0; padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #E3E6EB">
-<div style="display: flex; align-items: baseline; gap: 10px"><h1 style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; color: #1A1D23">Shortcuts</h1><span style="color: #5F6673">27 commands</span><button style="margin-left: auto; height: 24px; padding: 0 10px; border: 1px solid #CDD2DA; border-radius: 4px; background: #FFFFFF; color: #1A1D23; box-shadow: 0 1px 2px rgba(16,24,40,0.06)">Reset to defaults</button></div>
+<div style="display: flex; align-items: baseline; gap: 10px"><h1 style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; color: #1A1D23">Shortcuts</h1><button style="margin-left: auto; height: 24px; padding: 0 10px; border: 1px solid #CDD2DA; border-radius: 4px; background: #FFFFFF; color: #1A1D23; box-shadow: 0 1px 2px rgba(16,24,40,0.06)">Reset to defaults</button></div>
 <label style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #D5D9E0; border-radius: 4px; background: #FFFFFF; color: #5F6673"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="text" placeholder="Search commands or press a key combination" aria-label="Search shortcuts" style="flex: 1; min-width: 0; border: 0; background: transparent; outline: none; color: #1A1D23"></label>
 </div>
 <div style="flex: 1; min-height: 0; display: flex">
 <div role="listbox" aria-label="Category" style="width: 150px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; padding: 8px; border-right: 1px solid #E3E6EB">
 <span style="padding: 2px 8px 6px; color: #5F6673; font-size: 11px; font-weight: 500">Category</span>
 <sc-for list="{{cats}}" as="c" hint-placeholder-count="4">
-<div role="option" aria-selected="{{c.sel}}" style="height: 26px; display: flex; align-items: center; padding: 0 8px; border-radius: 4px; background: {{c.bg}}; color: {{c.fg}}">{{c.n}}<span style="margin-left: auto; color: #5F6673; font-family: 'JetBrains Mono', monospace; font-size: 11px">{{c.k}}</span></div>
+<div role="option" aria-selected="{{c.sel}}" style="height: 26px; display: flex; align-items: center; padding: 0 8px; border-radius: 4px; background: {{c.bg}}; color: {{c.fg}}">{{c.n}}</div>
 </sc-for>
 </div>
 <div role="table" aria-label="Shortcuts" style="flex: 1; min-width: 0; position: relative; overflow: hidden">
 <div role="row" style="height: 28px; display: grid; grid-template-columns: minmax(0, 1fr) 150px 96px 72px; gap: 12px; align-items: center; padding: 0 16px 0 12px; background: #F3F4F6; border-bottom: 1px solid #E3E6EB; color: #5F6673; font-size: 11px; font-weight: 500">
-<span role="columnheader" style="display: flex; align-items: center; gap: 4px; color: #1A1D23">Command<svg class="i" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span><span role="columnheader">Shortcut</span><span role="columnheader">Context</span><span role="columnheader">Type</span>
+<span role="columnheader" style="display: flex; align-items: center; justify-content: flex-end; gap: 4px; color: #1A1D23">Command<svg class="i" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span><span role="columnheader">Shortcut</span><span role="columnheader">Context</span><span role="columnheader">Type</span>
 </div>
 <sc-for list="{{cmds}}" as="c" hint-placeholder-count="27">
 <div role="row" style="height: 27px; display: grid; grid-template-columns: minmax(0, 1fr) 150px 96px 72px; gap: 12px; align-items: center; padding: 0 16px 0 12px; border-bottom: 1px solid #EEF0F3; background: {{c.bg}}">
@@ -95,7 +95,7 @@ a{color:#2459C9}a:hover{color:#1A4296}
 <div style="height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid #E3E6EB">
 <span>Selection mode</span>
 <div role="group" aria-label="Selection mode" style="display: inline-flex; padding: 2px; gap: 2px; border-radius: 6px; background: #EEF0F3; border: 1px solid #E3E6EB"><button aria-pressed="true" style="height: 22px; padding: 0 14px; border: 0; border-radius: 4px; background: #FFFFFF; color: #1A1D23; box-shadow: 0 1px 2px rgba(16,24,40,0.12)">Row</button><button style="height: 22px; padding: 0 14px; border: 0; border-radius: 4px; background: transparent; color: #464C57">Cell</button></div>
-<span style="margin-left: auto; color: #5F6673; font-family: 'JetBrains Mono', monospace; font-size: 11px">1 of 10,000 selected</span>
+
 </div>
 <div role="table" aria-label="Rows" style="position: relative; flex: 1; min-height: 0; overflow: hidden; background: #FFFFFF">
 <div role="row" style="height: 28px; display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 0 16px 0 12px; background: #F3F4F6; border-bottom: 1px solid #E3E6EB; color: #5F6673; font-size: 11px; font-weight: 500">
@@ -103,7 +103,7 @@ a{color:#2459C9}a:hover{color:#1A4296}
 </div>
 <sc-for list="{{rows}}" as="r" hint-placeholder-count="34">
 <div role="row" style="height: 24px; display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 0 16px 0 12px; background: {{r.bg}}; color: {{r.fg}}; box-shadow: {{r.ring}}">
-<span role="cell" style="color: #5F6673; font-family: 'JetBrains Mono', monospace; font-size: 11px">{{r.i}}</span>
+<span role="cell" style="color: #5F6673; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-align: right">{{r.i}}</span>
 <span role="cell">{{r.n}}</span>
 <span role="cell" style="font-family: 'JetBrains Mono', monospace; font-size: 11px">{{r.h}}</span>
 <span role="cell" style="font-family: 'JetBrains Mono', monospace; font-size: 11px">{{r.m}}</span>
@@ -131,7 +131,7 @@ class Component extends DCLogic {
 
     const icons = ['copy', 'cut', 'brush', 'trash', 'search', 'file', 'save', 'play', 'frame', 'undo'];
     const cmdSrc = [
-      ['About TachyonUI', '', 'Default', 'Instant'],
+      ['About IntersticeUI', '', 'Default', 'Instant'],
       ['Brush Tool', 'B', 'Sculpt', 'Instant', 'brush'],
       ['Copy', 'Ctrl C', 'Default', 'Instant', 'copy'],
       ['Cut', 'Ctrl X', 'Default', 'Instant', 'cut'],

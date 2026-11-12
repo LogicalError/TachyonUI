@@ -31,7 +31,7 @@ body{margin:0}
 </div>
 <label style="margin: 12px 18px 0 62px; display: flex; align-items: center; gap: 8px"><span style="width: 14px; height: 14px; box-sizing: border-box; border-radius: 3px; border: 1px solid {{t.dlgCtlBorder}}; background: {{t.dlgInput}}"></span>Don't ask again this session</label>
 <div style="margin-top: 16px; height: 52px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 16px; background: {{t.dlgHeader}}; border-top: 1px solid {{t.dlgLine}}">
-<button style="height: 28px; padding: 0 14px; box-sizing: border-box; border: 1px solid {{t.accent}}; box-shadow: 0 0 0 3px {{t.soft}}; border-radius: 4px; background: {{t.dlgControl}}; color: {{t.t1}}; font: inherit">Cancel</button>
+<button style="height: 28px; padding: 0 14px; box-sizing: border-box; border: 1px solid {{t.accent}}; border-radius: 4px; background: {{t.dlgControl}}; color: {{t.t1}}; font: inherit">Cancel</button>
 <button style="height: 28px; padding: 0 14px; border: 0; border-radius: 4px; background: {{t.danger}}; color: {{t.onDanger}}; font: inherit; font-weight: 600">Delete 12 assets</button>
 </div>
 </div>
@@ -46,7 +46,7 @@ body{margin:0}
 </div>
 <div role="status" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px; background: {{t.infoSoft}}; border-bottom: 1px solid {{t.line}}">
 <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: {{t.info}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M5 11h14v10H5ZM7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-<span style="color: {{t.t1}}">Read-only — this asset comes from a package</span>
+<span style="color: {{t.t1}}">Read-only, this asset comes from a package</span>
 <a href="#" style="margin-left: auto; color: {{t.link}}; text-decoration: none; font-weight: 500">Make editable</a>
 </div>
 <div style="padding: 10px 12px; display: flex; flex-direction: column; gap: 4px">
@@ -93,7 +93,7 @@ class Component extends DCLogic {
       dlgPanel: '#1B1E25', dlgHeader: '#20242C', dlgBorder: '#3A404C', dlgLine: '#2A2F39', dlgWell: '#13151A', dlgControl: '#272B34', dlgCtlBorder: '#3A404C', dlgInput: '#0F1115', dlgShadow: '0 0 0 1px rgba(0,0,0,0.5), 0 24px 64px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05)',
       app: '#0B0C0F', panel: '#121418', header: '#16191E', active: '#23272F', input: '#0D0F12', control: '#1E2128', well: '#0D0F12',
       border: '#1C1F25', line: '#23272F', line2: '#23272F', ctlBorder: '#2E333D', track: '#2A2F39',
-      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8A92A2', accent: '#6B9BFF', onAccent: '#0B0C0F', soft: 'rgba(107,155,255,0.16)', link: '#8FB3FF',
+      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8E96A7', accent: '#6B9BFF', onAccent: '#0B0C0F', soft: 'rgba(107,155,255,0.16)', link: '#8FB3FF',
       ok: '#4FC48A', okSoft: 'rgba(79,196,138,0.16)', warn: '#E5B454', warnSoft: 'rgba(229,180,84,0.10)', warnLine: 'rgba(229,180,84,0.30)',
       error: '#EF6A6A', errorSoft: 'rgba(239,106,106,0.16)', info: '#6B9BFF', infoSoft: 'rgba(107,155,255,0.07)',
       danger: '#EF6A6A', onDanger: '#0B0C0F',
@@ -101,13 +101,13 @@ class Component extends DCLogic {
       popup: '#1A1D23', popBorder: '#2E333D', popShadow: '0 12px 32px rgba(0,0,0,0.5)', dialogShadow: '0 24px 64px rgba(0,0,0,0.55)'
     };
     const I = {
-      ok: 'M20 6 9 17l-5-5', warn: 'M12 8v5M12 17h.01', error: 'M18 6 6 18M6 6l12 12', info: 'M12 19V5M5 12l7-7 7 7'
+      ok: 'M20 6 9 17l-5-5', warn: 'm21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3ZM12 9v4M12 17h.01', error: 'M18 6 6 18M6 6l12 12', info: 'M12 19V5M5 12l7-7 7 7'
     };
     const mono = "'JetBrains Mono', monospace";
     const toasts = [
       { title: 'Uploading build', time: 'now', body: 'build-0.8.3-win64.zip · 48%', icon: I.info, color: t.info, soft: t.soft, progress: true, actions: [['Cancel', t.t2]], role: 'status' },
       { title: '3 textures exceed 4K', time: '1 min', body: 'They will be downscaled on import.', icon: I.warn, color: t.warn, soft: t.warnSoft, actions: [['Review', t.link], ['Ignore', t.t2]], role: 'status' },
-      { title: 'Shader compile failed', time: '2 min', body: "Terrain.shader:118 — undeclared identifier 'uv2'", mono: true, icon: I.error, color: t.error, soft: t.errorSoft, actions: [['Show log', t.link], ['Copy error', t.t2]], role: 'alert' },
+      { title: 'Shader compile failed', time: '2 min', body: "Terrain.shader:118: undeclared identifier 'uv2'", mono: true, icon: I.error, color: t.error, soft: t.errorSoft, actions: [['Show log', t.link], ['Copy error', t.t2]], role: 'alert' },
       { title: 'Build succeeded', time: '4 min', body: 'Windows x64 · 1 m 42 s', icon: I.ok, color: t.ok, soft: t.okSoft, actions: [['Open folder', t.link], ['Run', t.t2]], role: 'status' }
     ].reverse().map(function (n) {
       return {

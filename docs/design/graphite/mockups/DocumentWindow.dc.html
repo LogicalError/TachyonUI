@@ -15,18 +15,11 @@ body{margin:0}
 </helmet>
 <div style="width: 1280px; height: 796px; box-sizing: border-box; padding: 32px; background: {{t.backdrop}}; color: {{t.t2}}; font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 16px">
 
-<div role="application" aria-label="Hero.prefab — second main window" style="width: 1216px; height: 732px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.app}}; border: 1px solid {{t.winBorder}}; border-radius: 8px; box-shadow: {{t.winShadow}}; overflow: hidden">
+<div role="application" aria-label="Hero.prefab, second main window" style="width: 1216px; height: 732px; box-sizing: border-box; display: flex; flex-direction: column; background: {{t.app}}; border: 1px solid {{t.winBorder}}; border-radius: 8px; box-shadow: {{t.winShadow}}; overflow: hidden">
 
-<header style="height: 36px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 4px; padding-left: 10px; background: {{t.title}}">
-<div style="width: 18px; height: 18px; border-radius: 4px; background: {{t.accent}}; display: flex; align-items: center; justify-content: center; color: {{t.onAccent}}; font-weight: 600; font-size: 11px">T</div>
-<span style="margin-left: 6px; padding: 0 9px">File</span><span style="padding: 0 9px">Edit</span><span style="padding: 0 9px">View</span><span style="padding: 0 9px">Help</span>
-<div style="flex: 1"></div>
-<span style="margin-right: 10px; color: {{t.t3}}; font-size: 11px">Window 2</span>
-<span style="width: 44px; height: 36px; display: flex; align-items: center; justify-content: center; color: {{t.t2}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M5 12h14"></path></svg></span>
-<span style="width: 44px; height: 36px; display: flex; align-items: center; justify-content: center; color: {{t.t2}}"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round"><path d="M4 4h16v16H4Z"></path></svg></span>
-<span style="width: 44px; height: 36px; display: flex; align-items: center; justify-content: center; color: {{t.t2}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span>
-</header>
-<div role="tablist" aria-label="Documents" style="height: 36px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 3px; padding: 0 8px; background: {{t.title}}; border-bottom: 2px solid {{docLine}}">
+<header style="height: 38px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 3px; padding-left: 10px; background: {{t.title}}; border-bottom: 2px solid {{docLine}}">
+<div style="align-self: center; display: flex; margin-right: 8px"><div style="width: 18px; height: 18px; border-radius: 4px; background: {{t.accent}}; display: flex; align-items: center; justify-content: center; color: {{t.onAccent}}; font-weight: 600; font-size: 11px">T</div></div>
+<div role="tablist" aria-label="Documents" style="display: flex; align-items: flex-end; gap: 3px">
 <sc-for list="{{docs}}" as="d" hint-placeholder-count="2">
 <div role="tab" aria-selected="{{d.sel}}" style="height: 30px; min-width: 150px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: 6px 6px 0 0; background: {{d.bg}}; color: {{d.fg}}">
 <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: {{d.ic}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="{{d.d}}"></path></svg>
@@ -37,8 +30,21 @@ body{margin:0}
 </sc-for>
 <button aria-label="New document" style="width: 26px; height: 26px; margin: 0 0 3px 4px; border: 0; border-radius: 4px; background: transparent; color: {{t.t3}}; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M5 12h14M12 5v14"></path></svg></button>
 </div>
+<span style="flex: 1"></span>
+<button style="height: 24px; align-self: center; margin-right: 6px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: {{t.t3}}; font: inherit">2 open<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m6 9 6 6 6-6"></path></svg></button>
+<div style="align-self: flex-start; display: flex">
+<span style="width: 44px; height: 36px; display: flex; align-items: center; justify-content: center; color: {{t.t2}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M5 12h14"></path></svg></span>
+<span style="width: 44px; height: 36px; display: flex; align-items: center; justify-content: center; color: {{t.t2}}"><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round"><path d="M4 4h16v16H4Z"></path></svg></span>
+<span style="width: 44px; height: 36px; display: flex; align-items: center; justify-content: center; color: {{t.t2}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span>
+</div>
+</header>
+<div role="toolbar" aria-label="Document menu, search and layout" style="height: 34px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 4px; background: {{t.app}}">
+<span style="padding: 0 9px 0 11px">File</span><span style="padding: 0 9px">Edit</span><span style="padding: 0 9px">View</span><span style="padding: 0 9px">Help</span>
+<div style="flex: 1; display: flex; justify-content: center"><span style="width: 340px; height: 26px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 10px; border: 1px solid {{t.line}}; border-radius: 6px; background: {{t.panel}}; color: {{t.t3}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-3.5-3.5"></path></svg>Search or run a command<span style="margin-left: auto; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: {{t.active}}; color: {{t.t2}}">Ctrl K</span></span></div>
+<span style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; color: {{t.t2}}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M3 3h18v18H3ZM3 9h18M9 9v12"></path></svg>Layouts<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: {{t.t3}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m6 9 6 6 6-6"></path></svg></span>
+</div>
 
-<main style="flex: 1; min-height: 0; display: flex; gap: 4px; padding: 4px">
+<main style="flex: 1; min-height: 0; display: flex; gap: 4px; padding: 0 4px 4px">
 <section aria-label="Prefab hierarchy" style="width: 220px; flex-shrink: 0; display: flex; flex-direction: column; background: {{t.panel}}; border: 1px solid {{t.border}}; border-radius: 6px; overflow: hidden">
 <div style="height: 34px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; padding: 0 5px; background: {{t.header}}; border-bottom: 1px solid {{t.line}}"><span style="height: 24px; display: flex; align-items: center; padding: 0 10px; border-radius: 4px; background: {{t.active}}; color: {{t.t1}}; font-weight: 500">Hierarchy</span></div>
 <div style="padding: 8px 4px">
@@ -101,7 +107,7 @@ class Component extends DCLogic {
     } : {
       backdrop: '#1D2026', app: '#0B0C0F', title: '#08090B', panel: '#121418', header: '#16191E', active: '#23272F', input: '#0D0F12',
       border: '#1C1F25', line: '#23272F', line2: '#23272F', rowLine: '#181B20',
-      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8A92A2', accent: '#6B9BFF', onAccent: '#0B0C0F', soft: 'rgba(107,155,255,0.16)', ok: '#4FC48A', key: '#C9CED8',
+      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8E96A7', accent: '#6B9BFF', onAccent: '#0B0C0F', soft: 'rgba(107,155,255,0.16)', ok: '#4FC48A', key: '#C9CED8',
       scene: 'linear-gradient(to bottom, #1A1E26 0%, #14171C 60%, #101215 100%)', grid: '#262B34',
       body: 'linear-gradient(135deg, #C9CED8 0%, #7E8594 45%, #3A3F4A 100%)',
       prefab: '#A98BFF', anim: '#F472B6',
