@@ -26,6 +26,8 @@ int main(int argc, char* argv[])
     // --float <title>: start with that panel in its own window (repeatable).
     // --files <folder>: the folder the Files panel shows (a copy: it's never written to);
     //                   the workdirectory without it.
+    // --capture <folder>: saves every panel, in the dark and the light theme, as
+    //                     <folder>/<theme>/<Panel>.png, and quits.
     for (int i = 1; i + 1 < argc; ++i)
     {
         if (std::string_view(argv[i]) == "--ui-scale")
@@ -38,6 +40,8 @@ int main(int argc, char* argv[])
             application->AddFloatPanel(argv[i + 1]);
         else if (std::string_view(argv[i]) == "--files")
             application->SetFilesRoot(argv[i + 1]);
+        else if (std::string_view(argv[i]) == "--capture")
+            application->SetCaptureDir(argv[i + 1]);
     }
 
     int returnCode = EXIT_FAILURE;
@@ -46,8 +50,10 @@ int main(int argc, char* argv[])
         if (application->Initialize())
         {
             const tachyon::Result<void> runResult = application->Run();
-            if (std::ofstream file(application->ResourceFile(tachyon::kUIStateFile), std::ios::binary); file)
-                file << application->SaveUIState();
+            // A capture leaves the saved layout and theme as they were.
+            if (!application->IsCapturing())
+                if (std::ofstream file(application->ResourceFile(tachyon::kUIStateFile), std::ios::binary); file)
+                    file << application->SaveUIState();
             application->Cleanup();
             if (runResult)
             {

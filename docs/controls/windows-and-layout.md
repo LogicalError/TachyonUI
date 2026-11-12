@@ -31,6 +31,7 @@ void EndWindow();
 | `WindowConfirmClose` | Ask your app before closing (see `CloseRequested`) |
 | `WindowIsModal` | Blocks input to the app's other windows |
 | `WindowRenderToImage` | No OS window: renders into an image, the host passes input ([Rendering into a host image](../integration/render-to-image.md)) |
+| `WindowImagePopups` | With `WindowRenderToImage`: its menus, tooltips and dialogs render into images too |
 
 ```cpp
 if (BeginWindow(windowID, "Hello", LayoutOverride{}.Size(360, 160)))

@@ -431,12 +431,20 @@ namespace tachyon
         };
     }
 
-    int2 GUIApplication::InjectedScreenPos(ID windowID, int2 pos)
+    void GUIApplication::InjectedFocus(ID windowID, bool press)
+    {
+        // Input to a window gives it the focus. A menu or picker opened from it keeps the
+        // focus, as on screen, but for a press in the window.
+        const OSWindowHandle window = windowManager->GetWindowHandle(windowID);
+        if (press || !m_imageWindows->HasFocusWithin(window))
+            m_imageWindows->SetFocus(window);
+    }
+
+    int2 GUIApplication::InjectedScreenPos(ID windowID, int2 pos, bool press)
     {
         const int2 screenPos = windowManager->GetWindowRect(windowID).position + pos;
-        const OSWindowHandle window = windowManager->GetWindowHandle(windowID);
-        m_imageWindows->SetPointer(window, screenPos, m_injectedButtons);
-        m_imageWindows->SetFocus(window);
+        m_imageWindows->SetPointer(windowManager->GetWindowHandle(windowID), screenPos, m_injectedButtons);
+        InjectedFocus(windowID, press);
         return screenPos;
     }
 
@@ -448,7 +456,7 @@ namespace tachyon
     void GUIApplication::InjectMouseButton(ID windowID, int2 pos, MouseButtons button, bool down, KeyModifier mods)
     {
         m_injectedButtons = down ? (m_injectedButtons | button) : (m_injectedButtons & ~button);
-        inputBroadcaster.OnMouseButton(windowID, InjectedScreenPos(windowID, pos), m_injectedButtons, mods,
+        inputBroadcaster.OnMouseButton(windowID, InjectedScreenPos(windowID, pos, down), m_injectedButtons, mods,
                                        down ? MouseAction::MouseDown : MouseAction::MouseUp);
     }
 
@@ -478,20 +486,20 @@ namespace tachyon
         const OSWindowHandle window = windowManager->GetWindowHandle(windowID);
         if (focused)
             m_imageWindows->SetFocus(window);
-        else if (window == windowBackend->GetActiveWindow())
+        else if (m_imageWindows->HasFocusWithin(window))   // its menus' too
             m_imageWindows->SetFocus(nullptr);
     }
 
     void GUIApplication::InjectKey(ID windowID, KeyCode key, KeyAction action, KeyModifier mods)
     {
-        m_imageWindows->SetFocus(windowManager->GetWindowHandle(windowID));
+        InjectedFocus(windowID, false);
         inputBroadcaster.OnKeyboard(windowID, key, 0, mods, action);
     }
 
     void GUIApplication::InjectText(ID windowID, std::string_view utf8)
     {
         // One KeyChar per codepoint, as the OS backend sends typed text.
-        m_imageWindows->SetFocus(windowManager->GetWindowHandle(windowID));
+        InjectedFocus(windowID, false);
         for (size_t i = 0; i < utf8.size(); )
         {
             const uint32_t codepoint = NextUtf8Codepoint(utf8, i);

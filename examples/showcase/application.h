@@ -6,6 +6,7 @@
 
 #include "scene_renderer.h"
 
+#include <chrono>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -86,6 +87,10 @@ namespace tachyon
         void SetFilesRoot(std::filesystem::path path) { m_filesRoot = std::move(path); }
         // The palette to start with, over the one saved at the last exit.
         void SetStartTheme(std::string path) { m_startTheme = std::move(path); }
+        // --capture: draws every panel to an image in each theme, saves them in `folder`, and
+        // quits, instead of the usual windows (capture.cpp).
+        void SetCaptureDir(std::string folder) { m_captureDir = std::move(folder); }
+        bool IsCapturing() const { return !m_captureDir.empty(); }
 
         // ---- Toolbar model (used by the View panel) -----------------------------
         struct ToolbarLayoutModel
@@ -511,6 +516,7 @@ namespace tachyon
             std::vector<std::unique_ptr<DocumentWindow>> documentWindows;   // documents dragged out
             bool          mainWindowOpen = true;
             ToastID       uploadToast = 0;          // the demo upload, its progress moving
+            std::vector<ToastID> demoToasts;        // the demo's toasts, taken away when shown again
             float         uploadStart = 0.0f;       // when it started, frame time in seconds
             bool          inspectorUnsaved = true;  // the Inspector's banners
             bool          inspectorReadOnly = true;
@@ -779,6 +785,43 @@ namespace tachyon
         std::vector<std::string> m_floatPanels;   // --float: start in their own windows
         std::filesystem::path    m_filesRoot;     // --files
         std::string              m_startTheme;    // --theme
+        std::string              m_captureDir;    // --capture
+        // Where --capture is: the theme and the shot it's on, and frames since the shot began.
+        struct CaptureState
+        {
+            ID            windowID    = ID::Invalid();
+            ID            areaID      = ID::Invalid();  // the area the panel is in
+            ID            scrollID    = ID::Invalid();  // the area paged through: the panel's that hides the most
+            DockingLayout layout;                       // holds the panel being captured
+            ID            panelID     = ID::Invalid();
+            size_t        theme       = 0;
+            size_t        loadedTheme = size_t(-1);
+            size_t        shot        = 0;
+            int           frames      = 0;
+            int           page        = 0;          // a long panel is captured a page at a time
+            int           pageScroll  = 0;          // where the last page was scrolled to
+            bool          targetFound = false;      // the element the shot acts on, after layout
+            IntRect       target {};                // its rect, in the window
+            ID            targetID    = ID::Invalid();
+            ID            targetWindowID = ID::Invalid();   // the window it's in: the capture's, or one opened in it
+            // A document window's documents, its own, made on first use.
+            DocumentSet   documents;
+            ID            documentsID = ID::Invalid();
+            // The States board's text fields and dropdowns, one per cell.
+            std::vector<std::string> stateTexts;
+            std::vector<int>         stateChoices;
+            int           closing     = 0;          // frames left closing what the last shot opened
+            std::chrono::steady_clock::time_point themeAt {};   // when the theme was last loaded
+            std::chrono::steady_clock::time_point actAt {};     // when the shot's action began
+        };
+        CaptureState             m_capture;
+        void RenderCapture();
+        void CaptureFindTarget();
+        void CaptureStatesBoard();
+        void CaptureDocumentWindow();
+        ID   CaptureScrollingArea(ID window) const;
+        // The capture window with the windows opened in it drawn over it, as on screen.
+        bool CaptureReadPixels(IntRect& rect, std::vector<uint8_t>& bgra);
     };
 
 } // namespace tachyon

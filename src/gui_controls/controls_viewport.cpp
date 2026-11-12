@@ -81,8 +81,7 @@ namespace tachyon
         view.revisionSeen = view.revision;
 
         // The scene draws every frame, so a cached panel holding the view is built again each
-        // frame too: its image is asked for, and goes when it isn't.
-        InvalidateCachedScopesAbove(id);
+        // frame too (see the AddPostLayout below): its image is asked for, and goes when it isn't.
 
         // Flying: the camera moves while fly keys are held, by the time the frame took.
         if (v->cameraMove == ViewportView::CameraMove::Look)
@@ -309,7 +308,13 @@ namespace tachyon
         const ElementRef ref = RegisterControl(std::move(element), std::move(constraints));
         if (!ref.IsValid())
             return changed;
-        VERIFY(elementStorage.AddPostLayout(ref, [v](PostLayoutContext& ctx) { v->viewRect = ctx.ElementInnerRect(); }));
+        // Laid out: the size the scene is drawn at next, and, in a cached panel, the panel
+        // built again next frame. Asked for now rather than while building, as building's
+        // request is cleared when the panel is captured after layout.
+        VERIFY(elementStorage.AddPostLayout(ref, [this, v, id](PostLayoutContext& ctx) {
+            v->viewRect = ctx.ElementInnerRect();
+            RebuildCachedScopesAbove(id);
+        }));
 
         // The tools down the left: a button each, the one in use selected.
         VERIFY(elementStorage.BeginChildren());

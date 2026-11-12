@@ -434,6 +434,29 @@ namespace tachyon
         EXPECT_FALSE(scopes.IsSelected());
     }
 
+    // PushShownState: what's built inside looks hovered, pressed or focused, as a picture of
+    // that state, whatever the pointer and the keyboard do; the scopes nest and balance.
+    TEST(ConstructionScopesTest, ShownStatesAddToWhatsBuiltInside)
+    {
+        GUIStateManager gsm;
+        IDManager ids;
+        const ID id = ids.CreateStaticID();
+        EXPECT_EQ(gsm.GetCurrentState(id), ElementState::None);
+
+        gsm.Construction().PushShownState(ElementState::Hover);
+        EXPECT_EQ(gsm.GetCurrentState(id), ElementState::Hover);
+        gsm.Construction().PushShownState(ElementState::Active | ElementState::Focused);
+        EXPECT_EQ(gsm.GetCurrentState(id), ElementState::Hover | ElementState::Active | ElementState::Focused);
+        EXPECT_FALSE(gsm.Construction().IsBalanced());
+
+        gsm.Construction().PopShownState();
+        EXPECT_EQ(gsm.GetCurrentState(id), ElementState::Hover);
+        gsm.Construction().PopShownState();
+        EXPECT_EQ(gsm.GetCurrentState(id), ElementState::None);
+        EXPECT_TRUE(gsm.Construction().IsBalanced());
+        EXPECT_EQ(gsm.GetCurrentState(ID::Invalid()), ElementState::None) << "nothing to show it on";
+    }
+
     // onReorder handlers run at end of frame and resolve item IDs through
     // FindListItemIndex; a second list view in the same frame must not wipe
     // the first one's entries.

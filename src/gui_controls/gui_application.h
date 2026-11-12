@@ -446,7 +446,9 @@ namespace tachyon
         /// Input for render-to-image windows (WindowFlags::RenderToImage), which get
         /// none from the OS. Positions are in the window's pixels. The window is under
         /// the pointer from a mouse event until InjectMouseLeave, and has keyboard
-        /// focus from any injected input until InjectFocus(windowID, false).
+        /// focus from any injected input until InjectFocus(windowID, false). A window
+        /// opened from it as an image (WindowImagePopups) takes the focus as an OS popup
+        /// does, and keeps it until a press in the window that opened it.
         void InjectMouseMove(ID windowID, int2 pos, KeyModifier mods = KeyModifier::None);
         /// A button press (down) or release at pos.
         void InjectMouseButton(ID windowID, int2 pos, MouseButtons button, bool down, KeyModifier mods = KeyModifier::None);
@@ -1371,6 +1373,12 @@ namespace tachyon
         bool BeginInvalid() { guiStateManager.Construction().PushInvalid(); return true; }
         /// Closes BeginInvalid.
         void EndInvalid()   { guiStateManager.Construction().PopInvalid(); }
+        /// The controls until EndShownState look hovered, pressed (Active) or focused as
+        /// `states` say, whatever the pointer and keyboard do: a control's states side by
+        /// side, for a preview or a screenshot. A focus ring also needs the focus visible.
+        bool BeginShownState(ElementState states) { guiStateManager.Construction().PushShownState(states); return true; }
+        /// Closes BeginShownState.
+        void EndShownState() { guiStateManager.Construction().PopShownState(); }
 
         ///@}
 
@@ -3036,7 +3044,8 @@ namespace tachyon
         std::unique_ptr<IWindowBackend> m_osWindowBackend;     ///< wrapped by windowBackend
         ImageWindowBackend*  m_imageWindows    { nullptr };    ///< == windowBackend
         MouseButtons         m_injectedButtons { MouseButtons::None };
-        int2 InjectedScreenPos(ID windowID, int2 pos);
+        int2 InjectedScreenPos(ID windowID, int2 pos, bool press = false);
+        void InjectedFocus(ID windowID, bool press);
         AllocationHooks m_allocationHooks;
         std::unique_ptr<GraphicsContext> m_graphicsBackend;
         MouseButtons m_lastPhysicalButtons { MouseButtons::None };  ///< for SynthesizeMissingMouseEvents

@@ -5,6 +5,7 @@
 #include <gui_controls/gui_application_internal.h>
 #include <gui_core/graphics/null/gui_null_graphics_context.h>
 #include <gui_core/windows/null/gui_null_window_backend.h>
+#include <gui_core/windows/gui_image_window_backend.h>
 #include <gui_core/windows/gui_window_flags.h>
 
 #include <functional>
@@ -23,16 +24,18 @@ namespace
         int     frames = 3;
         tachyon::int2 buttonCenter{ 0, 0 };   // after last frame's layout
         std::function<void(int)> script;
+        tachyon::ElementFlags windowFlags = tachyon::ElementFlags::WindowRenderToImage;
+        std::function<void()> inside;   // more of the window, after the button
 
         void OnGUI() override
         {
             if (script) script(frame);
-            if (BeginWindow(windowID, "Null", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(240, 120),
-                            tachyon::ElementFlags::WindowRenderToImage))
+            if (BeginWindow(windowID, "Null", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(240, 120), windowFlags))
             {
                 BeginVertical(tachyon::LayoutOverride{}.FlexGrow(1));
                 Button(buttonID, "Click", [this] { ++clicks; });
                 EndVertical();
+                if (inside) inside();
             }
             EndWindow();
             if (++frame >= frames)
@@ -93,6 +96,41 @@ namespace
         EXPECT_TRUE(app.Run());
         EXPECT_EQ(app.clicks, 1);
         app.Cleanup();
+    }
+
+    // A popup in a window that renders to an image: an OS window, unless the window
+    // asks for its popups as images too (WindowImagePopups), theirs included.
+    TEST(NullBackends, PopupsOfAnImageWindowAreImagesWhenAskedFor)
+    {
+        for (const bool asked : { false, true })
+        {
+            NullBackendApp app;
+            ASSERT_TRUE(app.Start());
+            if (asked)
+                app.windowFlags |= tachyon::ElementFlags::WindowImagePopups;
+            const tachyon::ID popupID = app.idManager.CreateStaticID();
+            const tachyon::ID nestedID = app.idManager.CreateStaticID();
+            const tachyon::ElementFlags popup = tachyon::ElementFlags::WindowNoCaption | tachyon::ElementFlags::WindowIsPopup;
+            app.inside = [&]
+            {
+                if (app.BeginWindow(popupID, "Popup", app.theme.windowStyleRef, tachyon::LayoutOverride{}.Size(80, 40), popup))
+                {
+                    if (app.BeginWindow(nestedID, "Nested", app.theme.windowStyleRef, tachyon::LayoutOverride{}.Size(60, 30), popup))
+                        app.Text("nested");
+                    app.EndWindow();
+                }
+                app.EndWindow();
+            };
+            EXPECT_TRUE(app.Run());
+            auto* images = static_cast<tachyon::ImageWindowBackend*>(app.windowBackend);
+            const tachyon::OSWindowHandle popupWindow = app.windowManager->GetWindowHandle(popupID);
+            const tachyon::OSWindowHandle nestedWindow = app.windowManager->GetWindowHandle(nestedID);
+            ASSERT_NE(popupWindow, nullptr);
+            ASSERT_NE(nestedWindow, nullptr);
+            EXPECT_EQ(images->IsImageWindow(popupWindow), asked);
+            EXPECT_EQ(images->IsImageWindow(nestedWindow), asked) << "a popup's popup too";
+            app.Cleanup();
+        }
     }
 
     // The host's window backend and clipboard are the ones the app uses.

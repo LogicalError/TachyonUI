@@ -17,6 +17,28 @@ if (BeginWindow(windowID, "Panel", theme.windowStyleRef, tachyon::LayoutOverride
 EndWindow();
 ```
 
+## Popups as images too
+
+- By default a menu, tooltip or dialog opened in a render-to-image window is an OS window, on the screen.
+- `ElementFlags::WindowImagePopups` makes them images too, and the ones they open in turn:
+  - each is a window of its own, read with `ReadWindowPixels`
+  - its rect, from `GetWindowRect`, says where it goes over the window it opened from
+  - for example, to save a screenshot of the window with its open menu, or to draw a menu in your scene
+
+```cpp
+if (BeginWindow(windowID, "Panel", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(400, 300),
+                tachyon::ElementFlags::WindowRenderToImage | tachyon::ElementFlags::WindowImagePopups))
+{
+    // a menu opened here renders into an image, not an OS window
+}
+EndWindow();
+```
+
+- Such a popup takes the keyboard focus when it opens, as an OS popup does, and gives it back when it closes.
+- Input you inject into the window it opened from leaves the focus in the popup, but a press takes it back:
+  - a mouse move or a key: the menu stays open
+  - a press outside it: the menu closes, as on screen
+
 ## Copying into the host's image
 
 - When the GUI runs on your device (see [Using your own Vulkan device](vulkan-device.md)),
@@ -94,6 +116,8 @@ app.InjectFocus(windowID, false);
 
 - After any mouse event, the window is under the pointer until `InjectMouseLeave`.
 - After any injected input, it has keyboard focus until `InjectFocus(windowID, false)`.
+- A popup opened from it as an image keeps the focus until a press in the window (see
+  [Popups as images too](#popups-as-images-too)).
 
 ---
 
