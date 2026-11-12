@@ -493,6 +493,15 @@ private:
                 continue;
             }
 
+            // `inset` starts a box-shadow too (an inset focus outline).
+            if (m_lex.Check(TT::Ident) && ICEq(m_lex.Peek().text, "inset"))
+            {
+                CustomProperty prop{ .hasShadow = true };
+                if (!ParseShadowList(prop.shadows)) { SkipDecl(); continue; }
+                store(prop);
+                continue;
+            }
+
             // Otherwise parse as color/gradient
             StyleDecl d;
             d.prop = name;
@@ -992,17 +1001,22 @@ private:
     // :focus-visible holds one box-shadow, the focus ring.
     void ApplyFocusVisible(Style& style, const std::vector<StyleDecl>& decls)
     {
+        auto outline = [](const BoxShadow& b) { return b.x == 0 && b.y == 0 && b.blur == 0 && b.spread > 0; };
         for (const StyleDecl& d : decls)
         {
+            const BoxShadow& first = d.shadowVal[0];
+            const BoxShadow& second = d.shadowVal[1];
             if (!ICEq(d.prop, "box-shadow"))
                 Error("Only box-shadow is supported in ':focus-visible', not '" + d.prop + "'");
-            else if (!d.shadowVal[1].IsNone())
-                Error("The ':focus-visible' box-shadow takes one layer");
-            else if (d.shadowVal[0].inset && (d.shadowVal[0].x != 0 || d.shadowVal[0].y != 0 ||
-                                              d.shadowVal[0].blur != 0 || d.shadowVal[0].spread <= 0))
+            else if (!second.IsNone() && !(first.inset && second.inset))
+                Error("The ':focus-visible' box-shadow takes one layer, or two inset outlines");
+            else if ((first.inset && !outline(first)) || (second.inset && !outline(second)))
                 Error("An inset focus ring is an outline: inset 0 0 0 <width> <color>");
             else
-                style.focusRing = d.shadowVal[0];
+            {
+                style.focusRing = first;
+                style.focusRingUnder = second;
+            }
         }
     }
 

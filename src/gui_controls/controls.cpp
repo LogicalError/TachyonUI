@@ -57,6 +57,12 @@ namespace tachyon
 		    false); // already updated state, so skipping it in RegisterElementInternal
     }
 
+    void GUIApplication::DrawnValid(ElementRef ref)
+    {
+        if (elementStorage.IsValidRef(ref))
+            elementStorage.GetElementUnsafe(ref).state &= ~ElementState::Invalid;
+    }
+
     // A control without an ID can't take input or keep state: it's drawn, nothing more.
     void GUIApplication::ReportInvalidControlID(ID id)
     {
@@ -829,13 +835,14 @@ namespace tachyon
     {
         // Selected while checked, so the box and label restyle with it.
         if (value) guiStateManager.Construction().PushSelected();
+        // Invalid shows on the box alone: the row and the label are drawn as valid.
         const tachyon::ElementState state = guiStateManager.GetCurrentState(id);
         tachyon::Element control{};
         control.id           = id;
         control.state        = state;
         control.styleRef     = style;
         control.eventHandler = tachyon::MakeButtonHandler(guiStateManager, [value, onToggle]() { onToggle(!value); });
-        RegisterControl(std::move(control), std::move(constraints));
+        DrawnValid(RegisterControl(std::move(control), std::move(constraints)));
         VERIFY(elementStorage.BeginChildren());
         // Under the checkbox's own ID, so its parts' IDs don't depend on what came before.
         [[maybe_unused]] const bool pushed = idManager.PushParent(id);
@@ -856,7 +863,7 @@ namespace tachyon
                 label.styleRef = theme.checkboxLabelStyleRef;
                 label.flags    = tachyon::ElementFlags::NoInput;
                 label.textID   = textSystem->RegisterText(label.id, text, label.styleRef, label.state);
-                RegisterElement(std::move(label), LayoutOverride{});
+                DrawnValid(RegisterElement(std::move(label), LayoutOverride{}));
             }
         }
         if (pushed) (void)idManager.PopParent();
@@ -885,14 +892,15 @@ namespace tachyon
         // Selected while on, so the track, knob and label restyle with it.
         if (value) guiStateManager.Construction().PushSelected();
 
-        // The whole control takes the click; its parts are NoInput and share its state.
+        // The whole control takes the click; its parts are NoInput and share its state. Invalid
+        // shows on the track alone: the row and the label are drawn as valid.
         const tachyon::ElementState state = guiStateManager.GetCurrentState(id);
         tachyon::Element control{};
         control.id           = id;
         control.state        = state;
         control.styleRef     = style;
         control.eventHandler = tachyon::MakeButtonHandler(guiStateManager, [value, onToggle]() { onToggle(!value); });
-        RegisterControl(std::move(control), std::move(constraints));
+        DrawnValid(RegisterControl(std::move(control), std::move(constraints)));
         VERIFY(elementStorage.BeginChildren());
         {
             tachyon::Element track{};
@@ -939,7 +947,7 @@ namespace tachyon
                 label.styleRef = theme.switchLabelStyleRef;
                 label.flags    = tachyon::ElementFlags::NoInput;
                 label.textID   = textSystem->RegisterText(label.id, text, label.styleRef, label.state);
-                RegisterElement(std::move(label), LayoutOverride{});
+                DrawnValid(RegisterElement(std::move(label), LayoutOverride{}));
             }
         }
         if (pushed) (void)idManager.PopParent();

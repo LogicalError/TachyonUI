@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Light editor — NodeView and Profiler</title>
+<title>Light editor, NodeView and Profiler</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -19,9 +19,30 @@ a{color:#2459C9}a:hover{color:#1A4296}
 </helmet>
 <div style="width: 100%; min-height: 976px; display: flex; flex-direction: column; background: #E6E8EC; color: #464C57; font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 16px">
 
-<header style="height: 36px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 4px; padding-left: 10px; background: #DADDE2">
-<div style="width: 18px; height: 18px; border-radius: 4px; background: {{accent}}; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-weight: 600; font-size: 11px">T</div>
-<nav aria-label="Main menu" style="display: flex; gap: 2px; margin-left: 6px">
+<header style="height: 38px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 3px; padding-left: 10px; background: #DADDE2; border-bottom: 2px solid {{docLine}}">
+<div style="align-self: center; display: flex; margin-right: 8px"><div style="width: 18px; height: 18px; border-radius: 4px; background: {{accent}}; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-weight: 600; font-size: 11px">T</div></div>
+<div role="tablist" aria-label="Documents" style="display: flex; align-items: flex-end; gap: 3px; min-width: 0">
+<sc-for list="{{docs}}" as="d" hint-placeholder-count="6">
+<div role="tab" aria-selected="{{d.sel}}" style="height: 30px; min-width: 150px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: 6px 6px 0 0; background: {{d.bg}}; color: {{d.fg}}">
+<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: {{d.ic}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="{{d.d}}"></path></svg>
+<span style="white-space: nowrap; font-weight: {{d.w}}">{{d.n}}<span style="color: {{d.extC}}; font-weight: 400">{{d.ext}}</span></span>
+<span style="flex: 1"></span>
+<sc-if value="{{d.dirty}}" hint-placeholder-val="{{false}}"><span aria-label="Unsaved changes" style="width: 6px; height: 6px; margin: 0 5px; border-radius: 50%; background: {{d.markC}}"></span></sc-if>
+<sc-if value="{{d.close}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 3px; color: {{d.markC}}"><svg width="11" height="11" viewBox="0 0 24 24" style="fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span></sc-if>
+</div>
+</sc-for>
+<button aria-label="New document" style="width: 26px; height: 26px; margin: 0 0 3px 4px; border: 0; border-radius: 4px; background: transparent; color: #5F6673; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M5 12h14M12 5v14"></path></svg></button>
+</div>
+<span style="flex: 1"></span>
+<button style="height: 24px; align-self: center; margin-right: 6px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #5F6673; font: inherit">6 open<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m6 9 6 6 6-6"></path></svg></button>
+<div style="align-self: flex-start; display: flex">
+<button aria-label="Minimize" style="width: 44px; height: 36px; border: 0; background: transparent; color: #464C57; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path></svg></button>
+<button aria-label="Maximize" style="width: 44px; height: 36px; border: 0; background: transparent; color: #464C57; display: flex; align-items: center; justify-content: center"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></button>
+<button aria-label="Close" style="width: 44px; height: 36px; border: 0; background: transparent; color: #464C57; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+</div>
+</header>
+<div role="toolbar" aria-label="Document menu, search and layout" style="height: 34px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 4px; background: #E6E8EC">
+<nav aria-label="Main menu" style="display: flex; gap: 2px; margin-left: 2px">
 <button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #464C57">File</button>
 <button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #464C57">Edit</button>
 <button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #464C57">View</button>
@@ -34,26 +55,10 @@ a{color:#2459C9}a:hover{color:#1A4296}
 <span style="margin-left: auto; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #EEF0F3; color: #464C57">Ctrl K</span>
 </button>
 </div>
-<button aria-label="Minimize" style="width: 44px; height: 36px; border: 0; background: transparent; color: #464C57; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path></svg></button>
-<button aria-label="Maximize" style="width: 44px; height: 36px; border: 0; background: transparent; color: #464C57; display: flex; align-items: center; justify-content: center"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></button>
-<button aria-label="Close" style="width: 44px; height: 36px; border: 0; background: transparent; color: #464C57; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
-</header>
-<div role="tablist" aria-label="Documents" style="height: 36px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 3px; padding: 0 8px; background: #DADDE2; border-bottom: 2px solid {{docLine}}">
-<sc-for list="{{docs}}" as="d" hint-placeholder-count="4">
-<div role="tab" aria-selected="{{d.sel}}" style="height: 30px; min-width: 150px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: 6px 6px 0 0; background: {{d.bg}}; color: {{d.fg}}">
-<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: {{d.ic}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="{{d.d}}"></path></svg>
-<span style="white-space: nowrap; font-weight: {{d.w}}">{{d.n}}<span style="color: {{d.extC}}; font-weight: 400">{{d.ext}}</span></span>
-<span style="flex: 1"></span>
-<sc-if value="{{d.dirty}}" hint-placeholder-val="{{false}}"><span aria-label="Unsaved changes" style="width: 6px; height: 6px; margin: 0 5px; border-radius: 50%; background: {{d.markC}}"></span></sc-if>
-<sc-if value="{{d.close}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 3px; color: {{d.markC}}"><svg width="11" height="11" viewBox="0 0 24 24" style="fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span></sc-if>
-</div>
-</sc-for>
-<button aria-label="New document" style="width: 26px; height: 26px; margin: 0 0 3px 4px; border: 0; border-radius: 4px; background: transparent; color: #5F6673; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M5 12h14M12 5v14"></path></svg></button>
-<span style="flex: 1"></span>
-<button style="height: 24px; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #5F6673; font: inherit">4 open<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button aria-haspopup="menu" style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; border: 0; border-radius: 4px; background: transparent; color: #464C57; font: inherit"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M3 3h18v18H3ZM3 9h18M9 9v12"></path></svg>Layouts<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #5F6673; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m6 9 6 6 6-6"></path></svg></button>
 </div>
 
-<main style="flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 4px 4px 0; min-height: 0">
+<main style="flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 0 4px; min-height: 0">
 <div style="display: flex; flex-wrap: wrap; gap: 4px">
 
 <section aria-label="Hierarchy" style="flex: 1 1 260px; max-width: 100%; height: 600px; display: flex; flex-direction: column; background: #FBFBFC; border: 1px solid #DADDE3; border-radius: 6px; overflow: hidden">
@@ -94,7 +99,7 @@ a{color:#2459C9}a:hover{color:#1A4296}
 <button style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #464C57"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7ZM3.3 7l8.7 5 8.7-5M12 22V12"></path></svg>Viewport</button>
 <button style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #464C57"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg>Settings</button>
 </div>
-<div style="position: relative; flex: 1; overflow: hidden; background-color: #F4F5F7; background-image: radial-gradient(#CDD2DA 1px, transparent 1px); background-size: 16px 16px">
+<div style="position: relative; flex: 1; overflow: hidden; background-color: #ECEEF1; background-image: radial-gradient(#B5BCC7 1px, transparent 1px); background-size: 16px 16px">
 
 <svg aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 900px; height: 566px; pointer-events: none">
 <path d="M244 160 C 322 160 322 250 400 250" fill="none" stroke="#0FA596" stroke-width="2"></path>
@@ -106,8 +111,8 @@ a{color:#2459C9}a:hover{color:#1A4296}
 <span>Graphs</span><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg><span style="color: #1A1D23">Terrain material</span>
 </div>
 
-<div style="position: absolute; left: 60px; top: 110px; width: 184px; background: #FFFFFF; border: 1px solid #D5D9E0; border-radius: 6px; box-shadow: 0 4px 14px rgba(16,24,40,0.10)">
-<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #F3F4F6; border-bottom: 1px solid #E3E6EB; border-radius: 5px 5px 0 0">
+<div style="position: absolute; left: 60px; top: 110px; width: 184px; background: #FFFFFF; border: 1px solid #C3C9D2; border-radius: 6px; box-shadow: 0 4px 14px rgba(16,24,40,0.14)">
+<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #FAE9E8; border-bottom: 1px solid #F4CFCE; border-radius: 5px 5px 0 0">
 <span style="width: 8px; height: 8px; border-radius: 2px; background: #D9534F"></span>
 <span style="color: #1A1D23; font-weight: 600">Source</span>
 <span style="margin-left: auto; color: #5F6673; font-size: 11px">Generator</span>
@@ -119,8 +124,8 @@ a{color:#2459C9}a:hover{color:#1A4296}
 </div>
 </div>
 
-<div style="position: absolute; left: 400px; top: 200px; width: 196px; background: #FFFFFF; border: 1px solid {{accent}}; border-radius: 6px; box-shadow: 0 0 0 3px {{accentSoft}}, 0 4px 14px rgba(16,24,40,0.10)">
-<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #F3F4F6; border-bottom: 1px solid #E3E6EB; border-radius: 5px 5px 0 0">
+<div style="position: absolute; left: 400px; top: 200px; width: 196px; background: #FFFFFF; border: 1px solid {{accent}}; border-radius: 6px; box-shadow: 0 0 0 3px {{accentSoft}}, 0 4px 14px rgba(16,24,40,0.14)">
+<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #E4ECFC; border-bottom: 1px solid #C5D7F9; border-radius: 5px 5px 0 0">
 <span style="width: 8px; height: 8px; border-radius: 2px; background: {{accent}}"></span>
 <span style="color: #1A1D23; font-weight: 600">Mix</span>
 <span style="margin-left: auto; color: #5F6673; font-size: 11px">Operator</span>
@@ -133,8 +138,8 @@ a{color:#2459C9}a:hover{color:#1A4296}
 </div>
 </div>
 
-<div style="position: absolute; left: 60px; top: 320px; width: 184px; background: #FFFFFF; border: 1px solid #D5D9E0; border-radius: 6px; box-shadow: 0 4px 14px rgba(16,24,40,0.10)">
-<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #F3F4F6; border-bottom: 1px solid #E3E6EB; border-radius: 5px 5px 0 0">
+<div style="position: absolute; left: 60px; top: 320px; width: 184px; background: #FFFFFF; border: 1px solid #C3C9D2; border-radius: 6px; box-shadow: 0 4px 14px rgba(16,24,40,0.14)">
+<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #E2F2EB; border-bottom: 1px solid #C0E4D3; border-radius: 5px 5px 0 0">
 <span style="width: 8px; height: 8px; border-radius: 2px; background: #1E9E62"></span>
 <span style="color: #1A1D23; font-weight: 600">Texture</span>
 <span style="margin-left: auto; color: #5F6673; font-size: 11px">Input</span>
@@ -145,8 +150,8 @@ a{color:#2459C9}a:hover{color:#1A4296}
 </div>
 </div>
 
-<div style="position: absolute; left: 660px; top: 330px; width: 184px; background: #FFFFFF; border: 1px solid #D5D9E0; border-radius: 6px; box-shadow: 0 4px 14px rgba(16,24,40,0.10)">
-<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #F3F4F6; border-bottom: 1px solid #E3E6EB; border-radius: 5px 5px 0 0">
+<div style="position: absolute; left: 660px; top: 330px; width: 184px; background: #FFFFFF; border: 1px solid #C3C9D2; border-radius: 6px; box-shadow: 0 4px 14px rgba(16,24,40,0.14)">
+<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #EEEAFB; border-bottom: 1px solid #DAD1F6; border-radius: 5px 5px 0 0">
 <span style="width: 8px; height: 8px; border-radius: 2px; background: #7C5CE0"></span>
 <span style="color: #1A1D23; font-weight: 600">Output</span>
 <span style="margin-left: auto; color: #5F6673; font-size: 11px">Output</span>
@@ -359,7 +364,7 @@ class Component extends DCLogic {
 
     const folders = [
       ['Home', 0, true, true], ['Documents', 1], ['Images', 1], ['Music', 1], ['Projects', 1, true],
-      ['TachyonUI', 2], ['Vulkan', 2], ['Downloads', 1]
+      ['IntersticeUI', 2], ['Vulkan', 2], ['Downloads', 1]
     ].map(function (f) {
       return { label: f[0], pad: 4 + f[1] * 14, open: !!f[2], leaf: !f[2], bg: f[3] ? accentSoft : 'transparent', fg: f[3] ? '#1A1D23' : '#464C57' };
     });
@@ -383,16 +388,20 @@ class Component extends DCLogic {
     const docPaths = {
       level: 'M3 20 9 8l4 7 3-4 5 9Z',
       mat: 'M3 3h8v8H3ZM13 13h8v8h-8ZM7 11v4a2 2 0 0 0 2 2h4',
-      layout: 'M3 3h18v18H3ZM3 9h18M9 9v12'
+      layout: 'M3 3h18v18H3ZM3 9h18M9 9v12',
+      prefab: 'M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7ZM3.3 7l8.7 5 8.7-5M12 22V12',
+      anim: 'M4 4h16v16H4ZM8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4'
     };
-    const docSolid = { level: '#2F6FEB', mat: '#0B7A6F', layout: '#B35F0E' };
-    const docTint = { level: '#2F6FEB', mat: '#0FA596', layout: '#D9771A' };
+    const docSolid = { level: '#2F6FEB', mat: '#0B7A6F', layout: '#B35F0E', prefab: '#7C5CE0', anim: '#B8306F' };
+    const docTint = { level: '#2F6FEB', mat: '#0FA596', layout: '#D9771A', prefab: '#7C5CE0', anim: '#D63F8C' };
     const tintOf = function (h) { return 'rgba(' + parseInt(h.slice(1, 3), 16) + ',' + parseInt(h.slice(3, 5), 16) + ',' + parseInt(h.slice(5, 7), 16) + ',0.12)'; };
     const docs = [
       ['Forest.level', 'level', true, false],
       ['Desert.level', 'level', false, true],
       ['Terrain.mat', 'mat', false, false],
-      ['Hud.layout', 'layout', false, false]
+      ['Hud.layout', 'layout', false, false],
+      ['Rock.prefab', 'prefab', false, false],
+      ['Walk.anim', 'anim', false, false]
     ].map(function (d) {
       const on = d[2];
       return {

@@ -11,11 +11,13 @@
     --bg-raised: #FFFFFF;
     --bg-control: #FFFFFF;
     --bg-active: #E4E7EC;
-    --bg-pressed: #EEF0F3;
+    --bg-pressed: #DCDDE0;  /* --text-1 at 14% over --bg-panel, opaque */
+    --segment-on: #FFFFFF;
+    --switch-knob: #FFFFFF;  /* a switch that is off */
     --bg-hover: #E9E9EB;  /* --text-1 at 8% over --bg-panel, opaque */
     --bg-input: #FFFFFF;
     --bg-list: #F6F7F9;
-    --bg-well: #F6F7F9;
+    --bg-well: #EEF0F3;
     --bg-popup: #FFFFFF;
     --bg-menu-hover: #E6EEFD;
     --bg-keycap: #FFFFFF;
@@ -117,7 +119,7 @@
     --doc-animation-pressed: #F472B63D;
     --doc-animation-solid: #B8306F;
 
-    --bg-canvas: #F4F5F7;
+    --bg-canvas: #ECEEF1;
     --canvas-dot: #B5BCC7;
     --frame-fill: #5F66730F;    /* --text-3 at 6% */
     --frame-band: #5F66731F;    /* --text-3 at 12% */
@@ -167,12 +169,12 @@
     --timeline-wave: #0FA596B3;         /* teal at 70% */
     --timeline-event-soft: #D9771A24;   /* --timeline-marker at 14% */
 
-    --shadow-node: 0 4px 14px rgba(16, 24, 40, 0.10);
+    --shadow-node: 0 4px 14px rgba(16, 24, 40, 0.14);
     --shadow-tooltip: 0 4px 12px rgba(16, 24, 40, 0.20);
     --shadow-popup: 0 12px 32px rgba(16, 24, 40, 0.16);
     --shadow-control: 0 1px 2px rgba(16, 24, 40, 0.06);
     --shadow-chip: 0 1px 2px rgba(16, 24, 40, 0.12);
-    --focus-ring: 0 0 0 3px #2F6FEB40;     /* the accent at 25% */
+    --focus-ring: inset 0 0 0 1px #2F6FEB; /* the control's own border, in the accent */
     --selected-ring: 0 0 0 3px #2F6FEB29;  /* the accent at 16% */
     --invalid-halo: 0 0 0 3px #D645452E;   /* the error color at 18% */
 }

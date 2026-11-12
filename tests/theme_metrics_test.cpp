@@ -62,7 +62,7 @@ namespace
     TEST(ThemeMetrics, SecondaryTextHasContrastOnEverySurface)
     {
         const char* surfaces[] = { "--bg-app", "--bg-input", "--bg-canvas", "--bg-panel", "--bg-header", "--bg-raised",
-                                   "--bg-control", "--bg-active", "--bg-pressed", "--row-stripe" };
+                                   "--bg-control", "--bg-active", "--segment-on", "--row-stripe" };
         for (const char* theme : { "themes/dark.css", "themes/light.css" })
         {
             HeadlessGUIApp app(theme);

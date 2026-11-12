@@ -1718,6 +1718,38 @@ namespace tachyon
             EXPECT_TRUE(ParseStyleSheet(src).HasErrors()) << src;
     }
 
+    // A variable can hold an inset outline, for every control's focus ring.
+    TEST(StyleSheet, AVariableHoldsAnInsetOutline)
+    {
+        auto s = ParseStyleSheet(R"(
+            :root { --ring: inset 0 0 0 1px blue; }
+            .a:focus-visible { box-shadow: var(--ring); }
+            .b:focus-visible { box-shadow: var(--ring), inset 0 0 0 2px red; }
+        )");
+        ASSERT_FALSE(s.HasErrors()) << s.errors[0].message;
+        EXPECT_TRUE(s.GetStyle("a")->focusRing.inset);
+        EXPECT_EQ(s.GetStyle("a")->focusRing.spread, 1);
+        EXPECT_EQ(s.GetStyle("b")->focusRing.color, RGB(0, 0, 255));
+        EXPECT_EQ(s.GetStyle("b")->focusRingUnder.spread, 2);
+    }
+
+    // Two inset outlines, the first over the second: an accent edge with a line of another color
+    // inside it, for a control filled with the accent.
+    TEST(StyleSheet, FocusVisibleTakesTwoInsetOutlines)
+    {
+        auto s = ParseStyleSheet(".a:focus-visible { box-shadow: inset 0 0 0 1px blue, inset 0 0 0 2px red; }");
+        ASSERT_FALSE(s.HasErrors()) << s.errors[0].message;
+        const Style* a = s.GetStyle("a");
+        EXPECT_EQ(a->focusRing.spread, 1);
+        EXPECT_EQ(a->focusRing.color, RGB(0, 0, 255));
+        EXPECT_TRUE(a->focusRingUnder.inset);
+        EXPECT_EQ(a->focusRingUnder.spread, 2);
+        EXPECT_EQ(a->focusRingUnder.color, RGB(255, 0, 0));
+
+        EXPECT_TRUE(ParseStyleSheet(".a:focus-visible { box-shadow: inset 0 0 0 1px blue, 0 0 0 2px red; }").HasErrors())
+            << "both inset, or one layer";
+    }
+
     TEST(StyleSheet, VerticalTrim)
     {
         auto s = ParseStyleSheet(".a { -tachyon-vertical-trim: cap-to-baseline; } .b { -tachyon-vertical-trim: normal; }");

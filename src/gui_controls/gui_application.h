@@ -600,6 +600,9 @@ namespace tachyon
 
         /// As RegisterElement, for a control: it joins the Tab order and needs a valid ID.
         tachyon::ElementRef RegisterControl(tachyon::Element&& element, LayoutOverride&& constraints);
+        /// The element just registered drawn as valid inside a BeginInvalid scope: the part of a
+        /// control that shows it invalid is another one (a check box's box, not its row).
+        void DrawnValid(tachyon::ElementRef ref);
         /// As above, with `text` registered as its text.
         tachyon::ElementRef RegisterControl(tachyon::Element&& element, std::string_view text, LayoutOverride&& constraints);
         /// As above; createTextID registers the text, given the element with its current state.

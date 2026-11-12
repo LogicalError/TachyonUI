@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Editor — NodeView and Profiler</title>
+<title>Editor, NodeView and Profiler</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -19,27 +19,10 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 </helmet>
 <div style="width: 100%; min-height: 976px; display: flex; flex-direction: column; background: #0B0C0F; color: #AEB4C0; font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 16px">
 
-<header style="height: 36px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 4px; padding-left: 10px; background: #08090B">
-<div style="width: 18px; height: 18px; border-radius: 4px; background: {{accent}}; display: flex; align-items: center; justify-content: center; color: #0B0C0F; font-weight: 600; font-size: 11px">T</div>
-<nav aria-label="Main menu" style="display: flex; gap: 2px; margin-left: 6px">
-<button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">File</button>
-<button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">Edit</button>
-<button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">View</button>
-<button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">Help</button>
-</nav>
-<div style="flex: 1; display: flex; justify-content: center">
-<button style="width: 380px; max-width: 100%; height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 10px; border: 1px solid #23272F; border-radius: 6px; background: #121418; color: #8A92A2; font: inherit">
-<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-3.5-3.5"></path></svg>
-<span>Search or run a command</span>
-<span style="margin-left: auto; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #1E2128; color: #AEB4C0">Ctrl K</span>
-</button>
-</div>
-<button aria-label="Minimize" style="width: 44px; height: 36px; border: 0; background: transparent; color: #AEB4C0; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path></svg></button>
-<button aria-label="Maximize" style="width: 44px; height: 36px; border: 0; background: transparent; color: #AEB4C0; display: flex; align-items: center; justify-content: center"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></button>
-<button aria-label="Close" style="width: 44px; height: 36px; border: 0; background: transparent; color: #AEB4C0; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
-</header>
-<div role="tablist" aria-label="Documents" style="height: 36px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 3px; padding: 0 8px; background: #08090B; border-bottom: 2px solid {{docLine}}">
-<sc-for list="{{docs}}" as="d" hint-placeholder-count="4">
+<header style="height: 38px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: flex-end; gap: 3px; padding-left: 10px; background: #08090B; border-bottom: 2px solid {{docLine}}">
+<div style="align-self: center; display: flex; margin-right: 8px"><div style="width: 18px; height: 18px; border-radius: 4px; background: {{accent}}; display: flex; align-items: center; justify-content: center; color: #0B0C0F; font-weight: 600; font-size: 11px">T</div></div>
+<div role="tablist" aria-label="Documents" style="display: flex; align-items: flex-end; gap: 3px; min-width: 0">
+<sc-for list="{{docs}}" as="d" hint-placeholder-count="6">
 <div role="tab" aria-selected="{{d.sel}}" style="height: 30px; min-width: 150px; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; border-radius: 6px 6px 0 0; background: {{d.bg}}; color: {{d.fg}}">
 <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex-shrink: 0; fill: none; stroke: {{d.ic}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="{{d.d}}"></path></svg>
 <span style="white-space: nowrap; font-weight: {{d.w}}">{{d.n}}<span style="color: {{d.extC}}; font-weight: 400">{{d.ext}}</span></span>
@@ -48,23 +31,45 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 <sc-if value="{{d.close}}" hint-placeholder-val="{{false}}"><span aria-hidden="true" style="width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; border-radius: 3px; color: {{d.markC}}"><svg width="11" height="11" viewBox="0 0 24 24" style="fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round"><path d="M18 6 6 18M6 6l12 12"></path></svg></span></sc-if>
 </div>
 </sc-for>
-<button aria-label="New document" style="width: 26px; height: 26px; margin: 0 0 3px 4px; border: 0; border-radius: 4px; background: transparent; color: #8A92A2; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M5 12h14M12 5v14"></path></svg></button>
+<button aria-label="New document" style="width: 26px; height: 26px; margin: 0 0 3px 4px; border: 0; border-radius: 4px; background: transparent; color: #8E96A7; display: flex; align-items: center; justify-content: center"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M5 12h14M12 5v14"></path></svg></button>
+</div>
 <span style="flex: 1"></span>
-<button style="height: 24px; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #8A92A2; font: inherit">4 open<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button style="height: 24px; align-self: center; margin-right: 6px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #8E96A7; font: inherit">6 open<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m6 9 6 6 6-6"></path></svg></button>
+<div style="align-self: flex-start; display: flex">
+<button aria-label="Minimize" style="width: 44px; height: 36px; border: 0; background: transparent; color: #AEB4C0; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"></path></svg></button>
+<button aria-label="Maximize" style="width: 44px; height: 36px; border: 0; background: transparent; color: #AEB4C0; display: flex; align-items: center; justify-content: center"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect></svg></button>
+<button aria-label="Close" style="width: 44px; height: 36px; border: 0; background: transparent; color: #AEB4C0; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+</div>
+</header>
+<div role="toolbar" aria-label="Document menu, search and layout" style="height: 34px; flex-shrink: 0; box-sizing: border-box; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 4px; background: #0B0C0F">
+<nav aria-label="Main menu" style="display: flex; gap: 2px; margin-left: 2px">
+<button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">File</button>
+<button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">Edit</button>
+<button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">View</button>
+<button style="height: 26px; padding: 0 9px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">Help</button>
+</nav>
+<div style="flex: 1; display: flex; justify-content: center">
+<button style="width: 380px; max-width: 100%; height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 10px; border: 1px solid #23272F; border-radius: 6px; background: #121418; color: #8E96A7; font: inherit">
+<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-3.5-3.5"></path></svg>
+<span>Search or run a command</span>
+<span style="margin-left: auto; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: #1E2128; color: #AEB4C0">Ctrl K</span>
+</button>
+</div>
+<button aria-haspopup="menu" style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 10px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0; font: inherit"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M3 3h18v18H3ZM3 9h18M9 9v12"></path></svg>Layouts<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: #8E96A7; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m6 9 6 6 6-6"></path></svg></button>
 </div>
 
-<main style="flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 4px 4px 0; min-height: 0">
+<main style="flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 0 4px; min-height: 0">
 
 <div style="display: flex; flex-wrap: wrap; gap: 4px">
 
 <section aria-label="Hierarchy" style="flex: 1 1 260px; max-width: 100%; height: 600px; display: flex; flex-direction: column; background: #121418; border: 1px solid #1C1F25; border-radius: 6px; overflow: hidden">
 <div style="height: 34px; flex-shrink: 0; display: flex; align-items: center; gap: 2px; padding: 0 4px 0 5px; background: #16191E; border-bottom: 1px solid #23272F">
 <button style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 4px; background: #23272F; color: #E8EAEF; font-weight: 500"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="color: {{accent}}"><path d="M21 12h-8M21 6H8M21 18h-8M3 6v4c0 1.1.9 2 2 2h3M3 10v6c0 1.1.9 2 2 2h3"></path></svg>Hierarchy</button>
-<button aria-label="Add object" style="margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: #8A92A2; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"></path></svg></button>
-<button aria-label="Panel options" style="width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: #8A92A2; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg></button>
+<button aria-label="Add object" style="margin-left: auto; width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: #8E96A7; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"></path></svg></button>
+<button aria-label="Panel options" style="width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: #8E96A7; display: flex; align-items: center; justify-content: center"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle></svg></button>
 </div>
 <div style="padding: 8px">
-<label style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #23272F; border-radius: 4px; background: #0D0F12; color: #8A92A2">
+<label style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #23272F; border-radius: 4px; background: #0D0F12; color: #8E96A7">
 <svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
 <input type="text" placeholder="Filter objects" aria-label="Filter objects" style="flex: 1; min-width: 0; border: 0; background: transparent; outline: none; color: #E8EAEF">
 </label>
@@ -72,8 +77,8 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 <div role="tree" aria-label="Scene objects" style="padding: 0 4px 8px">
 <sc-for list="{{tree}}" as="r" hint-placeholder-count="13">
 <div role="treeitem" style="height: 22px; display: flex; align-items: center; gap: 4px; padding-left: {{r.pad}}px; padding-right: 8px; border-radius: 4px; background: {{r.bg}}; color: {{r.fg}}">
-<sc-if value="{{r.open}}" hint-placeholder-val="{{true}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8A92A2; width: 16px"><path d="m6 9 6 6 6-6"></path></svg></sc-if>
-<sc-if value="{{r.closed}}" hint-placeholder-val="{{false}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8A92A2; width: 16px"><path d="m9 18 6-6-6-6"></path></svg></sc-if>
+<sc-if value="{{r.open}}" hint-placeholder-val="{{true}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8E96A7; width: 16px"><path d="m6 9 6 6 6-6"></path></svg></sc-if>
+<sc-if value="{{r.closed}}" hint-placeholder-val="{{false}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8E96A7; width: 16px"><path d="m9 18 6-6-6-6"></path></svg></sc-if>
 <sc-if value="{{r.leaf}}" hint-placeholder-val="{{false}}"><span style="width: 16px"></span></sc-if>
 <span style="display: flex; color: {{r.ic}}">
 <sc-if value="{{r.isScene}}" hint-placeholder-val="{{false}}"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3a13 13 0 0 0 0 18 13 13 0 0 0 0-18M3 12h18"></path></svg></sc-if>
@@ -95,7 +100,7 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 <button style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7ZM3.3 7l8.7 5 8.7-5M12 22V12"></path></svg>Viewport</button>
 <button style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg>Settings</button>
 </div>
-<div style="position: relative; flex: 1; overflow: hidden; background-color: #0E1013; background-image: radial-gradient(#252A33 1px, transparent 1px); background-size: 16px 16px">
+<div style="position: relative; flex: 1; overflow: hidden; background-color: #0E1013; background-image: radial-gradient(#39404D 1px, transparent 1px); background-size: 16px 16px">
 
 <svg aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 900px; height: 566px; pointer-events: none">
 <path d="M244 160 C 322 160 322 250 400 250" fill="none" stroke="#34D1BF" stroke-width="2"></path>
@@ -103,59 +108,59 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 <path d="M244 472 C 452 472 452 408 660 408" fill="none" stroke="#F472B6" stroke-width="2"></path>
 </svg>
 
-<div style="position: absolute; left: 12px; top: 12px; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #23272F; border-radius: 6px; background: #16191E; color: #8A92A2">
+<div style="position: absolute; left: 12px; top: 12px; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #23272F; border-radius: 6px; background: #16191E; color: #8E96A7">
 <span>Graphs</span><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg><span style="color: #E8EAEF">Terrain material</span>
 </div>
 
-<div style="position: absolute; left: 60px; top: 110px; width: 184px; background: #181B20; border: 1px solid #2A2F39; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.35)">
-<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #1E2128; border-bottom: 1px solid #2A2F39; border-radius: 5px 5px 0 0">
+<div style="position: absolute; left: 60px; top: 110px; width: 184px; background: #1F232A; border: 1px solid #363C48; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.35)">
+<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #4D363A; border-bottom: 1px solid #684143; border-radius: 5px 5px 0 0">
 <span style="width: 8px; height: 8px; border-radius: 2px; background: #E0716B"></span>
 <span style="color: #E8EAEF; font-weight: 600">Source</span>
-<span style="margin-left: auto; color: #8A92A2; font-size: 11px">Generator</span>
+<span style="margin-left: auto; color: #8E96A7; font-size: 11px">Generator</span>
 </div>
 <div style="padding: 6px 0">
-<div style="position: relative; height: 26px; display: flex; align-items: center; justify-content: flex-end; padding: 0 14px">Value<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #34D1BF; box-shadow: 0 0 0 2px #181B20"></span></div>
-<div style="position: relative; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 14px"><span>Seed</span><input type="text" value="7" aria-label="Seed" style="margin-left: auto; width: 72px; height: 22px; padding: 0 8px; border: 1px solid #2A2F39; border-radius: 4px; background: #0D0F12; color: #E8EAEF; font-family: 'JetBrains Mono', monospace; text-align: right"><span style="position: absolute; right: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #F59E4B; background: #181B20"></span></div>
-<div style="position: relative; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 14px"><span>Enabled</span><button aria-label="Enabled" aria-pressed="true" style="margin-left: auto; position: relative; width: 28px; height: 16px; border: 0; border-radius: 8px; background: {{accent}}"><span style="position: absolute; right: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #0B0C0F"></span></button><span style="position: absolute; right: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #A98BFF; background: #181B20"></span></div>
+<div style="position: relative; height: 26px; display: flex; align-items: center; justify-content: flex-end; padding: 0 14px">Value<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #34D1BF; box-shadow: 0 0 0 2px #1F232A"></span></div>
+<div style="position: relative; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 14px"><span>Seed</span><input type="text" value="7" aria-label="Seed" style="margin-left: auto; width: 72px; height: 22px; padding: 0 8px; border: 1px solid #2A2F39; border-radius: 4px; background: #0D0F12; color: #E8EAEF; font-family: 'JetBrains Mono', monospace; text-align: right"><span style="position: absolute; right: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #F59E4B; background: #1F232A"></span></div>
+<div style="position: relative; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 14px"><span>Enabled</span><button aria-label="Enabled" aria-pressed="true" style="margin-left: auto; position: relative; width: 28px; height: 16px; border: 0; border-radius: 8px; background: {{accent}}"><span style="position: absolute; right: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: #0B0C0F"></span></button><span style="position: absolute; right: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #A98BFF; background: #1F232A"></span></div>
 </div>
 </div>
 
-<div style="position: absolute; left: 400px; top: 200px; width: 196px; background: #181B20; border: 1px solid {{accent}}; border-radius: 6px; box-shadow: 0 0 0 3px {{accentSoft}}, 0 8px 20px rgba(0,0,0,0.35)">
-<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #1E2128; border-bottom: 1px solid #2A2F39; border-radius: 5px 5px 0 0">
+<div style="position: absolute; left: 400px; top: 200px; width: 196px; background: #1F232A; border: 1px solid {{accent}}; border-radius: 6px; box-shadow: 0 0 0 3px {{accentSoft}}, 0 8px 20px rgba(0,0,0,0.35)">
+<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #31405D; border-bottom: 1px solid #3C517B; border-radius: 5px 5px 0 0">
 <span style="width: 8px; height: 8px; border-radius: 2px; background: {{accent}}"></span>
 <span style="color: #E8EAEF; font-weight: 600">Mix</span>
-<span style="margin-left: auto; color: #8A92A2; font-size: 11px">Operator</span>
+<span style="margin-left: auto; color: #8E96A7; font-size: 11px">Operator</span>
 </div>
 <div style="padding: 6px 0">
-<div style="position: relative; height: 26px; display: flex; align-items: center; padding: 0 14px"><span style="position: absolute; left: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #34D1BF; box-shadow: 0 0 0 2px #181B20"></span>Strength</div>
-<div style="position: relative; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 14px"><span style="position: absolute; left: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #F59E4B; background: #181B20"></span><span>Gain</span><input type="text" value="1.00" aria-label="Gain" style="margin-left: auto; width: 84px; height: 22px; padding: 0 8px; border: 1px solid #2A2F39; border-radius: 4px; background: #0D0F12; color: #E8EAEF; font-family: 'JetBrains Mono', monospace; text-align: right"></div>
-<div style="position: relative; height: 26px; display: flex; align-items: center; padding: 0 14px"><span style="position: absolute; left: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #A98BFF; background: #181B20"></span>Bypass<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #A98BFF; background: #181B20"></span></div>
-<div style="position: relative; height: 26px; display: flex; align-items: center; justify-content: flex-end; padding: 0 14px">Result<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #34D1BF; box-shadow: 0 0 0 2px #181B20"></span></div>
+<div style="position: relative; height: 26px; display: flex; align-items: center; padding: 0 14px"><span style="position: absolute; left: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #34D1BF; box-shadow: 0 0 0 2px #1F232A"></span>Strength</div>
+<div style="position: relative; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 14px"><span style="position: absolute; left: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #F59E4B; background: #1F232A"></span><span>Gain</span><input type="text" value="1.00" aria-label="Gain" style="margin-left: auto; width: 84px; height: 22px; padding: 0 8px; border: 1px solid #2A2F39; border-radius: 4px; background: #0D0F12; color: #E8EAEF; font-family: 'JetBrains Mono', monospace; text-align: right"></div>
+<div style="position: relative; height: 26px; display: flex; align-items: center; padding: 0 14px"><span style="position: absolute; left: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #A98BFF; background: #1F232A"></span>Bypass<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #A98BFF; background: #1F232A"></span></div>
+<div style="position: relative; height: 26px; display: flex; align-items: center; justify-content: flex-end; padding: 0 14px">Result<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #34D1BF; box-shadow: 0 0 0 2px #1F232A"></span></div>
 </div>
 </div>
 
-<div style="position: absolute; left: 60px; top: 320px; width: 184px; background: #181B20; border: 1px solid #2A2F39; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.35)">
-<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #1E2128; border-bottom: 1px solid #2A2F39; border-radius: 5px 5px 0 0">
+<div style="position: absolute; left: 60px; top: 320px; width: 184px; background: #1F232A; border: 1px solid #363C48; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.35)">
+<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #2B4A41; border-bottom: 1px solid #31604E; border-radius: 5px 5px 0 0">
 <span style="width: 8px; height: 8px; border-radius: 2px; background: #4FC48A"></span>
 <span style="color: #E8EAEF; font-weight: 600">Texture</span>
-<span style="margin-left: auto; color: #8A92A2; font-size: 11px">Input</span>
+<span style="margin-left: auto; color: #8E96A7; font-size: 11px">Input</span>
 </div>
 <div style="padding: 10px 0 6px">
 <div role="img" aria-label="Texture preview: hue and value gradient" style="margin: 0 10px; height: 92px; border-radius: 4px; border: 1px solid #2A2F39; background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, #000 100%), linear-gradient(to right, #ff4d4d, #ffd84d, #4dff88, #4dd2ff, #6b6bff, #ff4dd8)"></div>
-<div style="position: relative; height: 26px; margin-top: 6px; display: flex; align-items: center; justify-content: flex-end; padding: 0 14px">Color<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #F472B6; box-shadow: 0 0 0 2px #181B20"></span></div>
+<div style="position: relative; height: 26px; margin-top: 6px; display: flex; align-items: center; justify-content: flex-end; padding: 0 14px">Color<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #F472B6; box-shadow: 0 0 0 2px #1F232A"></span></div>
 </div>
 </div>
 
-<div style="position: absolute; left: 660px; top: 330px; width: 184px; background: #181B20; border: 1px solid #2A2F39; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.35)">
-<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #1E2128; border-bottom: 1px solid #2A2F39; border-radius: 5px 5px 0 0">
+<div style="position: absolute; left: 660px; top: 330px; width: 184px; background: #1F232A; border: 1px solid #363C48; border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.35)">
+<div style="height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #403C5D; border-bottom: 1px solid #534B7B; border-radius: 5px 5px 0 0">
 <span style="width: 8px; height: 8px; border-radius: 2px; background: #A98BFF"></span>
 <span style="color: #E8EAEF; font-weight: 600">Output</span>
-<span style="margin-left: auto; color: #8A92A2; font-size: 11px">Output</span>
+<span style="margin-left: auto; color: #8E96A7; font-size: 11px">Output</span>
 </div>
 <div style="padding: 6px 0">
-<div style="position: relative; height: 26px; display: flex; align-items: center; padding: 0 14px"><span style="position: absolute; left: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #34D1BF; box-shadow: 0 0 0 2px #181B20"></span>Value</div>
-<div style="position: relative; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 14px"><span style="position: absolute; left: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: #F472B6; box-shadow: 0 0 0 2px #181B20"></span><span>Tint</span><span style="margin-left: auto; width: 72px; height: 22px; border: 1px solid #2A2F39; border-radius: 4px; background: linear-gradient(to right, #ff4d4d, #6b6bff)"></span></div>
-<div style="position: relative; height: 26px; display: flex; align-items: center; justify-content: flex-end; padding: 0 14px">Level<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #F59E4B; background: #181B20"></span></div>
+<div style="position: relative; height: 26px; display: flex; align-items: center; padding: 0 14px"><span style="position: absolute; left: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #34D1BF; box-shadow: 0 0 0 2px #1F232A"></span>Value</div>
+<div style="position: relative; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 14px"><span style="position: absolute; left: -6px; top: 10px; width: 10px; height: 10px; border-radius: 50%; background: #F472B6; box-shadow: 0 0 0 2px #1F232A"></span><span>Tint</span><span style="margin-left: auto; width: 72px; height: 22px; border: 1px solid #2A2F39; border-radius: 4px; background: linear-gradient(to right, #ff4d4d, #6b6bff)"></span></div>
+<div style="position: relative; height: 26px; display: flex; align-items: center; justify-content: flex-end; padding: 0 14px">Level<span style="position: absolute; right: -6px; top: 8px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #F59E4B; background: #1F232A"></span></div>
 </div>
 </div>
 
@@ -172,7 +177,7 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 <span style="position: absolute; left: 62px; top: 32px; width: 24px; height: 18px; border-radius: 2px; background: {{accent}}"></span>
 <span style="position: absolute; left: 10px; top: 50px; width: 22px; height: 22px; border-radius: 2px; background: #2E333D"></span>
 <span style="position: absolute; left: 102px; top: 52px; width: 22px; height: 16px; border-radius: 2px; background: #2E333D"></span>
-<span style="position: absolute; left: 4px; top: 6px; width: 128px; height: 76px; border: 1px solid #8A92A2; border-radius: 3px"></span>
+<span style="position: absolute; left: 4px; top: 6px; width: 128px; height: 76px; border: 1px solid #8E96A7; border-radius: 3px"></span>
 </div>
 </div>
 </section>
@@ -183,32 +188,32 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 <button style="height: 24px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">Inspector</button>
 <button style="height: 24px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">Reorderable</button>
 <button style="height: 24px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">Misc</button>
-<button aria-label="4 more tabs" style="height: 24px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #8A92A2">+4<svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button aria-label="4 more tabs" style="height: 24px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #8E96A7">+4<svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
 </div>
 <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 8px">
 <div style="height: 26px; display: flex; align-items: center; gap: 6px">
 <button aria-pressed="true" style="height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #2E333D; border-radius: 4px; background: #1E2128; color: #E8EAEF"><span style="width: 8px; height: 8px; border-radius: 50%; background: #EF6A6A"></span>Recording</button>
 <button aria-label="Pause" style="width: 26px; height: 26px; border: 1px solid #2E333D; border-radius: 4px; background: #1E2128; color: #AEB4C0; display: flex; align-items: center; justify-content: center"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg></button>
 <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace; color: #E8EAEF">9.27 ms</span>
-<span style="font-family: 'JetBrains Mono', monospace; color: #8A92A2">108 fps</span>
+<span style="font-family: 'JetBrains Mono', monospace; color: #8E96A7">108 fps</span>
 </div>
 <div style="position: relative; height: 64px; flex-shrink: 0; padding: 0 4px; display: flex; align-items: flex-end; gap: 1px; border-radius: 4px; background: #0D0F12">
 <sc-for list="{{bars}}" as="b" hint-placeholder-count="120"><span style="flex: 1; height: {{b.h}}%; background: {{b.c}}; border-radius: 1px 1px 0 0"></span></sc-for>
 <span style="position: absolute; left: 0; right: 0; bottom: 66.8%; border-top: 1px dashed #5A606C"></span>
-<span style="position: absolute; left: 6px; bottom: 66.8%; margin-bottom: 2px; font-size: 10px; line-height: 12px; color: #8A92A2; font-family: 'JetBrains Mono', monospace">16.7 ms</span>
+<span style="position: absolute; left: 6px; bottom: 66.8%; margin-bottom: 2px; font-size: 10px; line-height: 12px; color: #8E96A7; font-family: 'JetBrains Mono', monospace">16.7 ms</span>
 </div>
 <div style="position: relative; height: 78px; flex-shrink: 0">
 <sc-for list="{{flame}}" as="f" hint-placeholder-count="14"><span style="position: absolute; left: {{f.l}}%; width: {{f.w}}%; top: {{f.t}}px; height: 18px; padding: 0 6px; border-radius: 3px; background: {{f.c}}; color: #E8EAEF; font-size: 11px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04)">{{f.n}}</span></sc-for>
 </div>
 <div role="table" aria-label="Profiler scopes" style="flex: 1; min-height: 0; overflow: hidden; border: 1px solid #23272F; border-radius: 4px">
-<div role="row" style="height: 26px; display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px 96px 44px; align-items: center; padding: 0 8px; gap: 8px; background: #16191E; border-bottom: 1px solid #23272F; color: #8A92A2; font-size: 11px; font-weight: 500">
+<div role="row" style="height: 26px; display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px 96px 44px; align-items: center; padding: 0 8px; gap: 8px; background: #16191E; border-bottom: 1px solid #23272F; color: #8E96A7; font-size: 11px; font-weight: 500">
 <span role="columnheader">Scope</span><span role="columnheader" style="text-align: right">Total ms</span><span role="columnheader" style="text-align: right">Self ms</span><span role="columnheader" style="text-align: right">% frame</span><span role="columnheader" style="text-align: right">Calls</span>
 </div>
 <sc-for list="{{scopes}}" as="s" hint-placeholder-count="15">
 <div role="row" style="height: 22px; display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px 96px 44px; align-items: center; padding: 0 8px; gap: 8px; background: {{s.bg}}; color: {{s.fg}}">
 <span role="cell" style="display: flex; align-items: center; gap: 2px; padding-left: {{s.pad}}px; white-space: nowrap; overflow: hidden">
-<sc-if value="{{s.open}}" hint-placeholder-val="{{false}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8A92A2; width: 14px"><path d="m6 9 6 6 6-6"></path></svg></sc-if>
-<sc-if value="{{s.closed}}" hint-placeholder-val="{{false}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8A92A2; width: 14px"><path d="m9 18 6-6-6-6"></path></svg></sc-if>
+<sc-if value="{{s.open}}" hint-placeholder-val="{{false}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8E96A7; width: 14px"><path d="m6 9 6 6 6-6"></path></svg></sc-if>
+<sc-if value="{{s.closed}}" hint-placeholder-val="{{false}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8E96A7; width: 14px"><path d="m9 18 6-6-6-6"></path></svg></sc-if>
 <sc-if value="{{s.leaf}}" hint-placeholder-val="{{true}}"><span style="width: 14px"></span></sc-if>
 {{s.n}}</span>
 <span role="cell" style="text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px">{{s.total}}</span>
@@ -232,7 +237,7 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 <div role="tree" aria-label="Folders" style="width: 168px; flex-shrink: 0; padding: 6px 4px; border-right: 1px solid #23272F">
 <sc-for list="{{folders}}" as="r" hint-placeholder-count="8">
 <div role="treeitem" style="height: 22px; display: flex; align-items: center; gap: 4px; padding-left: {{r.pad}}px; border-radius: 4px; background: {{r.bg}}; color: {{r.fg}}">
-<sc-if value="{{r.open}}" hint-placeholder-val="{{false}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8A92A2; width: 14px"><path d="m6 9 6 6 6-6"></path></svg></sc-if>
+<sc-if value="{{r.open}}" hint-placeholder-val="{{false}}"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="color: #8E96A7; width: 14px"><path d="m6 9 6 6 6-6"></path></svg></sc-if>
 <sc-if value="{{r.leaf}}" hint-placeholder-val="{{true}}"><span style="width: 14px"></span></sc-if>
 <svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="color: #D9A443"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9l-.8-1.2A2 2 0 0 0 7.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
 <span style="white-space: nowrap">{{r.label}}</span>
@@ -241,10 +246,10 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 </div>
 <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
 <div style="height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-bottom: 1px solid #23272F">
-<span style="color: #8A92A2">Home</span>
-<label style="margin-left: auto; width: 150px; height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #23272F; border-radius: 4px; background: #0D0F12; color: #8A92A2"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="text" placeholder="Search" aria-label="Search files" style="flex: 1; min-width: 0; border: 0; background: transparent; outline: none"></label>
+<span style="color: #8E96A7">Home</span>
+<label style="margin-left: auto; width: 150px; height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #23272F; border-radius: 4px; background: #0D0F12; color: #8E96A7"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="text" placeholder="Search" aria-label="Search files" style="flex: 1; min-width: 0; border: 0; background: transparent; outline: none"></label>
 <button aria-label="Grid view" aria-pressed="true" style="width: 24px; height: 24px; border: 0; border-radius: 4px; background: #23272F; color: #E8EAEF; display: flex; align-items: center; justify-content: center"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg></button>
-<button aria-label="List view" style="width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: #8A92A2; display: flex; align-items: center; justify-content: center"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg></button>
+<button aria-label="List view" style="width: 24px; height: 24px; border: 0; border-radius: 4px; background: transparent; color: #8E96A7; display: flex; align-items: center; justify-content: center"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"></path></svg></button>
 </div>
 <div style="flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 8px; align-content: start">
 <sc-for list="{{files}}" as="f" hint-placeholder-count="8">
@@ -267,7 +272,7 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 </div>
 <div style="height: 38px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-bottom: 1px solid #23272F">
 <button style="height: 24px; padding: 0 10px; border: 1px solid #2E333D; border-radius: 4px; background: #1E2128; color: #E8EAEF">Clear</button>
-<label style="flex: 1; min-width: 120px; height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #23272F; border-radius: 4px; background: #0D0F12; color: #8A92A2"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="text" placeholder="Filter messages" aria-label="Filter messages" style="flex: 1; min-width: 0; border: 0; background: transparent; outline: none"></label>
+<label style="flex: 1; min-width: 120px; height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #23272F; border-radius: 4px; background: #0D0F12; color: #8E96A7"><svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="text" placeholder="Filter messages" aria-label="Filter messages" style="flex: 1; min-width: 0; border: 0; background: transparent; outline: none"></label>
 <div style="display: flex; gap: 2px; padding: 2px; border-radius: 6px; background: #0D0F12; border: 1px solid #23272F">
 <button aria-label="Errors: 0" aria-pressed="true" style="height: 20px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border: 0; border-radius: 4px; background: #1E2128; color: #AEB4C0; font-family: 'JetBrains Mono', monospace; font-size: 11px"><span style="width: 7px; height: 7px; border-radius: 50%; background: #EF6A6A"></span>0</button>
 <button aria-label="Warnings: 0" aria-pressed="true" style="height: 20px; display: flex; align-items: center; gap: 5px; padding: 0 8px; border: 0; border-radius: 4px; background: #1E2128; color: #AEB4C0; font-family: 'JetBrains Mono', monospace; font-size: 11px"><span style="width: 7px; height: 7px; border-radius: 50%; background: #E5B454"></span>0</button>
@@ -278,7 +283,7 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 <div role="log" style="flex: 1; min-height: 0; padding: 4px">
 <sc-for list="{{log}}" as="l" hint-placeholder-count="4">
 <div style="height: 24px; display: grid; grid-template-columns: 96px 16px minmax(0, 1fr); gap: 8px; align-items: center; padding: 0 8px; border-radius: 4px; background: {{l.bg}}; color: {{l.fg}}">
-<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8A92A2">{{l.t}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8E96A7">{{l.t}}</span>
 <span style="width: 7px; height: 7px; border-radius: 50%; background: #6B9BFF; justify-self: center"></span>
 <span style="white-space: pre; overflow: hidden; text-overflow: ellipsis">{{l.m}}</span>
 </div>
@@ -286,13 +291,13 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 </div>
 <div style="flex-shrink: 0; padding: 10px 16px 12px; border-top: 1px solid #23272F; background: #0F1114; font-family: 'JetBrains Mono', monospace; font-size: 11.5px; line-height: 18px">
 <div style="color: #E8EAEF"><span style="color: #8FB3FF">info</span> [theme] loaded <span style="background: {{selection}}">themes/dark.css: 190 styles</span>, 0 errors</div>
-<div style="color: #8A92A2">at <a href="#">src/gui_controls/gui_theme.cpp:218</a></div>
+<div style="color: #8E96A7">at <a href="#">src/gui_controls/gui_theme.cpp:218</a></div>
 </div>
 </section>
 </div>
 </main>
 
-<footer style="height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 16px; padding: 0 12px; color: #8A92A2; font-size: 11px">
+<footer style="height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 16px; padding: 0 12px; color: #8E96A7; font-size: 11px">
 <span style="display: flex; align-items: center; gap: 6px"><span style="width: 6px; height: 6px; border-radius: 50%; background: #4FC48A"></span>Ready</span>
 <span>Vulkan · NVIDIA GeForce RTX 4070 Ti SUPER</span>
 <span style="margin-left: auto; font-family: 'JetBrains Mono', monospace">9.27 ms · 108 fps</span>
@@ -320,7 +325,7 @@ class Component extends DCLogic {
         label: t[0], pad: 4 + t[1] * 16, open: t[3] === 'open', closed: t[3] === 'closed', leaf: !t[3],
         isScene: t[2] === 'scene', isGroup: t[2] === 'group', isMesh: t[2] === 'mesh',
         isCam: t[2] === 'camera', isLight: t[2] === 'light', isFolder: t[2] === 'folder',
-        bg: sel ? accentSoft : 'transparent', fg: sel ? '#E8EAEF' : '#AEB4C0', ic: sel ? accent : '#8A92A2'
+        bg: sel ? accentSoft : 'transparent', fg: sel ? '#E8EAEF' : '#AEB4C0', ic: sel ? accent : '#8E96A7'
       };
     });
 
@@ -360,7 +365,7 @@ class Component extends DCLogic {
 
     const folders = [
       ['Home', 0, true, true], ['Documents', 1], ['Images', 1], ['Music', 1], ['Projects', 1, true],
-      ['TachyonUI', 2], ['Vulkan', 2], ['Downloads', 1]
+      ['IntersticeUI', 2], ['Vulkan', 2], ['Downloads', 1]
     ].map(function (f) {
       return { label: f[0], pad: 4 + f[1] * 14, open: !!f[2], leaf: !f[2], bg: f[3] ? accentSoft : 'transparent', fg: f[3] ? '#E8EAEF' : '#AEB4C0' };
     });
@@ -384,22 +389,26 @@ class Component extends DCLogic {
     const docPaths = {
       level: 'M3 20 9 8l4 7 3-4 5 9Z',
       mat: 'M3 3h8v8H3ZM13 13h8v8h-8ZM7 11v4a2 2 0 0 0 2 2h4',
-      layout: 'M3 3h18v18H3ZM3 9h18M9 9v12'
+      layout: 'M3 3h18v18H3ZM3 9h18M9 9v12',
+      prefab: 'M21 8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.7ZM3.3 7l8.7 5 8.7-5M12 22V12',
+      anim: 'M4 4h16v16H4ZM8 4v16M16 4v16M4 9h4M4 15h4M16 9h4M16 15h4'
     };
-    const docSolid = { level: '#6B9BFF', mat: '#34D1BF', layout: '#F59E4B' };
-    const docTint = { level: '#6B9BFF', mat: '#34D1BF', layout: '#F59E4B' };
+    const docSolid = { level: '#6B9BFF', mat: '#34D1BF', layout: '#F59E4B', prefab: '#A98BFF', anim: '#F472B6' };
+    const docTint = { level: '#6B9BFF', mat: '#34D1BF', layout: '#F59E4B', prefab: '#A98BFF', anim: '#F472B6' };
     const tintOf = function (h) { return 'rgba(' + parseInt(h.slice(1, 3), 16) + ',' + parseInt(h.slice(3, 5), 16) + ',' + parseInt(h.slice(5, 7), 16) + ',0.14)'; };
     const docs = [
       ['Forest.level', 'level', true, false],
       ['Desert.level', 'level', false, true],
       ['Terrain.mat', 'mat', false, false],
-      ['Hud.layout', 'layout', false, false]
+      ['Hud.layout', 'layout', false, false],
+      ['Rock.prefab', 'prefab', false, false],
+      ['Walk.anim', 'anim', false, false]
     ].map(function (d) {
       const on = d[2];
       return {
         n: d[0].split('.')[0], ext: '.' + d[0].split('.')[1], d: docPaths[d[1]], sel: on ? 'true' : 'false', dirty: d[3], close: on, w: on ? 600 : 400,
         bg: on ? docSolid[d[1]] : tintOf(docTint[d[1]]), fg: on ? '#0B0C0F' : '#E8EAEF', ic: on ? '#0B0C0F' : docTint[d[1]],
-        extC: on ? 'rgba(11,12,15,0.62)' : '#8A92A2', markC: on ? '#0B0C0F' : '#AEB4C0'
+        extC: on ? 'rgba(11,12,15,0.62)' : '#8E96A7', markC: on ? '#0B0C0F' : '#AEB4C0'
       };
     });
     const docLine = docSolid.level;

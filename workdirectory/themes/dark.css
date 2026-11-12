@@ -12,7 +12,9 @@
     --bg-raised: #181B20;
     --bg-control: #1E2128;
     --bg-active: #23272F;
-    --bg-pressed: #2A2F39;
+    --bg-pressed: #303236;  /* --text-1 at 14% over --bg-panel, opaque */
+    --segment-on: #2A2F39;
+    --switch-knob: #AEB4C0;  /* a switch that is off */
     --bg-hover: #232529;       /* --text-1 at 8% over --bg-panel, opaque */
     --bg-input: #0D0F12;
     --bg-list: #101216;
@@ -173,7 +175,7 @@
     --shadow-popup: 0 16px 40px rgba(0, 0, 0, 0.55);
     --shadow-control: none;
     --shadow-chip: none;
-    --focus-ring: 0 0 0 3px #6B9BFF4D;     /* the accent at 30% */
+    --focus-ring: inset 0 0 0 1px #6B9BFF; /* the control's own border, in the accent */
     --selected-ring: 0 0 0 3px #6B9BFF29;  /* the accent at 16% */
     --invalid-halo: 0 0 0 3px #EF6A6A2B;   /* the error color at 17% */
 }

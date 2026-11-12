@@ -65,4 +65,31 @@ namespace
         Emit(on, "On");
         EXPECT_FALSE(on);
     }
+
+    // Invalid: the track (a check box's box) takes the error border and halo, not the whole
+    // row with its label.
+    TEST_F(SwitchTest, InvalidMarksTheTrackOrTheBoxOnly)
+    {
+        const ID checkID = app.idManager.CreateStaticID();
+        bool on = false, checked = false;
+        app.Frame([&] {
+            app.BeginRootWindow();
+            app.BeginInvalid();
+            app.Switch(switchID, on, "Accept");
+            app.Checkbox(checkID, checked, "Accept");
+            app.EndInvalid();
+            app.EndRootWindow();
+        });
+        auto invalid = [](const Element& e) { return (e.state & ElementState::Invalid) != ElementState::None; };
+        for (const ID id : { switchID, checkID })
+        {
+            const auto ref = app.elementStorage.FindElementRefByID(id);
+            ASSERT_TRUE(ref.IsValid());
+            EXPECT_FALSE(invalid(app.elementStorage.GetElementUnsafe(ref))) << "the row";
+            const auto parts = app.elementStorage.GetChildrenSpan(ref);
+            ASSERT_EQ(parts.size(), 2u);
+            EXPECT_TRUE(invalid(parts[0])) << "the track or box";
+            EXPECT_FALSE(invalid(parts[1])) << "the label";
+        }
+    }
 }
