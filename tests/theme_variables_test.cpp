@@ -8,6 +8,7 @@
 
 #include <gui_core/style/gui_style_manager.h>
 #include <gui_core/style/gui_style_sheet.h>
+#include <gui_core/diagnostics/gui_logging.h>
 
 #include <string>
 
@@ -461,6 +462,37 @@ namespace tachyon
             other.Frame([&] { other.BeginRootWindow(); other.EndRootWindow(); });
             EXPECT_EQ(other.theme.GetVariable("--radius-md")->number, 7.0f) << "Light's";
             other.Cleanup();
+        }
+
+        // Restoring the UI state loads the theme again only when its saved changes differ from
+        // the ones it was loaded with: a start with nothing changed loads it once.
+        TEST_F(ThemeVariableChanges, RestoringTheSameChangesDoesntLoadTheThemeAgain)
+        {
+            app.PersistThemeVariables("themeVariables");
+            app.SetThemeVariable("--radius-md", "7px");
+            Frame();
+            Frame();
+            const std::string saved = app.SaveUIState();
+
+            int loads = 0;
+            auto counter = [](const Diagnostics::LogRecord& record, void* context) {
+                if (record.messageTemplate.starts_with("loaded "))
+                    ++*static_cast<int*>(context);
+            };
+            const Diagnostics::LogSeverity before = Diagnostics::GetMinimumLogSeverity();
+            Diagnostics::SetMinimumLogSeverity(Diagnostics::LogSeverity::Info);   // the load is an info record
+            ASSERT_TRUE(Diagnostics::AddLogSink(counter, &loads));
+            ASSERT_TRUE(app.RestoreUIState(saved));
+            Frame();
+            EXPECT_EQ(loads, 0) << "the same changes";
+
+            const std::string other = std::string(saved).replace(saved.find("7px"), 3, "5px");
+            ASSERT_TRUE(app.RestoreUIState(other));
+            Frame();
+            EXPECT_EQ(loads, 1) << "another value";
+            Diagnostics::RemoveLogSink(counter, &loads);
+            Diagnostics::SetMinimumLogSeverity(before);
+            EXPECT_EQ(app.theme.GetVariable("--radius-md")->number, 5.0f);
         }
 
         // Shut down right after a reset, with the reload still to come: nothing left dangling.
