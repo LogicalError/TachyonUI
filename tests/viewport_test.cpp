@@ -361,6 +361,43 @@ namespace tachyon
             }
         };
 
+        // In a cached panel the view is built every frame: its scene is drawn again each
+        // frame, at the size the view has. Resized, it takes the new size at once rather than
+        // staying stretched at the old one until the panel is built for another reason.
+        TEST_F(ViewportControlTest, InACachedPanelItIsBuiltEveryFrameAtItsSize)
+        {
+            app.SetDrawCacheEnabled(true);
+            const ID scope = app.idManager.CreateStaticID();
+            int builds = 0;
+            int width = 800;
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow({ 1000, 700 }, ElementFlags::None, app.theme.mainWindowStyleRef);
+                    if (app.BeginCached(scope, app.theme.emptyVertStyleRef, 0, LayoutOverride{}.Size(width, 600)))
+                    {
+                        ++builds;
+                        app.Viewport(viewID, view, LayoutOverride{}.FlexGrow(1));
+                    }
+                    app.EndCached();
+                    app.EndRootWindow();
+                });
+            };
+            // The pointer elsewhere: a scope under it is rebuilt for that alone.
+            app.InjectMouseMove({ 990, 690 }, MouseButtons::None);
+            for (int i = 0; i < 4; ++i) frame();
+            builds = 0;
+            for (int i = 0; i < 4; ++i) frame();
+            EXPECT_EQ(builds, 4) << "built every frame, not replayed";
+
+            width = 500;   // the panel narrows, as when a panel beside it goes
+            frame();
+            frame();
+            EXPECT_EQ(view.viewRect.w, 500);
+            builds = 0;
+            frame();
+            EXPECT_EQ(builds, 1) << "and still built at the new size";
+        }
+
         TEST_F(ViewportControlTest, TheMouseMovesTheCamera)
         {
             ASSERT_GT(view.viewRect.w, 0);
