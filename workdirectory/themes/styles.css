@@ -49,7 +49,19 @@
     syntax: "<color>";
     category: "Surfaces";
     label: "Pressed";
-    description: "A pressed control, and the selected segment";
+    description: "A pressed control: the text color at 14% over the panel";
+}
+@property --switch-knob {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Switch knob";
+    description: "The knob of a switch that is off";
+}
+@property --segment-on {
+    syntax: "<color>";
+    category: "Surfaces";
+    label: "Selected segment";
+    description: "The selected segment of a segmented control";
 }
 @property --bg-hover {
     syntax: "<color>";
@@ -1154,7 +1166,6 @@
     border-color: var(--line-strong);
 }
 .text-style:hover  { border-color: var(--line-strong); }
-.text-style:active { border-color: var(--accent); }
 .text-style:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 .text-style::highlight(selected) { color: var(--text-1); border-color: var(--accent); background-color: var(--accent-soft); }
 
@@ -1344,7 +1355,7 @@
     flex-shrink: 1;
 }
 .vector-component:hover  { border-color: var(--line-strong); background-color: var(--bg-input); }
-.vector-component:active { border-color: var(--accent); background-color: var(--bg-input); }
+.vector-component:active { background-color: var(--bg-input); }
 .vector-component:focus  { border-color: var(--accent); background-color: var(--bg-input); }
 .vector-component::selection { color: var(--text-1); background-color: var(--selection); }
 .vector-component:not(:focus)::selection { background-color: var(--selection-inactive); }   /* the app in the background */
@@ -1421,7 +1432,7 @@
     flex-shrink: 1;
 }
 .textbox:hover, .number-field:hover  { border-color: var(--line-strong); background-color: var(--bg-input); }
-.textbox:active, .number-field:active { border-color: var(--accent); background-color: var(--bg-input); }
+.textbox:active, .number-field:active { background-color: var(--bg-input); }
 .textbox:focus, .number-field:focus  { border-color: var(--accent); background-color: var(--bg-input); }
 .textbox::selection, .number-field::selection { color: var(--text-1); background-color: var(--selection); }
 .textbox:not(:focus)::selection, .number-field:not(:focus)::selection { background-color: var(--selection-inactive); }   /* the app in the background */
@@ -1452,7 +1463,6 @@
     flex-shrink: 1;
 }
 .search-textbox:hover  { border-color: var(--line-strong); }
-.search-textbox:active { border-color: var(--accent); }
 .search-textbox:focus  { border-color: var(--accent); }
 
 /* Leading icon, drawn to fit its box; dimmed so it reads as a hint. */
@@ -1512,9 +1522,7 @@
     cursor: pointer;
 }
 .button:hover  { border-color: var(--line-strong); }
-.button:active { border-color: var(--accent); }
-.button:focus  { border-color: var(--accent); background-color: var(--bg-control); }
-.button::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
+.button::highlight(selected) { border-color: var(--line-strong); background-color: var(--accent-soft); color: var(--accent); }
 
 /* ---- iconButtonStyle: compact icon-only action button (list/dict add & delete).
    Flat by default - transparent background, no border - so it reads as just the
@@ -1528,7 +1536,7 @@
     background-color: transparent;
     color: var(--text-2);
     margin: 1px;
-    padding: 3px 0px;
+    padding: 3px;           /* a square round the icon */
     overflow: hidden;
     text-align: center;
     -tachyon-vertical-text-align: middle;
@@ -1537,7 +1545,6 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.icon-button:focus  { background-color: var(--bg-active); }
 
 /* .icon-button-end: same flat icon button, pinned to the end of the cross axis
    so the trailing add button sits at the bottom-right of the list / dictionary
@@ -1550,7 +1557,7 @@
     background-color: transparent;
     color: var(--text-2);
     margin: 1px;
-    padding: 3px 0px;
+    padding: 3px;           /* a square round the icon */
     overflow: hidden;
     text-align: center;
     -tachyon-vertical-text-align: middle;
@@ -1560,7 +1567,6 @@
     align-self: flex-end;
     cursor: pointer;
 }
-.icon-button-end:focus  { background-color: var(--bg-active); }
 
 /* Flat button: looks like plain left-aligned text (no border/background), but
    stays clickable with a cursor + subtle hover. Used where a button shouldn't
@@ -1630,7 +1636,7 @@
 }
 .group-button:hover  { color: var(--text-1); }
 .group-button:active { color: var(--text-1); }
-.group-button::highlight(selected) { background-color: var(--bg-pressed); color: var(--text-1); }
+.group-button::highlight(selected) { background-color: var(--segment-on); color: var(--text-1); }
 
 /* ---- menuTriggerStyle ----------------------------------------------------- */
 /* Dropdown / menu trigger. Visually matches .button, but its label is left-
@@ -1662,8 +1668,6 @@
     cursor: pointer;
 }
 .menu-trigger:hover  { border-color: var(--line-strong); }
-.menu-trigger:active { border-color: var(--accent); }
-.menu-trigger:focus  { border-color: var(--accent); background-color: var(--bg-control); }
 /* Open: an accent border. */
 .menu-trigger::highlight(selected) { border-color: var(--accent); background-color: var(--bg-control); }
 
@@ -1686,9 +1690,7 @@
     border-style: dashed;
 }
 .dashed:hover  { border-color: var(--line-strong); }
-.dashed:active { border-color: var(--accent); }
-.dashed:focus  { border-color: var(--accent); background-color: var(--bg-control); }
-.dashed::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
+.dashed::highlight(selected) { border-color: var(--line-strong); background-color: var(--accent-soft); color: var(--accent); }
 
 /* ---- Table (row x column data grid) --------------------------------------
    Outer wrapper: flex column hosting the header + body sections. Does NOT
@@ -2151,12 +2153,8 @@
     cursor: pointer;
 }
 .toggle:hover  { border-color: var(--line-strong); }
-.toggle:active { border-color: var(--accent); }
-.toggle:focus  { border-color: var(--accent); background-color: var(--bg-control); }
-.toggle       ::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
+.toggle       ::highlight(selected) { border-color: var(--line-strong); background-color: var(--accent-soft); color: var(--accent); }
 .toggle:hover ::highlight(selected) { border-color: var(--line-strong); }
-.toggle:active::highlight(selected) { border-color: var(--accent); }
-.toggle:focus ::highlight(selected) { border-color: var(--accent); background-color: var(--bg-pressed); }
 
 /* A segment of a toggle group; :first-child / :last-child rules can shape the group's ends. */
 .group-toggle {
@@ -2183,7 +2181,7 @@
 }
 .group-toggle:hover  { color: var(--text-1); }
 .group-toggle:active { color: var(--text-1); }
-.group-toggle::highlight(selected) { background-color: var(--bg-pressed); color: var(--text-1); }
+.group-toggle::highlight(selected) { background-color: var(--segment-on); color: var(--text-1); }
 
 /* ---- button-group / toggle-group containers ------------------------------ */
 /* A segmented control: a recessed well holding its segments (.group-button or
@@ -2192,7 +2190,7 @@
     border-width: 1px;
     border-radius: var(--radius-lg);
     border-color: var(--line-subtle);
-    background-color: var(--bg-input);
+    background-color: var(--bg-well);   /* the well the selected segment sits raised in */
     margin: 0px;
     padding: 2px;
     display: flex;
@@ -2251,9 +2249,7 @@
     border-color: var(--line-strong);
 }
 .knob:hover  { border-color: var(--line-strong); }
-.knob:active { border-color: var(--accent); }
-.knob:focus  { border-color: var(--accent); background-color: var(--bg-control); }
-.knob::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
+.knob::highlight(selected) { border-color: var(--line-strong); background-color: var(--accent-soft); color: var(--accent); }
 
 /* ---- firstIconStyle ------------------------------------------------------- */
 .first-icon {
@@ -2273,9 +2269,7 @@
     break-after: left;
 }
 .first-icon:hover  { border-color: var(--line-strong); }
-.first-icon:active { border-color: var(--accent); }
-.first-icon:focus  { border-color: var(--accent); background-color: var(--bg-control); }
-.first-icon::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
+.first-icon::highlight(selected) { border-color: var(--line-strong); background-color: var(--accent-soft); color: var(--accent); }
 
 /* ---- iconLeftStyle -------------------------------------------------------- */
 .icon-left {
@@ -2297,9 +2291,7 @@
     border-color: var(--line-strong);
 }
 .icon-left:hover  { border-color: var(--line-strong); }
-.icon-left:active { border-color: var(--accent); }
-.icon-left:focus  { border-color: var(--accent); background-color: var(--bg-control); }
-.icon-left::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
+.icon-left::highlight(selected) { border-color: var(--line-strong); background-color: var(--accent-soft); color: var(--accent); }
 
 /* ---- iconRightStyle ------------------------------------------------------- */
 .icon-right {
@@ -2321,9 +2313,7 @@
     border-color: var(--line-strong);
 }
 .icon-right:hover  { border-color: var(--line-strong); }
-.icon-right:active { border-color: var(--accent); }
-.icon-right:focus  { border-color: var(--accent); background-color: var(--bg-control); }
-.icon-right::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
+.icon-right::highlight(selected) { border-color: var(--line-strong); background-color: var(--accent-soft); color: var(--accent); }
 
 /* ---- iconTopStyle --------------------------------------------------------- */
 .icon-top {
@@ -2345,9 +2335,7 @@
     border-color: var(--line-strong);
 }
 .icon-top:hover  { border-color: var(--line-strong); }
-.icon-top:active { border-color: var(--accent); }
-.icon-top:focus  { border-color: var(--accent); background-color: var(--bg-control); }
-.icon-top::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
+.icon-top::highlight(selected) { border-color: var(--line-strong); background-color: var(--accent-soft); color: var(--accent); }
 
 /* ---- iconBottomStyle ------------------------------------------------------ */
 .icon-bottom {
@@ -2369,9 +2357,7 @@
     border-color: var(--line-strong);
 }
 .icon-bottom:hover  { border-color: var(--line-strong); }
-.icon-bottom:active { border-color: var(--accent); }
-.icon-bottom:focus  { border-color: var(--accent); background-color: var(--bg-control); }
-.icon-bottom::highlight(selected) { border-color: var(--line-strong); background-color: var(--bg-pressed); }
+.icon-bottom::highlight(selected) { border-color: var(--line-strong); background-color: var(--accent-soft); color: var(--accent); }
 
 /* ---- itemListStyle -------------------------------------------------------- */
 .item-list {
@@ -5192,10 +5178,10 @@
     height: 12px;
     border-width: 0px;
     border-radius: 6px;
-    background-color: var(--text-2);
+    background-color: var(--switch-knob);
     border-color: transparent;
 }
-.switch-knob::highlight(selected) { background-color: var(--bg-app); }
+.switch-knob::highlight(selected) { background-color: var(--on-accent); }
 .switch-label {
     margin: 0px;
     padding: 0px;
@@ -5420,7 +5406,6 @@
     font-size: 11.5px;
 }
 .color-swatch:hover { border-color: var(--line-strong); }
-.color-swatch:focus { border-color: var(--accent); }
 
 .color-picker {
     width: 640px;   /* the spec's 560, wider for the Lab and Oklab spaces */
@@ -5757,7 +5742,6 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.color-picker-swatch:focus, .color-picker-recent:focus { border-color: var(--accent); }
 /* Adds the current color to the swatches. */
 .color-picker-new {
     -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
@@ -5916,8 +5900,6 @@
     text-underline-offset: 2px;
 }
 /* The default button (focused): a ring. */
-.dialog-button:focus         { border-color: var(--accent); }
-.dialog-button-primary:focus { border-width: 1px; border-color: var(--text-1); }
 /* A destructive button (Quit, Delete). */
 .dialog-button-danger {
     -tachyon-state-layer: light 18% 30%; /* hover and pressed: white over the red, brighter */
@@ -5941,7 +5923,6 @@
     text-underline-color: var(--on-danger);
     text-underline-offset: 2px;
 }
-.dialog-button-danger:focus { border-width: 1px; border-color: var(--text-1); }
 
 /* ---- MessageDialog: a modal question, 456 wide ------------------------------ */
 .message-box {
@@ -7686,7 +7667,6 @@
     flex-shrink: 0;
     cursor: pointer;
 }
-.checkbox:hover { background-color: var(--bg-active); }
 .checkbox-box {
     width: 14px;
     height: 14px;
@@ -7701,6 +7681,7 @@
     -tachyon-vertical-text-align: middle;
     flex-shrink: 0;
 }
+.checkbox-box:hover { background-color: var(--bg-hover); border-color: var(--text-3); }
 .checkbox-box::highlight(selected) { background-color: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .checkbox-label {
     margin: 0px;
@@ -7732,7 +7713,6 @@
     overflow: visible;
 }
 .gradient-swatch:hover { border-color: var(--line-strong); }
-.gradient-swatch:focus { border-color: var(--accent); }
 
 .gradient-editor {
     width: 720px;
@@ -8444,7 +8424,7 @@
 .icon-top:focus-visible, .icon-bottom:focus-visible,
 .group-button:focus-visible, .group-toggle:focus-visible,
 .dialog-button:focus-visible, .dialog-button-primary:focus-visible, .dialog-button-danger:focus-visible,
-.checkbox:focus-visible, .switch:focus-visible, .slider:focus-visible, .slider-field-track:focus-visible,
+.checkbox-box:focus-visible, .switch-track:focus-visible, .slider:focus-visible, .slider-field-track:focus-visible,
 .color-swatch:focus-visible, .color-alpha:focus-visible, .gradient-swatch:focus-visible,
 .color-hex:focus-visible, .typed-field:focus-visible, .color-picker-hdr:focus-visible, .gradient-editor-location:focus-visible,
 .collection-remove:focus-visible, .collection-add:focus-visible, .collection-add-entry:focus-visible,
@@ -8459,8 +8439,12 @@
 .color-picker-recent:focus-visible, .color-picker-range:focus-visible, .color-picker-new:focus-visible,
 .toast-action:focus-visible, .toast-action-secondary:focus-visible, .toast-dismiss:focus-visible, .toast-earlier:focus-visible,
 .banner-primary:focus-visible, .banner-secondary:focus-visible, .banner-link:focus-visible,
-.curve-field:focus-visible, .curve-preset:focus-visible {
+.curve-field:focus-visible, .curve-preset:focus-visible, .icon-button:focus-visible, .icon-button-end:focus-visible {
     box-shadow: var(--focus-ring);
+}
+/* Filled with the accent: its edge, and a line of the panel's color inside it. */
+.dialog-button-primary:focus-visible, .dialog-button-danger:focus-visible {
+    box-shadow: var(--focus-ring), inset 0 0 0 2px var(--bg-panel);
 }
 
 /* Tabs, rows and menu items sit flush with their neighbours: an outline inside them instead. */

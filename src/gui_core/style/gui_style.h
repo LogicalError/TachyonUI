@@ -727,6 +727,7 @@ namespace tachyon
         float           borderDashSize   = 0.0f; ///< dash length in CSS px; 0 = solid
         float           borderDashOffset = 0.0f; ///< offset into the dash pattern, CSS px
         BoxShadow       focusRing {};            ///< :focus-visible box-shadow, over the state's shadows
+        BoxShadow       focusRingUnder {};       ///< a second inset :focus-visible outline, under focusRing
         /// -tachyon-state-layer: Content makes the hovered and pressed backgrounds from the
         /// state's text color over its background, in place of the :hover / :active ones.
         StateLayer      stateLayer = StateLayer::None;
@@ -935,6 +936,7 @@ namespace tachyon
         VisualShadow layers[kMaxBoxShadows] {}; ///< the state's box-shadow layers
         VisualShadow ring {};                   ///< the focus ring (Style::focusRing)
         uint32_t     insetRing = 0; ///< 1 + flat GPU index of the outline's box style, 0 = none
+        uint32_t     insetRingUnder = 0; ///< as insetRing, the second outline, drawn under it
         float        opacity   = -1.0f; ///< StyleState::opacity; below 0 = not set
 
         bool operator==(const VisualShadowStyle&) const noexcept = default;

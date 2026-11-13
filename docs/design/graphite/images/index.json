@@ -2,291 +2,591 @@
  {
   "theme": "dark",
   "path": "dark/Main.png",
-  "title": "Main window — document tabs + panels"
+  "title": "Dark · Main window · document tabs, menu row, panels"
  },
  {
   "theme": "dark",
   "path": "dark/panels/Main--Hierarchy.png",
-  "title": "Main window — document tabs + panels › Hierarchy panel"
+  "title": "Dark · Main window · document tabs, menu row, panels › Hierarchy panel"
  },
  {
   "theme": "dark",
   "path": "dark/panels/Main--NodeView.png",
-  "title": "Main window — document tabs + panels › NodeView panel"
+  "title": "Dark · Main window · document tabs, menu row, panels › NodeView panel"
  },
  {
   "theme": "dark",
   "path": "dark/panels/Main--Profiler.png",
-  "title": "Main window — document tabs + panels › Profiler panel"
+  "title": "Dark · Main window · document tabs, menu row, panels › Profiler panel"
  },
  {
   "theme": "dark",
   "path": "dark/panels/Main--Files.png",
-  "title": "Main window — document tabs + panels › Files panel"
+  "title": "Dark · Main window · document tabs, menu row, panels › Files panel"
  },
  {
   "theme": "dark",
   "path": "dark/panels/Main--Log.png",
-  "title": "Main window — document tabs + panels › Log panel"
+  "title": "Dark · Main window · document tabs, menu row, panels › Log panel"
  },
  {
   "theme": "dark",
   "path": "dark/Inspector.png",
-  "title": "Viewport + Inspector panels"
+  "title": "Dark · Viewport + Inspector panels"
  },
  {
   "theme": "dark",
   "path": "dark/panels/Inspector--Viewport.png",
-  "title": "Viewport + Inspector panels › Viewport panel"
+  "title": "Dark · Viewport + Inspector panels › Viewport panel"
  },
  {
   "theme": "dark",
   "path": "dark/panels/Inspector--Inspector.png",
-  "title": "Viewport + Inspector panels › Inspector panel"
+  "title": "Dark · Viewport + Inspector panels › Inspector panel"
  },
  {
   "theme": "dark",
   "path": "dark/States.png",
-  "title": "States & transitions"
+  "title": "Dark · States & transitions"
  },
  {
   "theme": "dark",
   "path": "dark/Timeline.png",
-  "title": "Timeline"
+  "title": "Dark · Timeline"
  },
  {
   "theme": "dark",
   "path": "dark/CurveEditor.png",
-  "title": "Curve editor"
+  "title": "Dark · Curve editor"
  },
  {
   "theme": "dark",
   "path": "dark/Tooltips.png",
-  "title": "Tooltips"
+  "title": "Dark · Tooltips"
  },
  {
   "theme": "dark",
   "path": "dark/Progress.png",
-  "title": "Progress & loading"
+  "title": "Dark · Progress & loading, in the editor"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Progress--Hierarchy.png",
+  "title": "Dark · Progress & loading, in the editor › Hierarchy panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Progress--Viewport.png",
+  "title": "Dark · Progress & loading, in the editor › Viewport panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Progress--Build.png",
+  "title": "Dark · Progress & loading, in the editor › Build panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Progress--Files.png",
+  "title": "Dark · Progress & loading, in the editor › Files panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Progress--Log.png",
+  "title": "Dark · Progress & loading, in the editor › Log panel"
  },
  {
   "theme": "dark",
   "path": "dark/Notifications.png",
-  "title": "Notifications & confirmations"
+  "title": "Dark · Notifications & confirmations"
  },
  {
   "theme": "dark",
   "path": "dark/Settings.png",
-  "title": "Settings + Table panels"
+  "title": "Dark · Settings + Table panels"
  },
  {
   "theme": "dark",
   "path": "dark/panels/Settings--Settings.png",
-  "title": "Settings + Table panels › Settings panel"
+  "title": "Dark · Settings + Table panels › Settings panel"
  },
  {
   "theme": "dark",
   "path": "dark/panels/Settings--Table.png",
-  "title": "Settings + Table panels › Table panel"
+  "title": "Dark · Settings + Table panels › Table panel"
  },
  {
   "theme": "dark",
   "path": "dark/DocumentWindow.png",
-  "title": "Second main window — dragged-out document"
+  "title": "Dark · Second main window · dragged-out document"
  },
  {
   "theme": "dark",
   "path": "dark/panels/DocumentWindow--Prefab-hierarchy.png",
-  "title": "Second main window — dragged-out document › Prefab hierarchy panel"
+  "title": "Dark · Second main window · dragged-out document › Prefab hierarchy panel"
  },
  {
   "theme": "dark",
   "path": "dark/panels/DocumentWindow--Prefab-viewport.png",
-  "title": "Second main window — dragged-out document › Prefab viewport panel"
+  "title": "Dark · Second main window · dragged-out document › Prefab viewport panel"
  },
  {
   "theme": "dark",
   "path": "dark/panels/DocumentWindow--Animation.png",
-  "title": "Second main window — dragged-out document › Animation panel"
+  "title": "Dark · Second main window · dragged-out document › Animation panel"
  },
  {
   "theme": "dark",
   "path": "dark/panels/DocumentWindow--Inspector.png",
-  "title": "Second main window — dragged-out document › Inspector panel"
+  "title": "Dark · Second main window · dragged-out document › Inspector panel"
  },
  {
   "theme": "dark",
   "path": "dark/Docking.png",
-  "title": "Torn-off panel window"
+  "title": "Dark · Torn-off panel window"
  },
  {
   "theme": "dark",
   "path": "dark/ColorPicker.png",
-  "title": "Color picker"
+  "title": "Dark · Color picker"
  },
  {
   "theme": "dark",
   "path": "dark/Tokens.png",
-  "title": "Tokens & metrics"
+  "title": "Dark · Tokens & metrics"
  },
  {
   "theme": "dark",
   "path": "dark/GradientEditor.png",
-  "title": "Gradient editor"
+  "title": "Dark · Gradient editor"
  },
  {
   "theme": "dark",
   "path": "dark/InspectorLists.png",
-  "title": "Lists, dictionary, menus"
+  "title": "Dark · Lists, dictionary, menus"
  },
  {
   "theme": "light",
   "path": "light/Main.png",
-  "title": "Main window — document tabs + panels"
+  "title": "Light · Main window · document tabs, menu row, panels"
  },
  {
   "theme": "light",
   "path": "light/panels/Main--Hierarchy.png",
-  "title": "Main window — document tabs + panels › Hierarchy panel"
+  "title": "Light · Main window · document tabs, menu row, panels › Hierarchy panel"
  },
  {
   "theme": "light",
   "path": "light/panels/Main--NodeView.png",
-  "title": "Main window — document tabs + panels › NodeView panel"
+  "title": "Light · Main window · document tabs, menu row, panels › NodeView panel"
  },
  {
   "theme": "light",
   "path": "light/panels/Main--Profiler.png",
-  "title": "Main window — document tabs + panels › Profiler panel"
+  "title": "Light · Main window · document tabs, menu row, panels › Profiler panel"
  },
  {
   "theme": "light",
   "path": "light/panels/Main--Files.png",
-  "title": "Main window — document tabs + panels › Files panel"
+  "title": "Light · Main window · document tabs, menu row, panels › Files panel"
  },
  {
   "theme": "light",
   "path": "light/panels/Main--Log.png",
-  "title": "Main window — document tabs + panels › Log panel"
+  "title": "Light · Main window · document tabs, menu row, panels › Log panel"
  },
  {
   "theme": "light",
   "path": "light/Inspector.png",
-  "title": "Viewport + Inspector panels"
+  "title": "Light · Viewport + Inspector panels"
  },
  {
   "theme": "light",
   "path": "light/panels/Inspector--Viewport.png",
-  "title": "Viewport + Inspector panels › Viewport panel"
+  "title": "Light · Viewport + Inspector panels › Viewport panel"
  },
  {
   "theme": "light",
   "path": "light/panels/Inspector--Inspector.png",
-  "title": "Viewport + Inspector panels › Inspector panel"
+  "title": "Light · Viewport + Inspector panels › Inspector panel"
  },
  {
   "theme": "light",
   "path": "light/States.png",
-  "title": "States & transitions"
+  "title": "Light · States & transitions"
  },
  {
   "theme": "light",
   "path": "light/Timeline.png",
-  "title": "Timeline"
+  "title": "Light · Timeline"
  },
  {
   "theme": "light",
   "path": "light/CurveEditor.png",
-  "title": "Curve editor"
+  "title": "Light · Curve editor"
  },
  {
   "theme": "light",
   "path": "light/Tooltips.png",
-  "title": "Tooltips"
+  "title": "Light · Tooltips"
  },
  {
   "theme": "light",
   "path": "light/Progress.png",
-  "title": "Progress & loading"
+  "title": "Light · Progress & loading, in the editor"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Progress--Hierarchy.png",
+  "title": "Light · Progress & loading, in the editor › Hierarchy panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Progress--Viewport.png",
+  "title": "Light · Progress & loading, in the editor › Viewport panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Progress--Build.png",
+  "title": "Light · Progress & loading, in the editor › Build panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Progress--Files.png",
+  "title": "Light · Progress & loading, in the editor › Files panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Progress--Log.png",
+  "title": "Light · Progress & loading, in the editor › Log panel"
  },
  {
   "theme": "light",
   "path": "light/Notifications.png",
-  "title": "Notifications & confirmations"
+  "title": "Light · Notifications & confirmations"
  },
  {
   "theme": "light",
   "path": "light/Settings.png",
-  "title": "Settings + Table panels"
+  "title": "Light · Settings + Table panels"
  },
  {
   "theme": "light",
   "path": "light/panels/Settings--Settings.png",
-  "title": "Settings + Table panels › Settings panel"
+  "title": "Light · Settings + Table panels › Settings panel"
  },
  {
   "theme": "light",
   "path": "light/panels/Settings--Table.png",
-  "title": "Settings + Table panels › Table panel"
+  "title": "Light · Settings + Table panels › Table panel"
  },
  {
   "theme": "light",
   "path": "light/DocumentWindow.png",
-  "title": "Second main window — dragged-out document"
+  "title": "Light · Second main window · dragged-out document"
  },
  {
   "theme": "light",
   "path": "light/panels/DocumentWindow--Prefab-hierarchy.png",
-  "title": "Second main window — dragged-out document › Prefab hierarchy panel"
+  "title": "Light · Second main window · dragged-out document › Prefab hierarchy panel"
  },
  {
   "theme": "light",
   "path": "light/panels/DocumentWindow--Prefab-viewport.png",
-  "title": "Second main window — dragged-out document › Prefab viewport panel"
+  "title": "Light · Second main window · dragged-out document › Prefab viewport panel"
  },
  {
   "theme": "light",
   "path": "light/panels/DocumentWindow--Animation.png",
-  "title": "Second main window — dragged-out document › Animation panel"
+  "title": "Light · Second main window · dragged-out document › Animation panel"
  },
  {
   "theme": "light",
   "path": "light/panels/DocumentWindow--Inspector.png",
-  "title": "Second main window — dragged-out document › Inspector panel"
+  "title": "Light · Second main window · dragged-out document › Inspector panel"
  },
  {
   "theme": "light",
   "path": "light/Docking.png",
-  "title": "Torn-off panel window"
+  "title": "Light · Torn-off panel window"
  },
  {
   "theme": "light",
   "path": "light/ColorPicker.png",
-  "title": "Color picker"
+  "title": "Light · Color picker"
  },
  {
   "theme": "light",
   "path": "light/Tokens.png",
-  "title": "Tokens & metrics"
+  "title": "Light · Tokens & metrics"
  },
  {
   "theme": "light",
   "path": "light/GradientEditor.png",
-  "title": "Gradient editor"
+  "title": "Light · Gradient editor"
  },
  {
   "theme": "light",
   "path": "light/InspectorLists.png",
-  "title": "Lists, dictionary, menus"
+  "title": "Light · Lists, dictionary, menus"
  },
  {
   "theme": "dark",
   "path": "dark/MessageBox.png",
-  "title": "Message boxes (yes / no / cancel)"
+  "title": "Dark · Message boxes (yes / no / cancel)"
  },
  {
   "theme": "light",
   "path": "light/MessageBox.png",
-  "title": "Message boxes (yes / no / cancel)"
+  "title": "Light · Message boxes (yes / no / cancel)"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/Menus.png",
+  "title": "Dark · Menus & context menus"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Menus--File-menu.png",
+  "title": "Dark · Menus & context menus › File menu panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Menus--Edit-menu.png",
+  "title": "Dark · Menus & context menus › Edit menu panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Menus--View-menu.png",
+  "title": "Dark · Menus & context menus › View menu panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Menus--Context-menu.png",
+  "title": "Dark · Menus & context menus › Context menu panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/NodeGraph.png",
+  "title": "Dark · NodeView details · frames, reroutes, states, wire shapes"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/NodeGraph--NodeView.png",
+  "title": "Dark · NodeView details · frames, reroutes, states, wire shapes › NodeView panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/NodeGraph--Orthogonal-wires.png",
+  "title": "Dark · NodeView details · frames, reroutes, states, wire shapes › Orthogonal wires panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/NodeGraph--Add-node-menu.png",
+  "title": "Dark · NodeView details · frames, reroutes, states, wire shapes › Add node menu panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/Tables.png",
+  "title": "Dark · TreeTable, FrozenTable, row & cell states"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Tables--TreeTable.png",
+  "title": "Dark · TreeTable, FrozenTable, row & cell states › TreeTable panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Tables--FrozenTable.png",
+  "title": "Dark · TreeTable, FrozenTable, row & cell states › FrozenTable panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/InspectorMore.png",
+  "title": "Dark · Inspector · banners, search, mixed values, curves, levels"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/InspectorMore--Inspector-editing.png",
+  "title": "Dark · Inspector · banners, search, mixed values, curves, levels › Inspector, editing panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/InspectorMore--Inspector-curves-and-levels.png",
+  "title": "Dark · Inspector · banners, search, mixed values, curves, levels › Inspector, curves and levels panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/StateMachine.png",
+  "title": "Dark · State machine"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/Reorder.png",
+  "title": "Dark · Reorderable · drag, drop gap, hover"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/Misc.png",
+  "title": "Dark · Misc · drawing, icon buttons, rich text, images, sketch"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Misc--Vector-drawing.png",
+  "title": "Dark · Misc · drawing, icon buttons, rich text, images, sketch › Vector drawing panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Misc--Icon-buttons.png",
+  "title": "Dark · Misc · drawing, icon buttons, rich text, images, sketch › Icon buttons panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Misc--Rich-text.png",
+  "title": "Dark · Misc · drawing, icon buttons, rich text, images, sketch › Rich text panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Misc--Sketch.png",
+  "title": "Dark · Misc · drawing, icon buttons, rich text, images, sketch › Sketch panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Misc--Image-thumbnails.png",
+  "title": "Dark · Misc · drawing, icon buttons, rich text, images, sketch › Image thumbnails panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Misc--Clipboard-image-wells.png",
+  "title": "Dark · Misc · drawing, icon buttons, rich text, images, sketch › Clipboard image wells panel"
+ },
+ {
+  "theme": "dark",
+  "path": "dark/panels/Misc--Rules.png",
+  "title": "Dark · Misc · drawing, icon buttons, rich text, images, sketch › Rules panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/Menus.png",
+  "title": "Light · Menus & context menus"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Menus--File-menu.png",
+  "title": "Light · Menus & context menus › File menu panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Menus--Edit-menu.png",
+  "title": "Light · Menus & context menus › Edit menu panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Menus--View-menu.png",
+  "title": "Light · Menus & context menus › View menu panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Menus--Context-menu.png",
+  "title": "Light · Menus & context menus › Context menu panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/NodeGraph.png",
+  "title": "Light · NodeView details · frames, reroutes, states, wire shapes"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/NodeGraph--NodeView.png",
+  "title": "Light · NodeView details · frames, reroutes, states, wire shapes › NodeView panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/NodeGraph--Orthogonal-wires.png",
+  "title": "Light · NodeView details · frames, reroutes, states, wire shapes › Orthogonal wires panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/NodeGraph--Add-node-menu.png",
+  "title": "Light · NodeView details · frames, reroutes, states, wire shapes › Add node menu panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/Tables.png",
+  "title": "Light · TreeTable, FrozenTable, row & cell states"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Tables--TreeTable.png",
+  "title": "Light · TreeTable, FrozenTable, row & cell states › TreeTable panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Tables--FrozenTable.png",
+  "title": "Light · TreeTable, FrozenTable, row & cell states › FrozenTable panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/InspectorMore.png",
+  "title": "Light · Inspector · banners, search, mixed values, curves, levels"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/InspectorMore--Inspector-editing.png",
+  "title": "Light · Inspector · banners, search, mixed values, curves, levels › Inspector, editing panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/InspectorMore--Inspector-curves-and-levels.png",
+  "title": "Light · Inspector · banners, search, mixed values, curves, levels › Inspector, curves and levels panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/StateMachine.png",
+  "title": "Light · State machine"
+ },
+ {
+  "theme": "light",
+  "path": "light/Reorder.png",
+  "title": "Light · Reorderable · drag, drop gap, hover"
+ },
+ {
+  "theme": "light",
+  "path": "light/Misc.png",
+  "title": "Light · Misc · drawing, icon buttons, rich text, images, sketch"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Misc--Vector-drawing.png",
+  "title": "Light · Misc · drawing, icon buttons, rich text, images, sketch › Vector drawing panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Misc--Icon-buttons.png",
+  "title": "Light · Misc · drawing, icon buttons, rich text, images, sketch › Icon buttons panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Misc--Rich-text.png",
+  "title": "Light · Misc · drawing, icon buttons, rich text, images, sketch › Rich text panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Misc--Sketch.png",
+  "title": "Light · Misc · drawing, icon buttons, rich text, images, sketch › Sketch panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Misc--Image-thumbnails.png",
+  "title": "Light · Misc · drawing, icon buttons, rich text, images, sketch › Image thumbnails panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Misc--Clipboard-image-wells.png",
+  "title": "Light · Misc · drawing, icon buttons, rich text, images, sketch › Clipboard image wells panel"
+ },
+ {
+  "theme": "light",
+  "path": "light/panels/Misc--Rules.png",
+  "title": "Light · Misc · drawing, icon buttons, rich text, images, sketch › Rules panel"
  }
 ]

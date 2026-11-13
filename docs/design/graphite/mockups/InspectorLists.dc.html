@@ -86,7 +86,7 @@ body{margin:0}
 </div>
 <div style="min-height: 26px; display: grid; grid-template-columns: 116px minmax(0, 1fr); align-items: center; gap: 12px"><span>Big menu</span>
 <div style="position: relative">
-<button aria-haspopup="menu" aria-expanded="true" style="width: 160px; height: 24px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; border: 1px solid {{t.accent}}; border-radius: 4px; background: {{t.control}}; box-shadow: 0 0 0 3px {{t.soft}}; color: {{t.t1}}; font: inherit; cursor: pointer">Open<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="margin-left: auto; fill: none; stroke: {{t.t2}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m18 15-6-6-6 6"></path></svg></button>
+<button aria-haspopup="menu" aria-expanded="true" style="width: 160px; height: 24px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; border: 1px solid {{t.accent}}; border-radius: 4px; background: {{t.control}}; color: {{t.t1}}; font: inherit; cursor: pointer">Open<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="margin-left: auto; fill: none; stroke: {{t.t2}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="m18 15-6-6-6 6"></path></svg></button>
 
 <div role="menu" aria-label="Big menu" style="position: absolute; left: 0; top: 30px; width: 264px; z-index: 2; display: flex; flex-direction: column; padding: 4px; background: {{t.pop}}; border: 1px solid {{t.popBorder}}; border-radius: 8px; box-shadow: {{t.popShadow}}">
 <div role="searchbox" aria-label="Filter commands" style="height: 26px; margin-bottom: 4px; box-sizing: border-box; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid {{t.accent}}; box-shadow: 0 0 0 2px {{t.soft}}; border-radius: 4px; background: {{t.input}}; color: {{t.t3}}"><svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round"><path d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-3.5-3.5"></path></svg><span style="display: flex; align-items: center"><span aria-hidden="true" style="width: 2px; height: 14px; margin-right: 1px; border-radius: 1px; background: {{t.accent}}"></span>Filter commands</span><span style="margin-left: auto; padding: 0 5px; border-radius: 3px; background: {{t.hover}}; color: {{t.t3}}; font-family: 'JetBrains Mono', monospace; font-size: 10px">Esc</span></div>
@@ -115,14 +115,14 @@ class Component extends DCLogic {
     const isLight = (this.props.theme ?? 'dark') === 'light';
     const t = isLight ? {
       app: '#E6E8EC', panel: '#FBFBFC', header: '#F3F4F6', active: '#E4E7EC', input: '#FFFFFF', control: '#FFFFFF',
-      listBg: '#F6F7F9', hover: '#EAECF0', border: '#DADDE3', line: '#E3E6EB', line2: '#D5D9E0', ctlBorder: '#CDD2DA', divider: '#E9EBEF',
+      listBg: '#F6F7F9', hover: '#E9E9EB', border: '#DADDE3', line: '#E3E6EB', line2: '#D5D9E0', ctlBorder: '#CDD2DA', divider: '#E9EBEF',
       t1: '#1A1D23', t2: '#464C57', t3: '#5F6673', accent: '#2F6FEB', soft: 'rgba(47,111,235,0.12)', error: '#D64545',
       ctlShadow: '0 1px 2px rgba(16,24,40,0.06)', raised: '#FFFFFF', dragShadow: '0 6px 16px rgba(16,24,40,0.16)',
       pop: '#FFFFFF', popBorder: '#D5D9E0', popShadow: '0 12px 32px rgba(16,24,40,0.16), 0 2px 6px rgba(16,24,40,0.08)'
     } : {
       app: '#0B0C0F', panel: '#121418', header: '#16191E', active: '#23272F', input: '#0D0F12', control: '#1E2128',
-      listBg: '#101216', hover: '#1A1D23', border: '#1C1F25', line: '#23272F', line2: '#23272F', ctlBorder: '#2E333D', divider: '#1E2128',
-      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8A92A2', accent: '#6B9BFF', soft: 'rgba(107,155,255,0.16)', error: '#EF6A6A',
+      listBg: '#101216', hover: '#232529', border: '#1C1F25', line: '#23272F', line2: '#23272F', ctlBorder: '#2E333D', divider: '#1E2128',
+      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8E96A7', accent: '#6B9BFF', soft: 'rgba(107,155,255,0.16)', error: '#EF6A6A',
       ctlShadow: 'none', raised: '#1E2128', dragShadow: '0 8px 20px rgba(0,0,0,0.5)',
       pop: '#1A1D23', popBorder: '#2E333D', popShadow: '0 16px 40px rgba(0,0,0,0.55)'
     };
@@ -140,7 +140,7 @@ class Component extends DCLogic {
     });
 
     const dict = [['speed', '1'], ['health', '100', true], ['damage', '25']].map(function (d) {
-      return { k: d[0], v: d[1], vBorder: d[2] ? t.accent : t.line2, vHalo: d[2] ? '0 0 0 3px ' + t.soft : 'none', selBg: d[2] ? (isLight ? 'rgba(47,111,235,0.25)' : 'rgba(107,155,255,0.35)') : 'transparent' };
+      return { k: d[0], v: d[1], vBorder: d[2] ? t.accent : t.line2, vHalo: 'none', selBg: d[2] ? (isLight ? 'rgba(47,111,235,0.25)' : 'rgba(107,155,255,0.35)') : 'transparent' };
     });
 
     const P = {

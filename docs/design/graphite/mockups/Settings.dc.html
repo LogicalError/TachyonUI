@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Editor — Settings and Table</title>
+<title>Editor, Settings and Table</title>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -31,7 +31,7 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 </div>
 <div style="flex: 1; min-height: 0; display: flex">
 <nav aria-label="Settings sections" style="width: 176px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; border-right: 1px solid #23272F; background: #101216">
-<span style="padding: 4px 8px 8px; color: #8A92A2; font-size: 11px; font-weight: 500">Preferences</span>
+<span style="padding: 4px 8px 8px; color: #8E96A7; font-size: 11px; font-weight: 500">Preferences</span>
 <a href="#" style="height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 4px; background: {{accentSoft}}; color: #E8EAEF; text-decoration: none"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="color: {{accent}}"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"></path></svg>Shortcuts</a>
 <a href="#" style="height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 4px; color: #AEB4C0; text-decoration: none"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1"></circle><circle cx="17.5" cy="10.5" r="1"></circle><circle cx="8.5" cy="7.5" r="1"></circle><circle cx="6.5" cy="12.5" r="1"></circle><path d="M12 2a10 10 0 0 0 0 20c.9 0 1.6-.7 1.6-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1a1.6 1.6 0 0 1 1.6-1.7h2a5.6 5.6 0 0 0 5.6-5.6C22 6 17.5 2 12 2Z"></path></svg>Appearance</a>
 <a href="#" style="height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 4px; color: #AEB4C0; text-decoration: none"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg>General</a>
@@ -40,23 +40,23 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 </nav>
 <div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
 <div style="flex-shrink: 0; padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #23272F">
-<div style="display: flex; align-items: baseline; gap: 10px"><h1 style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; color: #E8EAEF">Shortcuts</h1><span style="color: #8A92A2">27 commands</span><button style="margin-left: auto; height: 24px; padding: 0 10px; border: 1px solid #2E333D; border-radius: 4px; background: #1E2128; color: #E8EAEF">Reset to defaults</button></div>
-<label style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #23272F; border-radius: 4px; background: #0D0F12; color: #8A92A2"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="text" placeholder="Search commands or press a key combination" aria-label="Search shortcuts" style="flex: 1; min-width: 0; border: 0; background: transparent; outline: none; color: #E8EAEF"></label>
+<div style="display: flex; align-items: baseline; gap: 10px"><h1 style="margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; color: #E8EAEF">Shortcuts</h1><button style="margin-left: auto; height: 24px; padding: 0 10px; border: 1px solid #2E333D; border-radius: 4px; background: #1E2128; color: #E8EAEF">Reset to defaults</button></div>
+<label style="height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid #23272F; border-radius: 4px; background: #0D0F12; color: #8E96A7"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="text" placeholder="Search commands or press a key combination" aria-label="Search shortcuts" style="flex: 1; min-width: 0; border: 0; background: transparent; outline: none; color: #E8EAEF"></label>
 </div>
 <div style="flex: 1; min-height: 0; display: flex">
 <div role="listbox" aria-label="Category" style="width: 150px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; padding: 8px; border-right: 1px solid #23272F">
-<span style="padding: 2px 8px 6px; color: #8A92A2; font-size: 11px; font-weight: 500">Category</span>
+<span style="padding: 2px 8px 6px; color: #8E96A7; font-size: 11px; font-weight: 500">Category</span>
 <sc-for list="{{cats}}" as="c" hint-placeholder-count="4">
-<div role="option" aria-selected="{{c.sel}}" style="height: 26px; display: flex; align-items: center; padding: 0 8px; border-radius: 4px; background: {{c.bg}}; color: {{c.fg}}">{{c.n}}<span style="margin-left: auto; color: #8A92A2; font-family: 'JetBrains Mono', monospace; font-size: 11px">{{c.k}}</span></div>
+<div role="option" aria-selected="{{c.sel}}" style="height: 26px; display: flex; align-items: center; padding: 0 8px; border-radius: 4px; background: {{c.bg}}; color: {{c.fg}}">{{c.n}}</div>
 </sc-for>
 </div>
 <div role="table" aria-label="Shortcuts" style="flex: 1; min-width: 0; position: relative; overflow: hidden">
-<div role="row" style="height: 28px; display: grid; grid-template-columns: minmax(0, 1fr) 150px 96px 72px; gap: 12px; align-items: center; padding: 0 16px 0 12px; background: #16191E; border-bottom: 1px solid #23272F; color: #8A92A2; font-size: 11px; font-weight: 500">
-<span role="columnheader" style="display: flex; align-items: center; gap: 4px; color: #E8EAEF">Command<svg class="i" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span><span role="columnheader">Shortcut</span><span role="columnheader">Context</span><span role="columnheader">Type</span>
+<div role="row" style="height: 28px; display: grid; grid-template-columns: minmax(0, 1fr) 150px 96px 72px; gap: 12px; align-items: center; padding: 0 16px 0 12px; background: #16191E; border-bottom: 1px solid #23272F; color: #8E96A7; font-size: 11px; font-weight: 500">
+<span role="columnheader" style="display: flex; align-items: center; justify-content: flex-end; gap: 4px; color: #E8EAEF">Command<svg class="i" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span><span role="columnheader">Shortcut</span><span role="columnheader">Context</span><span role="columnheader">Type</span>
 </div>
 <sc-for list="{{cmds}}" as="c" hint-placeholder-count="27">
 <div role="row" style="height: 27px; display: grid; grid-template-columns: minmax(0, 1fr) 150px 96px 72px; gap: 12px; align-items: center; padding: 0 16px 0 12px; border-bottom: 1px solid #181B20; background: {{c.bg}}">
-<span role="cell" style="display: flex; align-items: center; gap: 8px; color: #E8EAEF; white-space: nowrap; overflow: hidden"><span style="width: 14px; display: flex; color: #8A92A2">
+<span role="cell" style="display: flex; align-items: center; gap: 8px; color: #E8EAEF; white-space: nowrap; overflow: hidden"><span style="width: 14px; display: flex; color: #8E96A7">
 <sc-if value="{{c.ic.copy}}" hint-placeholder-val="{{false}}"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="14" height="14" rx="2"></rect><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"></path></svg></sc-if>
 <sc-if value="{{c.ic.cut}}" hint-placeholder-val="{{false}}"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"></path></svg></sc-if>
 <sc-if value="{{c.ic.brush}}" hint-placeholder-val="{{false}}"><svg class="i" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="m9.1 11.3 8.2-8.2a2.1 2.1 0 0 1 3 3l-8.2 8.2M7 14a3 3 0 0 0-3 3c0 1.3-2 2-2 2 1 1.5 2.4 2 4 2a4 4 0 0 0 4-4 3 3 0 0 0-3-3Z"></path></svg></sc-if>
@@ -70,10 +70,10 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 </span>{{c.n}}</span>
 <span role="cell" style="display: flex; gap: 3px">
 <sc-for list="{{c.keys}}" as="k" hint-placeholder-count="2"><kbd style="min-width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; border: 1px solid #2E333D; border-bottom-width: 2px; border-radius: 4px; background: #1A1D23; color: #E8EAEF; font-family: 'JetBrains Mono', monospace; font-size: 10.5px">{{k}}</kbd></sc-for>
-<sc-if value="{{c.none}}" hint-placeholder-val="{{false}}"><span style="color: #8A92A2">Unassigned</span></sc-if>
+<sc-if value="{{c.none}}" hint-placeholder-val="{{false}}"><span style="color: #8E96A7">Unassigned</span></sc-if>
 </span>
 <span role="cell" style="color: #AEB4C0">{{c.ctx}}</span>
-<span role="cell" style="color: #8A92A2">{{c.type}}</span>
+<span role="cell" style="color: #8E96A7">{{c.type}}</span>
 </div>
 </sc-for>
 <span aria-hidden="true" style="position: absolute; right: 3px; top: 32px; width: 4px; height: 520px; border-radius: 2px; background: #2E333D"></span>
@@ -90,20 +90,20 @@ a{color:#8FB3FF}a:hover{color:#B5CDFF}
 <button style="height: 24px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">TreeTable</button>
 <button style="height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border: 0; border-radius: 4px; background: #23272F; color: #E8EAEF; font-weight: 500"><svg class="i" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="color: {{accent}}"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M3 9h18M3 15h18M9 3v18"></path></svg>Table</button>
 <button style="height: 24px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">FrozenTable</button>
-<button aria-label="4 more tabs" style="height: 24px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #8A92A2">+4<svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
+<button aria-label="4 more tabs" style="height: 24px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: #8E96A7">+4<svg class="i" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>
 </div>
 <div style="height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-bottom: 1px solid #23272F">
 <span>Selection mode</span>
 <div role="group" aria-label="Selection mode" style="display: inline-flex; padding: 2px; gap: 2px; border-radius: 6px; background: #0D0F12; border: 1px solid #23272F"><button aria-pressed="true" style="height: 22px; padding: 0 14px; border: 0; border-radius: 4px; background: #2A2F39; color: #E8EAEF">Row</button><button style="height: 22px; padding: 0 14px; border: 0; border-radius: 4px; background: transparent; color: #AEB4C0">Cell</button></div>
-<span style="margin-left: auto; color: #8A92A2; font-family: 'JetBrains Mono', monospace; font-size: 11px">1 of 10,000 selected</span>
+
 </div>
 <div role="table" aria-label="Rows" style="position: relative; flex: 1; min-height: 0; overflow: hidden">
-<div role="row" style="height: 28px; display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 0 16px 0 12px; background: #16191E; border-bottom: 1px solid #23272F; color: #8A92A2; font-size: 11px; font-weight: 500">
+<div role="row" style="height: 28px; display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 0 16px 0 12px; background: #16191E; border-bottom: 1px solid #23272F; color: #8E96A7; font-size: 11px; font-weight: 500">
 <span role="columnheader" style="display: flex; align-items: center; gap: 4px; color: #E8EAEF">#<svg class="i" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></span><span role="columnheader">Name</span><span role="columnheader">Hex</span><span role="columnheader">Multiple</span>
 </div>
 <sc-for list="{{rows}}" as="r" hint-placeholder-count="34">
 <div role="row" style="height: 24px; display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: center; padding: 0 16px 0 12px; background: {{r.bg}}; color: {{r.fg}}; box-shadow: {{r.ring}}">
-<span role="cell" style="color: #8A92A2; font-family: 'JetBrains Mono', monospace; font-size: 11px">{{r.i}}</span>
+<span role="cell" style="color: #8E96A7; font-family: 'JetBrains Mono', monospace; font-size: 11px; text-align: right">{{r.i}}</span>
 <span role="cell">{{r.n}}</span>
 <span role="cell" style="font-family: 'JetBrains Mono', monospace; font-size: 11px">{{r.h}}</span>
 <span role="cell" style="font-family: 'JetBrains Mono', monospace; font-size: 11px">{{r.m}}</span>
@@ -131,7 +131,7 @@ class Component extends DCLogic {
 
     const icons = ['copy', 'cut', 'brush', 'trash', 'search', 'file', 'save', 'play', 'frame', 'undo'];
     const cmdSrc = [
-      ['About TachyonUI', '', 'Default', 'Instant'],
+      ['About IntersticeUI', '', 'Default', 'Instant'],
       ['Brush Tool', 'B', 'Sculpt', 'Instant', 'brush'],
       ['Copy', 'Ctrl C', 'Default', 'Instant', 'copy'],
       ['Cut', 'Ctrl X', 'Default', 'Instant', 'cut'],

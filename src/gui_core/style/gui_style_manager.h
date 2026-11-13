@@ -229,7 +229,7 @@ namespace tachyon
         VisualTextStyleIndex RegisterVisualTextStyles(const VisualTextStyle (&states)[Style::kStateCount],
                                                       uint64_t hash) noexcept;
         /// 1-based index of the deduplicated shadow style, 0 when there are no shadows.
-        uint16_t RegisterShadows(const BoxShadow (&layers)[kMaxBoxShadows], const BoxShadow& ring, BoxCorners radius,
+        uint16_t RegisterShadows(const BoxShadow (&layers)[kMaxBoxShadows], const BoxShadow& ring, const BoxShadow& ringUnder, BoxCorners radius,
                                  float opacity) noexcept;
 
         GradientManager&             m_gradientManager;

@@ -16,7 +16,7 @@ body{margin:0}
 <div style="width: 1560px; height: 860px; box-sizing: border-box; padding: 32px; display: grid; grid-template-columns: 980px minmax(0, 1fr); gap: 20px; background: {{t.app}}; color: {{t.t2}}; font-family: 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 16px">
 
 <div style="display: flex; flex-direction: column; gap: 12px; padding: 16px; background: {{t.panel}}; border: 1px solid {{t.border}}; border-radius: 6px">
-<div style="display: flex; align-items: baseline; gap: 12px"><span style="color: {{t.t1}}; font-size: 14px; font-weight: 600">Control states</span><span style="color: {{t.t3}}">Every state = base + state layer (content color at 8% hover, 14% pressed) + selection + focus ring</span></div>
+<div style="display: flex; align-items: baseline; gap: 12px"><span style="color: {{t.t1}}; font-size: 14px; font-weight: 600">Control states</span><span style="color: {{t.t3}}">Every state = base + state layer (content color at 8% hover, 14% pressed) + selection + focus border</span></div>
 <div role="table" aria-label="State matrix" style="display: flex; flex-direction: column">
 <div role="row" style="height: 30px; display: grid; grid-template-columns: 110px repeat(7, minmax(0, 1fr)); align-items: center; border-bottom: 1px solid {{t.line}}; color: {{t.t3}}; font-size: 11px; font-weight: 500">
 <span></span><sc-for list="{{cols}}" as="c" hint-placeholder-count="7"><span role="columnheader">{{c}}</span></sc-for>
@@ -26,17 +26,17 @@ body{margin:0}
 <span role="rowheader" style="color: {{t.t1}}">{{r.n}}</span>
 <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="7">
 <div role="cell" style="display: flex; align-items: center">
-<sc-if value="{{c.isBox}}" hint-placeholder-val="{{true}}"><span style="width: {{c.w}}; height: {{c.h}}px; box-sizing: border-box; display: flex; align-items: center; justify-content: {{c.justify}}; gap: 6px; padding: {{c.pad}}; border: 1px solid {{c.border}}; border-radius: {{c.radius}}; background: {{c.bg}}; color: {{c.fg}}; box-shadow: {{c.ring}}; opacity: {{c.op}}; font-family: {{c.font}}; font-size: {{c.size}}; font-weight: {{c.weight}}; white-space: nowrap">{{c.text}}<sc-if value="{{c.caret}}" hint-placeholder-val="{{false}}"><span style="width: 2px; height: 13px; margin-left: -4px; background: {{t.accent}}"></span></sc-if><sc-if value="{{c.chev}}" hint-placeholder-val="{{false}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true" style="margin-left: auto; fill: none; stroke: {{c.chevC}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="{{c.chevD}}"></path></svg></sc-if></span></sc-if>
+<sc-if value="{{c.isBox}}" hint-placeholder-val="{{true}}"><span style="width: {{c.w}}; height: {{c.h}}px; box-sizing: border-box; display: flex; align-items: center; justify-content: {{c.justify}}; gap: 6px; padding: {{c.pad}}; border: 1px solid {{c.border}}; border-radius: {{c.radius}}; background: {{c.bg}}; color: {{c.fg}}; box-shadow: {{c.ring}}; opacity: {{c.op}}; font-family: {{c.font}}; font-size: {{c.size}}; font-weight: {{c.weight}}; white-space: nowrap">{{c.text}}<sc-if value="{{c.caret}}" hint-placeholder-val="{{false}}"><span style="width: 2px; height: 13px; margin-left: -4px; background: {{t.accent}}"></span></sc-if><sc-if value="{{c.err}}" hint-placeholder-val="{{false}}"><svg width="13" height="13" viewBox="0 0 24 24" aria-label="Invalid" style="margin-left: auto; fill: none; stroke: {{t.error}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20ZM12 8v4M12 16h.01"></path></svg></sc-if><sc-if value="{{c.chev}}" hint-placeholder-val="{{false}}"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true" style="margin-left: auto; fill: none; stroke: {{c.chevC}}; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><path d="{{c.chevD}}"></path></svg></sc-if></span></sc-if>
 <sc-if value="{{c.isToggle}}" hint-placeholder-val="{{false}}"><span style="position: relative; width: 28px; height: 16px; border-radius: 8px; background: {{c.bg}}; box-shadow: {{c.ring}}; opacity: {{c.op}}"><span style="position: absolute; left: {{c.knobX}}px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: {{c.knob}}"></span></span></sc-if>
 <sc-if value="{{c.isCheck}}" hint-placeholder-val="{{false}}"><span style="width: 16px; height: 16px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 1px solid {{c.border}}; border-radius: {{c.radius}}; background: {{c.bg}}; box-shadow: {{c.ring}}; opacity: {{c.op}}"><sc-if value="{{c.on}}" hint-placeholder-val="{{false}}"><span style="display: flex"><svg width="10" height="10" viewBox="0 0 24 24" aria-hidden="true" style="fill: none; stroke: {{c.mark}}; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round"><path d="{{c.markD}}"></path></svg></span></sc-if></span><span style="margin-left: 8px; color: {{c.fg}}; opacity: {{c.op}}">{{c.text}}</span></sc-if>
-<sc-if value="{{c.isNa}}" hint-placeholder-val="{{false}}"><span style="color: {{t.na}}">—</span></sc-if>
+<sc-if value="{{c.isNa}}" hint-placeholder-val="{{false}}"><span style="color: {{t.na}}">–</span></sc-if>
 </div>
 </sc-for>
 </div>
 </sc-for>
 </div>
 <div style="margin-top: auto; display: flex; gap: 20px; color: {{t.t3}}; font-size: 11px">
-<span>Focus = keyboard focus only (not shown on mouse click)</span><span>Disabled = 40% opacity, no state layer</span><span>Invalid = error border + 3px error halo, keeps its other states</span>
+<span>Focus = keyboard only: the control's own 1px border turns accent (accent fills add a 1px panel line inside)</span><span>Disabled = 40% opacity, no state layer</span><span>Pressed never changes the border · Invalid = error border + 3px halo + icon in fields</span>
 </div>
 </div>
 
@@ -98,7 +98,7 @@ class Component extends DCLogic {
     } : {
       app: '#0B0C0F', panel: '#121418', header: '#16191E', active: '#23272F', input: '#0D0F12', control: '#1E2128',
       border: '#1C1F25', line: '#23272F', rowLine: '#181B20', ctlBorder: '#2E333D', fieldBorder: '#23272F', trackOff: '#2E333D',
-      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8A92A2', na: '#3A3F4A', accent: '#6B9BFF', onAccent: '#0B0C0F',
+      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8E96A7', na: '#3A3F4A', accent: '#6B9BFF', onAccent: '#0B0C0F',
       soft: 'rgba(107,155,255,0.16)', ring: 'rgba(107,155,255,0.30)', error: '#EF6A6A', errorHalo: 'rgba(239,106,106,0.18)',
       ok: '#4FC48A'
     };
@@ -115,7 +115,7 @@ class Component extends DCLogic {
     const box = function (o) {
       return Object.assign({
         isBox: true, w: 'auto', h: 24, justify: 'center', pad: '0 12px', border: 'transparent', radius: '4px', bg: 'transparent',
-        fg: t.t1, ring: 'none', op: 1, font: 'inherit', size: '12px', weight: 400, text: '', caret: false, chev: false, chevC: t.t3, chevD: 'm6 9 6 6 6-6'
+        fg: t.t1, ring: 'none', op: 1, font: 'inherit', size: '12px', weight: 400, text: '', caret: false, err: false, chev: false, chevC: t.t3, chevD: 'm6 9 6 6 6-6'
       }, o);
     };
 
@@ -130,8 +130,8 @@ class Component extends DCLogic {
       box({ text: 'Apply', bg: sec.rest, border: t.ctlBorder }),
       box({ text: 'Apply', bg: sec.hover, border: t.ctlBorder }),
       box({ text: 'Apply', bg: sec.press, border: t.ctlBorder }),
-      box({ text: 'Apply', bg: sec.rest, border: t.accent, ring: '0 0 0 3px ' + t.ring }),
-      box({ text: 'Apply', bg: t.soft, border: t.accent, fg: t.accent }),
+      box({ text: 'Apply', bg: sec.rest, border: t.accent }),
+      box({ text: 'Apply', bg: t.soft, border: t.ctlBorder, fg: t.accent, weight: 500 }),
       box({ text: 'Apply', bg: sec.rest, border: t.ctlBorder, op: 0.4 }),
       na
     ];
@@ -140,7 +140,7 @@ class Component extends DCLogic {
       box({ text: 'Save', bg: pri.rest, border: pri.rest, fg: t.onAccent, weight: 600 }),
       box({ text: 'Save', bg: pri.hover, border: pri.hover, fg: t.onAccent, weight: 600 }),
       box({ text: 'Save', bg: pri.press, border: pri.press, fg: t.onAccent, weight: 600 }),
-      box({ text: 'Save', bg: pri.rest, border: pri.rest, fg: t.onAccent, weight: 600, ring: '0 0 0 2px ' + t.panel + ', 0 0 0 4px ' + t.accent }),
+      box({ text: 'Save', bg: pri.rest, border: pri.rest, fg: t.onAccent, weight: 600, ring: 'inset 0 0 0 1px ' + t.panel }),
       na,
       box({ text: 'Save', bg: pri.rest, border: pri.rest, fg: t.onAccent, weight: 600, op: 0.4 }),
       na
@@ -162,34 +162,34 @@ class Component extends DCLogic {
     ];
     const fld = function (o) { return box(Object.assign({ text: '0.75', w: '104px', justify: 'flex-start', pad: '0 8px', bg: t.input, border: t.fieldBorder, font: "'JetBrains Mono', monospace", size: '11.5px' }, o)); };
     const field = [
-      fld({}), fld({ border: t.ctlBorder }), fld({ border: t.ctlBorder }), fld({ border: t.accent, ring: '0 0 0 3px ' + t.ring, caret: true, text: '0.75 ' }),
-      na, fld({ op: 0.4 }), fld({ text: '1.8', border: t.error, ring: errRing })
+      fld({}), fld({ border: t.ctlBorder }), fld({ border: t.ctlBorder }), fld({ border: t.accent, caret: true, text: '0.75 ' }),
+      na, fld({ op: 0.4 }), fld({ text: '1.8', border: t.error, ring: errRing, err: true })
     ];
     const dd = function (o) { return box(Object.assign({ text: 'Linear', w: '104px', justify: 'flex-start', pad: '0 6px 0 8px', bg: sec.rest, border: t.ctlBorder, chev: true }, o)); };
     const dropdown = [
-      dd({}), dd({ bg: sec.hover }), dd({ bg: sec.press }), dd({ border: t.accent, ring: '0 0 0 3px ' + t.ring }),
-      dd({ border: t.accent, ring: '0 0 0 3px ' + t.ring, chevD: 'm18 15-6-6-6 6', chevC: t.t2 }), dd({ op: 0.4 }), dd({ border: t.error, ring: errRing, text: 'Required' })
+      dd({}), dd({ bg: sec.hover }), dd({ bg: sec.press }), dd({ border: t.accent }),
+      dd({ border: t.ctlBorder, bg: sec.press, chevD: 'm18 15-6-6-6 6', chevC: t.t2 }), dd({ op: 0.4 }), dd({ border: t.error, ring: errRing, text: 'Required' })
     ];
     const tog = function (on, o) {
       return Object.assign({ isToggle: true, bg: on ? t.accent : t.trackOff, knob: on ? t.onAccent : (isLight ? '#FFFFFF' : t.t2), knobX: on ? 14 : 2, ring: 'none', op: 1 }, o);
     };
     const toggle = [
       tog(false), tog(false, { bg: mix(t.trackOff, t.t1, 0.12) }), tog(false, { bg: mix(t.trackOff, t.t1, 0.2), knobX: 4 }),
-      tog(false, { ring: '0 0 0 2px ' + t.panel + ', 0 0 0 4px ' + t.accent }), tog(true), tog(false, { op: 0.4 }), na
+      tog(false, { ring: 'inset 0 0 0 1px ' + t.accent }), tog(true), tog(false, { op: 0.4 }), tog(false, { ring: 'inset 0 0 0 1px ' + t.error + ', 0 0 0 3px ' + t.errorHalo })
     ];
     const ck = function (on, o) {
       return Object.assign({ isCheck: true, on: on, text: 'Visible', fg: t.t1, border: on ? t.accent : t.ctlBorder, bg: on ? t.accent : t.input, mark: t.onAccent, markD: 'M20 6 9 17l-5-5', radius: '4px', ring: 'none', op: 1 }, o);
     };
     const check = [
       ck(false), ck(false, { border: mix(t.ctlBorder, t.t1, 0.3), bg: mix(t.input, t.t1, 0.06) }), ck(false, { border: mix(t.ctlBorder, t.t1, 0.4), bg: mix(t.input, t.t1, 0.12) }),
-      ck(false, { ring: '0 0 0 1px ' + t.accent + ', 0 0 0 4px ' + t.ring }), ck(true), ck(true, { op: 0.4 }), ck(false, { border: t.error, ring: errRing, text: 'Accept' })
+      ck(false, { border: t.accent }), ck(true), ck(true, { op: 0.4 }), ck(false, { border: t.error, ring: errRing, text: 'Accept' })
     ];
     const rd = function (on, o) {
       return ck(on, Object.assign({ radius: '50%', bg: on ? t.input : t.input, border: on ? t.accent : t.ctlBorder, mark: t.accent, markD: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z', text: 'Bezier' }, o));
     };
     const radio = [
       rd(false), rd(false, { border: mix(t.ctlBorder, t.t1, 0.3), bg: mix(t.input, t.t1, 0.06) }), rd(false, { border: mix(t.ctlBorder, t.t1, 0.4), bg: mix(t.input, t.t1, 0.12) }),
-      rd(false, { ring: '0 0 0 1px ' + t.accent + ', 0 0 0 4px ' + t.ring }), rd(true, { border: t.accent }), rd(true, { op: 0.4 }), na
+      rd(false, { border: t.accent }), rd(true, { border: t.accent }), rd(true, { op: 0.4 }), na
     ];
     const acc = hex2(t.accent);
     const tintA = function (a) { return 'rgba(' + acc[0] + ',' + acc[1] + ',' + acc[2] + ',' + a + ')'; };
@@ -201,7 +201,7 @@ class Component extends DCLogic {
 
     const ib = function (o) { return box(Object.assign({ text: '⋯', w: '24px', h: 24, pad: '0', fg: t.t2, size: '14px' }, o)); };
     const iconBtn = [
-      ib({}), ib({ bg: tabS.hover, fg: t.t1 }), ib({ bg: tabS.press, fg: t.t1 }), ib({ ring: focusRing }),
+      ib({}), ib({ bg: tabS.hover, fg: t.t1 }), ib({ bg: tabS.press, fg: t.t1 }), ib({ border: t.accent }),
       ib({ bg: t.active, fg: t.accent }), ib({ op: 0.4 }), na
     ];
     const mi = function (o) { return box(Object.assign({ text: 'Duplicate', w: '104px', h: 24, justify: 'flex-start', pad: '0 8px', fg: t.t1 }, o)); };
@@ -224,7 +224,7 @@ class Component extends DCLogic {
     const timings = [
       ['Hover in', '70 ms', 'out', 'ease-out'], ['Hover out', '140 ms', 'out', 'ease-out'],
       ['Press', '0 ms', 'step', 'instant'], ['Release', '120 ms', 'out', 'ease-out'],
-      ['Focus ring', '100 ms', 'out', 'ease-out'], ['Selection', '0 ms', 'step', 'instant'],
+      ['Focus border', '100 ms', 'out', 'ease-out'], ['Selection', '0 ms', 'step', 'instant'],
       ['Toggle, check, radio', '120 ms', 'inout', 'ease-in-out'], ['Tooltip', '100 in · 80 out', 'out', 'ease-out'],
       ['Menu, popup', '120 in · 80 out', 'out', 'ease-out'], ['Toast', '180 in · 140 out', 'out', 'ease-out'],
       ['Dock preview', '100 ms', 'out', 'ease-out'], ['Invalid', '0 ms (halo 150)', 'step', 'instant'],

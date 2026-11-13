@@ -65,7 +65,6 @@ namespace tachyon
             const color4b popup = PaletteColor(palette, "--bg-popup", light ? color4b{ 255, 255, 255, 255 } : color4b{ 26, 29, 35, 255 });
             const float soft      = light ? 0.12f : 0.16f;   // selected rows, menu highlight
             const float selection = light ? 0.25f : 0.35f;   // selected text
-            const float focus     = light ? 0.25f : 0.30f;   // the focus ring
             const std::string a = Hex(accent);
             return std::format(":root {{\n"
                                "    --accent: {0};\n"
@@ -74,11 +73,11 @@ namespace tachyon
                                "    --selection: {1};\n"
                                "    --accent-soft: {2};\n"
                                "    --bg-menu-hover: {3};\n"
-                               "    --focus-ring: 0 0 0 3px {4};\n"
-                               "    --selected-ring: 0 0 0 3px {5};\n"
+                               "    --focus-ring: inset 0 0 0 1px {0};\n"   // the control's own border, in the accent
+                               "    --selected-ring: 0 0 0 3px {4};\n"
                                "}}\n",
                                a, Hex(accent, selection), Hex(Over(panel, accent, soft)), Hex(Over(popup, accent, soft)),
-                               Hex(accent, focus), Hex(accent, 0.16f));
+                               Hex(accent, 0.16f));
         }
     }
 

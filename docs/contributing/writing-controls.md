@@ -213,23 +213,27 @@ The checklist for adding a control to the library. It builds on
   ```
 
 - [ ] Focus is visible. The control's CSS class has one of these:
-  - a `:focus` rule that draws the border in `--accent`
-  - an entry in the `:focus-visible` ring list in `styles.css`. That list draws
-    `box-shadow: var(--focus-ring)`, a ring that shows only when the focus came from the
-    keyboard.
+  - a text field: a `:focus` rule that draws the border in `--accent`, as it shows while typing
+    after a click too
+  - anything else: an entry in the `:focus-visible` list in `styles.css`. That list draws
+    `box-shadow: var(--focus-ring)`, the control's own border in the accent, only when the
+    focus came from the keyboard.
 
   Also:
-  - full-width rows and tabs use the inset outline instead of the ring
+  - a press doesn't change the border: no `:active` border color
+  - full-width rows and tabs use the inset outline in `--accent` too
+  - for a control whose border is drawn by a part (a check box's box, a switch's track), the
+    part's class is in the list
   - `KeyboardFocusTest` fails for any Tab stop without visible focus
 
   For example, in `styles.css`:
 
   ```css
-  /* A :focus rule */
+  /* A :focus rule, for a text field */
   .textbox:focus, .number-field:focus  { border-color: var(--accent); background-color: var(--bg-input); }
 
-  /* The ring list */
-  .checkbox:focus-visible, .switch:focus-visible, .slider:focus-visible, .slider-field-track:focus-visible,
+  /* The focus list */
+  .button:focus-visible, .checkbox-box:focus-visible, .switch-track:focus-visible,
   /* ... */ {
       box-shadow: var(--focus-ring);
   }

@@ -12,6 +12,8 @@ namespace tachyon
     {
         IntRect          rect { 0, 0, 0, 0 };
         IWindowContext*  context = nullptr;
+        ImageWindow*     parent  = nullptr;   // the image window it was opened from
+        bool             focusable = true;    // not WindowFlags::NotFocusable
     };
 
     struct ImageWindowBackend::State
@@ -60,6 +62,17 @@ namespace tachyon
         m_state->focusWindow = focus;
     }
 
+    bool ImageWindowBackend::HasFocusWithin(OSWindowHandle window) const
+    {
+        const ImageWindow* w = Find(window);
+        if (w == nullptr)
+            return false;
+        for (const ImageWindow* up = m_state->focusWindow; up != nullptr; up = up->parent)
+            if (up == w)
+                return true;
+        return false;
+    }
+
     bool ImageWindowBackend::IsOpenedFromImageWindow(OSWindowHandle window) const
     {
         const auto& opened = m_state->openedFromImage;
@@ -99,9 +112,15 @@ namespace tachyon
             return handle;
         }
         auto window = std::make_unique<ImageWindow>();
-        window->rect = rect;
+        window->rect   = rect;
+        window->parent = Find(parentOSHandle);
+        window->focusable = (windowFlags & WindowFlags::NotFocusable) == WindowFlags::None;
         const auto handle = reinterpret_cast<OSWindowHandle>(window.get());
+        // Opened from the window with the focus: it takes it, as an OS popup or dialog does.
+        const bool takesFocus = window->parent != nullptr && window->parent == m_state->focusWindow && window->focusable;
         m_state->windows.push_back(std::move(window));
+        if (takesFocus)
+            SetFocus(handle);
         return handle;
     }
 
@@ -117,8 +136,12 @@ namespace tachyon
         }
         if (m_state->pointerWindow == w)
             m_state->pointerWindow = nullptr;
+        // The focus goes back to the window it was opened from, as the OS does.
         if (m_state->focusWindow == w)
-            m_state->focusWindow = nullptr;
+            m_state->focusWindow = w->parent;
+        for (const auto& other : m_state->windows)
+            if (other->parent == w)
+                other->parent = w->parent;
         std::erase_if(m_state->windows, [w](const auto& p) { return p.get() == w; });
         return true;
     }
@@ -231,7 +254,18 @@ namespace tachyon
 
     void ImageWindowBackend::SetWindowVisible(OSWindowHandle window, bool visible)
     {
-        if (!IsImageWindow(window)) m_os.SetWindowVisible(window, visible);
+        ImageWindow* w = Find(window);
+        if (w == nullptr)
+        {
+            m_os.SetWindowVisible(window, visible);
+            return;
+        }
+        // Hidden with the focus in it (a menu that closed): the focus goes back to the
+        // window it was opened from. Shown again from there: it takes it again.
+        if (!visible && w->parent != nullptr && HasFocusWithin(window))
+            SetFocus(reinterpret_cast<OSWindowHandle>(w->parent));
+        if (visible && w->parent != nullptr && w->parent == m_state->focusWindow && w->focusable)
+            SetFocus(window);
     }
 
     std::vector<MonitorInfo> ImageWindowBackend::GetMonitors() const { return m_os.GetMonitors(); }

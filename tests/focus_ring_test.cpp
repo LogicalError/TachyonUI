@@ -75,15 +75,28 @@ namespace tachyon
             EXPECT_TRUE(FocusVisible());
         }
 
-        // The theme gives focused buttons a ring.
-        TEST_F(FocusRingTest, TheThemeGivesFocusedButtonsARing)
+        // The theme gives focused buttons their own border in the accent: an outline over it,
+        // without a halo round them.
+        TEST_F(FocusRingTest, TheThemeGivesFocusedButtonsAnAccentBorder)
         {
             const VisualBoxStyleIndex button = app.theme.regularControls.button.visualBoxStyleIndex;
             const VisualShadowStyle* focused = app.styleManager.GetVisualShadowStyle(ComputeGPUStyleIndex(button, ElementState::Focused));
             ASSERT_NE(focused, nullptr);
-            EXPECT_FALSE(focused->ring.IsNone());
+            EXPECT_NE(focused->insetRing, 0u);
+            EXPECT_TRUE(focused->ring.IsNone()) << "no halo";
             const VisualShadowStyle* normal = app.styleManager.GetVisualShadowStyle(ComputeGPUStyleIndex(button, ElementState::None));
-            EXPECT_TRUE(normal == nullptr || normal->ring.IsNone()) << "the ring is for focused states only";
+            EXPECT_TRUE(normal == nullptr || normal->insetRing == 0u) << "the outline is for focused states only";
+        }
+
+        // A button filled with the accent: the accent edge, and a line of the panel's color
+        // inside it.
+        TEST_F(FocusRingTest, TheThemeGivesAFocusedPrimaryButtonALineInside)
+        {
+            const VisualBoxStyleIndex primary = app.theme.dialogPrimaryButtonStyleRef.visualBoxStyleIndex;
+            const VisualShadowStyle* focused = app.styleManager.GetVisualShadowStyle(ComputeGPUStyleIndex(primary, ElementState::Focused));
+            ASSERT_NE(focused, nullptr);
+            EXPECT_NE(focused->insetRing, 0u);
+            EXPECT_NE(focused->insetRingUnder, 0u);
         }
 
         // List rows take an outline inside them instead.

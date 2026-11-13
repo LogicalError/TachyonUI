@@ -116,13 +116,29 @@ namespace tachyon
 
             const Element&     winElement = elementStorage.GetElementUnsafe(winRef);
             const ElementRect& winRect    = elementStorage.GetElementRectUnsafe(winRef);
+            // Opened in a window that renders its popups to images: an image too.
+            ElementFlags flags = winElement.flags;
+            for (uint32_t up = windowEntry.parentWindowEntry; up != WindowRegistry::kInvalidIndex; )
+            {
+                const auto& parent = windowRegistry.Windows()[up];
+                if (!elementStorage.IsValidRef(parent.windowRef))
+                    break;
+                const ElementFlags parentFlags = elementStorage.GetElementUnsafe(parent.windowRef).flags;
+                const ElementFlags imagePopups = ElementFlags::WindowRenderToImage | ElementFlags::WindowImagePopups;
+                if ((parentFlags & imagePopups) == imagePopups)
+                {
+                    flags |= ElementFlags::WindowRenderToImage;
+                    break;
+                }
+                up = parent.parentWindowEntry;
+            }
             std::string_view   title      = winElement.textID != TextID::Invalid ? textSystem->GetText(winElement.textID) : "";
 
             // Create or recycle the OS window.
             [[maybe_unused]]
             auto addResult = windowManager.GetOrCreateWindow(
                                 windowEntry.id, title, winRect.rect, onGui,
-                                ElementFlagsToWindowFlags(winElement.flags), parentID, winElement.monitorIndex);
+                                ElementFlagsToWindowFlags(flags), parentID, winElement.monitorIndex);
             assert(addResult == AddWindowResult::SuccessCreate ||
                    addResult == AddWindowResult::SuccessRecycle ||
                    addResult == AddWindowResult::WindowUserClosed);

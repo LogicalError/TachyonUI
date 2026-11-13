@@ -42,6 +42,7 @@ tachyon_add_example(showcase
   panel_misc.cpp
   panel_node_view.cpp
   panel_state_machine.cpp
+  capture.cpp
   panel_profiler_tree.cpp
   panel_reorderable.cpp
   panel_settings.cpp

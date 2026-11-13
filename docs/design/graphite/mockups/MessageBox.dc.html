@@ -69,7 +69,7 @@ class Component extends DCLogic {
       shadow: '0 0 0 1px rgba(16,24,40,0.06), 0 24px 64px rgba(16,24,40,0.28)'
     } : {
       app: '#0B0C0F', bpanel: '#121418', bborder: '#1C1F25', scrim: 'rgba(0,0,0,0.55)', caption: '#AEB4C0', panel: '#1B1E25', header: '#20242C', input: '#0F1115', control: '#272B34', well: '#13151A',
-      border: '#3A404C', line: '#2A2F39', ctlBorder: '#3A404C', t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8A92A2',
+      border: '#3A404C', line: '#2A2F39', ctlBorder: '#3A404C', t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8E96A7',
       accent: '#6B9BFF', onAccent: '#0B0C0F', ring: 'rgba(107,155,255,0.30)', danger: '#EF6A6A', onDanger: '#0B0C0F',
       info: '#6B9BFF', infoSoft: 'rgba(107,155,255,0.16)', warn: '#E5B454', warnSoft: 'rgba(229,180,84,0.14)',
       error: '#EF6A6A', errorSoft: 'rgba(239,106,106,0.16)', level: '#6B9BFF', mat: '#34D1BF',
@@ -89,7 +89,7 @@ class Component extends DCLogic {
         bg: primary ? t.accent : (danger ? t.danger : t.control),
         border: primary ? t.accent : (danger ? t.danger : (focus ? t.accent : t.ctlBorder)),
         fg: primary ? t.onAccent : (danger ? t.onDanger : t.t1), w: (primary || danger) ? 600 : 400,
-        ring: focus ? (primary ? '0 0 0 2px ' + t.panel + ', 0 0 0 4px ' + t.accent : '0 0 0 3px ' + t.ring) : 'none'
+        ring: focus && primary ? 'inset 0 0 0 1px ' + t.panel : 'none'
       };
     };
     const boxes = [

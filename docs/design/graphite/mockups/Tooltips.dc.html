@@ -94,15 +94,15 @@ class Component extends DCLogic {
   renderVals() {
     const isLight = (this.props.theme ?? 'dark') === 'light';
     const t = isLight ? {
-      app: '#E6E8EC', panel: '#FBFBFC', header: '#F3F4F6', active: '#E4E7EC', hover: '#EAECF0', input: '#FFFFFF', control: '#FFFFFF', raised: '#FFFFFF',
+      app: '#E6E8EC', panel: '#FBFBFC', header: '#F3F4F6', active: '#E4E7EC', hover: '#E9E9EB', input: '#FFFFFF', control: '#FFFFFF', raised: '#FFFFFF',
       border: '#DADDE3', line: '#E3E6EB', line2: '#D5D9E0', ctlBorder: '#CDD2DA',
       t1: '#1A1D23', t2: '#464C57', t3: '#5F6673', error: '#D64545', errorSoft: 'rgba(214,69,69,0.12)', pinFloat: '#0FA596', pinHalo: 'rgba(15,165,150,0.25)',
       tip: '#1A1D23', tipBorder: '#1A1D23', tipText: '#FFFFFF', tipMuted: '#AEB4C0', tipKbd: 'rgba(255,255,255,0.12)', tipShadow: '0 4px 12px rgba(16,24,40,0.20)',
       popup: '#FFFFFF', popBorder: '#D5D9E0', popShadow: '0 12px 32px rgba(16,24,40,0.16)'
     } : {
-      app: '#0B0C0F', panel: '#121418', header: '#16191E', active: '#23272F', hover: '#1A1D23', input: '#0D0F12', control: '#1E2128', raised: '#181B20',
+      app: '#0B0C0F', panel: '#121418', header: '#16191E', active: '#23272F', hover: '#232529', input: '#0D0F12', control: '#1E2128', raised: '#181B20',
       border: '#1C1F25', line: '#23272F', line2: '#23272F', ctlBorder: '#2E333D',
-      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8A92A2', error: '#EF6A6A', errorSoft: 'rgba(239,106,106,0.16)', pinFloat: '#34D1BF', pinHalo: 'rgba(52,209,191,0.25)',
+      t1: '#E8EAEF', t2: '#AEB4C0', t3: '#8E96A7', error: '#EF6A6A', errorSoft: 'rgba(239,106,106,0.16)', pinFloat: '#34D1BF', pinHalo: 'rgba(52,209,191,0.25)',
       tip: '#2A2F39', tipBorder: '#363C48', tipText: '#E8EAEF', tipMuted: '#A3AAB7', tipKbd: 'rgba(255,255,255,0.08)', tipShadow: '0 6px 16px rgba(0,0,0,0.45)',
       popup: '#1A1D23', popBorder: '#2E333D', popShadow: '0 16px 40px rgba(0,0,0,0.55)'
     };

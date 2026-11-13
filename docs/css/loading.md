@@ -171,7 +171,7 @@ The palette variables that follow the accent:
 | `--selection` | Selected text | 35% | 25% |
 | `--accent-soft` | Selected rows and items, over `--bg-panel` | 16% | 12% |
 | `--bg-menu-hover` | The highlighted menu row, over `--bg-popup` | 16% | 12% |
-| `--focus-ring` | The focus ring's 3px halo | 30% | 25% |
+| `--focus-ring` | The focus outline: the control's own border in the accent | 100% | 100% |
 | `--selected-ring` | A selected node's halo | 16% | 16% |
 
 - These are the amounts the palettes use for their own blue, so Blue gives the palettes'

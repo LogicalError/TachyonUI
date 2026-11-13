@@ -91,17 +91,25 @@ namespace tachyon
             bool ShowsFocus(ID id) const
             {
                 const auto& storage = app.elementStorage;
-                for (ElementRef ref = storage.FindElementRefByID(id); ref.IsValid(); ref = storage.GetParentRef(ref))
-                {
-                    const Element& e = storage.GetElementUnsafe(ref);
-                    const bool self = e.id == id;
-                    if (!self && (e.flags & ElementFlags::PropagatesDescendantState) == ElementFlags::None)
-                        continue;
+                auto looksFocused = [&](const Element& e) {
                     const VisualBoxStyle* normal  = app.styleManager.GetVisualBoxStyle(e.styleRef.visualBoxStyleIndex, ElementState::None);
                     const VisualBoxStyle* focused = app.styleManager.GetVisualBoxStyle(e.styleRef.visualBoxStyleIndex, ElementState::Focused);
-                    if (normal && focused && !(*normal == *focused))
+                    return normal && focused && !(*normal == *focused);
+                };
+                const ElementRef self = storage.FindElementRefByID(id);
+                for (ElementRef ref = self; ref.IsValid(); ref = storage.GetParentRef(ref))
+                {
+                    const Element& e = storage.GetElementUnsafe(ref);
+                    if (e.id != id && (e.flags & ElementFlags::PropagatesDescendantState) == ElementFlags::None)
+                        continue;
+                    if (looksFocused(e))
                         return true;
                 }
+                // Or a part drawn in the control's state shows it: a check box's box, a switch's track.
+                if (self.IsValid())
+                    for (const Element& part : storage.GetChildrenSpan(self))
+                        if ((part.state & ElementState::Focused) != ElementState::None && looksFocused(part))
+                            return true;
                 return false;
             }
 

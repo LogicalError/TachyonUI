@@ -4,7 +4,7 @@
   --font-mono: 'JetBrains Mono', monospace;
   --bg-app: #E6E8EC;
   --bg-input: #FFFFFF;
-  --bg-canvas: #F4F5F7;
+  --bg-canvas: #ECEEF1;
   --bg-sidebar: #F6F7F9;
   --bg-list: #F6F7F9;
   --bg-panel: #FBFBFC;
@@ -14,7 +14,7 @@
   --bg-popup: #FFFFFF;
   --bg-control: #FFFFFF;
   --bg-active: #E4E7EC;
-  --bg-pressed: #FFFFFF;
+  --bg-pressed: #DCDDE0;
   --bg-well: #EEF0F3;
   --row-stripe: #F6F7F9;
   --panel-border: #DADDE3;
@@ -22,7 +22,7 @@
   --line-node: #D5D9E0;
   --line-strong: #C9CED6;
   --line-section: #E9EBEF;
-  --canvas-dot: #CDD2DA;
+  --canvas-dot: #B5BCC7;
   --text-1: #1A1D23;
   --text-2: #464C57;
   --text-3: #5F6673;
@@ -36,7 +36,7 @@
   --caret: #2F6FEB;
   --ok: #1E9E62;
   --warn: #D99A2B;
-  --warn-text: #9A6512;
+  --warn-text: #8E5D11;
   --error: #D64545;
   --info: #2F6FEB;
   --folder: #E3AE4C;
@@ -65,7 +65,7 @@
   --checker-b: #E3E6EB;
   --alpha-track: #464C57;
   --alpha-fill: #FFFFFF;
-  --shadow-node: 0 4px 14px rgba(16,24,40,0.10);
+  --shadow-node: 0 4px 14px rgba(16,24,40,0.14);
   --shadow-popup: 0 12px 32px rgba(16,24,40,0.16);
   --shadow-dialog: 0 0 0 1px rgba(16,24,40,0.06), 0 24px 64px rgba(16,24,40,0.28);
   --shadow-control: 0 1px 2px rgba(16,24,40,0.06);
@@ -112,6 +112,24 @@
   --dialog-input: #FFFFFF;
   --dialog-control: #FFFFFF;
   --dialog-control-border: #C9CED6;
+  --segment-on: #FFFFFF;
+  --node-bg: #FFFFFF;
+  --node-border: #C3C9D2;
+  --node-tint-alpha: 0.13;
+  --node-tint-line-alpha: 0.28;
+  --state-tint-alpha: 0.16;
+  --state-border-alpha: 0.45;
+  --playhead: #1A1D23;
+  --frame-fill-alpha: 0.07;
+  --frame-border-alpha: 0.45;
+  --frame-title-alpha: 0.18;
+  --reroute-ring: #C3C9D2;
+  --state-indigo: #5B6CD9;
+  --state-teal: #0FA596;
+  --state-red: #D64545;
+  --state-amber: #C27C0E;
+  --state-violet: #7C5CE0;
+  --active-state: #1E9E62;
   --scrim: rgba(16,24,40,0.30);
   --font-ui: 12px;
   --font-caption: 11px;
@@ -169,7 +187,14 @@
   --slider-track-h: 4px;
   --slider-thumb: 14px;
   --focus-ring: 1px;
-  --focus-halo: 3px;
+  --focus-halo: 0px;
+  --menu-item-h: 26px;
+  --menu-label-shortcut-gap: 24px;
+  --state-h: 32px;
+  --reroute: 12px;
+  --thumb: 76px;
+  --drag-threshold: 4px;
+  --curve-field-h: 44px;
   --caret-w: 2px;
   --scrollbar-w: 4px;
   --checker: 8px;
@@ -208,4 +233,8 @@
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
   --scrim-ms: 120ms;
+  --reorder-slide-ms: 120ms;
+  --reorder-cancel-ms: 160ms;
+  --submenu-open-delay-ms: 200ms;
+  --submenu-close-delay-ms: 300ms;
 }
