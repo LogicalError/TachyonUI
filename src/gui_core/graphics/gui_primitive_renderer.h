@@ -14,6 +14,7 @@
 #include <array>
 #include <cassert>
 #include <cstddef>
+#include <span>
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
@@ -117,8 +118,8 @@ namespace tachyon
             T ordered = primitive;
             ordered.transform0.w = float(nextOrder++);
             ordered.transform1.w = 1.0f - currentOpacity;   // transparency: 0 is opaque
-            const auto* bytes = reinterpret_cast<const std::byte*>(&ordered);
-            cpu.insert(cpu.end(), bytes, bytes + sizeof(T));
+            const auto bytes = std::as_bytes(std::span{ &ordered, 1 });
+            cpu.insert(cpu.end(), bytes.begin(), bytes.end());
         }
     };
 
