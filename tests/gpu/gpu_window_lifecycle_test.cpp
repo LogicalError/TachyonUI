@@ -1,5 +1,7 @@
 #include "gpu_test_harness.h"
+#include <atomic>
 #include <string>
+#include <thread>
 #include <gui_core/graphics/gui_primitive_renderer.h>
 #include <gui_core/input/gui_platform_input_handler.h>
 #include <SDL3/SDL_events.h>
@@ -124,6 +126,161 @@ TEST_F(GpuTest, RenderMultipleFramesIsValidationClean)
     }
     EXPECT_FALSE(sink.HasErrors())
         << "multi-frame render tripped validation/sync errors:\n" << sink.Dump();
+}
+
+// Styles registered while the app runs replace the style buffers the last frame drew with.
+// The old ones go once that frame is done on the GPU, however many frames go by without a
+// window being drawn (redraw only when needed): not after a count of frames.
+TEST_F(GpuTest, AReplacedStyleBufferOutlivesTheFrameThatDrewWithIt)
+{
+    auto* ctx = CreateImageWindowContext({ 320, 240 });
+    if (ctx == nullptr)
+        GTEST_SKIP() << "no render-to-image window available in this environment";
+
+    sink.Clear();
+    for (int i = 0; i < 16; ++i)
+    {
+        graphicsContext->BeginFrame();
+        RenderOneFrameWithDot(ctx, { 320, 240 });
+
+        // New styles: the next frame uploads new buffers in place of the ones just drawn with.
+        styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ uint8_t(i), 20, 30, 255 }));
+        tachyon::Style style{};
+        style.borderWidths = tachyon::BoxEdges(uint16_t(1 + i));
+        styleManager.Register(style);
+        graphicsContext->BeginFrame();
+        graphicsContext->PrepareFrame(styleManager, gradientManager, 0.0f);
+
+        // Frames that draw no window: nothing waits on the GPU in them.
+        for (int idle = 0; idle < 4; ++idle)
+        {
+            graphicsContext->BeginFrame();
+            graphicsContext->PrepareFrame(styleManager, gradientManager, 0.0f);
+        }
+    }
+    EXPECT_FALSE(sink.HasErrors())
+        << "a buffer went while a frame still used it:\n" << sink.Dump();
+}
+
+// A scene image (a 3D viewport's) no longer asked for goes once the frames that drew it are
+// done, with frames that draw nothing in between.
+TEST_F(GpuTest, ASceneImageLetGoOutlivesTheFramesThatDrewIt)
+{
+    auto* ctx = CreateImageWindowContext({ 320, 240 });
+    if (ctx == nullptr)
+        GTEST_SKIP() << "no render-to-image window available in this environment";
+
+    sink.Clear();
+    tachyon::ID scene{};
+    scene.value.dynamicParts.mode      = tachyon::IDMode::Static;
+    scene.value.dynamicParts.hashValue = 9100;
+    for (int round = 0; round < 4; ++round)
+    {
+        // Drawn at a size each round: the image is made again, the old one let go.
+        graphicsContext->BeginFrame();
+        vk->RenderScene(scene, ctx->GetID(), tachyon::uint2{ 64u + 16u * uint32_t(round), 48 }, tachyon::color4f{ 0, 0, 0, 1 },
+                        [](const void*) {});
+        RenderOneFrameWithDot(ctx, { 320, 240 });
+        // Not asked for: it goes after a few frames, none of which draws a window.
+        for (int idle = 0; idle < 8; ++idle)
+        {
+            graphicsContext->BeginFrame();
+            graphicsContext->PrepareFrame(styleManager, gradientManager, 0.0f);
+        }
+    }
+    EXPECT_FALSE(sink.HasErrors())
+        << "a scene image went while a frame still used it:\n" << sink.Dump();
+}
+
+// An image made and let go between two frames: its upload is never recorded, so no frame
+// uses it, and its staging copy goes with it.
+TEST_F(GpuTest, AnImageLetGoBeforeItsUploadIsNeverUsed)
+{
+    auto* ctx = CreateImageWindowContext({ 320, 240 });
+    if (ctx == nullptr)
+        GTEST_SKIP() << "no render-to-image window available in this environment";
+
+    sink.Clear();
+    const uint8_t pixels[4 * 4 * 4] = {};
+    for (int i = 0; i < 8; ++i)
+    {
+        tachyon::Image* image = graphicsContext->CreateImage(const_cast<uint8_t*>(pixels), tachyon::uint2{ 4, 4 },
+                                                             tachyon::ImageFormat::R8G8B8A8, tachyon::Sampler::LinearClampToEdge);
+        ASSERT_NE(image, nullptr);
+        graphicsContext->DestroyImageAtEnd(image, tachyon::DeviceScope::Frame);
+        graphicsContext->BeginFrame();
+        RenderOneFrameWithDot(ctx, { 320, 240 });
+        for (int idle = 0; idle < 3; ++idle)
+        {
+            graphicsContext->BeginFrame();
+            graphicsContext->PrepareFrame(styleManager, gradientManager, 0.0f);
+        }
+    }
+    EXPECT_FALSE(sink.HasErrors())
+        << "a dropped image was used or went too soon:\n" << sink.Dump();
+}
+
+// An image handed over to go at Cleanup (DeviceScope::Application) stays in use until then:
+// registered, every frame draws with it, and nothing counts it as dropped.
+TEST_F(GpuTest, AnImageThatGoesAtCleanupStaysUsable)
+{
+    auto* ctx = CreateImageWindowContext({ 320, 240 });
+    if (ctx == nullptr)
+        GTEST_SKIP() << "no render-to-image window available in this environment";
+
+    sink.Clear();
+    const uint8_t pixels[4 * 4 * 4] = {};
+    tachyon::Image* image = graphicsContext->CreateImage(const_cast<uint8_t*>(pixels), tachyon::uint2{ 4, 4 },
+                                                         tachyon::ImageFormat::R8G8B8A8, tachyon::Sampler::LinearRepeat);
+    ASSERT_NE(image, nullptr);
+    const tachyon::ImageIndex index = graphicsContext->RegisterImage(image);
+    ASSERT_NE(index, tachyon::ImageIndex::Invalid);
+    graphicsContext->DestroyImageAtEnd(image, tachyon::DeviceScope::Application);
+    EXPECT_EQ(vk->deviceContext.WasDropped(static_cast<tachyon::vulkan::VulkanImage*>(image)->imageView), nullptr);
+    for (int i = 0; i < 4; ++i)
+    {
+        graphicsContext->BeginFrame();
+        RenderOneFrameWithDot(ctx, { 320, 240 });
+    }
+    EXPECT_FALSE(sink.HasErrors())
+        << "an image kept until Cleanup tripped validation:\n" << sink.Dump();
+}
+
+// Images made and let go on another thread while frames are drawn: the uploads, the live
+// images and what's dropped are shared with the frame.
+TEST_F(GpuTest, ImagesMadeOnAnotherThreadWhileFramesAreDrawn)
+{
+    auto* ctx = CreateImageWindowContext({ 320, 240 });
+    if (ctx == nullptr)
+        GTEST_SKIP() << "no render-to-image window available in this environment";
+
+    sink.Clear();
+    std::atomic<bool> stop{ false };
+    std::atomic<int>  made{ 0 };
+    std::thread maker([&] {
+        const uint8_t pixels[8 * 8 * 4] = {};
+        while (!stop.load())
+        {
+            tachyon::Image* image = graphicsContext->CreateImage(const_cast<uint8_t*>(pixels), tachyon::uint2{ 8, 8 },
+                                                                 tachyon::ImageFormat::R8G8B8A8, tachyon::Sampler::LinearClampToEdge);
+            if (image != nullptr)
+                graphicsContext->DestroyImageAtEnd(image, tachyon::DeviceScope::Frame);
+            ++made;
+        }
+    });
+    for (int frame = 0; frame < 40; ++frame)
+    {
+        graphicsContext->BeginFrame();
+        if (frame % 3 != 2)   // some frames draw no window
+            RenderOneFrameWithDot(ctx, { 320, 240 });
+        else
+            graphicsContext->PrepareFrame(styleManager, gradientManager, 0.0f);
+    }
+    stop = true;
+    maker.join();
+    EXPECT_GT(made.load(), 0);
+    EXPECT_FALSE(sink.HasErrors())
+        << "images made on another thread tripped validation:\n" << sink.Dump();
 }
 
 TEST_F(GpuTest, PrimitiveUploadArenaGrowsAndThenStaysStable)

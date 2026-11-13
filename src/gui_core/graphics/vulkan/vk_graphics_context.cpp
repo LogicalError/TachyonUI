@@ -189,6 +189,14 @@ bool tachyon::vulkan::VulkanGraphicsContext::RenderWindowFrame(VkCommandBuffer c
                 if (textures[first].imageView == VK_NULL_HANDLE) { ++first; continue; }
                 uint32_t end = first + 1;
                 while (end < count && textures[end].imageView != VK_NULL_HANDLE) ++end;
+                // A dropped image in a slot: this frame would use it after its destroy was timed.
+                for (uint32_t i = first; i < end; ++i)
+                    if (const std::source_location* dropped = deviceContext.WasDropped(textures[i].imageView))
+                    {
+                        TACHYON_LOG_ERROR(kLogVulkan, "image slot {} holds an image dropped at {}:{}; unregister it first",
+                                          i + 1, dropped->file_name(), dropped->line());
+                        assert(false && "a dropped image is still in the image set");
+                    }
                 writer.writes.push_back(VkWriteDescriptorSet
                     {
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -712,8 +720,8 @@ bool VulkanImageSet::SetDescriptor(tachyon::ImageIndex index, const VkDescriptor
 
 void VulkanGraphicsContext::BeginFrame()
 {
-    // Runs after all windows' BeginWindowFrame fence-waits for the current
-    // frame, so the slot being flushed (FRAME_OVERLAP frames old) is safe.
+    // What the GPU has passed goes: the submit timeline decides, as frames that draw no
+    // window wait on nothing.
     deviceContext.AdvanceFrameAndFlushDeletions();
     deviceContext.frameWaits.NextFrame();
     guiRenderer->Reset();
@@ -1134,6 +1142,18 @@ bool tachyon::vulkan::VulkanDeviceContext::InitializeSharedResources()
     GetDeletionQueue(tachyon::DeviceScope::Application)
         .push_function([=, this]() { vkDestroyFence(device, immFence, AllocationCallbacks()); });
 
+    // The frame submissions' timeline: what a frame drops goes once the GPU has passed it.
+    {
+        VkSemaphoreTypeCreateInfo timelineInfo{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+                                                .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE, .initialValue = 0 };
+        VkSemaphoreCreateInfo semaphoreInfo{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, .pNext = &timelineInfo };
+        if (vkCreateSemaphore(device, &semaphoreInfo, AllocationCallbacks(), &submitTimeline) != VK_SUCCESS)
+            return failed("submit timeline");
+        m_submitValue = 0;
+        GetDeletionQueue(tachyon::DeviceScope::Application)
+            .push_function([=, this]() { vkDestroySemaphore(device, submitTimeline, AllocationCallbacks()); submitTimeline = VK_NULL_HANDLE; });
+    }
+
     {
         // As many image slots as asked for, up to what the device can sample in one stage
         // (combined image samplers count as both samplers and sampled images).
@@ -1208,13 +1228,121 @@ bool tachyon::vulkan::VulkanDeviceContext::InitializeSharedResources()
     return true;
 }
 
+namespace
+{
+    // Set while dropped destroys run, so the immediate destroys they call know it's safe.
+    thread_local bool t_destroyingAfterGpu = false;
+}
+
 void tachyon::vulkan::VulkanDeviceContext::Flush()
 {
     WaitForUploads();
     WaitIdle();
     WaitForFence(device, immFence);
+    DestroyAllDropped();
+}
 
-    for (auto& q : frameDeletionQueues) q.flush();
+void tachyon::vulkan::VulkanDeviceContext::DestroyAfterGpu(std::function<void()> destroy)
+{
+    std::lock_guard lock(m_deletionMutex);
+    m_dropped.push_function(std::move(destroy));
+}
+
+void tachyon::vulkan::VulkanDeviceContext::Defer(tachyon::DeviceScope scope, std::function<void()> destroy)
+{
+    if (scope == tachyon::DeviceScope::Frame)
+        DestroyAfterGpu(std::move(destroy));
+    else
+        mainDeletionQueue.push_function(std::move(destroy));
+}
+
+void tachyon::vulkan::VulkanDeviceContext::AdvanceFrameAndFlushDeletions()
+{
+    // How far the GPU is: a lost device or no timeline yet runs nothing (Flush and Destroy
+    // run it all once the GPU is idle).
+    uint64_t done = 0;
+    const bool known = submitTimeline != VK_NULL_HANDLE &&
+                       vkGetSemaphoreCounterValue(device, submitTimeline, &done) == VK_SUCCESS;
+    std::vector<DeletionQueue> passed;
+    {
+        std::lock_guard lock(m_deletionMutex);
+        while (known && !m_droppedAfter.empty() && m_droppedAfter.front().after <= done)
+        {
+            passed.push_back(std::move(m_droppedAfter.front().queue));
+            m_droppedAfter.pop_front();
+        }
+        // Dropped since the last frame began: every window of that frame has submitted, so
+        // the last submission covers whatever drew with it.
+        if (!m_dropped.deletors.empty())
+        {
+            m_droppedAfter.push_back({ m_submitValue.load(), std::move(m_dropped) });
+            m_dropped = {};
+        }
+    }
+    // Outside the lock: a destroy may drop something else.
+    t_destroyingAfterGpu = true;
+    for (DeletionQueue& queue : passed)
+        queue.flush();
+    t_destroyingAfterGpu = false;
+    ++frameNumber;
+}
+
+void tachyon::vulkan::VulkanDeviceContext::DestroyAllDropped()
+{
+    std::vector<DeletionQueue> all;
+    {
+        std::lock_guard lock(m_deletionMutex);
+        for (DroppedAfter& batch : m_droppedAfter)
+            all.push_back(std::move(batch.queue));
+        m_droppedAfter.clear();
+        all.push_back(std::move(m_dropped));
+        m_dropped = {};
+    }
+    t_destroyingAfterGpu = true;
+    for (DeletionQueue& queue : all)
+        queue.flush();
+    t_destroyingAfterGpu = false;
+}
+
+VkSemaphoreSubmitInfo tachyon::vulkan::VulkanDeviceContext::NextSubmitSignal()
+{
+    return VkSemaphoreSubmitInfo{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO, .semaphore = submitTimeline,
+                                  .value = ++m_submitValue, .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT };
+}
+
+void tachyon::vulkan::VulkanDeviceContext::NoteDropped([[maybe_unused]] VkImageView view, [[maybe_unused]] const std::source_location& where)
+{
+#ifndef NDEBUG
+    std::lock_guard lock(m_deletionMutex);
+    m_droppedViews.insert_or_assign(view, where);
+#endif
+}
+
+void tachyon::vulkan::VulkanDeviceContext::NoteDestroyed([[maybe_unused]] VkImageView view)
+{
+#ifndef NDEBUG
+    std::lock_guard lock(m_deletionMutex);
+    m_droppedViews.erase(view);
+#endif
+}
+
+const std::source_location* tachyon::vulkan::VulkanDeviceContext::WasDropped([[maybe_unused]] VkImageView view) const
+{
+#ifndef NDEBUG
+    std::lock_guard lock(m_deletionMutex);
+    const auto it = m_droppedViews.find(view);
+    return it != m_droppedViews.end() ? &it->second : nullptr;
+#else
+    return nullptr;
+#endif
+}
+
+bool tachyon::vulkan::VulkanDeviceContext::FramesDone() const
+{
+    uint64_t done = 0;
+    if (submitTimeline == VK_NULL_HANDLE || vkGetSemaphoreCounterValue(device, submitTimeline, &done) != VK_SUCCESS)
+        return true;   // nothing submitted yet, or the device is lost: nothing runs on it
+    return done >= m_submitValue.load();
 }
 
 void tachyon::vulkan::VulkanDeviceContext::Destroy()
@@ -1223,18 +1351,22 @@ void tachyon::vulkan::VulkanDeviceContext::Destroy()
     WaitIdle();
     WaitForFence(device, immFence);
     frameWaits.Clear();
-    for (auto& q : frameDeletionQueues) q.flush();
-    GetDeletionQueue(tachyon::DeviceScope::Application).flush();
-    for (const PendingUpload& upload : m_pendingUploads) // never recorded: no frame ran
-        DestroyBuffer(upload.staging);
-    m_pendingUploads.clear();
+    DestroyAllDropped();
+    // The GPU is idle: what's left goes now, before the timeline and the rest go.
+    {
+        std::lock_guard lock(m_imagesMutex);
+        for (const PendingUpload& upload : m_pendingUploads) // never recorded: no frame ran
+            DestroyUnsubmittedBuffer(upload.staging);
+        m_pendingUploads.clear();
+    }
     for (const auto& [id, resident] : m_residentBuffers)
     {
         if (!resident.ready)
-            DestroyBuffer(resident.staging);
+            DestroyUnsubmittedBuffer(resident.staging);
         DestroyBuffer(resident.buffer);
     }
     m_residentBuffers.clear();
+    GetDeletionQueue(tachyon::DeviceScope::Application).flush();
 
     // Dump VMA stats only for live allocations; empty reusable blocks are normal here.
     VmaTotalStatistics totalStats{};
@@ -1307,6 +1439,13 @@ tachyon::vulkan::Buffer tachyon::vulkan::VulkanDeviceContext::CreateMappedStorag
 
 void tachyon::vulkan::VulkanDeviceContext::DestroyBuffer(const Buffer& buffer) const
 {
+    // A frame on the GPU may still use it: DestroyAfterGpu is the way, while frames run.
+    assert((t_destroyingAfterGpu || FramesDone()) && "a GPU buffer destroyed while a frame may use it: DestroyAfterGpu");
+    DestroyUnsubmittedBuffer(buffer);
+}
+
+void tachyon::vulkan::VulkanDeviceContext::DestroyUnsubmittedBuffer(const Buffer& buffer) const
+{
     // The upload worker may still be copying into it.
     if (m_uploads.Busy())
         m_uploads.Wait();
@@ -1364,6 +1503,7 @@ tachyon::Image* tachyon::vulkan::VulkanDeviceContext::CreateImage(tachyon::uint2
     VkSampler vulkan_sampler = ToVulkanSampler(sampler, this);
     *image = CreateImage(VkExtent3D { size.x, size.y , 1 }, vulkan_format, VK_IMAGE_USAGE_SAMPLED_BIT, vulkan_sampler, mipmapped);
     image->recipe = { .usage = VK_IMAGE_USAGE_SAMPLED_BIT, .sampler = sampler, .mipmapped = mipmapped };
+    std::lock_guard lock(m_imagesMutex);
     m_liveImages.insert(image);
     return image;
 }
@@ -1381,7 +1521,6 @@ tachyon::Image* tachyon::vulkan::VulkanDeviceContext::CreateImage(const void* da
     const VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
                                   | (mipmapped ? VK_IMAGE_USAGE_TRANSFER_SRC_BIT : 0);
     *image = CreateImage(extent, vulkanFormat, usage, ToVulkanSampler(sampler, this), mipmapped);
-    m_pendingUploads.push_back({ staging, image->image, extent, mipmapped });
     image->recipe = { .usage = usage, .sampler = sampler, .mipmapped = mipmapped };
     // The pixels are kept for a device loss; the staging copy reads them on the upload worker
     // (DestroyImage waits for it).
@@ -1389,13 +1528,22 @@ tachyon::Image* tachyon::vulkan::VulkanDeviceContext::CreateImage(const void* da
         image->recipe.pixels.assign(static_cast<const uint8_t*>(data), static_cast<const uint8_t*>(data) + dataSize);
     m_uploads.Copy(staging.info.pMappedData, data != nullptr ? image->recipe.pixels.data() : nullptr, dataSize);
     m_uploads.Then([allocator = allocator, allocation = staging.allocation]() { vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE); });
+    // Any thread may make images while a frame records the uploads.
+    std::lock_guard lock(m_imagesMutex);
+    m_pendingUploads.push_back({ staging, image->image, extent, mipmapped });
     m_liveImages.insert(image);
     return image;
 }
 
 void tachyon::vulkan::VulkanDeviceContext::RecordPendingUploads(VkCommandBuffer cmd)
 {
-    for (const PendingUpload& upload : m_pendingUploads)
+    // Taken as they are now: an image made meanwhile goes with the next frame.
+    std::vector<PendingUpload> uploads;
+    {
+        std::lock_guard lock(m_imagesMutex);
+        uploads.swap(m_pendingUploads);
+    }
+    for (const PendingUpload& upload : uploads)
     {
         tachyon::vulkan::transition_image(cmd, upload.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         VkBufferImageCopy region {};
@@ -1409,9 +1557,8 @@ void tachyon::vulkan::VulkanDeviceContext::RecordPendingUploads(VkCommandBuffer 
             tachyon::vulkan::transition_image(cmd, upload.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
         const Buffer staging = upload.staging;
-        GetDeletionQueue(tachyon::DeviceScope::Frame).push_function([this, staging]() { DestroyBuffer(staging); });
+        DestroyAfterGpu([this, staging]() { DestroyBuffer(staging); });
     }
-    m_pendingUploads.clear();
 
     // Resident buffers: one barrier makes every copy visible to the shaders that read them.
     bool copied = false;
@@ -1422,7 +1569,7 @@ void tachyon::vulkan::VulkanDeviceContext::RecordPendingUploads(VkCommandBuffer 
         const VkBufferCopy region{ .srcOffset = 0, .dstOffset = 0, .size = resident.size };
         vkCmdCopyBuffer(cmd, resident.staging.buffer, resident.buffer.buffer, 1, &region);
         const Buffer staging = resident.staging;
-        GetDeletionQueue(tachyon::DeviceScope::Frame).push_function([this, staging]() { DestroyBuffer(staging); });
+        DestroyAfterGpu([this, staging]() { DestroyBuffer(staging); });
         resident.staging = {};
         resident.ready   = true;
         copied = true;
@@ -1498,24 +1645,34 @@ void tachyon::vulkan::VulkanDeviceContext::ReleaseResidentBuffer(tachyon::RHI::R
     m_residentBuffers.erase(it);
     if (!resident.ready)
     {
-        // Never copied, so no command buffer refers to it.
-        DestroyBuffer(resident.staging);
-        DestroyBuffer(resident.buffer);
+        // Never copied, so no command buffer refers to it (the upload worker may still fill
+        // its staging copy: DestroyUnsubmittedBuffer waits for it).
+        DestroyUnsubmittedBuffer(resident.staging);
+        DestroyUnsubmittedBuffer(resident.buffer);
         return;
     }
-    GetDeletionQueue(tachyon::DeviceScope::Frame).push_function([this, buffer = resident.buffer]() { DestroyBuffer(buffer); });
+    DestroyAfterGpu([this, buffer = resident.buffer]() { DestroyBuffer(buffer); });
 }
 
 void tachyon::vulkan::VulkanDeviceContext::DestroyImage(tachyon::Image* img)
 {
     VulkanImage* vulkanImage = (VulkanImage*)img;
-    m_liveImages.erase(vulkanImage);
+    {
+        std::lock_guard lock(m_imagesMutex);
+        m_liveImages.erase(vulkanImage);
+    }
     DestroyImage(*vulkanImage);
 }
 
 void tachyon::vulkan::VulkanDeviceContext::ReleaseLiveImages()
 {
-    for (VulkanImage* image : m_liveImages)
+    // Taken under the lock, destroyed outside it: DestroyImage takes it too.
+    std::vector<VulkanImage*> live;
+    {
+        std::lock_guard lock(m_imagesMutex);
+        live.assign(m_liveImages.begin(), m_liveImages.end());
+    }
+    for (VulkanImage* image : live)
     {
         DestroyImage(*image);
         image->image     = VK_NULL_HANDLE;
@@ -1526,6 +1683,7 @@ void tachyon::vulkan::VulkanDeviceContext::ReleaseLiveImages()
 
 void tachyon::vulkan::VulkanDeviceContext::RebuildLiveImages()
 {
+    std::lock_guard lock(m_imagesMutex);
     for (VulkanImage* image : m_liveImages)
     {
         VulkanImage::Recipe recipe = std::move(image->recipe);
@@ -1546,15 +1704,33 @@ void tachyon::vulkan::VulkanDeviceContext::RebuildLiveImages()
 void tachyon::vulkan::VulkanDeviceContext::DestroyImageAtEnd(tachyon::Image* img, tachyon::DeviceScope scope,
                                                     [[maybe_unused]] const std::source_location& loc)
 {
-    m_liveImages.erase((VulkanImage*)img);
     VulkanImage vulkanImage = *(VulkanImage*)img;
+    // Dropped: nothing may record a use of it from now on, its own upload included, or a
+    // later frame would use it after its destroy was timed.
+    std::vector<Buffer> cancelled;
+    {
+        std::lock_guard lock(m_imagesMutex);
+        m_liveImages.erase((VulkanImage*)img);
+        std::erase_if(m_pendingUploads, [&](const PendingUpload& upload)
+        {
+            if (upload.image != vulkanImage.image) return false;
+            cancelled.push_back(upload.staging);
+            return true;
+        });
+    }
+    for (const Buffer& staging : cancelled)
+        DestroyUnsubmittedBuffer(staging);   // never recorded; waits for the upload worker
+    // Dropped for good only with the frame: an Application-scope image stays usable until
+    // Cleanup (a registered checkerboard handed over at once, say).
+    if (scope == tachyon::DeviceScope::Frame)
+        NoteDropped(vulkanImage.imageView, loc);
     auto func = [this, vulkanImage, img]()
         {
-            //TACHYON_LOG_ERROR(kLogVulkan, "{}({}): {}", loc.file_name(), loc.line(), loc.function_name());
+            NoteDestroyed(vulkanImage.imageView);
             DestroyImage(vulkanImage);
             delete img;
         };
-    GetDeletionQueue(scope).push_function(func);
+    Defer(scope, std::move(func));
 }
 
 void tachyon::vulkan::VulkanDeviceContext::DestroyVisualColorStyles(tachyon::Buffer* buffer)
@@ -1572,7 +1748,7 @@ void tachyon::vulkan::VulkanDeviceContext::DestroyVisualColorStylesAtEnd(tachyon
             DestroyVisualColorStyles(buffer);
             delete buffer;
         };
-    GetDeletionQueue(scope).push_function(func);
+    Defer(scope, std::move(func));
 }
 
 void tachyon::vulkan::VulkanDeviceContext::DestroyVisualBoxStyles(tachyon::Buffer* buffer)
@@ -1590,7 +1766,7 @@ void tachyon::vulkan::VulkanDeviceContext::DestroyVisualBoxStylesAtEnd(tachyon::
             DestroyVisualBoxStyles(buffer);
             delete buffer;
         };
-    GetDeletionQueue(scope).push_function(func);
+    Defer(scope, std::move(func));
 }
 
 void tachyon::vulkan::VulkanDeviceContext::DestroyImage(const VulkanImage& img)
@@ -1599,12 +1775,19 @@ void tachyon::vulkan::VulkanDeviceContext::DestroyImage(const VulkanImage& img)
     if (m_uploads.Busy())
         m_uploads.Wait();
     // An upload still queued for this image has nothing left to fill.
-    std::erase_if(m_pendingUploads, [&](const PendingUpload& upload)
+    std::vector<Buffer> cancelled;
     {
-        if (upload.image != img.image) return false;
-        DestroyBuffer(upload.staging);
-        return true;
-    });
+        std::lock_guard lock(m_imagesMutex);
+        std::erase_if(m_pendingUploads, [&](const PendingUpload& upload)
+        {
+            if (upload.image != img.image) return false;
+            cancelled.push_back(upload.staging);
+            return true;
+        });
+    }
+    for (const Buffer& staging : cancelled)
+        DestroyUnsubmittedBuffer(staging);   // never recorded
+    assert((t_destroyingAfterGpu || FramesDone()) && "a GPU image destroyed while a frame may use it: DestroyImageAtEnd");
     vkDestroyImageView(device, img.imageView, AllocationCallbacks());
     vmaDestroyImage(allocator, img.image, img.allocation);
 }

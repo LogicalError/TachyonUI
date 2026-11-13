@@ -552,23 +552,28 @@ namespace tachyon
             if (const JsonValue* saved = section("layoutPresets", key))
                 (void)target->FromJson(saved->Write());
 
-        // Theme variables, in place of the ones set before; the theme loads again with them.
+        // Theme variables, in place of the ones set before; the theme loads again with them, when
+        // they differ from the ones it has (a start that changed nothing loads it once).
         for (const std::string& key : m_persistThemeVariables)
         {
             const JsonValue* saved = section("themeVariables", key);
             if (!saved || !saved->IsObject())
                 continue;
-            m_themeVariables.clear();
+            decltype(m_themeVariables) restored;
             for (const auto& [path, set] : saved->Members())
             {
                 if (!set.IsObject())
                     continue;
-                ThemeVariableOverrides& variables = m_themeVariables[ThemePathKey(path)];
+                ThemeVariableOverrides& variables = restored[ThemePathKey(path)];
                 for (const auto& [name, value] : set.Members())
                     if (value.IsString())
                         variables[name] = value.AsString();
             }
-            m_themeReloadPending = true;
+            if (restored != m_themeVariables)
+            {
+                m_themeVariables = std::move(restored);
+                m_themeReloadPending = true;
+            }
         }
 
         // App values, by their own type; a value of another type is skipped.

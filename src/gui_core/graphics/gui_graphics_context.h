@@ -39,8 +39,8 @@ namespace tachyon
     class IWindowBackend;
     class IWindowContext;
 
-    /// When a deferred GPU resource destruction runs: Frame once the frames that may use it
-    /// are done, Application at Cleanup.
+    /// When a deferred GPU resource destruction runs: Frame once the GPU has finished the frames
+    /// that may use it, Application at Cleanup.
     enum class DeviceScope
     {
         Frame,
@@ -110,8 +110,11 @@ namespace tachyon
         /// null for a cleared image); `mipmapped` generates its mip levels. Doesn't wait for the GPU:
         /// the upload goes with the next frame. RegisterImage makes it drawable.
         virtual Image*  CreateImage(void* data, uint2 size, ImageFormat format, Sampler sampler, bool mipmapped = false) = 0;
-        /// Destroys the image and deletes the object once the GPU is done with it: a few frames
-        /// on for DeviceScope::Frame, at Cleanup for DeviceScope::Application. `loc` is for diagnostics.
+        /// Destroys the image and deletes the object once the GPU is done with it: for
+        /// DeviceScope::Frame once it has finished the frames that may have drawn with it, however
+        /// many frames draw nothing meanwhile; for DeviceScope::Application at Cleanup. Unregister
+        /// it first (UnregisterImage): no frame may draw with it after this. Any thread. `loc` is
+        /// for diagnostics.
         virtual void    DestroyImageAtEnd(Image* img, DeviceScope scope, const std::source_location& loc = std::source_location::current()) = 0;
 
     public:
