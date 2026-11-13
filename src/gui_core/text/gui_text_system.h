@@ -378,13 +378,15 @@ namespace tachyon
 
         /// Registers an icon from `size.x` x `size.y` RGBA pixels (straight alpha, rows from the
         /// top) under a unique name: a picture in its own colors, drawn untinted. Registering a
-        /// name again returns the existing icon. Each takes one of the image slots shared with
-        /// fonts, gradients and images. IconID::Invalid if `rgba` is too short.
+        /// name again returns the existing icon, and counts as a registration of its own: two
+        /// caches that use one name each let go of it. Each icon takes one of the image slots
+        /// shared with fonts, gradients and images. IconID::Invalid if `rgba` is too short.
         virtual IconID RegisterIconFromPixels(const char* name, uint2 size, std::span<const uint8_t> rgba) = 0;
 
-        /// Lets go of an icon from RegisterIconFromPixels: its image slot is freed, the ID draws
-        /// nothing from then on and isn't given out again, and its name can be registered anew.
-        /// Does nothing for other icons.
+        /// Lets go of one registration of an icon from RegisterIconFromPixels. At the last one,
+        /// its image slot is freed, the ID draws nothing from then on and isn't given out again,
+        /// and its name can be registered anew. Does nothing for other icons, nor once an icon
+        /// has been let go of as often as it was registered.
         virtual void UnregisterIcon(IconID iconId) = 0;
 
         // -------------------- Icon Rendering --------------------

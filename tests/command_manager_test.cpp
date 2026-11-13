@@ -5,6 +5,8 @@
 #include <gui_core/input/gui_command_manager.h>
 #include <gui_core/input/gui_input_state.h>
 
+#include <string>
+
 using tachyon::CommandManager;
 using tachyon::CommandID;
 using tachyon::CommandMode;
@@ -478,4 +480,61 @@ TEST(CommandManager, RegisteredModesAreDistinct)
     m.SetMode(sculpt);
     m.ProcessInput(MakeKey(KeyCode::KeyG));
     EXPECT_EQ(fired, 1);
+}
+
+// A command's callback can register commands while it runs, its own binding included: it
+// carries on with what it captured. The text is longer than a short string, so it lives on
+// the heap and a freed callback would read freed memory.
+namespace
+{
+    const std::string kLongText = "the text the callback writes, longer than a short string";
+
+    // Rebinds the D key to a callback of its own, then registers enough commands to move them all.
+    void RegisterOverIt(CommandManager& m)
+    {
+        m.RegisterCommand(KeyCode::KeyD, KeyModifier::Control, []() {}, "Replaced");
+        for (int i = 0; i < 64; ++i)
+            m.RegisterCommand(IconID::Invalid, []() {}, "Filler");
+    }
+}
+
+TEST(CommandManager, ACommandThatRegistersCommandsKeepsRunning)
+{
+    CommandManager m;
+    std::string written;
+    m.RegisterCommand(KeyCode::KeyD, KeyModifier::Control,
+                      [&m, &written, text = kLongText]() { RegisterOverIt(m); written = text; }, "Duplicate");
+    EXPECT_TRUE(Dispatch(m, KeyCode::KeyD, KeyModifier::Control));
+    EXPECT_EQ(written, kLongText);
+}
+
+TEST(CommandManager, AChordThatRegistersCommandsKeepsRunning)
+{
+    CommandManager m;
+    std::string written;
+    m.RegisterChord(CommandMode::Default, KeyCode::KeyK, KeyModifier::Control, KeyCode::KeyS, KeyModifier::Control,
+                    [&m, &written, text = kLongText]() {
+                        m.RegisterChord(CommandMode::Default, KeyCode::KeyK, KeyModifier::Control,
+                                        KeyCode::KeyS, KeyModifier::Control, []() {}, "Replaced");
+                        RegisterOverIt(m);
+                        written = text;
+                    }, "Save All");
+    EXPECT_TRUE(Dispatch(m, KeyCode::KeyK, KeyModifier::Control));
+    EXPECT_TRUE(Dispatch(m, KeyCode::KeyS, KeyModifier::Control));
+    EXPECT_EQ(written, kLongText);
+}
+
+TEST(CommandManager, AHeldCommandsEndThatRegistersCommandsKeepsRunning)
+{
+    CommandManager m;
+    std::string written;
+    m.RegisterHeldCommand(KeyCode::Space, KeyModifier::None, []() {},
+                          [&m, &written, text = kLongText]() {
+                              m.RegisterHeldCommand(KeyCode::Space, KeyModifier::None, []() {}, []() {});
+                              RegisterOverIt(m);
+                              written = text;
+                          });
+    EXPECT_TRUE(Dispatch(m, KeyCode::Space));
+    EXPECT_TRUE(DispatchUp(m, KeyCode::Space));
+    EXPECT_EQ(written, kLongText);
 }

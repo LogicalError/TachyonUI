@@ -26,6 +26,11 @@ namespace tachyon
     {
     public:
         explicit FileIcons(ITextSystem& textSystem, uint32_t pixels = 48);
+        /// Lets go of the icons it registered (ITextSystem::UnregisterIcon); another cache's
+        /// registrations of the same icons keep them.
+        ~FileIcons();
+        FileIcons(const FileIcons&)            = delete;
+        FileIcons& operator=(const FileIcons&) = delete;
 
         IconID Get(std::string_view name, bool isFolder);
         /// A folder's icon while it's open, or while something is dragged over it.

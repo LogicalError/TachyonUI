@@ -286,7 +286,10 @@ namespace tachyon
 		auto& icons = m_skribidiContext->pixelIcons;
 		for (size_t i = 0; i < icons.size(); i++)
 			if (icons[i].image && icons[i].name == name)
+			{
+				++icons[i].references;
 				return IconID{ SkribidiContext::kPixelIconBit | uint32_t(i + 1) };
+			}
 
 		std::vector<uint8_t> pixels(rgba.begin(), rgba.begin() + std::ptrdiff_t(size_t(size.x) * size.y * 4));
 		GraphicsContext* gc = m_skribidiContext->graphicsContext;
@@ -302,7 +305,8 @@ namespace tachyon
 		const std::string placeholder = std::string("pixels:") + name;
 		const skb_icon_handle_t handle = skb_icon_collection_add_icon(m_skribidiContext->icon_collection, placeholder.c_str(),
 		                                                              float(size.x), float(size.y));
-		icons.push_back(SkribidiContext::PixelIcon{ .name = name, .image = image, .index = index, .size = size, .handle = handle });
+		icons.push_back(SkribidiContext::PixelIcon{ .name = name, .image = image, .index = index, .size = size, .handle = handle,
+		                                            .references = 1 });
 		return IconID{ SkribidiContext::kPixelIconBit | uint32_t(icons.size()) };
 	}
 
@@ -314,7 +318,7 @@ namespace tachyon
 		if (!m_skribidiContext->GetPixelIcon(iconId))
 			return;
 		SkribidiContext::PixelIcon* icon = &m_skribidiContext->pixelIcons[((uint32_t)iconId & ~SkribidiContext::kPixelIconBit) - 1];
-		if (!icon->image)
+		if (!icon->image || --icon->references > 0)
 			return;
 		GraphicsContext* gc = m_skribidiContext->graphicsContext;
 		if (gc && icon->index != ImageIndex::Invalid)

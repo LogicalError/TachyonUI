@@ -1049,9 +1049,17 @@ namespace
         EXPECT_NE(green, tachyon::IconID::Invalid);
         EXPECT_NE(green, app.picture);
 
-        // Let go: the name can be registered anew, under another ID.
+        // Each registration is let go of on its own: registered twice, it lives on after
+        // the first release.
+        EXPECT_EQ(app.textSystem->RegisterIconFromPixels("green", tachyon::uint2{ 2, 1 }, kOther), green);
         app.textSystem->UnregisterIcon(green);
+        EXPECT_EQ(app.textSystem->RegisterIconFromPixels("green", tachyon::uint2{ 2, 1 }, kOther), green)
+            << "still registered once";
         app.textSystem->UnregisterIcon(green);
+
+        // Let go of as often as registered: the name can be registered anew, under another ID.
+        app.textSystem->UnregisterIcon(green);
+        app.textSystem->UnregisterIcon(green);   // once more than registered: nothing happens
         const tachyon::IconID again = app.textSystem->RegisterIconFromPixels("green", tachyon::uint2{ 2, 1 }, kOther);
         EXPECT_NE(again, tachyon::IconID::Invalid);
         EXPECT_NE(again, green) << "an ID isn't given out again";
