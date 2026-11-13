@@ -21,14 +21,35 @@ namespace tachyon::Diagnostics
     {
         struct Sink { LogSinkFn fn; void* context; };
 
+        // Two locks, always taken in this order when both are held:
+        // - `dispatch` covers handing records out (the console and the sinks) and the sink
+        //   list. Records reach the sinks in sequence order, and once RemoveLogSink returns
+        //   on another thread the sink isn't called again. It is recursive so a sink can
+        //   log and add or remove sinks on its own thread.
+        // - `ring` covers the ring and the sequence, held only to copy a record in or out:
+        //   LatestLogSequence and CopyRecentLogRecords take only it, so sinks can call them.
         struct Logger
         {
-            std::mutex mutex;
-            Sink       sinks[kMaxLogSinks] = {};
-            int        sinkCount = 0;
-            LogRecord  ring[kLogRingCapacity];
+            std::recursive_mutex dispatch;
+            Sink                 sinks[kMaxLogSinks] = {};
+            int                  sinkCount = 0;
+
+            std::mutex ring;
+            LogRecord  records[kLogRingCapacity];
             uint64_t   sequence = 0;
         };
+
+        // How many sinks this thread is inside: what a sink logs isn't handed to the sinks
+        // again, so a sink that logs about every record doesn't go round forever.
+        thread_local int t_sinkDepth = 0;
+
+        bool IsSinkRegistered(const Logger& logger, Sink sink)
+        {
+            for (int i = 0; i < logger.sinkCount; ++i)
+                if (logger.sinks[i].fn == sink.fn && logger.sinks[i].context == sink.context)
+                    return true;
+            return false;
+        }
 
         Logger& GetLogger()
         {
@@ -154,12 +175,9 @@ namespace tachyon::Diagnostics
     bool AddLogSink(LogSinkFn sink, void* context)
     {
         Logger& logger = GetLogger();
-        std::lock_guard lock(logger.mutex);
-        if (!sink || logger.sinkCount == kMaxLogSinks)
+        std::lock_guard lock(logger.dispatch);
+        if (!sink || logger.sinkCount == kMaxLogSinks || IsSinkRegistered(logger, { sink, context }))
             return false;
-        for (int i = 0; i < logger.sinkCount; ++i)
-            if (logger.sinks[i].fn == sink && logger.sinks[i].context == context)
-                return false;
         logger.sinks[logger.sinkCount++] = { sink, context };
         return true;
     }
@@ -167,7 +185,7 @@ namespace tachyon::Diagnostics
     void RemoveLogSink(LogSinkFn sink, void* context)
     {
         Logger& logger = GetLogger();
-        std::lock_guard lock(logger.mutex);
+        std::lock_guard lock(logger.dispatch);
         for (int i = 0; i < logger.sinkCount; ++i)
         {
             if (logger.sinks[i].fn == sink && logger.sinks[i].context == context)
@@ -178,7 +196,7 @@ namespace tachyon::Diagnostics
         }
     }
 
-    void LogMessage(LogCategory category, LogSeverity severity, std::string_view messageTemplate,
+    void LogMessage(LogCategory category, LogSeverity severity, LogTemplate messageTemplate,
                     std::span<const LogArg> args, const char* file, uint32_t line)
     {
         if (severity < GetMinimumLogSeverity())
@@ -189,7 +207,7 @@ namespace tachyon::Diagnostics
         record.threadId        = std::hash<std::thread::id>{}(std::this_thread::get_id());
         record.category        = category;
         record.severity        = severity;
-        record.messageTemplate = messageTemplate;
+        record.messageTemplate = messageTemplate.text;
         record.file            = file ? file : "";
         record.line            = line;
         record.argCount        = uint8_t(std::min<size_t>(args.size(), kMaxLogArgs));
@@ -212,31 +230,48 @@ namespace tachyon::Diagnostics
         }
 
         Logger& logger = GetLogger();
-        std::lock_guard lock(logger.mutex);
-        record.sequence = ++logger.sequence;
-        logger.ring[(record.sequence - 1) % kLogRingCapacity] = record;
+        std::lock_guard dispatch(logger.dispatch);
+        {
+            std::lock_guard ring(logger.ring);
+            record.sequence = ++logger.sequence;
+            logger.records[(record.sequence - 1) % kLogRingCapacity] = record;
+        }
         if (g_consoleOutput.load(std::memory_order_relaxed))
             WriteToConsole(record);
-        for (int i = 0; i < logger.sinkCount; ++i)
-            logger.sinks[i].fn(record, logger.sinks[i].context);
+        if (t_sinkDepth > 0)
+            return;
+
+        // A sink may add or remove sinks: go by the list as it was, and skip one removed
+        // meanwhile.
+        Sink sinks[kMaxLogSinks];
+        const int sinkCount = logger.sinkCount;
+        std::copy_n(logger.sinks, sinkCount, sinks);
+        struct InSinks
+        {
+            InSinks()  { ++t_sinkDepth; }
+            ~InSinks() { --t_sinkDepth; }   // a sink that throws doesn't leave the thread inside
+        } inSinks;
+        for (int i = 0; i < sinkCount; ++i)
+            if (IsSinkRegistered(logger, sinks[i]))
+                sinks[i].fn(record, sinks[i].context);
     }
 
     uint64_t LatestLogSequence()
     {
         Logger& logger = GetLogger();
-        std::lock_guard lock(logger.mutex);
+        std::lock_guard lock(logger.ring);
         return logger.sequence;
     }
 
     uint32_t CopyRecentLogRecords(std::span<LogRecord> out)
     {
         Logger& logger = GetLogger();
-        std::lock_guard lock(logger.mutex);
+        std::lock_guard lock(logger.ring);
         const uint64_t available = std::min<uint64_t>(logger.sequence, kLogRingCapacity);
         const uint64_t count     = std::min<uint64_t>(available, out.size());
         const uint64_t first     = logger.sequence - count + 1;
         for (uint64_t i = 0; i < count; ++i)
-            out[i] = logger.ring[(first + i - 1) % kLogRingCapacity];
+            out[i] = logger.records[(first + i - 1) % kLogRingCapacity];
         return uint32_t(count);
     }
 }

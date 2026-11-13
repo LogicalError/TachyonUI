@@ -140,6 +140,8 @@ namespace tachyon
                                 if (!Literal("\\u") || !Hex4(low) || low < 0xDC00 || low >= 0xE000) return Fail("a lone surrogate");
                                 cp = 0x10000 + ((cp - 0xD800) << 10) + (low - 0xDC00);
                             }
+                            else if (cp >= 0xDC00 && cp < 0xE000)   // a low half without its high half
+                                return Fail("a lone surrogate");
                             AppendUtf8(out, cp);
                             break;
                         }

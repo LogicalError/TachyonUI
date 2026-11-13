@@ -105,6 +105,18 @@ namespace tachyon::Diagnostics
     inline constexpr int kLogRingCapacity   = 1024;
     inline constexpr int kMaxLogSinks       = 8;
 
+    /// A message template, with a {} per argument. Records keep a view of it, so it must live as
+    /// long as the program: only a character array that is a constant expression builds one,
+    /// a string literal most often. Text made at run time goes in as a {} argument, which is
+    /// copied into the record.
+    struct LogTemplate
+    {
+        template<size_t N>
+        consteval LogTemplate(const char (&chars)[N]) : text(chars, N > 0 && chars[N - 1] == '\0' ? N - 1 : N) {}
+
+        std::string_view text;
+    };
+
     /// One message as sinks and CopyRecentLogRecords see it. Fixed size; its strings are
     /// static or inside the record.
     struct LogRecord
@@ -114,7 +126,7 @@ namespace tachyon::Diagnostics
         uint64_t         threadId       = 0; ///< Hash of the emitting thread's std::thread::id
         LogCategory      category;           ///< Where it comes from
         LogSeverity      severity       = LogSeverity::Info; ///< How serious it is
-        std::string_view messageTemplate;    ///< Static, with a {} per argument
+        std::string_view messageTemplate;    ///< A LogTemplate's text: lives as long as the program
         const char*      file           = ""; ///< Source file of the call (__FILE__)
         uint32_t         line           = 0; ///< Source line of the call
         uint8_t          argCount       = 0; ///< How many of args are used
@@ -137,7 +149,10 @@ namespace tachyon::Diagnostics
     /// Turns the built-in stdout/stderr/debugger sink on or off (on by default). [AnyThread]
     void SetLogConsoleOutput(bool enabled);
 
-    /// A log sink. Sinks run on the emitting thread, under the logger's lock.
+    /// A log sink. Sinks run on the emitting thread, one record at a time and in sequence
+    /// order. A sink may log, read the ring and add or remove sinks; what it logs reaches the
+    /// ring and the console but not the sinks. Once RemoveLogSink returns on another thread,
+    /// the sink isn't called again.
     using LogSinkFn = void (*)(const LogRecord& record, void* context);
     /// Registers `sink`, called with every record and `context`. False when this sink and
     /// context are already registered or kMaxLogSinks are in use. [MainThread]
@@ -146,7 +161,7 @@ namespace tachyon::Diagnostics
     void RemoveLogSink(LogSinkFn sink, void* context);
 
     /// Emits one record. Prefer the TACHYON_LOG_* macros, which add the source location. [AnyThread]
-    void LogMessage(LogCategory category, LogSeverity severity, std::string_view messageTemplate,
+    void LogMessage(LogCategory category, LogSeverity severity, LogTemplate messageTemplate,
                     std::span<const LogArg> args, const char* file = "", uint32_t line = 0);
 
     /// API misuse (an unbalanced Begin/End, a call outside its frame, ...) is reported, not
@@ -168,7 +183,7 @@ namespace tachyon::Diagnostics
     /// the TACHYON_LOG_* macros call. [AnyThread]
     template<typename... Args>
     void Log(LogCategory category, LogSeverity severity, const char* file, uint32_t line,
-             std::string_view messageTemplate, const Args&... args)
+             LogTemplate messageTemplate, const Args&... args)
     {
         static_assert(sizeof...(Args) <= kMaxLogArgs, "too many log arguments");
         if (severity < GetMinimumLogSeverity())

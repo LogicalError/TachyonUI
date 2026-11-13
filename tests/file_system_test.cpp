@@ -314,6 +314,29 @@ namespace tachyon
         }
 
 #ifdef _WIN32
+        // A cache lets go of its icons when it goes. Two caches of a size share the icons:
+        // the first to go leaves the other's, the last frees them.
+        TEST(FileIconsTest, ACacheLetsGoOfItsIconsWithoutTakingAnothersWithThem)
+        {
+            StubTextSystem textSystem;
+            IconID text = IconID::Invalid, folder = IconID::Invalid;
+            {
+                FileIcons first(textSystem, 32);
+                text   = first.Get("notes.txt", false);
+                folder = first.Get("Docs", true);
+                ASSERT_NE(text, IconID::Invalid);
+                ASSERT_NE(folder, IconID::Invalid);
+                {
+                    FileIcons second(textSystem, 32);
+                    EXPECT_EQ(second.Get("notes.txt", false), text) << "the same icon, by name";
+                }
+                EXPECT_TRUE(textSystem.IsPixelIconLive(text)) << "the other cache still has it";
+                EXPECT_TRUE(textSystem.IsPixelIconLive(folder));
+            }
+            EXPECT_FALSE(textSystem.IsPixelIconLive(text)) << "the last cache freed it";
+            EXPECT_FALSE(textSystem.IsPixelIconLive(folder));
+        }
+
         // An icon of colors and a mask, without alpha of its own: the mask says what shows.
         TEST(FileIconsTest, AnIconWithoutAlphaUsesItsMask)
         {
