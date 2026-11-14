@@ -20,7 +20,9 @@ namespace tachyon
         // In flex-column, items chained via keep-with-next form one horizontal "row" sharing
         // a Y slot, so `Label + Field` works without a nested flex-row. Without keep-with-next
         // every group is a single item and this is plain flex-column.
-        template <typename Visitor>
+        // kContentSize: for the sizing passes, an item's height counts at no less than its
+        // flex-basis when it can't grow (LayoutHelpers::FlexContentContribution).
+        template <bool kContentSize = false, typename Visitor>
         static inline void VisitColumnGroups(std::span<const ElementRect> childRects,
                                              int16_t gap,
                                              Visitor&& visitor)
@@ -28,6 +30,9 @@ namespace tachyon
             if (childRects.empty()) return;
 
             auto axisSize = [](const ElementRect& c, int axis) -> int32_t {
+                if constexpr (kContentSize)
+                    if (axis == 1)
+                        return LayoutHelpers::FlexContentContribution<1>(c);
                 int32_t s = c.rect.size[axis];
                 if (s == 0)
                 {
@@ -228,7 +233,7 @@ namespace tachyon
             case FlexDirection::RowReverse:
             {
                 int32_t totalChildrenInFlow = 0;
-                int32_t totalSize = LayoutHelpers::CalcLayoutAdd<0>(childRects, totalChildrenInFlow);
+                int32_t totalSize = LayoutHelpers::CalcFlexContentAdd<0>(childRects, totalChildrenInFlow);
                 int32_t totalGaps = (totalChildrenInFlow < 1) ? 0 : ((totalChildrenInFlow - 1) * flexLayout.gap);
 
                 // Fixed-width parent: distribute the remaining space.
@@ -319,7 +324,7 @@ namespace tachyon
             {
                 int32_t total    = 0;
                 int32_t numRows  = 0;
-                VisitColumnGroups(childRects, flexLayout.gap,
+                VisitColumnGroups<true>(childRects, flexLayout.gap,
                     [&](size_t, size_t, int32_t, int32_t rowHeight, int32_t)
                     {
                         total += rowHeight;

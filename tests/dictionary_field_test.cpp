@@ -109,6 +109,35 @@ namespace tachyon
         };
 
         // ---- Tests --------------------------------------------------------
+        // ---- Tests --------------------------------------------------------
+
+        // The value fields line up, under the header's Value, however long each key is.
+        TEST_F(DictionaryFieldTest, TheValueColumnLinesUpWhateverTheKeys)
+        {
+            std::vector<std::pair<std::string, float>> dictionary{ { "a", 1.0f }, { "a much longer key than that", 12345678.0f }, { "b", 25.0f } };
+            const ID id = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow({ 600, 300 });
+                app.Field(id, dictionary, LayoutOverride{}.Width(Pixels{ 400 }));
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+
+            std::vector<int> valueX, keyX;
+            int headerValueX = -1;
+            Walk(app.elementStorage.FindElementRefByID(id), [&](ElementRef, const Element& e, const ElementRect& r, int) {
+                if (e.styleRef == app.theme.collectionValueStyleRef) valueX.push_back(r.rect.x);
+                if (e.styleRef == app.theme.controls->textbox)       keyX.push_back(r.rect.x);
+                if (e.styleRef == app.theme.collectionHeaderCellStyleRef) headerValueX = r.rect.x;   // the last: Value's
+            });
+            ASSERT_EQ(valueX.size(), 3u);
+            ASSERT_EQ(keyX.size(), 3u);
+            EXPECT_EQ(valueX[0], valueX[1]) << "the value column is straight";
+            EXPECT_EQ(valueX[0], valueX[2]);
+            EXPECT_EQ(keyX[0], keyX[1]);
+            EXPECT_NEAR(valueX[0], headerValueX, 4) << "under the header's Value";
+        }
 
         // The real `Field(vector<pair<string,V>>&, ...)` overload inside a label group
         // + dock content wrapper, as the inspector panel uses it.

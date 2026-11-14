@@ -1106,12 +1106,32 @@ namespace tachyon
         /// Button / toggle group: Buttons / Field(bool) inside are restyled with
         /// .first-/.mid-/.last-* so they share borders. A single item keeps its plain style.
         bool        BeginButtonGroup(LayoutOverride&& constraints = {});
+        /// As above, with the group's own ID.
+        bool        BeginButtonGroup(ID id, LayoutOverride&& constraints = {});
         /// Closes BeginButtonGroup.
         void        EndButtonGroup();
         /// The same for Toggles and Field(bool).
         bool        BeginToggleGroup(LayoutOverride&& constraints = {});
         /// Closes BeginToggleGroup.
         void        EndToggleGroup();
+
+        /// One of a few choices side by side, as a button group with the chosen segment
+        /// selected: `selected` is its index in `options`. A click on another segment writes
+        /// its index to `selected` (stable storage of the caller's). True on the frame after.
+        bool        Segmented(ID id, int& selected, std::span<const std::string_view> options, LayoutOverride&& constraints = {});
+        /// As above, for an enum whose values are the segments' indices.
+        template<typename E> requires std::is_enum_v<E>
+        bool        Segmented(ID id, E& selected, std::span<const std::string_view> options, LayoutOverride&& constraints = {})
+        {
+            return SegmentedImpl(id, int(selected), options, [&selected](int index) { selected = E(index); }, std::move(constraints));
+        }
+        /// As above, with the call site as the ID.
+        template<typename T> requires (std::is_enum_v<T> || std::is_same_v<T, int>)
+        bool        Segmented(T& selected, std::span<const std::string_view> options, LayoutOverride&& constraints = {},
+                              std::source_location site = std::source_location::current())
+        {
+            return Segmented(idManager.AllocateDynamicID(site), selected, options, std::move(constraints));
+        }
 
         ///@}
         /// @name Areas, caching and layout containers
@@ -1989,8 +2009,11 @@ namespace tachyon
                 for (int i = 0; i < (int)items.size(); i++)
                 {
                     BeginHorizontal(idManager.AllocateDynamicID("dictionary_row"), theme.collectionEntryStyleRef, tachyon::LayoutOverride{}.NoShrink());
-                    Field(items[i].first,  tachyon::LayoutOverride{}.FlexGrow(1));
-                    Field(items[i].second, TextEditBehavior::ContinuousUpdate, theme.collectionValueStyleRef, tachyon::LayoutOverride{}.FlexGrow(1));
+                    // Key and value share the row evenly whatever they hold, as the header's
+                    // cells do: the columns line up from row to row.
+                    Field(items[i].first,  tachyon::LayoutOverride{}.FlexGrow(1).FlexBasis(Pixels{ 0 }));
+                    Field(items[i].second, TextEditBehavior::ContinuousUpdate, theme.collectionValueStyleRef,
+                          tachyon::LayoutOverride{}.FlexGrow(1).FlexBasis(Pixels{ 0 }));
                     Button(theme.tabCloseIcon, [&items, i]() { items.erase(items.begin() + i); },
                            theme.collectionRemoveStyleRef, tachyon::LayoutOverride{}.NoGrow());
                     EndHorizontal();
@@ -2163,14 +2186,44 @@ namespace tachyon
         inline bool SliderField(int& value, int minVal, int maxVal,
                                 std::string_view text, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return SliderField(idManager.AllocateDynamicID(site), value, minVal, maxVal, text, theme.sliderFieldTrackStyleRef, std::move(constraints)); }
 
-        /// Groove + knob without value text; drag-only, integer-valued.
-        bool        Slider(ID id, int& value, int minVal, int maxVal, StyleRef style, LayoutOverride&& constraints = {});
+        /// Groove + knob without value text; drag-only. Integer types step in whole numbers,
+        /// float and double move smoothly. Built for float, double and the 8 to 64 bit
+        /// integer types.
+        template<typename T> requires std::is_arithmetic_v<T>
+        bool        Slider(ID id, T& value, std::type_identity_t<T> minVal, std::type_identity_t<T> maxVal, StyleRef style, LayoutOverride&& constraints = {});
         /// As above, in the theme's slider style.
-        inline bool Slider(ID id, int& value, int minVal, int maxVal, LayoutOverride&& constraints = {}) { return Slider(id, value, minVal, maxVal, theme.sliderStyleRef, std::move(constraints)); }
+        template<typename T> requires std::is_arithmetic_v<T>
+        inline bool Slider(ID id, T& value, std::type_identity_t<T> minVal, std::type_identity_t<T> maxVal, LayoutOverride&& constraints = {}) { return Slider<T>(id, value, minVal, maxVal, theme.sliderStyleRef, std::move(constraints)); }
         /// As above, with the call site as the ID.
-        inline bool Slider(int& value, int minVal, int maxVal, StyleRef style, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Slider(idManager.AllocateDynamicID(site), value, minVal, maxVal, style, std::move(constraints)); }
+        template<typename T> requires std::is_arithmetic_v<T>
+        inline bool Slider(T& value, std::type_identity_t<T> minVal, std::type_identity_t<T> maxVal, StyleRef style, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Slider<T>(idManager.AllocateDynamicID(site), value, minVal, maxVal, style, std::move(constraints)); }
         /// As above, with the call site as the ID, in the theme's slider style.
-        inline bool Slider(int& value, int minVal, int maxVal, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Slider(idManager.AllocateDynamicID(site), value, minVal, maxVal, theme.sliderStyleRef, std::move(constraints)); }
+        template<typename T> requires std::is_arithmetic_v<T>
+        inline bool Slider(T& value, std::type_identity_t<T> minVal, std::type_identity_t<T> maxVal, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Slider<T>(idManager.AllocateDynamicID(site), value, minVal, maxVal, theme.sliderStyleRef, std::move(constraints)); }
+
+        /// A number in [minVal, maxVal]: a slider taking the row's room and a value box after
+        /// it to type into. True when the value changed. The types are Slider's.
+        template<typename T> requires std::is_arithmetic_v<T>
+        bool RangeField(ID id, T& value, std::type_identity_t<T> minVal, std::type_identity_t<T> maxVal, LayoutOverride&& constraints = {})
+        {
+            if (maxVal < minVal) std::swap(minVal, maxVal);
+            BeginHorizontal(id, theme.rangeFieldStyleRef, std::move(constraints));
+            [[maybe_unused]] const bool pushed = idManager.PushParent(id);   // the parts' IDs under the field's
+            bool changed = Slider<T>(idManager.AllocateDynamicID("range_slider"), value, minVal, maxVal,
+                                     theme.sliderStyleRef, LayoutOverride{}.FlexGrow(1));
+            NumericFieldConfig<T> config{};
+            config.minVal = minVal;
+            config.maxVal = maxVal;
+            changed = Field<T>(idManager.AllocateDynamicID("range_value"), value, TextEditBehavior::ContinuousUpdate,
+                               theme.controls->number, config, LayoutOverride::FixedWidth(CssPx{ 56 }).NoGrow().NoShrink()) || changed;
+            if (pushed) (void)idManager.PopParent();
+            EndHorizontal();
+            guiStateManager.SetModified(changed);
+            return changed;
+        }
+        /// As above, with the call site as the ID.
+        template<typename T> requires std::is_arithmetic_v<T>
+        inline bool RangeField(T& value, std::type_identity_t<T> minVal, std::type_identity_t<T> maxVal, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return RangeField<T>(idManager.AllocateDynamicID(site), value, minVal, maxVal, std::move(constraints)); }
 
 
 
@@ -2815,6 +2868,10 @@ namespace tachyon
         /// GUIApplicationInternals (gui_application_internal.h) re-exposes these to
         /// the library's own code and the tests.
         friend class GUIApplicationInternals;
+
+        /// Segmented's body: `pick` writes a clicked segment's index to the caller's value.
+        bool SegmentedImpl(ID id, int selected, std::span<const std::string_view> options,
+                           std::function<void(int)> pick, LayoutOverride&& constraints);
 
         /// Cached scopes being rebuilt (BeginCached misses), innermost last.
         std::vector<ID>                            m_cacheRecordStack;

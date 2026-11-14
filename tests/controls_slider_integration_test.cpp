@@ -10,6 +10,8 @@
 #include <gui_core/elements/gui_element_storage.h>
 #include <gui_core/input/gui_input_enums.h>
 
+#include <cstdint>
+
 namespace tachyon
 {
     using GUITest::HeadlessGUIApp;
@@ -175,6 +177,81 @@ namespace tachyon
                 EXPECT_FALSE(mismatch) << "kind " << int(kind);
                 drag.Cleanup();
             }
+        }
+
+        // A float slider moves smoothly: a quarter of the way along is near 0.25, not a whole number.
+        TEST_F(ControlsSliderIntegrationTest, AFloatSliderIsntRoundedToWholeNumbers)
+        {
+            float v = 0.0f;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.Slider(sliderID, v, 0.0f, 1.0f, LayoutOverride{}.Size(300, 30));
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+            const IntRect r = app.GetElementRect(sliderID);
+            app.DragFrom({ r.x + 1, r.y + r.h / 2 }, { r.x + r.w / 4, r.y + r.h / 2 });
+            app.Frame(draw);
+            EXPECT_NEAR(v, 0.25f, 0.05f);
+        }
+
+        // Any integer type works: a uint8_t slider in [50, 100] reaches both ends.
+        TEST_F(ControlsSliderIntegrationTest, ASmallIntegerSliderReachesBothEnds)
+        {
+            uint8_t v = 75;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.Slider(sliderID, v, uint8_t(50), uint8_t(100), LayoutOverride{}.Size(300, 30));
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+            const IntRect r = app.GetElementRect(sliderID);
+            app.DragFrom({ r.x + r.w / 2, r.y + r.h / 2 }, { r.x + r.w - 1, r.y + r.h / 2 });
+            app.Frame(draw);
+            EXPECT_EQ(v, 100);
+            app.DragFrom({ r.x + r.w / 2, r.y + r.h / 2 }, { r.x + 1, r.y + r.h / 2 });
+            app.Frame(draw);
+            EXPECT_EQ(v, 50);
+        }
+
+        // A ranged number: a slider that takes the room, and a 56px value box after it.
+        // Dragging the slider changes the value the box shows.
+        TEST_F(ControlsSliderIntegrationTest, ARangeFieldIsASliderAndAValueBox)
+        {
+            float v = 0.5f;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.RangeField(sliderID, v, 0.25f, 1.0f, LayoutOverride{}.Width(Pixels{ 400 }).NoGrow());
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+
+            IntRect slider{}, box{};
+            int sliders = 0, boxes = 0;
+            const ElementRef root = app.elementStorage.FindElementRefByID(sliderID);
+            ASSERT_TRUE(app.elementStorage.IsValidRef(root));
+            const auto children = app.elementStorage.GetChildRange(root);
+            for (uint32_t idx = children.begin; idx < children.end; ++idx)
+            {
+                const ElementRef ref{ root.depth + 1, idx };
+                const Element& e = *app.elementStorage.GetElementPtr(ref);
+                const IntRect& rect = app.elementStorage.GetElementRectPtr(ref)->rect;
+                if (e.styleRef == app.theme.sliderStyleRef)    { slider = rect; ++sliders; }
+                if (e.styleRef == app.theme.controls->number)  { box = rect;    ++boxes; }
+            }
+            ASSERT_EQ(sliders, 1);
+            ASSERT_EQ(boxes, 1);
+            EXPECT_EQ(box.w, app.styleManager.Px(56));
+            EXPECT_GT(slider.w, box.w) << "the slider takes the rest of the row";
+            EXPECT_LT(slider.x + slider.w, box.x) << "the box comes after the slider";
+
+            app.DragFrom({ slider.x + slider.w / 2, slider.y + slider.h / 2 },
+                         { slider.x + slider.w - 1, slider.y + slider.h / 2 });
+            app.Frame(draw);
+            EXPECT_NEAR(v, 1.0f, 0.01f);
         }
 
     } // namespace

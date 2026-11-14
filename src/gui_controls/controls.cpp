@@ -1014,7 +1014,11 @@ namespace tachyon
 
     bool GUIApplication::BeginButtonGroup(LayoutOverride&& constraints)
     {
-        tachyon::ID groupID = idManager.AllocateDynamicID("button_group");
+        return BeginButtonGroup(idManager.AllocateDynamicID("button_group"), std::move(constraints));
+    }
+
+    bool GUIApplication::BeginButtonGroup(ID groupID, LayoutOverride&& constraints)
+    {
         tachyon::Element wrap{};
         wrap.id       = groupID;
         wrap.styleRef = theme.buttonGroupStyleRef;
@@ -1054,6 +1058,30 @@ namespace tachyon
     {
         m_buttonGroup->EndToggleGroup();
         VERIFY(elementStorage.EndChildren());
+    }
+
+    bool GUIApplication::Segmented(ID id, int& selected, std::span<const std::string_view> options, LayoutOverride&& constraints)
+    {
+        return SegmentedImpl(id, selected, options, [&selected](int index) { selected = index; }, std::move(constraints));
+    }
+
+    bool GUIApplication::SegmentedImpl(ID id, int selected, std::span<const std::string_view> options,
+                                       std::function<void(int)> pick, LayoutOverride&& constraints)
+    {
+        bool clicked = false;
+        BeginButtonGroup(id, std::move(constraints).NoGrow());
+        [[maybe_unused]] const bool pushed = idManager.PushParent(id);   // the segments' IDs under the group's
+        for (int i = 0; i < int(options.size()); ++i)
+        {
+            const bool chosen = (i == selected);
+            if (chosen) guiStateManager.Construction().PushSelected();
+            clicked = Button(idManager.AllocateDynamicID("segment"), options[i], [pick, i]() { pick(i); }) || clicked;
+            if (chosen) guiStateManager.Construction().PopSelected();
+        }
+        if (pushed) (void)idManager.PopParent();
+        EndButtonGroup();
+        guiStateManager.SetModified(clicked);
+        return clicked;
     }
 
     // ---------------------------------------------------------------------------
@@ -1445,21 +1473,37 @@ namespace tachyon
 
     namespace
     {
-        // Per-element state of the integer slider's drag (element data store).
-        struct IntSliderState
+        // Per-element state of a slider's drag (element data store).
+        template<typename T>
+        struct SliderDragState
         {
-            Gesture<int> drag;   // `before`: the value at the press, put back by Escape
+            Gesture<T> drag;   // `before`: the value at the press, put back by Escape
         };
 
-        // Drag handler for the integer Slider / SliderField. Writes the caller's int
-        // (must be stable storage) from the cursor X, rounded to a whole number. Escape
-        // during the drag puts the value back.
-        tachyon::EventHandler MakeIntSliderDrag(GUIStateManager& gsm, const ElementStorage& es,
-                                            int* valuePtr, int minVal, int maxVal, int trackWidth)
+        // `v` in [minVal, maxVal] as a T: integer types round to the nearest whole number.
+        // The ends are returned as they are, so a range near the type's limits can't overflow.
+        template<typename T>
+        T SliderValueFrom(double v, T minVal, T maxVal)
         {
-            const int range = maxVal - minVal;
-            return [&gsm, &es, valuePtr, minVal, maxVal, range, trackWidth](tachyon::ElementEvent&& event) -> bool
+            if (!(v > double(minVal))) return minVal;
+            if (!(v < double(maxVal))) return maxVal;
+            if constexpr (std::is_integral_v<T>)
+                return std::clamp(T(std::round(v)), minVal, maxVal);
+            else
+                return T(v);
+        }
+
+        // Drag handler for Slider and the integer SliderField. Writes the caller's value
+        // (must be stable storage) from the cursor X. Escape during the drag puts it back.
+        // Keys: arrows step one (integers) or a hundredth of the range, Page Up / Down a
+        // tenth, Home / End to the ends.
+        template<typename T>
+        tachyon::EventHandler MakeSliderDrag(GUIStateManager& gsm, const ElementStorage& es,
+                                             T* valuePtr, T minVal, T maxVal, int trackWidth)
+        {
+            return [&gsm, &es, valuePtr, minVal, maxVal, trackWidth](tachyon::ElementEvent&& event) -> bool
             {
+                const double lo = double(minVal), range = double(maxVal) - double(minVal);
                 auto& store = gsm.GetElementDataStore();
                 auto setFromMouse = [&]()
                 {
@@ -1467,51 +1511,50 @@ namespace tachyon
                     int w     = event.rect ? event.rect->rect.w : trackWidth;
                     if (w <= 0) w = 1;
                     int cx    = event.rect ? event.LocalCursor(es).x : event.state.screenPos.x;
-                    float tt  = std::clamp(float(cx - leftX) / float(w), 0.0f, 1.0f);
-                    int nv    = std::clamp(minVal + int(std::lround(tt * float(range))), minVal, maxVal);
-                    if (nv != *valuePtr) *valuePtr = nv;
+                    const double tt = std::clamp(double(cx - leftX) / double(w), 0.0, 1.0);
+                    *valuePtr = SliderValueFrom(lo + tt * range, minVal, maxVal);
                 };
                 switch (event.type)
                 {
                     case tachyon::EventType::MouseDown:
                         if (event.state.LeftPressed())
                         {
-                            auto& s = store.GetOrCreate<IntSliderState>(event.id);
+                            auto& s = store.GetOrCreate<SliderDragState<T>>(event.id);
                             s.drag.Press(event, es, gsm, *valuePtr, { .atOnce = true, .capture = false });
                             setFromMouse();
                             return true;
                         }
                         break;
                     case tachyon::EventType::MouseMove:
-                        if (auto* s = store.Get<IntSliderState>(event.id); s && s->drag.Move(event, 0))
+                        if (auto* s = store.Get<SliderDragState<T>>(event.id); s && s->drag.Move(event, 0))
                         { setFromMouse(); return true; }
                         break;
                     case tachyon::EventType::MouseUp:
-                        if (auto* s = store.Get<IntSliderState>(event.id); s && s->drag.Release(event) != PointerDrag::Ended::No)
+                        if (auto* s = store.Get<SliderDragState<T>>(event.id); s && s->drag.Release(event) != PointerDrag::Ended::No)
                             return true;
                         break;
                     case tachyon::EventType::KeyDown:
                     {
-                        if (auto* s = store.Get<IntSliderState>(event.id); s && s->drag.Cancel(event, gsm, *valuePtr))
+                        if (auto* s = store.Get<SliderDragState<T>>(event.id); s && s->drag.Cancel(event, gsm, *valuePtr))
                             return true;
-                        // Arrows step 1, Page Up / Down a tenth of the range, Home / End to its ends.
                         if (gsm.Interaction().GetFocusedID() != event.id || event.state.consumed)
                             break;
-                        const int bigStep = std::max(1, range / 10);
-                        int step = 0;
+                        const double smallStep = std::is_integral_v<T> ? 1.0 : range / 100.0;
+                        const double bigStep   = std::is_integral_v<T> ? std::max(1.0, std::floor(range / 10.0)) : range / 10.0;
+                        double step = 0.0;
                         switch (event.state.lastKey)
                         {
-                            case tachyon::KeyCode::Left:  case tachyon::KeyCode::Down:     step = -1;       break;
-                            case tachyon::KeyCode::Right: case tachyon::KeyCode::Up:       step = +1;       break;
-                            case tachyon::KeyCode::PageDown:                               step = -bigStep; break;
-                            case tachyon::KeyCode::PageUp:                                 step = +bigStep; break;
+                            case tachyon::KeyCode::Left:  case tachyon::KeyCode::Down:     step = -smallStep; break;
+                            case tachyon::KeyCode::Right: case tachyon::KeyCode::Up:       step = +smallStep; break;
+                            case tachyon::KeyCode::PageDown:                               step = -bigStep;   break;
+                            case tachyon::KeyCode::PageUp:                                 step = +bigStep;   break;
                             case tachyon::KeyCode::Home: *valuePtr = minVal; return true;
                             case tachyon::KeyCode::End:  *valuePtr = maxVal; return true;
                             default: break;
                         }
-                        if (step == 0)
+                        if (step == 0.0)
                             break;
-                        *valuePtr = std::clamp(*valuePtr + step, minVal, maxVal);
+                        *valuePtr = SliderValueFrom(double(*valuePtr) + step, minVal, maxVal);
                         return true;
                     }
                     default: break;
@@ -1545,8 +1588,8 @@ namespace tachyon
         track.state    = guiStateManager.GetCurrentState(id);
         track.styleRef = style;
         track.eventHandler = ReportingChanges(guiStateManager, valuePtr,
-                                              MakeIntSliderDrag(guiStateManager, elementStorage,
-                                                                valuePtr, minVal, maxVal, trackWidth));
+                                              MakeSliderDrag(guiStateManager, elementStorage,
+                                                             valuePtr, minVal, maxVal, trackWidth));
         const auto trackRef = RegisterControl(std::move(track), std::move(constraints).FlexGrow(1));
 
         const auto bgStyle    = theme.sliderFieldBgStyleRef.visualBoxStyleIndex;
@@ -1615,29 +1658,32 @@ namespace tachyon
     }
 
     // ---------------------------------------------------------------------------
-    // Slider - groove + knob without value text; drag-only, integer-valued.
+    // Slider - groove + knob without value text; drag-only.
     // ---------------------------------------------------------------------------
-    bool GUIApplication::Slider(ID id, int& value, int minVal, int maxVal,
+    template<typename T> requires std::is_arithmetic_v<T>
+    bool GUIApplication::Slider(ID id, T& value, std::type_identity_t<T> minVal, std::type_identity_t<T> maxVal,
                                 StyleRef style, LayoutOverride&& constraints)
     {
         if (maxVal < minVal) std::swap(minVal, maxVal);
+        if constexpr (std::is_floating_point_v<T>)
+            if (std::isnan(value)) value = minVal;
         value = std::clamp(value, minVal, maxVal);
-        const int before = value;
-        const int range  = maxVal - minVal;
+        const T      before = value;
+        const double range  = double(maxVal) - double(minVal);
 
         const int kDefaultTrackWidth = styleManager.Px(120);
         int trackWidth = m_sliderFieldTrack->GetWidth(id);
         if (trackWidth <= 0) trackWidth = kDefaultTrackWidth;
 
         const float t = (range > 0)
-            ? std::clamp(float(value - minVal) / float(range), 0.0f, 1.0f) : 0.0f;
+            ? float(std::clamp((double(value) - double(minVal)) / range, 0.0, 1.0)) : 0.0f;
 
         tachyon::Element track{};
         track.id           = id;
         track.state        = guiStateManager.GetCurrentState(id);
         track.styleRef     = style;
         track.eventHandler = ReportingChanges(guiStateManager, &value,
-                                              MakeIntSliderDrag(guiStateManager, elementStorage,
+                                              MakeSliderDrag<T>(guiStateManager, elementStorage,
                                                                 &value, minVal, maxVal, trackWidth));
         const auto trackRef = RegisterControl(std::move(track), std::move(constraints));
 
@@ -1667,21 +1713,26 @@ namespace tachyon
 
                 // Groove: full width, centred; filled up to the knob's centre.
                 const int knobX = X + static_cast<int>(std::lround(t * float(std::max(0, W - knobSz))));
-                ctx.RenderBox(tachyon::IntRect{ .position = { X, (Hc - grooveH) / 2 },
-                                            .size     = { W, grooveH } },
-                              grooveStyle, trackState);
-                ctx.RenderBox(tachyon::IntRect{ .position = { X, (Hc - grooveH) / 2 },
-                                            .size     = { knobX + knobSz / 2 - X, grooveH } },
-                              fillStyle, trackState);
+                // x, y, w, h: clang rejects designated .position / .size (members of an
+                // anonymous union) in a template.
+                ctx.RenderBox(tachyon::IntRect{ X, (Hc - grooveH) / 2, W, grooveH }, grooveStyle, trackState);
+                ctx.RenderBox(tachyon::IntRect{ X, (Hc - grooveH) / 2, knobX + knobSz / 2 - X, grooveH }, fillStyle, trackState);
 
                 // Knob: kept inside the track.
-                ctx.RenderBox(tachyon::IntRect{ .position = { knobX, (Hc - knobSz) / 2 },
-                                            .size     = { knobSz, knobSz } },
-                              knobStyle, trackState);
+                ctx.RenderBox(tachyon::IntRect{ knobX, (Hc - knobSz) / 2, knobSz, knobSz }, knobStyle, trackState);
             });
 
         const bool changed = value != before || guiStateManager.Interaction().HasBeenClicked(id);
         guiStateManager.SetModified(changed);
         return changed;
     }
+
+    #define TACHYON_SLIDER_INSTANCE(T) \
+        template bool GUIApplication::Slider<T>(ID, T&, T, T, StyleRef, LayoutOverride&&);
+    TACHYON_SLIDER_INSTANCE(float)    TACHYON_SLIDER_INSTANCE(double)
+    TACHYON_SLIDER_INSTANCE(int8_t)   TACHYON_SLIDER_INSTANCE(int16_t)
+    TACHYON_SLIDER_INSTANCE(int32_t)  TACHYON_SLIDER_INSTANCE(int64_t)
+    TACHYON_SLIDER_INSTANCE(uint8_t)  TACHYON_SLIDER_INSTANCE(uint16_t)
+    TACHYON_SLIDER_INSTANCE(uint32_t) TACHYON_SLIDER_INSTANCE(uint64_t)
+    #undef TACHYON_SLIDER_INSTANCE
 }

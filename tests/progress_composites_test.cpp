@@ -328,6 +328,35 @@ namespace tachyon
             EXPECT_EQ(FillOf(WithStyle(app.theme.progressBarSmallStyleRef).at(0)).w, app.styleManager.Px(120));
         }
 
+        // In a status bar too narrow for all of it, the bar gives way, not the task's name:
+        // the name is read in full and the bar keeps a little of itself.
+        TEST_F(ProgressCompositesTest, ANarrowStatusBarShrinksTheBarNotTheName)
+        {
+            const ProgressTask task{ .name = "Indexing assets", .value = 0.5f, .note = "1,885 / 3,800" };
+            auto draw = [&](int width) {
+                Frame([&] {
+                    app.BeginStatusBar(LayoutOverride{}.Width(Pixels{ width }).NoGrow());
+                    app.StatusProgress(task);
+                    app.EndStatusBar();
+                });
+                Frame([&] {
+                    app.BeginStatusBar(LayoutOverride{}.Width(Pixels{ width }).NoGrow());
+                    app.StatusProgress(task);
+                    app.EndStatusBar();
+                });
+            };
+            draw(800);
+            const int32_t fullName = app.GetElementRect(app.FindByText("Indexing assets")).w;
+            const int32_t fullBar  = app.GetElementRect(WithStyle(app.theme.progressBarSmallStyleRef).at(0)).w;
+
+            draw(260);
+            const int32_t name = app.GetElementRect(app.FindByText("Indexing assets")).w;
+            const int32_t bar  = app.GetElementRect(WithStyle(app.theme.progressBarSmallStyleRef).at(0)).w;
+            EXPECT_EQ(name, fullName) << "the name in full";
+            EXPECT_LT(bar, fullBar) << "the bar gave way";
+            EXPECT_GE(bar, app.styleManager.Px(32)) << "and kept a little of itself";
+        }
+
         // ---------------------------------------------------------------------
         // BackgroundTasks
         // ---------------------------------------------------------------------

@@ -393,25 +393,11 @@
     margin: 0px;
     padding: 3px 0px 4px 0px;
     overflow: hidden;
-    /* Transparent: the eye column's darkening comes from the full-height
-       .hierarchy-viz-bg strip behind these cells, so it's uniform across the
-       rows AND the empty area below them (a per-cell wash would stop at the
-       last row). */
-    background-color: transparent;
+    background-color: transparent;   /* the eye column reads as part of the row */
     color: var(--text-3);
     font-size: var(--font-size);
 }
 
-/* Full-height strip painted behind the eye column (TableColumn::
-   columnBackground). Translucent so it darkens whatever shows through -
-   the zebra rows, the row-hover highlight, the selection - by a constant
-   amount, and carries that same shade on past the last row. */
-.hierarchy-viz-bg {
-    margin: 0px;
-    padding: 0px;
-    border-width: 0px;
-    background-color: rgba(0, 0, 0, 0.22);
-}
 /* The eye element itself: fills the cell in both axes (so even the icon-less
    "visible" state keeps a full hit area) and centres a 16px icon. No hover
    background of its own - that would paint a flat colour over the alternating

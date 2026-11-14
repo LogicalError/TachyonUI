@@ -87,12 +87,46 @@ namespace tachyon
         {
             for (ElementRect& c : items)
             {
-                if (!c.constraints.IsInFlowAxis(axis) || !c.layoutStyle) continue;
+                if (!c.constraints.IsInFlowAxis(axis)) continue;
                 if (c.constraints.HasFixedAxis(axis)) continue;
-                const int16_t basis = c.layoutStyle->layoutData.flex.flexBasis;
+                const int16_t basis = c.constraints.GetFlexBasis(c.layoutStyle);
                 if (basis >= 0)
                     c.rect.size[axis] = basis;
             }
+        }
+
+        /// An item's share of its container's content size along the container's main axis
+        /// `axis` (CSS flexbox 9.9.1): its size, but no less than its flex-basis (within its
+        /// min / max) when it can't grow, as it is laid out at least that big. For the
+        /// sizing passes; positioning goes by the sizes the items were flexed to.
+        template <int axis> requires(axis == 0 || axis == 1)
+        static inline int32_t FlexContentContribution(const ElementRect& c)
+        {
+            const int32_t size = c.rect.size[axis];
+            if (c.constraints.HasFixedAxis(axis) || c.constraints.GetFlexGrow(c.layoutStyle) > 0)
+                return size;
+            const int16_t basis = c.constraints.GetFlexBasis(c.layoutStyle);
+            if (basis < 0)
+                return size;
+            const SizeConstraintAxis& limits = (axis == 0) ? c.constraints.width : c.constraints.height;
+            return std::max(size, limits.Clamp(basis));
+        }
+
+        /// The summed FlexContentContribution of the in-flow items on `axis`; `count` is
+        /// set to how many there are.
+        template <int axis> requires(axis == 0 || axis == 1)
+        static inline int32_t CalcFlexContentAdd(std::span<const ElementRect> childRects, int32_t& count)
+        {
+            int32_t size = 0;
+            count = 0;
+            for (const ElementRect& c : childRects)
+            {
+                if (!c.constraints.IsInFlowAxis(axis))
+                    continue;
+                size += FlexContentContribution<axis>(c);
+                count++;
+            }
+            return size;
         }
 
         /// Resolves flexible lengths on `axis` (CSS "resolve flexible lengths"):

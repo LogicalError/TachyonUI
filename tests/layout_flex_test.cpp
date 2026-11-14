@@ -725,6 +725,72 @@ namespace tachyon
         EXPECT_EQ(storage.GetElementRectUnsafe(b).rect.w, 100);
     }
 
+    // FlexBasis(0) shares the free space by flex-grow alone, from nothing: items of different
+    // sizes come out equal (as CSS flex: 1 1 0), so columns of rows line up.
+    TEST_F(LayoutFlexTest, AZeroFlexBasisSharesTheRowEvenly)
+    {
+        Style rowStyle;
+        rowStyle.layoutData.flex.direction = FlexDirection::Row;
+        const StyleRef rowIdx = styleManager.Register(rowStyle);
+
+        auto layout = [&](bool zeroBasis) {
+            EXPECT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+            (void)storage.Add(Element{ .styleRef = rowIdx }, LayoutOverride::FixedSize(200, 40));
+            EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+            LayoutOverride wide = LayoutOverride{}.FlexGrow(1).MinWidth(Pixels{ 80 });
+            LayoutOverride narrow = LayoutOverride{}.FlexGrow(1).MinWidth(Pixels{ 20 });
+            if (zeroBasis)
+            {
+                wide.FlexBasis(Pixels{ 0 });
+                narrow.FlexBasis(Pixels{ 0 });
+            }
+            const ElementRef a = storage.Add(Element{ .styleRef = defaultStyleIndex }, std::move(wide)).ref;
+            const ElementRef b = storage.Add(Element{ .styleRef = defaultStyleIndex }, std::move(narrow)).ref;
+            EXPECT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+            EXPECT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+            layoutEngine.Layout(*osWindowManager, storage);
+            return std::pair{ storage.GetElementRectUnsafe(a).rect.w, storage.GetElementRectUnsafe(b).rect.w };
+        };
+        const auto [a, b] = layout(true);
+        EXPECT_EQ(a, 100);
+        EXPECT_EQ(b, 100);
+    }
+
+    // A container sized to its content counts an item that can't grow at no less than its
+    // flex-basis (CSS flexbox 9.9.1): a bar of no content with a basis of 120 makes its row
+    // 120 wider, and the row lays it out at 120. Along a column, the same for heights.
+    TEST_F(LayoutFlexTest, AContentSizedContainerCountsAnItemAtItsFlexBasis)
+    {
+        for (const FlexDirection direction : { FlexDirection::Row, FlexDirection::Column })
+        {
+            const int axis = direction == FlexDirection::Row ? 0 : 1;
+            Style outerStyle, innerStyle;
+            outerStyle.layoutData.flex.direction = direction;
+            innerStyle.layoutData.flex.direction = direction;
+            const StyleRef outerIdx = styleManager.Register(outerStyle);
+            const StyleRef innerIdx = styleManager.Register(innerStyle);
+
+            EXPECT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+            (void)storage.Add(Element{ .styleRef = outerIdx }, LayoutOverride::FixedSize(400, 400));
+            EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+            const ElementRef inner = storage.Add(Element{ .styleRef = innerIdx }, LayoutOverride{}.NoGrow().NoShrink()).ref;
+            EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+            LayoutOverride barSize = LayoutOverride{}.FlexBasis(Pixels{ 120 }).NoGrow().FlexShrink(1);
+            if (axis == 0) barSize.MinWidth(Pixels{ 32 }).Height(Pixels{ 10 });
+            else           barSize.MinHeight(Pixels{ 32 }).Width(Pixels{ 10 });
+            const ElementRef bar = storage.Add(Element{ .styleRef = defaultStyleIndex }, std::move(barSize)).ref;
+            (void)storage.Add(Element{ .styleRef = defaultStyleIndex }, LayoutOverride::FixedSize(50, 50));
+            EXPECT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+            EXPECT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+            EXPECT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+            layoutEngine.Layout(*osWindowManager, storage);
+
+            const char* name = axis == 0 ? "row" : "column";
+            EXPECT_EQ(storage.GetElementRectUnsafe(inner).rect.size[axis], 170) << name;
+            EXPECT_EQ(storage.GetElementRectUnsafe(bar).rect.size[axis], 120) << name;
+        }
+    }
+
     // A wrapping column breaks into a new column only when its items exceed the
     // content height; the margin lies outside the fixed height.
     TEST_F(LayoutFlexTest, FixedHeightWrappingColumnWithMarginWrapsAtItsContentHeight)

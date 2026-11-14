@@ -87,11 +87,7 @@ namespace tachyon
         std::span<VirtualTableColumn> columnSpan(columns.data(), columns.size());
 
 
-        BeginHorizontal(LayoutOverride{}.NoGrow().NoShrink());
-            Text(idManager.AllocateDynamicID(), "Selection mode:", theme.staticTextStyleRef);
-            Toggle(tableStyle.selectionMode == TableSelectionMode::Row, "Row", [&tableStyle](bool) { tableStyle.selectionMode = TableSelectionMode::Row; });
-            Toggle(tableStyle.selectionMode == TableSelectionMode::Cell, "Cell", [&tableStyle](bool) { tableStyle.selectionMode = TableSelectionMode::Cell; });
-        EndHorizontal(); 
+        SelectionModeSwitch(tableStyle.selectionMode);
         
         // flex-fill-row + table-fill (flex-basis:0) bound the table to the
         // panel, so its middle section scrolls inside it and the section's

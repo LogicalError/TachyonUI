@@ -35,7 +35,8 @@ Calls (members of tachyon::GUIApplication):
 @ref tachyon::GUIApplication::Invalidate "Invalidate",
 @ref tachyon::GUIApplication::BeginLabelGroup "BeginLabelGroup",
 @ref tachyon::GUIApplication::BeginButtonGroup "BeginButtonGroup",
-@ref tachyon::GUIApplication::BeginToggleGroup "BeginToggleGroup".
+@ref tachyon::GUIApplication::BeginToggleGroup "BeginToggleGroup",
+@ref tachyon::GUIApplication::Segmented "Segmented".
 Guide: @ref md_docs_2controls_2windows-and-layout "Windows and layout".
 
 @defgroup controls_text Text and images
@@ -79,7 +80,8 @@ Guide: @ref md_docs_2controls_2fields "Fields".
 
 Calls (members of tachyon::GUIApplication):
 @ref tachyon::GUIApplication::SliderField "SliderField",
-@ref tachyon::GUIApplication::Slider "Slider".
+@ref tachyon::GUIApplication::Slider "Slider",
+@ref tachyon::GUIApplication::RangeField "RangeField".
 Guide: @ref md_docs_2controls_2sliders "Sliders".
 
 @defgroup controls_color Color and gradient fields

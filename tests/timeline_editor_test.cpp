@@ -835,6 +835,37 @@ namespace tachyon
             EXPECT_TRUE(edits.empty()) << "the playhead isn't an edit";
         }
 
+        // The playhead's pill stays on the ruler at either end of the view: at 0 it isn't cut
+        // in half by the ruler's edge. The line under it stays on the playhead.
+        TEST_F(TimelineEditorTest, ThePlayheadsPillStaysOnTheRuler)
+        {
+            for (const bool atEnd : { false, true })
+            {
+                view.playback.time = atEnd ? InView().end : InView().start;
+                Settle();
+                const ElementRef ruler = app.elementStorage.FindElementRefByID(WithStyle(app.theme.timelineRulerStyleRef));
+                const ElementCustomDraw* draw = app.elementStorage.GetCustomDraw(ruler);
+                ASSERT_TRUE(draw != nullptr && draw->callback);
+                const ElementRect* rects = app.elementStorage.GetElementRectPtr(ruler);
+                GUITest::StubGUIRenderer renderer;
+                CustomDrawContext ctx{ renderer, app.elementStorage, ruler, rects->rect, rects->innerRect,
+                                       IntRect{ 0, 0, 4000, 4000 }, float3x2{}, int2{ 0, 0 } };
+                draw->callback(ctx);
+
+                const IntRect outer = ctx.ElementRect();   // in the draw's own coordinates
+                const int32_t pillHeight = app.styleManager.Px(18);
+                int pills = 0;
+                for (const IntRect& box : renderer.boxes)
+                    if (box.h == pillHeight)
+                    {
+                        ++pills;
+                        EXPECT_GE(box.x, outer.x) << (atEnd ? "end" : "start");
+                        EXPECT_LE(box.x + box.w, outer.x + outer.w) << (atEnd ? "end" : "start");
+                    }
+                EXPECT_EQ(pills, 1) << (atEnd ? "end" : "start");
+            }
+        }
+
         // Shift + a drag on the ruler sets the loop range, as one edit; its ends drag; Ctrl +
         // a click clears it.
         TEST_F(TimelineEditorTest, TheRulerSetsTheLoopRange)

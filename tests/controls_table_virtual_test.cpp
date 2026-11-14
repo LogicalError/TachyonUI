@@ -10,6 +10,8 @@
 #include <gui_core/state/gui_state_manager.h>
 #include <gui_core/state/gui_scroll_management.h>
 
+#include <functional>
+
 namespace tachyon
 {
     using GUITest::HeadlessGUIApp;
@@ -302,6 +304,52 @@ namespace tachyon
             EXPECT_EQ(plainH, treeH)
                 << "plain row " << plainH << " px vs tree row " << treeH
                 << " px — mixing cell types in one table requires uniform row height";
+        }
+
+        // A flat button in a cell reads as the cell's text: the cell gives the padding, so the
+        // row is as tall as a plain one and the button's text sits where plain text does.
+        TEST_F(TableVirtualScrollTest, AFlatButtonCellLinesUpWithPlainCells)
+        {
+            tachyon::TableState state{};
+            auto pin = [&]{ PinViewport(state); };
+            pin();
+            app.Frame([&]{ Emit(state); pin(); });
+            app.Frame([&]{ Emit(state); pin(); });
+            ASSERT_GT(state.internal.totalRowCount, 0);
+            const IntRect plainRow = app.GetElementRect(state.RowIDForIndex(0));
+            // The first row's cells: table-cell elements on the row's line.
+            int32_t plainTextY = -1;
+            std::function<void(ElementRef)> findCell = [&](ElementRef ref) {
+                if (!app.elementStorage.IsValidRef(ref)) return;
+                const ElementRect& r = app.elementStorage.GetElementRectUnsafe(ref);
+                if (app.elementStorage.GetElementUnsafe(ref).styleRef == app.theme.tableCellStyleRef &&
+                    r.rect.y == plainRow.y && plainTextY < 0)
+                    plainTextY = r.innerRect.y - plainRow.y;
+                const auto children = app.elementStorage.GetChildRange(ref);
+                for (uint32_t idx = children.begin; idx < children.end; ++idx)
+                    findCell(ElementRef{ ref.depth + 1, idx });
+            };
+            findCell(app.elementStorage.GetFirstElementRef());
+            ASSERT_GE(plainTextY, 0);
+
+            const ID buttonID = app.idManager.CreateStaticID();
+            columns[0].generateCell = [this, buttonID](int r) {
+                app.Cell([this, buttonID, r]() {
+                    app.Button(r == 0 ? buttonID : app.idManager.AllocateDynamicID("btn"), "Ctrl+S", []() {},
+                               app.theme.flatButtonStyleRef);
+                });
+            };
+            tachyon::TableState state2{};
+            auto pin2 = [&]{ PinViewport(state2); };
+            pin2();
+            app.Frame([&]{ Emit(state2); pin2(); });
+            app.Frame([&]{ Emit(state2); pin2(); });
+            const IntRect buttonRow = app.GetElementRect(state2.RowIDForIndex(0));
+            const int32_t buttonTextY = app.elementStorage.GetElementRectUnsafe(
+                app.elementStorage.FindElementRefByID(buttonID)).innerRect.y - buttonRow.y;
+
+            EXPECT_EQ(buttonRow.h, plainRow.h) << "no extra padding from the button";
+            EXPECT_EQ(buttonTextY, plainTextY) << "the button's text on the plain text's line";
         }
 
         // ---------------------------------------------------------------

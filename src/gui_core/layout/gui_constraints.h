@@ -132,6 +132,7 @@ namespace tachyon
 
         int16_t grow   = kDefault; ///< flex-grow override
         int16_t shrink = kDefault; ///< flex-shrink override
+        int16_t basis  = kDefault; ///< flex-basis override, pixels
 
         constexpr bool HasGrow()   const { return grow   != kDefault; }
         constexpr bool HasShrink() const { return shrink != kDefault; }
@@ -317,6 +318,10 @@ namespace tachyon
         TACHYON_LO_BUILDER(FlexGrow(int16_t v),   flex.grow = v;)
         TACHYON_LO_BUILDER(FlexShrink(int16_t v), flex.shrink = v;)
         ///@}
+        /// Overrides the style's flex-basis, the main size the item grows or shrinks from:
+        /// Pixels{ 0 } shares the space by flex-grow alone, so items line up whatever they hold
+        /// (CSS flex: 1 1 0).
+        TACHYON_LO_BUILDER(FlexBasis(Pixels v),   flex.basis = int16_t(std::max<int32_t>(0, v.value));)
         /// Shorthands for FlexGrow(0) / FlexShrink(0).
         ///@{
         TACHYON_LO_BUILDER(NoGrow(),              flex.grow = 0;)
@@ -352,6 +357,12 @@ namespace tachyon
         {
             if (flex.grow != FlexOverride::kDefault) return (uint32_t)std::max<int16_t>(0, flex.grow);
             return ls ? ls->layoutData.flex.flexGrow : 0;
+        }
+        /// The flex-basis in pixels; below 0 = auto.
+        int16_t GetFlexBasis(const LayoutStyle* ls) const
+        {
+            if (flex.basis != FlexOverride::kDefault) return flex.basis;
+            return ls ? ls->layoutData.flex.flexBasis : int16_t(-1);
         }
         uint32_t GetFlexShrink(const LayoutStyle* ls) const
         {

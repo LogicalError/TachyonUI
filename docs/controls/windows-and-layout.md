@@ -305,6 +305,7 @@ These draw a few controls packed together, sharing their borders, as one strip.
 
 ```cpp
 bool BeginButtonGroup(LayoutOverride&& constraints = {});
+bool BeginButtonGroup(ID id, LayoutOverride&& constraints = {});   // with the group's own ID
 void EndButtonGroup();
 bool BeginToggleGroup(LayoutOverride&& constraints = {});
 void EndToggleGroup();
@@ -328,11 +329,39 @@ EndToggleGroup();
 
 ```cpp
 BeginButtonGroup(LayoutOverride{}.NoGrow());
-Button("Left", [this] { align = 0; });
-Button("Center", [this] { align = 1; });
-Button("Right", [this] { align = 2; });
+Button("Undo", [this] { Undo(); });
+Button("Redo", [this] { Redo(); });
 EndButtonGroup();
 ```
+
+## Segmented control
+
+One of a few choices side by side: a button group whose chosen segment is selected.
+
+- `selected` is the chosen segment's index in `options`.
+  - For example, `1` picks "Center" of Left, Center, Right.
+- A click on another segment writes its index to `selected`.
+  - `selected` must outlive the frame (a member, not a local), as the click is handled later.
+- It returns true on the frame after a click.
+- An enum works too: its values are the segments' indices.
+  - For example, `TableSelectionMode` with the options Row and Cell.
+
+```cpp
+bool Segmented(ID id, int& selected, std::span<const std::string_view> options, LayoutOverride&& constraints = {});
+template<typename E> bool Segmented(ID id, E& selected, std::span<const std::string_view> options, LayoutOverride&& constraints = {});
+```
+
+```cpp
+static constexpr std::string_view kAlignments[] = { "Left", "Center", "Right" };
+Segmented(align, kAlignments);   // member: int align
+```
+
+```cpp
+static constexpr std::string_view kModes[] = { "Row", "Cell" };
+Segmented(tableState.selectionMode, kModes);   // a TableSelectionMode
+```
+
+It is drawn as a button group: `button-group`, with `group-button` for each segment.
 
 ---
 

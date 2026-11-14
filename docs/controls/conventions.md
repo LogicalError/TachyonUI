@@ -81,6 +81,7 @@ BeginWindow(windowID, "Tool", LayoutOverride::FixedSize(900, 600).Centered());
 | `Size(w, h)`, `Width(w)`, `Height(h)` | Fixed size |
 | `MinWidth`, `MinHeight`, `MaxWidth`, `MaxHeight` | Size limits |
 | `FlexGrow(n)`, `FlexShrink(n)`, `NoGrow()`, `NoShrink()` | Flex factors |
+| `FlexBasis(Pixels{ n })` | Flex basis: the size it grows or shrinks from. `Pixels{ 0 }` shares a row by `FlexGrow` alone, so items line up whatever they hold |
 | `Position(x, y)`, `Centered()`, `Relative(...)`, `Absolute(...)` | Position |
 | `Anchored(target, placement, offset)` | Position next to another element |
 | `Overhang(int2)` (after `Anchored`) | How far it may reach past the screen edge, as see-through room around its content |

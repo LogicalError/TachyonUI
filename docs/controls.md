@@ -26,11 +26,11 @@ results all controls share.
 | Page | Covers |
 | --- | --- |
 | [Common conventions](controls/conventions.md) | Parameter order, return values, callbacks, `LayoutOverride`, state scopes |
-| [Windows and layout](controls/windows-and-layout.md) | Windows, horizontal and vertical groups, areas, scroll bars, caching, label and button groups |
+| [Windows and layout](controls/windows-and-layout.md) | Windows, horizontal and vertical groups, areas, scroll bars, caching, label and button groups, `Segmented` |
 | [Text and images](controls/text-and-images.md) | `Text`, `Label`, `DragLabel`, `SelectableText`, `Image` |
 | [Buttons and toggles](controls/buttons-and-toggles.md) | `Button`, `CommandButton`, `Toggle`, `Switch`, `Checkbox` |
 | [Fields](controls/fields.md) | Text, search, numeric, vector and typed fields, edge, corner and shadow fields, dropdowns, lists, dictionaries |
-| [Sliders](controls/sliders.md) | `SliderField`, `Slider` |
+| [Sliders](controls/sliders.md) | `SliderField`, `Slider`, `RangeField` |
 | [Color and gradient fields](controls/color-and-gradient.md) | `ColorField`, `GradientField` and their pickers |
 | [Curves](controls/curves.md) | `CurveField` and its curve editor, `EvaluateCurve` |
 | [Plots](controls/plots.md) | `Plot`: histograms and other series, with handles (Levels) |

@@ -387,7 +387,9 @@ namespace
             EndWindow();
         }
 
-        bool Start()
+        // handOver: the image is dropped for the application's lifetime at once (as an app
+        // does that only draws it by its index), before any frame uploads it.
+        bool Start(bool handOver = false)
         {
             if (!Initialize())
                 return false;
@@ -397,7 +399,13 @@ namespace
             image = graphicsContext->CreateImage(pixels.data(), tachyon::uint2{ 4, 4 }, tachyon::ImageFormat::R8G8B8A8,
                                                  tachyon::Sampler::LinearClampToEdge);
             red = graphicsContext->RegisterImage(image);
-            return image != nullptr && red != tachyon::ImageIndex::Invalid;
+            const bool made = image != nullptr && red != tachyon::ImageIndex::Invalid;
+            if (made && handOver)
+            {
+                graphicsContext->DestroyImageAtEnd(image, tachyon::DeviceScope::Application);
+                image = nullptr;
+            }
+            return made;
         }
 
         // The window's center pixel is red (BGRA8).
@@ -443,6 +451,21 @@ namespace
         EXPECT_TRUE(app.CenterIsRed()) << "the image draws from its index on the new device";
 
         app.graphicsContext->DestroyImageAtEnd(app.image, tachyon::DeviceScope::Application);
+        app.Cleanup();
+    }
+
+    // An image handed over at once (dropped for the application's lifetime, before any frame)
+    // still gets its pixels: only a frame-scope drop gives up its upload.
+    TEST(GpuApplicationInit, AnImageHandedOverAtOnceStillGetsItsPixels)
+    {
+        DeviceLossApp app;
+        if (!app.Start(/*handOver*/ true))
+        {
+            app.Cleanup();
+            GTEST_SKIP() << "no Vulkan device available";
+        }
+        ASSERT_TRUE(app.Frames(3));
+        EXPECT_TRUE(app.CenterIsRed());
         app.Cleanup();
     }
 

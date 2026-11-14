@@ -274,8 +274,7 @@ namespace tachyon
             cols[0].column = TableColumn{ .header = {},
                 .initialWidth = kVizColWidth, .minWidth = kVizColWidth,
                 .maxWidth = kVizColWidth, .sizing = ColumnSizing::Fixed,
-                .interactiveContent = true,
-                .columnBackground = hierarchyVizBgStyleRef };
+                .interactiveContent = true };
             cols[0].generateCell = [this, &p, &rows, &visibleIdx, &state, eyeHeight](int rowIdx)
             {
                 if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
@@ -366,8 +365,9 @@ namespace tachyon
             // tableFill (flex-basis:0 + grow:1) bounds the table to the remaining
             // panel height so its body scrolls; flex-basis:auto would grow to fit
             // every row and never scroll.
-            state.showHeaders = false;
-            state.cellStyle   = hierarchyVizCellStyleRef;
+            state.showHeaders      = false;
+            state.columnSeparators = false;   // the eye column reads as part of the row
+            state.cellStyle        = hierarchyVizCellStyleRef;
             VirtualTable(id, state, std::span<VirtualTableColumn>(cols, 2),
                          int(visibleIdx.size()), 0, theme.tableFillStyleRef,
                          tachyon::LayoutOverride::Auto().FlexGrow(1).MinHeight(0));

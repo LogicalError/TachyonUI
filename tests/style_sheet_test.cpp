@@ -830,6 +830,24 @@ namespace tachyon
         }
     }
 
+    // A button stretched taller than its text (a tab in a tall bar) keeps the text in its
+    // middle, not at the top.
+    TEST(StyleSheet, ShippedButtonsCentreTheirTextVertically)
+    {
+        std::ifstream paletteFile("themes/dark.css"), stylesFile("themes/styles.css");
+        ASSERT_TRUE(paletteFile.good() && stylesFile.good());
+        std::ostringstream ss;
+        ss << paletteFile.rdbuf() << '\n' << stylesFile.rdbuf();
+        const StyleSheet s = ParseStyleSheet(ss.view());
+
+        for (const char* name : { "button", "group-button", "dialog-button", "toolbar-button" })
+        {
+            const Style* style = s.GetStyle(name);
+            ASSERT_NE(style, nullptr) << name;
+            EXPECT_EQ(style->textLayoutStyle.verticalAlignment, TextAlign::Center) << name;
+        }
+    }
+
     // Bars, separators and toolbar thumbs get their sizes from the stylesheet.
     TEST(StyleSheet, ShippedChromeSizesComeFromTheStylesheet)
     {

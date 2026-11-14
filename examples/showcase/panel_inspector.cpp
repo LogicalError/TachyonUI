@@ -148,17 +148,8 @@ namespace tachyon
         // Segmented alignment picker: the current choice is selected.
         add("Alignment", [this]() {
             Label("Alignment");
-            BeginButtonGroup(LayoutOverride{}.NoGrow());
-            {
-                const char* labels[] = { "Left", "Center", "Right" };
-                for (int i = 0; i < 3; ++i)
-                {
-                    if (showcase.alignment == i) guiStateManager.Construction().PushSelected();
-                    Button(labels[i], [this, i]() { showcase.alignment = i; });
-                    if (showcase.alignment == i) guiStateManager.Construction().PopSelected();
-                }
-            }
-            EndButtonGroup();
+            static constexpr std::string_view kAlignments[] = { "Left", "Center", "Right" };
+            Segmented(showcase.alignment, kAlignments);
         });
 
         // Independent style flags: each toggles on its own.
@@ -224,11 +215,11 @@ namespace tachyon
 
         add("Float [0.25, 1]", [this]() {
             DragLabel("Float [0.25, 1]");
-            Field(showcase.clampedFloat, NumericFieldConfig<float>{.minVal = 0.25f, .maxVal = 1.0f });
+            RangeField(showcase.clampedFloat, 0.25f, 1.0f);
         });
         add("UInt8 [50, 100]", [this]() {
             DragLabel("UInt8 [50, 100]");
-            Field(showcase.clampedUInt8, NumericFieldConfig<uint8_t>{.minVal = 50, .maxVal = 100 });
+            RangeField(showcase.clampedUInt8, 50, 100);
         });
 
         add("Volume", [this]() {

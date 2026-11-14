@@ -338,8 +338,10 @@ namespace tachyon
         [[maybe_unused]] const bool pushed = idManager.PushParent(id);
         if (task.state == TaskState::Running)
             Spinner(idManager.AllocateDynamicID("spinner"), SpinnerSize::Small);
-        StatusText(idManager.AllocateDynamicID("name"), task.name, theme.statusTextStyleRef);
-        TaskBar(idManager.AllocateDynamicID("bar"), task, theme.progressBarSmallStyleRef, LayoutOverride{}.Width(Pixels{ styleManager.Px(120) }));
+        // Short of room, the bar gives way and the name is read in full.
+        StatusText(idManager.AllocateDynamicID("name"), task.name, theme.statusTextStyleRef, LayoutOverride{}.NoShrink());
+        TaskBar(idManager.AllocateDynamicID("bar"), task, theme.progressBarSmallStyleRef,
+                LayoutOverride{}.FlexBasis(Pixels{ styleManager.Px(120) }).NoGrow().FlexShrink(1).MinWidth(Pixels{ styleManager.Px(32) }));
         if (const std::string state = StateText(task); !state.empty())
             StatusText(idManager.AllocateDynamicID("state"), state, theme.statusTextMonoStyleRef);
         if (pushed)
