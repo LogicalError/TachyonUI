@@ -560,8 +560,11 @@ void VulkanGraphicsContext::Cleanup()
         // mainDeletionQueue captures atlas font textures by pointer - they must
         // outlive Flush/Destroy.
         deviceContext.Flush();
+        deviceContext.DestroyHandedOverImages();
         deviceContext.Destroy();
     }
+    else
+        deviceContext.DestroyHandedOverImages();   // no device: the objects only
 
     delete vulkanImageSet;
     vulkanImageSet = nullptr;
@@ -1704,28 +1707,34 @@ void tachyon::vulkan::VulkanDeviceContext::RebuildLiveImages()
 void tachyon::vulkan::VulkanDeviceContext::DestroyImageAtEnd(tachyon::Image* img, tachyon::DeviceScope scope,
                                                     [[maybe_unused]] const std::source_location& loc)
 {
+    // Handed over for the application's lifetime (a registered image the app draws by its
+    // index): it stays live, its upload included, so a device loss makes it again; it is
+    // destroyed at shutdown (DestroyHandedOverImages), not with the Application deletion
+    // queue, which a device loss flushes too.
+    if (scope == tachyon::DeviceScope::Application)
+    {
+        std::lock_guard lock(m_imagesMutex);
+        m_handedOver.push_back((VulkanImage*)img);
+        return;
+    }
+
+    // Dropped for good: nothing may record a use of it from now on, its own upload
+    // included, or a later frame would use it after its destroy was timed.
     VulkanImage vulkanImage = *(VulkanImage*)img;
-    // A frame-scope drop is for good: nothing may record a use of it from now on, its own
-    // upload included, or a later frame would use it after its destroy was timed. An
-    // Application-scope image stays usable until Cleanup (a registered image handed over at
-    // once, say), so it keeps its upload and gets its pixels.
-    const bool forGood = (scope == tachyon::DeviceScope::Frame);
     std::vector<Buffer> cancelled;
     {
         std::lock_guard lock(m_imagesMutex);
         m_liveImages.erase((VulkanImage*)img);
-        if (forGood)
-            std::erase_if(m_pendingUploads, [&](const PendingUpload& upload)
-            {
-                if (upload.image != vulkanImage.image) return false;
-                cancelled.push_back(upload.staging);
-                return true;
-            });
+        std::erase_if(m_pendingUploads, [&](const PendingUpload& upload)
+        {
+            if (upload.image != vulkanImage.image) return false;
+            cancelled.push_back(upload.staging);
+            return true;
+        });
     }
     for (const Buffer& staging : cancelled)
         DestroyUnsubmittedBuffer(staging);   // never recorded; waits for the upload worker
-    if (forGood)
-        NoteDropped(vulkanImage.imageView, loc);
+    NoteDropped(vulkanImage.imageView, loc);
     auto func = [this, vulkanImage, img]()
         {
             NoteDestroyed(vulkanImage.imageView);
@@ -1733,6 +1742,25 @@ void tachyon::vulkan::VulkanDeviceContext::DestroyImageAtEnd(tachyon::Image* img
             delete img;
         };
     Defer(scope, std::move(func));
+}
+
+void tachyon::vulkan::VulkanDeviceContext::DestroyHandedOverImages()
+{
+    std::vector<VulkanImage*> handedOver;
+    {
+        std::lock_guard lock(m_imagesMutex);
+        handedOver.swap(m_handedOver);
+        for (VulkanImage* image : handedOver)
+            m_liveImages.erase(image);
+    }
+    // Outside the lock: DestroyImage takes it too. Their handles are the current ones, made
+    // again after any device loss.
+    for (VulkanImage* image : handedOver)
+    {
+        if (initialized)
+            DestroyImage(*image);
+        delete image;
+    }
 }
 
 void tachyon::vulkan::VulkanDeviceContext::DestroyVisualColorStyles(tachyon::Buffer* buffer)

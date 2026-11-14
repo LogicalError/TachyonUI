@@ -233,7 +233,13 @@ namespace tachyon::vulkan
         /// Makes the released images again on the new device, uploading the pixels they were
         /// made from.
         void RebuildLiveImages();
-        /// Destroys the image and deletes the object when the scope's deletion queue flushes.
+        /// At shutdown, the GPU idle: destroys the images handed over with an Application-scope
+        /// DestroyImageAtEnd and deletes their objects. Not on a device loss, which keeps them.
+        void DestroyHandedOverImages();
+        /// Destroys the image and deletes the object: a Frame-scope image once the frames
+        /// that may use it are done; an Application-scope one (handed over, to be drawn by its
+        /// index) at DestroyHandedOverImages, staying live till then, so a device loss makes
+        /// it again with its pixels.
         void DestroyImageAtEnd(tachyon::Image* img, tachyon::DeviceScope scope,
                                const std::source_location& loc =
                                std::source_location::current());
@@ -396,6 +402,7 @@ namespace tachyon::vulkan
         std::unordered_map<tachyon::RHI::ResidentBufferId, ResidentBuffer> m_residentBuffers;
         tachyon::RHI::ResidentBufferId m_nextResidentBuffer = 1;
         mutable std::unordered_set<VulkanImage*> m_liveImages;   ///< made by CreateImage, not yet destroyed
+        std::vector<VulkanImage*> m_handedOver;   ///< live, dropped for the application's lifetime (DestroyHandedOverImages)
 
         std::mutex  m_ownedQueueMutex;
         std::mutex* m_queueMutex = &m_ownedQueueMutex;
