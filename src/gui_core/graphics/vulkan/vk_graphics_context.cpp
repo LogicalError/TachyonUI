@@ -1705,24 +1705,26 @@ void tachyon::vulkan::VulkanDeviceContext::DestroyImageAtEnd(tachyon::Image* img
                                                     [[maybe_unused]] const std::source_location& loc)
 {
     VulkanImage vulkanImage = *(VulkanImage*)img;
-    // Dropped: nothing may record a use of it from now on, its own upload included, or a
-    // later frame would use it after its destroy was timed.
+    // A frame-scope drop is for good: nothing may record a use of it from now on, its own
+    // upload included, or a later frame would use it after its destroy was timed. An
+    // Application-scope image stays usable until Cleanup (a registered image handed over at
+    // once, say), so it keeps its upload and gets its pixels.
+    const bool forGood = (scope == tachyon::DeviceScope::Frame);
     std::vector<Buffer> cancelled;
     {
         std::lock_guard lock(m_imagesMutex);
         m_liveImages.erase((VulkanImage*)img);
-        std::erase_if(m_pendingUploads, [&](const PendingUpload& upload)
-        {
-            if (upload.image != vulkanImage.image) return false;
-            cancelled.push_back(upload.staging);
-            return true;
-        });
+        if (forGood)
+            std::erase_if(m_pendingUploads, [&](const PendingUpload& upload)
+            {
+                if (upload.image != vulkanImage.image) return false;
+                cancelled.push_back(upload.staging);
+                return true;
+            });
     }
     for (const Buffer& staging : cancelled)
         DestroyUnsubmittedBuffer(staging);   // never recorded; waits for the upload worker
-    // Dropped for good only with the frame: an Application-scope image stays usable until
-    // Cleanup (a registered checkerboard handed over at once, say).
-    if (scope == tachyon::DeviceScope::Frame)
+    if (forGood)
         NoteDropped(vulkanImage.imageView, loc);
     auto func = [this, vulkanImage, img]()
         {
