@@ -1713,17 +1713,13 @@ namespace tachyon
 
                 // Groove: full width, centred; filled up to the knob's centre.
                 const int knobX = X + static_cast<int>(std::lround(t * float(std::max(0, W - knobSz))));
-                ctx.RenderBox(tachyon::IntRect{ .position = { X, (Hc - grooveH) / 2 },
-                                            .size     = { W, grooveH } },
-                              grooveStyle, trackState);
-                ctx.RenderBox(tachyon::IntRect{ .position = { X, (Hc - grooveH) / 2 },
-                                            .size     = { knobX + knobSz / 2 - X, grooveH } },
-                              fillStyle, trackState);
+                // x, y, w, h: clang rejects designated .position / .size (members of an
+                // anonymous union) in a template.
+                ctx.RenderBox(tachyon::IntRect{ X, (Hc - grooveH) / 2, W, grooveH }, grooveStyle, trackState);
+                ctx.RenderBox(tachyon::IntRect{ X, (Hc - grooveH) / 2, knobX + knobSz / 2 - X, grooveH }, fillStyle, trackState);
 
                 // Knob: kept inside the track.
-                ctx.RenderBox(tachyon::IntRect{ .position = { knobX, (Hc - knobSz) / 2 },
-                                            .size     = { knobSz, knobSz } },
-                              knobStyle, trackState);
+                ctx.RenderBox(tachyon::IntRect{ knobX, (Hc - knobSz) / 2, knobSz, knobSz }, knobStyle, trackState);
             });
 
         const bool changed = value != before || guiStateManager.Interaction().HasBeenClicked(id);
