@@ -298,6 +298,10 @@ children (its items) out in a row or a column.
 - `flex-grow` is how much of the free space an item takes; `flex-shrink` how much it gives
   up when there isn't enough.
 - `flex` with one number: shrink 1, basis 0.
+- A container sized to its content counts an item that can't grow at no less than its
+  `flex-basis`.
+  - For example, an empty bar with `flex: 0 1 120px` makes its row 120px wider, and gives way
+    when the row is short of room.
 - `break-after`:
   - `always` or `right`: a line break after this item
   - `left`: a line break before it

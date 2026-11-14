@@ -176,14 +176,7 @@ namespace tachyon
         // ---- Mode switcher -------------------------------------------------
         // Row mode selects whole rows; Cell mode selects single cells, with
         // Left/Right arrow navigation.
-        BeginHorizontal(LayoutOverride{}.NoGrow().NoShrink());
-            Text(idManager.AllocateDynamicID(), "Selection mode:", theme.staticTextStyleRef);
-            Button("Row",  [this]() { showcase.treeTableState.selectionMode = TableSelectionMode::Row;  });
-            Button("Cell", [this]() { showcase.treeTableState.selectionMode = TableSelectionMode::Cell; });
-            const char* modeLabel =
-                (showcase.treeTableState.selectionMode == TableSelectionMode::Cell) ? "(Cell)" : "(Row)";
-            Text(idManager.AllocateDynamicID(), modeLabel, theme.staticTextStyleRef);
-        EndHorizontal();
+        SelectionModeSwitch(showcase.treeTableState.selectionMode);
 
         std::span<VirtualTableColumn> columnSpan(columns.data(), columns.size());
         VirtualTable(idManager.AllocateDynamicID("treeTable"),

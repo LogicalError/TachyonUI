@@ -633,6 +633,7 @@ namespace tachyon
         sliderGrooveStyleRef              = registerCSS("slider-groove");
         sliderFillStyleRef                = registerCSS("slider-fill");
         sliderKnobStyleRef                = registerCSS("slider-knob");
+        rangeFieldStyleRef                = registerCSS("range-field");
         switchStyleRef                    = registerCSS("switch");
         switchTrackStyleRef               = registerCSS("switch-track");
         switchKnobStyleRef                = registerCSS("switch-knob");

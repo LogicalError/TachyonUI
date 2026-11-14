@@ -606,7 +606,9 @@ namespace tachyon
             if (x < float(plot.rect.x) || x > float(plot.rect.x + plot.rect.w))
                 return;
             const int32_t w = pillSize.maxWidth + 2 * pillPad.x, h = pillSize.maxHeight + 2 * pillPad.y;
-            const IntRect box{ int32_t(x) - w / 2, r.y + (r.h - h) / 2, w, h };
+            // Centered on the playhead, but kept on the ruler at the ends of the plot.
+            const int32_t boxX = std::max(r.x, std::min(int32_t(x) - w / 2, r.x + r.w - w));
+            const IntRect box{ boxX, r.y + (r.h - h) / 2, w, h };
             ctx.RenderQuad(IntRect{ int32_t(x), r.y, px1, r.h }, r, theme.curveHandleColor);
             ctx.RenderBox(box, pillBox, pillState);
             ctx.RenderText(pill, IntRect{ box.x + pillPad.x, box.y + pillPad.y, pillSize.maxWidth, pillSize.maxHeight });

@@ -18,6 +18,8 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <vector>
+#include <string_view>
 
 namespace tachyon
 {
@@ -798,6 +800,75 @@ namespace tachyon
 
             const auto state = app.guiStateManager.GetCurrentState(labelID);
             EXPECT_NE(state & ElementState::Hover, ElementState::None);
+        }
+
+        // A segmented control: one of a few choices, the chosen segment selected. Clicking
+        // another segment picks it, and the call says so.
+        TEST_F(ControlsBasicTest, ASegmentedControlPicksOneOfItsSegments)
+        {
+            const ID id = app.idManager.CreateStaticID();
+            static constexpr std::string_view kOptions[] = { "Left", "Center", "Right" };
+            int  choice  = 1;
+            bool changed = false;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                changed = app.Segmented(id, choice, kOptions) || changed;
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+            EXPECT_FALSE(changed);
+
+            auto segments = [&] {
+                std::vector<ElementRef> refs;
+                const ElementRef group = app.elementStorage.FindElementRefByID(id);
+                const auto children = app.elementStorage.GetChildRange(group);
+                for (uint32_t i = children.begin; i < children.end; ++i)
+                    refs.push_back(ElementRef{ group.depth + 1, i });
+                return refs;
+            };
+            auto selected = [&](ElementRef ref) {
+                return (app.elementStorage.GetElementUnsafe(ref).state & ElementState::Selected) != ElementState::None;
+            };
+            const std::vector<ElementRef> before = segments();
+            ASSERT_EQ(before.size(), 3u);
+            EXPECT_FALSE(selected(before[0]));
+            EXPECT_TRUE(selected(before[1]));
+            EXPECT_FALSE(selected(before[2]));
+
+            const IntRect right = app.elementStorage.GetElementRectUnsafe(before[2]).rect;
+            app.ClickAt({ right.x + right.w / 2, right.y + right.h / 2 });
+            app.Frame(draw);
+            app.Frame(draw);
+            EXPECT_EQ(choice, 2);
+            EXPECT_TRUE(changed);
+            const std::vector<ElementRef> after = segments();
+            ASSERT_EQ(after.size(), 3u);
+            EXPECT_FALSE(selected(after[1]));
+            EXPECT_TRUE(selected(after[2]));
+        }
+
+        // An enum works as well as an int: its values are the segments' indices.
+        TEST_F(ControlsBasicTest, ASegmentedControlTakesAnEnum)
+        {
+            enum class Mode : uint8_t { Row, Cell };
+            const ID id = app.idManager.CreateStaticID();
+            static constexpr std::string_view kOptions[] = { "Row", "Cell" };
+            Mode mode = Mode::Row;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.Segmented(id, mode, kOptions);
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+            const ElementRef group = app.elementStorage.FindElementRefByID(id);
+            const auto children = app.elementStorage.GetChildRange(group);
+            ASSERT_EQ(children.end - children.begin, 2u);
+            const IntRect cell = app.elementStorage.GetElementRectUnsafe(ElementRef{ group.depth + 1, children.begin + 1 }).rect;
+            app.ClickAt({ cell.x + cell.w / 2, cell.y + cell.h / 2 });
+            app.Frame(draw);
+            EXPECT_EQ(mode, Mode::Cell);
         }
 
     } // namespace

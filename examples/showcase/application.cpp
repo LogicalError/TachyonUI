@@ -757,7 +757,6 @@ namespace tachyon
     bool Application::InitializeShowcaseStyles()
     {
         hierarchyVizCellStyleRef    = theme.GetStyle("hierarchy-viz-cell");
-        hierarchyVizBgStyleRef      = theme.GetStyle("hierarchy-viz-bg");
         hierarchyVisibilityStyleRef = theme.GetStyle("hierarchy-visibility");
         logLevelIconStyleRef        = theme.GetStyle("log-level-icon");
         logLevelWellStyleRef        = theme.GetStyle("log-level-well");

@@ -45,6 +45,15 @@ namespace tachyon
         }
     }
 
+    void Application::SelectionModeSwitch(TableSelectionMode& mode)
+    {
+        static constexpr std::string_view kModes[] = { "Row", "Cell" };   // TableSelectionMode's order
+        BeginHorizontal(LayoutOverride{}.NoGrow().NoShrink());
+            Text(idManager.AllocateDynamicID(), "Select", theme.staticTextStyleRef);
+            Segmented(mode, kModes);
+        EndHorizontal();
+    }
+
     void Application::RenderTablePanel()
     {
         // ---- Virtual-scrolled table (50k rows, click-to-sort, drag-to-reorder)
@@ -108,11 +117,7 @@ namespace tachyon
         // ---- Mode switcher -------------------------------------------------
         // Row mode selects whole rows; Cell mode selects single cells, with
         // Left/Right arrow navigation.
-        BeginHorizontal(LayoutOverride{}.NoGrow().NoShrink());
-            Text(idManager.AllocateDynamicID(), "Selection mode:", theme.staticTextStyleRef);
-            Toggle(showcase.tablePanelVirtualTableState.selectionMode == TableSelectionMode::Row, "Row", [this](bool) { showcase.tablePanelVirtualTableState.selectionMode = TableSelectionMode::Row; });
-            Toggle(showcase.tablePanelVirtualTableState.selectionMode == TableSelectionMode::Cell, "Cell", [this](bool) { showcase.tablePanelVirtualTableState.selectionMode = TableSelectionMode::Cell; });
-        EndHorizontal();
+        SelectionModeSwitch(showcase.tablePanelVirtualTableState.selectionMode);
 
         // Fills the panel and scrolls: sized to its 50k rows it would be past the
         // 16-bit layout range and not show at all.

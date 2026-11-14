@@ -148,6 +148,7 @@ namespace tachyon
         StyleRef sliderGrooveStyleRef {};    ///< Slider: groove line painted by the custom-draw
         StyleRef sliderFillStyleRef {};      ///< Slider: the groove's filled part, up to the knob
         StyleRef sliderKnobStyleRef {};      ///< Slider: knob painted by the custom-draw
+        StyleRef rangeFieldStyleRef {};      ///< RangeField: the row holding the slider and value box
         StyleRef switchStyleRef {};          ///< Switch: the control (track + label)
         StyleRef switchTrackStyleRef {};     ///< Switch: the track; its knob is painted by the custom-draw
         StyleRef switchKnobStyleRef {};      ///< Switch: the knob

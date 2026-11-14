@@ -116,7 +116,7 @@ namespace tachyon
         StyleRef borderTestStyleRef;
 
         // Classes from themes/showcase.css, looked up after each theme load.
-        StyleRef hierarchyVizCellStyleRef, hierarchyVizBgStyleRef, hierarchyVisibilityStyleRef;
+        StyleRef hierarchyVizCellStyleRef, hierarchyVisibilityStyleRef;
         StyleRef logLevelIconStyleRef, logLevelWellStyleRef;
         StyleRef logLevelPillStyleRefs[3];   // indexed by LogLevel
         StyleRef iconToggleStyleRef, logMessageStyleRef, logCellStyleRef, logCellTimeStyleRef, logCountBadgeStyleRef;
@@ -611,6 +611,8 @@ namespace tachyon
         /// The font scale, as a percentage: 100 to 300 in steps of 10, the theme reloaded at it.
         void SetFontScale(float percent);
         void RenderSettingsShortcuts();
+        /// A table's selection mode as a "Select" label and a Row | Cell segmented control.
+        void SelectionModeSwitch(TableSelectionMode& mode);
         /// Reduced motion as settingsMotionIndex says.
         void ApplyMotionSetting();
         /// The wheel mode settingsWheelIndex says.

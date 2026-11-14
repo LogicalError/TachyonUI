@@ -224,6 +224,43 @@ namespace tachyon
             EXPECT_EQ(deleteRuns, 1) << "test setup: an enabled item runs on a click";
         }
 
+        // A shortcut stays at least 24px from its label, however long both are: a menu as wide
+        // as its widest row ("Save As..." and "Ctrl+Shift+S" touched).
+        TEST_F(ControlsMenuTest, AShortcutKeepsItsDistanceFromTheLabel)
+        {
+            const ID menuID = app.idManager.CreateStaticID();
+            const ID itemID = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow();
+                if (app.BeginMenu(menuID, "File"))
+                {
+                    app.MenuItem(app.idManager.CreateStaticID(), { app.theme.deleteIcon, "Open" }, "Ctrl+O", [] {});
+                    app.MenuItem(itemID, { app.theme.deleteIcon, "Save a Copy of Everything As..." }, "Ctrl+Shift+Alt+S", [] {});
+                }
+                app.EndMenu();
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.ClickAt(app.CenterOf(menuID));
+            app.Frame(draw);
+            app.Frame(draw);
+            const auto& storage = app.elementStorage;
+            const ElementRef row = storage.FindElementRefByID(itemID);
+            ASSERT_TRUE(row.IsValid());
+            int labelEnd = -1, shortcutStart = -1;
+            for (const Element& part : storage.GetChildrenSpan(row))
+            {
+                const IntRect r = app.GetElementRect(part.id);
+                if (part.styleRef.layoutStyleIndex == app.theme.menuItemLabelStyleRef.layoutStyleIndex)
+                    labelEnd = r.x + app.textSystem->MeasureText(part.textID, TextWrapContext{}).maxWidth;
+                if (part.styleRef.layoutStyleIndex == app.theme.menuItemShortcutStyleRef.layoutStyleIndex)
+                    shortcutStart = r.x;
+            }
+            ASSERT_GE(labelEnd, 0);
+            ASSERT_GE(shortcutStart, 0);
+            EXPECT_GE(shortcutStart - labelEnd, app.styleManager.Px(24));
+        }
+
         // Closing the menu gives the focus back to where it was, unless the chosen item moved
         // it (Edit > Undo focusing the field it changed): then it stays there.
         TEST_F(ControlsMenuTest, AnItemThatMovesTheFocusKeepsIt)

@@ -646,8 +646,10 @@ namespace tachyon
                 {
                     const int32_t x = int32_t(g.XAt(time));
                     ctx.RenderBox(IntRect{ x, outer.y, px1, outer.h }, outer, line);
+                    // Centered on the playhead, but kept on the ruler at the ends of the view.
                     const int32_t w = std::max(pillMin, pillTextSize.x + pillPad);
-                    const IntRect p{ x - w / 2, outer.y + px4, w, pillHeight };
+                    const int32_t pillX = std::max(outer.x, std::min(x - w / 2, outer.x + outer.w - w));
+                    const IntRect p{ pillX, outer.y + px4, w, pillHeight };
                     ctx.RenderBox(p, outer, pill, pillState);
                     ctx.RenderText(pillText, IntRect{ p.x + (w - pillTextSize.x) / 2, p.y + (pillHeight - pillTextSize.y) / 2,
                                                        pillTextSize.x, pillTextSize.y });
