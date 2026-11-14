@@ -48,18 +48,21 @@ namespace tachyon
         bool CanUndo() const { return m_current > 0; }
         bool CanRedo() const { return m_current < m_steps.size(); }
 
+        /// The step's callback runs from a copy, after the history has moved: it may push,
+        /// clear or undo / redo again, and carries on with what it captured.
         void Undo()
         {
             if (!CanUndo()) return;
             m_mergeOpen = false;
-            if (const auto& undo = m_steps[--m_current].undo) undo();
+            if (const std::function<void()> undo = m_steps[--m_current].undo) undo();
         }
 
+        /// As Undo, the other way.
         void Redo()
         {
             if (!CanRedo()) return;
             m_mergeOpen = false;
-            if (const auto& redo = m_steps[m_current++].redo) redo();
+            if (const std::function<void()> redo = m_steps[m_current++].redo) redo();
         }
 
         size_t           UndoCount() const { return m_current; }

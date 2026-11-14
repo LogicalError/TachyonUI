@@ -50,7 +50,10 @@ namespace
 
     TEST(JsonTest, MalformedTextIsAnError)
     {
-        for (const char* text : { "", "{", "[1,]", "{\"a\" 1}", "\"open", "tru", "{} x", "\"\\ud800\"" })
+        // A surrogate is only text as the high half followed by the low half: alone, the
+        // wrong way round or followed by another character, it would make invalid UTF-8.
+        for (const char* text : { "", "{", "[1,]", "{\"a\" 1}", "\"open", "tru", "{} x", "\"\\ud800\"",
+                                  "\"\\udc00\"", "\"\\ude00\\ud83d\"", "\"\\ud83d\\u0041\"" })
         {
             const Result<JsonValue> v = JsonValue::Parse(text);
             EXPECT_FALSE(v) << text;

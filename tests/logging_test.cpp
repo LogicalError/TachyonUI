@@ -4,6 +4,7 @@
 #include <format>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 namespace tachyon::Diagnostics
@@ -168,5 +169,77 @@ namespace tachyon::Diagnostics
                 ASSERT_EQ(recent[i].sequence, recent[i - 1].sequence + 1);
             EXPECT_NE(recent.front().threadId, 0u);
         }
+
+        // A sink may log, read the ring and add or remove sinks: none of it waits on the logger.
+        // What a sink logs reaches the ring and the console, not the sinks again, so a sink that
+        // logs about every record doesn't go round forever.
+        void LoggingSink(const LogRecord& record, void* context)
+        {
+            ++*static_cast<int*>(context);
+            TACHYON_LOG_DEBUG(kTestCategory, "seen {}", record.sequence);
+        }
+
+        TEST_F(LoggingTest, ASinkThatLogsReachesTheRingButNotTheSinks)
+        {
+            int calls = 0;
+            ASSERT_TRUE(AddLogSink(LoggingSink, &calls));
+            TACHYON_LOG_INFO(kTestCategory, "outer");
+            RemoveLogSink(LoggingSink, &calls);
+
+            EXPECT_EQ(calls, 1) << "not called for its own record";
+            ASSERT_EQ(captured.messages.size(), 1u);
+            EXPECT_EQ(captured.messages[0], "outer");
+            LogRecord latest[1];
+            ASSERT_EQ(CopyRecentLogRecords(latest), 1u);
+            char message[64];
+            FormatLogMessage(latest[0], message);
+            EXPECT_EQ(std::string(message), std::format("seen {}", captured.records[0].sequence));
+        }
+
+        struct SelfRemoving { int calls = 0; };
+        void SelfRemovingSink(const LogRecord&, void* context)
+        {
+            ++static_cast<SelfRemoving*>(context)->calls;
+            RemoveLogSink(SelfRemovingSink, context);
+        }
+
+        TEST_F(LoggingTest, ASinkCanRemoveItself)
+        {
+            SelfRemoving sink;
+            ASSERT_TRUE(AddLogSink(SelfRemovingSink, &sink));
+            TACHYON_LOG_INFO(kTestCategory, "first");
+            TACHYON_LOG_INFO(kTestCategory, "second");
+            EXPECT_EQ(sink.calls, 1);
+            EXPECT_EQ(captured.messages.size(), 2u) << "the other sinks carry on";
+        }
+
+        struct RingReader { uint64_t latest = 0; uint64_t copied = 0; uint64_t record = 0; };
+        void RingReadingSink(const LogRecord& record, void* context)
+        {
+            auto* reader   = static_cast<RingReader*>(context);
+            reader->record = record.sequence;
+            reader->latest = LatestLogSequence();
+            LogRecord newest[1];
+            if (CopyRecentLogRecords(newest) == 1)
+                reader->copied = newest[0].sequence;
+        }
+
+        TEST_F(LoggingTest, ASinkCanReadTheRing)
+        {
+            RingReader reader;
+            ASSERT_TRUE(AddLogSink(RingReadingSink, &reader));
+            TACHYON_LOG_INFO(kTestCategory, "read me");
+            RemoveLogSink(RingReadingSink, &reader);
+            EXPECT_NE(reader.record, 0u);
+            EXPECT_EQ(reader.latest, reader.record);
+            EXPECT_EQ(reader.copied, reader.record);
+        }
+
+        // A template is a character array that lives as long as the program, a string literal
+        // most often: records keep a view of it. Text made at run time goes in a {} argument.
+        static_assert(std::is_constructible_v<LogTemplate, const char (&)[4]>);
+        static_assert(!std::is_constructible_v<LogTemplate, std::string>);
+        static_assert(!std::is_constructible_v<LogTemplate, std::string_view>);
+        static_assert(!std::is_constructible_v<LogTemplate, const char*>);
     }
 }

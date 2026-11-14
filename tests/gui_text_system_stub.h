@@ -255,18 +255,29 @@ namespace tachyon
             if (!name || size.x == 0 || size.y == 0 || rgba.size() < size_t(size.x) * size.y * 4)
                 return IconID::Invalid;
             if (const auto it = m_pixelIconNames.find(name); it != m_pixelIconNames.end())
+            {
+                ++m_pixelIconReferences[it->second];
                 return IconID{ it->second };
+            }
             const uint32_t id = 0x20000000 + m_pixelIconCount++;
-            m_pixelIconNames[name] = id;
-            m_pixelIconSizes[id]   = size;
+            m_pixelIconNames[name]     = id;
+            m_pixelIconSizes[id]       = size;
+            m_pixelIconReferences[id]  = 1;
             return IconID{ id };
         }
+
+        /// Whether a pixel icon is registered: not yet let go of as often as it was registered.
+        bool IsPixelIconLive(IconID iconId) const { return m_pixelIconReferences.contains(uint32_t(iconId)); }
 
         std::vector<IconID> unregisteredIcons;   ///< UnregisterIcon calls, in order
 
         void UnregisterIcon(IconID iconId) override
         {
             unregisteredIcons.push_back(iconId);
+            const auto references = m_pixelIconReferences.find(uint32_t(iconId));
+            if (references == m_pixelIconReferences.end() || --references->second > 0)
+                return;
+            m_pixelIconReferences.erase(references);
             std::erase_if(m_pixelIconNames, [iconId](const auto& named) { return named.second == uint32_t(iconId); });
             m_pixelIconSizes.erase(uint32_t(iconId));
         }
@@ -555,6 +566,7 @@ namespace tachyon
         std::unordered_map<uint64_t, std::string> m_intTextMap;
         std::unordered_map<std::string, uint32_t> m_pixelIconNames;
         std::unordered_map<uint32_t, uint2>       m_pixelIconSizes;
+        std::unordered_map<uint32_t, uint32_t>    m_pixelIconReferences;   ///< registrations not yet let go of
         uint32_t                                  m_pixelIconCount = 0;
 
         struct PendingEdit

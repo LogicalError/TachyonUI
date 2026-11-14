@@ -22,8 +22,6 @@ namespace tachyon::vulkan
     class VulkanGraphicsContext;
 
     constexpr unsigned int FRAME_OVERLAP = 2;
-    static_assert(FRAME_DELETION_SLOT_COUNT == FRAME_OVERLAP + 1,
-                  "Frame-scope deletion ring needs one more slot than FRAME_OVERLAP");
 
     struct FrameData
     {

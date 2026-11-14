@@ -65,7 +65,7 @@ VkBuffer GUIRenderContext::QuadIndices(tachyon::vulkan::VulkanDeviceContext& dev
         return quadIndexBuffer.buffer;
 
     if (quadIndexBuffer.buffer != VK_NULL_HANDLE)
-        deviceContext.mainDeletionQueue.push_function([&deviceContext, old = quadIndexBuffer]() { deviceContext.DestroyBuffer(old); });
+        deviceContext.DestroyAfterGpu([&deviceContext, old = quadIndexBuffer]() { deviceContext.DestroyBuffer(old); });
 
     constexpr uint32_t kMinimumPrimitives = 4096;
     const uint32_t capacity = std::bit_ceil(std::max(primitiveCount, kMinimumPrimitives));
@@ -232,12 +232,8 @@ void VulkanRenderCommandList::UploadTransientBuffers(
 
     if (requiredEnd > frame.primitiveUploadCapacity)
     {
-        // If earlier uploads were recorded into this command list, keep their
-        // old arena alive until this slot's fence signals. At normal GUI render
-        // time the offset is zero, so the fence wait in BeginWindowFrame makes
-        // immediate replacement safe.
+        // The old arena goes once the GPU is done with every frame that may use it.
         Buffer oldBuffer = frame.primitiveUploadBuffer;
-        const bool oldUsedThisFrame = frame.primitiveUploadOffset != 0;
 
         constexpr size_t kMinimumArenaCapacity = 64 * 1024;
         const size_t newCapacity = std::bit_ceil(std::max(requiredEnd, kMinimumArenaCapacity));
@@ -257,19 +253,7 @@ void VulkanRenderCommandList::UploadTransientBuffers(
         requiredEnd = calculateEnd(0);
 
         if (oldBuffer.buffer != VK_NULL_HANDLE)
-        {
-            if (oldUsedThisFrame)
-            {
-                frame.flushQueue.push_function([allocator = dc.allocator, oldBuffer]()
-                {
-                    vmaDestroyBuffer(allocator, oldBuffer.buffer, oldBuffer.allocation);
-                });
-            }
-            else
-            {
-                vmaDestroyBuffer(dc.allocator, oldBuffer.buffer, oldBuffer.allocation);
-            }
-        }
+            dc.DestroyAfterGpu([&device = dc, oldBuffer]() { device.DestroyBuffer(oldBuffer); });
     }
 
     // The upload worker copies while this thread records the draws; the frame's submit waits

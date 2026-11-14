@@ -128,6 +128,13 @@ namespace tachyon
     {
     }
 
+    FileIcons::~FileIcons()
+    {
+        for (const auto& [key, icon] : m_icons)
+            if (icon != IconID::Invalid)
+                m_textSystem.UnregisterIcon(icon);
+    }
+
     std::string FileIcons::Extension(std::string_view name)
     {
         const size_t dot = name.rfind('.');

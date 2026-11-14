@@ -5,6 +5,8 @@
 
 #include <gui_core/input/gui_undo_history.h>
 
+#include <string>
+
 namespace tachyon
 {
     namespace
@@ -114,6 +116,44 @@ namespace tachyon
             EXPECT_EQ(history.RedoDescription(), "Move text");
 
             history.Clear();
+            EXPECT_FALSE(history.CanUndo());
+            EXPECT_FALSE(history.CanRedo());
+        }
+
+        // A step's callback can change the history while it runs: it carries on with what it
+        // captured, and the history is as the change left it. The text is longer than a short
+        // string, so it lives on the heap and a freed callback would read freed memory.
+        TEST(UndoHistoryTest, AnUndoThatPushesAStepKeepsRunning)
+        {
+            UndoHistory history;
+            const std::string kText = "the text the undo writes, longer than a short string";
+            std::string written;
+            int value = 0;
+            history.Push({ .description = "Write",
+                           .undo = [&history, &value, &written, kText] {
+                               history.Push(SetStep(value, 0, 7));   // drops this step's redo
+                               written = kText;
+                           } });
+            history.Undo();
+            EXPECT_EQ(written, kText);
+            EXPECT_EQ(history.UndoCount(), 1u) << "the pushed step";
+            EXPECT_EQ(history.RedoCount(), 0u) << "the push dropped the undone step";
+        }
+
+        TEST(UndoHistoryTest, ARedoThatClearsTheHistoryKeepsRunning)
+        {
+            UndoHistory history;
+            const std::string kText = "the text the redo writes, longer than a short string";
+            std::string written;
+            history.Push({ .description = "Write",
+                           .undo = [] {},
+                           .redo = [&history, &written, kText] {
+                               history.Clear();
+                               written = kText;
+                           } });
+            history.Undo();
+            history.Redo();
+            EXPECT_EQ(written, kText);
             EXPECT_FALSE(history.CanUndo());
             EXPECT_FALSE(history.CanRedo());
         }

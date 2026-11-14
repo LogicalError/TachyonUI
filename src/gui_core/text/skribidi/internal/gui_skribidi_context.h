@@ -276,6 +276,7 @@ namespace tachyon
 			ImageIndex        index  = ImageIndex::Invalid;
 			uint2             size {};
 			skb_icon_handle_t handle = 0;   // the empty icon standing in for it in text
+			uint32_t          references = 0;   // registrations not yet let go of
 		};
 		std::vector<PixelIcon> pixelIcons;
 		const PixelIcon* GetPixelIcon(IconID iconId) const

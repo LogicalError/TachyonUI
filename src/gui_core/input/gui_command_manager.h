@@ -530,7 +530,7 @@ namespace tachyon
                 const CommandID cmd = m_activeHeld[j].cmd;
                 m_activeHeld.erase(m_activeHeld.begin() + j);
                 if (const Command* c = GetCommand(cmd); c && c->onEnd)
-                    c->onEnd();
+                    Run(c->onEnd);
                 fired = true;
             }
             return fired;
@@ -564,7 +564,14 @@ namespace tachyon
                 if (IsHeldActive(i)) return;
                 m_activeHeld.push_back({ s.key, i });
             }
-            if (s.callback) s.callback();
+            Run(s.callback);
+        }
+
+        /// Calls a command's callback from a copy: the callback may register or re-register
+        /// commands, which can move or replace the one it runs from.
+        static void Run(std::function<void()> callback)
+        {
+            if (callback) callback();
         }
 
         bool IsHeldActive(CommandID cmd) const
@@ -585,7 +592,7 @@ namespace tachyon
                 if (s.key == prefix.key && s.modifiers == prefix.mods
                     && s.chord2Key == state.lastKey && s.chord2Mods == state.modifiers)
                 {
-                    if (s.callback) s.callback();
+                    Run(s.callback);
                     return true;
                 }
             }

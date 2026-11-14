@@ -16,7 +16,9 @@
 #include <vk_mem_alloc.h>
 
 #include <algorithm>
+#include <atomic>
 #include <array>
+#include <deque>
 #include <mutex>
 #include <optional>
 #include <unordered_map>
@@ -107,10 +109,6 @@ namespace tachyon::vulkan
         std::vector<VkSemaphoreSubmitInfo> waits;
         size_t submitted = 0;   ///< the first this many were submitted
     };
-
-    /// Frame deletion queue slots: FRAME_OVERLAP + 1, so the slot pushed to is never the one
-    /// flushed in the same frame (static-asserted against FRAME_OVERLAP).
-    constexpr unsigned int FRAME_DELETION_SLOT_COUNT = 3;
 
     /// The Vulkan device the GUI renders with: its own, or a host's (SetExternalDevice). It
     /// lives in VulkanGraphicsContext::deviceContext; set it up before GUIApplication::Initialize.
@@ -227,8 +225,8 @@ namespace tachyon::vulkan
         /// submit reads must be copied first: WaitForUploads before vkQueueSubmit.
         UploadWorker& Uploads() const { return m_uploads; }
         void WaitForUploads() const { m_uploads.Wait(); }
-        /// Destroys the image's Vulkan objects now, without waiting for the GPU; doesn't delete
-        /// the object.
+        /// Destroys the image's Vulkan objects now; doesn't delete the object. Only when no
+        /// submitted frame can use it (debug builds check); DestroyImageAtEnd otherwise.
         void DestroyImage(tachyon::Image* img);
         /// After a device loss: frees the live images' Vulkan objects; the image objects stay.
         void ReleaseLiveImages();
@@ -242,7 +240,8 @@ namespace tachyon::vulkan
 
         /// Library internal: the color styles in a GPU buffer for the shaders.
         tachyon::Buffer* UploadVisualColorStyles(::std::span<const tachyon::VisualColorStyle> colorStyles) const;
-        /// Library internal: destroys the buffer's GPU objects now.
+        /// Library internal: destroys the buffer's GPU objects now, when no submitted frame can
+        /// use it.
         void DestroyVisualColorStyles(tachyon::Buffer* buffer);
         /// Library internal: destroys and deletes the buffer when the scope's queue flushes.
         void DestroyVisualColorStylesAtEnd(tachyon::Buffer* buffer, tachyon::DeviceScope scope,
@@ -251,7 +250,8 @@ namespace tachyon::vulkan
 
         /// Library internal: the box styles in a GPU buffer for the shaders.
         tachyon::Buffer* UploadVisualBoxStyles(::std::span<const tachyon::VisualBoxStyle> styles) const;
-        /// Library internal: destroys the buffer's GPU objects now.
+        /// Library internal: destroys the buffer's GPU objects now, when no submitted frame can
+        /// use it.
         void DestroyVisualBoxStyles(tachyon::Buffer* buffer);
         /// Library internal: destroys and deletes the buffer when the scope's queue flushes.
         void DestroyVisualBoxStylesAtEnd(tachyon::Buffer* buffer, tachyon::DeviceScope scope,
@@ -261,26 +261,41 @@ namespace tachyon::vulkan
         /// Library internal: the timeline semaphores the frame's submissions wait on.
         FrameWaits frameWaits;
 
-        /// Library internal: the current frame's deletion queue, or for DeviceScope::Application
-        /// the one flushed at Destroy.
+        /// Library internal: the deletion queue flushed at Destroy (DeviceScope::Application).
+        /// What a frame may draw with goes through DestroyAfterGpu instead.
         DeletionQueue& GetDeletionQueue(tachyon::DeviceScope scope)
         {
             switch (scope)
             {
-                case tachyon::DeviceScope::Frame:       return frameDeletionQueues[frameNumber % FRAME_DELETION_SLOT_COUNT];
                 case tachyon::DeviceScope::Application: return mainDeletionQueue;
                 default: throw;
             }
         }
 
-        /// Call once per frame, after every window's BeginWindowFrame: flushes the slot last
-        /// pushed to FRAME_OVERLAP frames ago, whose GPU work those fence waits have finished.
-        void AdvanceFrameAndFlushDeletions()
-        {
-            const size_t flushSlot = (frameNumber + 1) % FRAME_DELETION_SLOT_COUNT;
-            frameDeletionQueues[flushSlot].flush();
-            ++frameNumber;
-        }
+        /// The one way to free, while frames run, anything a frame may use (a buffer, an image,
+        /// a staging copy the upload worker fills): `destroy` runs once the GPU has finished
+        /// every frame submitted until the end of the frame it's dropped in, every window's.
+        /// However many frames go by without a window drawn: the GPU's progress decides, not
+        /// a count of frames. Any thread.
+        void DestroyAfterGpu(std::function<void()> destroy);
+        /// For DeviceScope::Frame, DestroyAfterGpu; for Application, at Destroy.
+        void Defer(tachyon::DeviceScope scope, std::function<void()> destroy);
+
+        /// Library internal, once a frame before it's built (all of the last frame's windows
+        /// submitted): what was dropped since the last call waits for the last submission, and
+        /// what the GPU has passed is destroyed.
+        void AdvanceFrameAndFlushDeletions();
+
+        /// Library internal: the signal every frame submission adds, the submit timeline at
+        /// its next value. Call with the queue locked (LockQueue), right before the submit, so
+        /// the values reach the queue in order.
+        VkSemaphoreSubmitInfo NextSubmitSignal();
+
+        /// True when the GPU has finished every frame submitted: a resource can go now.
+        bool FramesDone() const;
+        /// Debug builds: where an image dropped (DestroyImageAtEnd) and not destroyed yet was
+        /// dropped, which no frame may record with; null for any other, and in release builds.
+        const std::source_location* WasDropped(VkImageView view) const;
 
     public:
         std::string      shaderDirectory;  ///< Where to load the compiled shaders from; empty uses the built-in ones
@@ -326,9 +341,9 @@ namespace tachyon::vulkan
 
         /// Flushed at Destroy (DeviceScope::Application).
         DeletionQueue mainDeletionQueue;
-        /// One per frame slot; see AdvanceFrameAndFlushDeletions.
-        std::array<DeletionQueue, FRAME_DELETION_SLOT_COUNT> frameDeletionQueues;
-        /// Frames advanced so far; picks the frame deletion slot.
+        /// A timeline every frame submission signals, one value further each.
+        VkSemaphore submitTimeline = VK_NULL_HANDLE;
+        /// Frames advanced so far.
         uint64_t frameNumber{ 0 };
 
 
@@ -370,6 +385,8 @@ namespace tachyon::vulkan
         bool m_ownsAllocator = true;
 
         struct PendingUpload { Buffer staging; VkImage image; VkExtent3D extent; bool mipmapped; };
+        /// Guards m_pendingUploads and m_liveImages: images are made on any thread.
+        mutable std::mutex         m_imagesMutex;
         std::vector<PendingUpload> m_pendingUploads;
 
         mutable UploadWorker m_uploads;
@@ -383,12 +400,33 @@ namespace tachyon::vulkan
         std::mutex  m_ownedQueueMutex;
         std::mutex* m_queueMutex = &m_ownedQueueMutex;
 
+        /// What frames dropped (DestroyAfterGpu), guarded by m_deletionMutex: since the last
+        /// AdvanceFrameAndFlushDeletions, and before that, each batch with the submission it
+        /// waits for, oldest first.
+        struct DroppedAfter { uint64_t after = 0; DeletionQueue queue; };
+        mutable std::mutex         m_deletionMutex;
+        /// Debug builds: the views of the images dropped and not destroyed yet, and where they
+        /// were dropped (WasDropped).
+        std::unordered_map<VkImageView, std::source_location> m_droppedViews;
+        void NoteDropped(VkImageView view, const std::source_location& where);
+        void NoteDestroyed(VkImageView view);
+        DeletionQueue              m_dropped;
+        std::deque<DroppedAfter>   m_droppedAfter;
+        /// The value the last frame submission signals; set under the queue lock.
+        std::atomic<uint64_t>      m_submitValue{ 0 };
+        /// Runs every dropped destroy now, the GPU being idle (Flush, Destroy, a device loss).
+        void DestroyAllDropped();
+
     public:
 
         /// Library internal: a VMA buffer.
         Buffer CreateBuffer(size_t allocSize, VkBufferUsageFlags usage, VmaMemoryUsage memoryUsage) const;
-        /// Library internal: destroys a CreateBuffer buffer now.
+        /// Library internal: destroys a CreateBuffer buffer now. Only when no submitted frame can
+        /// use it: from DestroyAfterGpu, with the GPU idle, or one never recorded
+        /// (DestroyUnsubmittedBuffer). Debug builds check it.
         void DestroyBuffer(const Buffer& buffer) const;
+        /// Library internal: destroys a buffer no command buffer was recorded with, now.
+        void DestroyUnsubmittedBuffer(const Buffer& buffer) const;
 
         /// Library internal: a host-visible, persistently mapped storage buffer with a device
         /// address, filled by memcpy (no staging, no blocking submit). Empty, with `outAddress`
@@ -397,7 +435,8 @@ namespace tachyon::vulkan
 
         /// Library internal: a VMA image with its view.
         VulkanImage CreateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, VkSampler sampler, bool mipmapped = false) const;
-        /// Library internal: destroys the image and its view now.
+        /// Library internal: destroys the image and its view now; as DestroyBuffer, only when no
+        /// submitted frame can use it.
         void DestroyImage(const VulkanImage& img);
 
         /// Library internal: the box styles in GPU buffers. Per-primitive uploads go through the RHI.

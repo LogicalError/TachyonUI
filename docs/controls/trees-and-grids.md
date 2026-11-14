@@ -233,7 +233,10 @@ const IconID icon = icons.Get("photo.jpg", false);
 
 - It keeps its own colors: no icon tint from the style, no text shadow.
 - It scales to fit its box and keeps its aspect ratio, on its own or inside text.
-- `ITextSystem::UnregisterIcon` removes it and frees its image slot.
+- `ITextSystem::UnregisterIcon` lets go of it.
+  - Registering a name again returns the same icon, and counts as another registration.
+  - Let go of it once per registration: the image slot is freed at the last one.
+    - For example, two `FileIcons` caches of the same size share their icons, and the first one destroyed leaves the other's.
 
 ```cpp
 std::vector<uint8_t> rgba(16 * 16 * 4, 255);   // a white 16x16 square
