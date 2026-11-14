@@ -469,6 +469,27 @@ namespace
         app.Cleanup();
     }
 
+    // An image handed over at once is still the app's after a lost device: it is made again,
+    // with its pixels, under its index.
+    TEST(GpuApplicationInit, AnImageHandedOverAtOnceIsMadeAgainAfterADeviceLoss)
+    {
+        DeviceLossApp app;
+        if (!app.Start(/*handOver*/ true))
+        {
+            app.Cleanup();
+            GTEST_SKIP() << "no Vulkan device available";
+        }
+        ASSERT_TRUE(app.Frames(3));
+        ASSERT_TRUE(app.CenterIsRed());
+
+        auto* vulkan = static_cast<tachyon::vulkan::VulkanGraphicsContext*>(app.graphicsContext);
+        vulkan->SimulateDeviceLoss();
+        ASSERT_TRUE(app.Frames(3)) << "the frames go on";
+        EXPECT_FALSE(app.graphicsContext->DeviceLost());
+        EXPECT_TRUE(app.CenterIsRed()) << "the image draws from its index on the new device";
+        app.Cleanup();
+    }
+
     // Images made again while the upload worker is busy get their pixels when it reaches
     // them, after the rebuild has returned and the memory it let go of is used again.
     TEST(GpuApplicationInit, ImagesMadeAgainWhileTheUploadWorkerIsBusyKeepTheirPixels)
