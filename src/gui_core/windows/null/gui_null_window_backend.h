@@ -20,8 +20,9 @@ namespace tachyon
     class NullWindowBackend final : public IWindowBackend
     {
     public:
-        /// `monitor` is the one monitor GetMonitors reports, in screen pixels.
-        explicit NullWindowBackend(IntRect monitor = { 0, 0, 1920, 1080 });
+        /// `monitor` is the one monitor GetMonitors reports, in screen pixels, refreshing at
+        /// `refreshHz` (0: unknown).
+        explicit NullWindowBackend(IntRect monitor = { 0, 0, 1920, 1080 }, float refreshHz = 0.0f);
 
         OSWindowHandle CreateWindow(std::string_view title, int2 size, WindowFlags windowFlags, OSWindowHandle parentOSHandle) override;
         OSWindowHandle CreateWindow(std::string_view title, IntRect rect, WindowFlags windowFlags, OSWindowHandle parentOSHandle) override;
@@ -66,6 +67,7 @@ namespace tachyon
         };
 
         IntRect                                        m_monitor;
+        float                                          m_refreshHz = 0.0f;
         std::unordered_map<OSWindowHandle, Window>     m_windows;
         std::unordered_set<OSWindowHandle>             m_pendingDestroy;
         uintptr_t                                      m_nextHandle = 0;

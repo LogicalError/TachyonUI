@@ -39,4 +39,19 @@ namespace tachyon
         const double wait    = kFramePaceShare / hz - elapsed;
         return wait >= kFramePaceMinWaitSeconds ? wait : 0.0;
     }
+
+    void VsyncLock::NotePresent(double presentSeconds, float refreshHz)
+    {
+        const bool waited = refreshHz > 0.0f && presentSeconds >= kWaitedShare / double(refreshHz);
+        if (waited == m_locked)
+        {
+            m_streak = 0;
+            return;
+        }
+        if (++m_streak >= kFramesToSwitch)
+        {
+            m_locked = waited;
+            m_streak = 0;
+        }
+    }
 }

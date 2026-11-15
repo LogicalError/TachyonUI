@@ -763,15 +763,31 @@ namespace tachyon
         return 0.0f;
     }
 
-    float OSWindowManager::FastestRefreshRate() const
+    template <typename Pick>
+    float OSWindowManager::PickRefreshRate(Pick pick) const
     {
         const std::vector<MonitorInfo> current = monitors.empty() ? windowBackendManager->GetMonitors() : monitors;
-        float fastest = 0.0f;
+        float picked = 0.0f;
         for (const Window& window : windows)
-            if (window.state == WindowState::Alive && window.monitorIndex >= 0
-                && window.monitorIndex < static_cast<int32_t>(current.size()))
-                fastest = std::max(fastest, current[static_cast<size_t>(window.monitorIndex)].refreshRate);
-        return fastest > 0.0f ? fastest : MainRefreshRate();
+        {
+            if (window.state != WindowState::Alive || window.monitorIndex < 0
+                || window.monitorIndex >= static_cast<int32_t>(current.size()))
+                continue;
+            const float hz = current[static_cast<size_t>(window.monitorIndex)].refreshRate;
+            if (hz > 0.0f)
+                picked = picked > 0.0f ? pick(picked, hz) : hz;
+        }
+        return picked > 0.0f ? picked : MainRefreshRate();
+    }
+
+    float OSWindowManager::FastestRefreshRate() const
+    {
+        return PickRefreshRate([](float a, float b) { return std::max(a, b); });
+    }
+
+    float OSWindowManager::SlowestRefreshRate() const
+    {
+        return PickRefreshRate([](float a, float b) { return std::min(a, b); });
     }
 
     float OSWindowManager::MainDisplayScale() const

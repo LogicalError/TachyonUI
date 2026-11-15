@@ -5,8 +5,8 @@
 
 namespace tachyon
 {
-    NullWindowBackend::NullWindowBackend(IntRect monitor)
-        : m_monitor(monitor)
+    NullWindowBackend::NullWindowBackend(IntRect monitor, float refreshHz)
+        : m_monitor(monitor), m_refreshHz(refreshHz)
     {
     }
 
@@ -104,7 +104,7 @@ namespace tachyon
 
     std::vector<MonitorInfo> NullWindowBackend::GetMonitors() const
     {
-        return { MonitorInfo{ .rect = m_monitor, .workArea = m_monitor, .isPrimary = true } };
+        return { MonitorInfo{ .rect = m_monitor, .workArea = m_monitor, .isPrimary = true, .refreshRate = m_refreshHz } };
     }
 
     uint32_t NullWindowBackend::GetTicks() const

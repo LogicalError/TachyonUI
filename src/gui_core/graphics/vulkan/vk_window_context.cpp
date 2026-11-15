@@ -559,8 +559,9 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
     frameNumber++;
 }
 
-void VulkanWindowContext::PresentWindowFrame()
+std::optional<double> VulkanWindowContext::PresentWindowFrame()
 {
+    std::optional<double> presentSeconds;
     // Present waits on the image's present semaphore (rendering finished).
     if (presentPending)
     {
@@ -582,7 +583,9 @@ void VulkanWindowContext::PresentWindowFrame()
             // block. Timed as a wait, not work.
             TACHYON_PROFILE_SCOPE_WAIT("Present (vsync wait)");
             auto queueLock = deviceContext->LockQueue();
-            presentResult = vkQueuePresentKHR(deviceContext->graphicsQueue, &presentInfo);
+            const auto presentStart = std::chrono::steady_clock::now();   // not the lock's wait
+            presentResult  =vkQueuePresentKHR(deviceContext->graphicsQueue, &presentInfo);
+            presentSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - presentStart).count();
         }
         if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
             resize_requested = true;
@@ -603,6 +606,7 @@ void VulkanWindowContext::PresentWindowFrame()
     // Build time is measured from here to the next frame's submit.
     lastPresentEnd = std::chrono::steady_clock::now();
     havePresentEnd = true;
+    return presentSeconds;
 }
 
 void VulkanWindowContext::PerformReadback(const VulkanImage& drawImage)

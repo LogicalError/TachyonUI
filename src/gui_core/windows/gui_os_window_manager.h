@@ -371,6 +371,9 @@ namespace tachyon
         /// Refresh rate in Hz of the fastest monitor with a window of the app on it, so frames
         /// come often enough for each; MainRefreshRate when no window's monitor is known.
         float FastestRefreshRate() const;
+        /// Refresh rate in Hz of the slowest monitor with a window of the app on it; the same
+        /// as FastestRefreshRate when all the windows refresh together.
+        float SlowestRefreshRate() const;
 
         /// The window's context; nullptr when the window doesn't exist.
         IWindowContext* GetWindowContext(ID id) const
@@ -573,6 +576,10 @@ namespace tachyon
         bool    m_reducedMotion = false;
         /// First top-level window still open; null when there is none.
         const Window* MainWindow() const;
+        /// The known refresh rates of the monitors with a shown window, folded by `pick`
+        /// (min or max); MainRefreshRate when none is known.
+        template <typename Pick>
+        float PickRefreshRate(Pick pick) const;
         void LinkToParent(int32_t window_index, ID parentID);
         void ClearParentIDInChildren(int32_t window_index);
         void RemoveWindow(int32_t window_index);
