@@ -885,19 +885,20 @@ namespace tachyon
 
         /// A menu: a trigger button (in a menu bar or on its own), or a submenu item inside
         /// another menu. True while it is open: emit its items then. EndMenu is called either way.
-        bool        BeginMenu(ID id, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints = {});
+        /// `content` is the trigger's text with an optional icon before it.
+        bool        BeginMenu(ID id, const GUIContent& content, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints = {});
         /// As above, in the theme's menu styles.
-        inline bool BeginMenu(ID id, std::string_view text, LayoutOverride&& constraints = {}) { return BeginMenu(id, text, theme.controls->menuTrigger, theme.menuStyleRef, theme.menuItemRowStyleRef, std::move(constraints)); }
+        inline bool BeginMenu(ID id, const GUIContent& content, LayoutOverride&& constraints = {}) { return BeginMenu(id, content, theme.controls->menuTrigger, theme.menuStyleRef, theme.menuItemRowStyleRef, std::move(constraints)); }
         /// As above, with the call site as the ID.
-        inline bool BeginMenu(       std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return BeginMenu(idManager.AllocateDynamicID(site), text, buttonStyle, menuStyle, itemStyle, std::move(constraints)); }
+        inline bool BeginMenu(       const GUIContent& content, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return BeginMenu(idManager.AllocateDynamicID(site), content, buttonStyle, menuStyle, itemStyle, std::move(constraints)); }
         /// As above, with the call site as the ID, in the theme's menu styles.
-        inline bool BeginMenu(       std::string_view text, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return BeginMenu(idManager.AllocateDynamicID(site), text, theme.controls->menuTrigger, theme.menuStyleRef, theme.menuItemRowStyleRef, std::move(constraints)); }
+        inline bool BeginMenu(       const GUIContent& content, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return BeginMenu(idManager.AllocateDynamicID(site), content, theme.controls->menuTrigger, theme.menuStyleRef, theme.menuItemRowStyleRef, std::move(constraints)); }
         /// A menu opened from a dropdown: as BeginMenu, with an arrow after its text also in a
         /// menu bar or title bar, where it isn't one of the bar's menus (Left and Right don't
         /// go to it). For a picker with actions of its own, beside the bar's menus.
-        bool        BeginDropdownMenu(ID id, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints = {});
+        bool        BeginDropdownMenu(ID id, const GUIContent& content, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints = {});
         /// As above, in the theme's menu-bar dropdown style (menu-bar-dropdown) and menu styles.
-        inline bool BeginDropdownMenu(ID id, std::string_view text, LayoutOverride&& constraints = {}) { return BeginDropdownMenu(id, text, theme.menuBarDropdownStyleRef, theme.menuStyleRef, theme.menuItemRowStyleRef, std::move(constraints)); }
+        inline bool BeginDropdownMenu(ID id, const GUIContent& content, LayoutOverride&& constraints = {}) { return BeginDropdownMenu(id, content, theme.menuBarDropdownStyleRef, theme.menuStyleRef, theme.menuItemRowStyleRef, std::move(constraints)); }
         /// A dropdown: a field showing options[selected] that opens the list of options under
         /// itself. Picking one (click, or arrows and Enter) sets `selected` and returns true on
         /// that frame; Escape or a click elsewhere closes the list unchanged. The open list
@@ -1352,6 +1353,11 @@ namespace tachyon
         /// Writes the flat indices of visible rows (honoring isOpen) to visibleIdx.
         static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows,
                                            std::vector<int>& visibleIdx);
+        /// As above, for a tree drawn by a table with `state`: when rows were opened or closed,
+        /// its selection stays on the same rows (row IDs are visible positions). For a tree built
+        /// on VirtualTable directly; VirtualTreeView does this itself.
+        static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows,
+                                           std::vector<int>& visibleIdx, TableState& state);
 
         /// Single-column virtualized tree view (a VirtualTable with one TreeCell column).
         /// A non-empty header shows the header row.
@@ -1763,14 +1769,16 @@ namespace tachyon
         /// As above, with the call site as the ID.
         inline bool Field(       std::string& value, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Field(idManager.AllocateDynamicID(site), value, TextEditBehavior::ContinuousUpdate, theme.controls->textbox, std::move(constraints)); }
 
-        /// A Field with a leading icon inside its border; `style` is the border's.
-        inline bool SearchField(ID id, std::string& value, IconID icon, TextEditBehavior textEditBehavior, StyleRef style, LayoutOverride&& constraints = {}) { return SearchField(id, value, icon, textEditBehavior, style, std::move(constraints), nullptr); }
+        /// A Field with a leading icon inside its border; `style` is the border's. `content`'s
+        /// icon leads, and its text is the placeholder shown while the field is empty
+        /// ({ searchIcon, "Filter objects" }); an icon alone converts to it.
+        inline bool SearchField(ID id, std::string& value, const GUIContent& content, TextEditBehavior textEditBehavior, StyleRef style, LayoutOverride&& constraints = {}) { return SearchField(id, value, content, textEditBehavior, style, std::move(constraints), nullptr); }
         /// As above, in the theme's search style.
-        inline bool SearchField(ID id, std::string& value, IconID icon, TextEditBehavior textEditBehavior = TextEditBehavior::ContinuousUpdate, LayoutOverride&& constraints = {}) { return SearchField(id, value, icon, textEditBehavior, theme.searchTextboxStyleRef, std::move(constraints)); }
+        inline bool SearchField(ID id, std::string& value, const GUIContent& content, TextEditBehavior textEditBehavior = TextEditBehavior::ContinuousUpdate, LayoutOverride&& constraints = {}) { return SearchField(id, value, content, textEditBehavior, theme.searchTextboxStyleRef, std::move(constraints)); }
         /// As above, with the call site as the ID.
-        inline bool SearchField(       std::string& value, IconID icon, TextEditBehavior textEditBehavior, StyleRef style, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return SearchField(idManager.AllocateDynamicID(site), value, icon, textEditBehavior, style, std::move(constraints)); }
+        inline bool SearchField(       std::string& value, const GUIContent& content, TextEditBehavior textEditBehavior, StyleRef style, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return SearchField(idManager.AllocateDynamicID(site), value, content, textEditBehavior, style, std::move(constraints)); }
         /// As above, with the call site as the ID, in the theme's search style.
-        inline bool SearchField(       std::string& value, IconID icon, TextEditBehavior textEditBehavior = TextEditBehavior::ContinuousUpdate, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return SearchField(idManager.AllocateDynamicID(site), value, icon, textEditBehavior, theme.searchTextboxStyleRef, std::move(constraints)); }
+        inline bool SearchField(       std::string& value, const GUIContent& content, TextEditBehavior textEditBehavior = TextEditBehavior::ContinuousUpdate, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return SearchField(idManager.AllocateDynamicID(site), value, content, textEditBehavior, theme.searchTextboxStyleRef, std::move(constraints)); }
 
         /// A text field that lists, under itself while it has the keyboard and holds text, the
         /// suggestions that contain that text (ignoring case), at most 12. Up / Down highlight one,
@@ -2417,6 +2425,12 @@ namespace tachyon
         /// An icon in the open ghost window, 28 x 28 CSS px.
         void AddGhostIcon(IconID icon, std::source_location site = std::source_location::current())
         {
+            AddGhostIcon(icon, int2{ styleManager.Px(28), styleManager.Px(28) }, site);
+        }
+        /// As above, `size` in pixels: in a ghost window of that size, a small icon by the
+        /// cursor, for example.
+        void AddGhostIcon(IconID icon, int2 size, std::source_location site = std::source_location::current())
+        {
             auto dragGhostIconID = idManager.AllocateDynamicID(site);
             tachyon::Element ghostIcon
             {
@@ -2426,8 +2440,7 @@ namespace tachyon
                 .styleRef = theme.ghostIconStyleRef,
             };
 
-            auto ghostIconRes = elementStorage.Add(std::move(ghostIcon),
-                                                   tachyon::LayoutOverride::FixedSize(28, 28));
+            auto ghostIconRes = elementStorage.Add(std::move(ghostIcon), tachyon::LayoutOverride::FixedSize(size));
             VERIFY(ghostIconRes.status);
             VERIFY(windowRegistry.Add(ghostIconRes.ref));
         }
@@ -3017,7 +3030,7 @@ namespace tachyon
         /// API misuse (e.g. an End without its Begin): logged once, and the caller carries on.
         static void ReportMisuse(const char* message);
         /// The bodies of the conditional Begin / End pairs (the public ones keep the open stacks).
-        bool OpenMenu(ID menuID, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints);
+        bool OpenMenu(ID menuID, const GUIContent& content, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints);
         void CloseMenu();
         /// A tooltip's box: the plain one; a few lines; property help's, on the popup surface; an
         /// error's, on the popup surface with an error border.
@@ -3053,7 +3066,7 @@ namespace tachyon
         /// Adds `id` to the Tab order, unless it's disabled.
         void RegisterTabStop(ID id);
         /// SearchField, also giving the inner text field's ID.
-        bool SearchField(ID id, std::string& value, IconID icon, TextEditBehavior textEditBehavior, StyleRef style, LayoutOverride&& constraints, ID* outFieldID);
+        bool SearchField(ID id, std::string& value, const GUIContent& content, TextEditBehavior textEditBehavior, StyleRef style, LayoutOverride&& constraints, ID* outFieldID);
         /// A box that draws the border of the field inside it (a field with a caption or a
         /// unit): it takes the field's hover and focus, so its :hover / :focus rules show them.
         void BeginFieldBox(ID id, StyleRef style, LayoutOverride&& constraints);
@@ -3156,6 +3169,9 @@ namespace tachyon
         /// The disabled, selected and invalid scopes around each open tooltip, set aside while
         /// it's built (OpenTooltip) and put back when it's closed.
         std::vector<ConstructionScopes> m_tooltipScopes;
+        /// The same for each open menu (BeginMenu, BeginContextMenu): its items aren't
+        /// selected or disabled for what the menu is built inside (a selected tab's).
+        std::vector<ConstructionScopes> m_menuScopes;
         /// The theme that last loaded, for a reload that fails to fall back to.
         std::string m_loadedThemePath;
         float       m_loadedFontScale { 1.0f };
@@ -3398,7 +3414,8 @@ namespace tachyon
                                   bool cellSelected,
                                   std::function<void()> emit_fn,
                                   int colIdx, int colStart, int16_t gridRow);
-        void EmitDirectCellTree(const VirtualTableColumn& column, TableEmit& emit,
+        /// Returns the cell's element.
+        tachyon::ElementRef EmitDirectCellTree(const VirtualTableColumn& column, TableEmit& emit,
                                 tachyon::ID cellID, tachyon::ElementState cellState, tachyon::ElementFlags cellFlags,
                                 tachyon::StyleRef cellStyleRef, tachyon::EventHandler cellHandler,
                                 bool cellSelected,

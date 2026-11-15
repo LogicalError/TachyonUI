@@ -218,6 +218,23 @@ changes (see [BeginCached](windows-and-layout.md#begincached--endcached)). A pan
 layout.panels[log].cacheSignature = [this] { return std::optional<uint64_t>(logLines.size()); };
 ```
 
+A tab group's "+" sits right after its last tab when the layout has a `newTabMenu`:
+
+- `newTabMenu(layout, leafNodeID)` builds the menu's items: the panels that can be added.
+- An item adds its panel with `AddPanelToLeaf(layout.root.get(), leafNodeID, panelID)`, which
+  appends it as a tab and selects it.
+- A torn-off window's layout takes its home layout's `newTabMenu`.
+- With documents, set `DocumentSet::newTabMenu`: every document's layout gets it.
+
+```cpp
+layout.newTabMenu = [this](DockingLayout& in, ID leafNodeID) {
+    MenuItem("Log", [this, &in, leafNodeID] {
+        const ID log = CreatePanel(in.panels, "Log", IconID::Invalid, [this] { LogPanel(); });
+        AddPanelToLeaf(in.root.get(), leafNodeID, log);
+    });
+};
+```
+
 To change the layout from code:
 
 - `FloatPanel(layout, panelID, screenPos)` moves a panel into a window of its own.
@@ -536,7 +553,7 @@ void EndToolbar();
 ```cpp
 BeginToolbar();
 Button(saveIcon, [this] { Save(); });
-SetTooltip("Save", "Ctrl+S");
+SetTooltip("Save", "Ctrl S");
 Toggle(snapToGrid, "Snap");
 EndToolbar();
 ```

@@ -62,7 +62,7 @@ namespace tachyon
                 LayoutOverride::FixedWidth(Pixels{ buttonWidth }).Anchored(windowID, AnchorPlacement::InsideBottomLeft, {(int16_t)borderWidth, (int16_t)-borderWidth}));
     }
 
-    static void MenuTriggerButton(GUIApplication& application, ID menuID, std::string_view text, StyleRef buttonStyle, bool isMenuBar, LayoutOverride&& constraints)
+    static void MenuTriggerButton(GUIApplication& application, ID menuID, const GUIContent& content, StyleRef buttonStyle, bool isMenuBar, LayoutOverride&& constraints)
     {
         auto handler = [&menuManager = application.menuManager, &guiStateManager = application.guiStateManager, menuID, isMenuBar](ElementEvent&& event) -> bool
         {
@@ -123,19 +123,47 @@ namespace tachyon
             return false;
         };
 
-        // A dropdown shows an arrow after its text, pointing up (and the button selected)
-        // while its menu is open; a menu-bar item has no arrow.
+        // A menu-bar item is its text (and icon). A dropdown lays out its content (an icon,
+        // if any, and the text) and then an arrow, pointing up (and the button selected)
+        // while its menu is open; both are parts the trigger draws and takes the input for.
         const auto& root = application.menuManager.levels[0];
         const bool  open = !isMenuBar && root.isOpen && root.triggerID == menuID;
-        const IconID arrow = isMenuBar ? IconID::Invalid
-                           : open      ? application.theme.dropdownArrowUpIcon : application.theme.dropdownArrowIcon;
         if (open) application.guiStateManager.Construction().PushSelected();
-        application.RegisterControl(tachyon::Element{ .id = menuID, .eventHandler = std::move(handler), .styleRef = buttonStyle },
-                            [&application, arrow, text](tachyon::Element& element) {
-                                return application.textSystem->RegisterText(element.id, arrow, text, element.styleRef, element.state);
-                            },
-                            std::move(constraints));
+        if (isMenuBar)
+        {
+            application.RegisterControl(tachyon::Element{ .id = menuID, .eventHandler = std::move(handler), .styleRef = buttonStyle },
+                                [&application, content](tachyon::Element& element) {
+                                    return application.textSystem->RegisterText(element.id, content.icon, content.text, element.styleRef, element.state);
+                                },
+                                std::move(constraints));
+        }
+        else
+        {
+            application.RegisterControl(tachyon::Element{ .id = menuID, .eventHandler = std::move(handler), .styleRef = buttonStyle },
+                                        std::move(constraints));
+            const ElementState triggerState = application.guiStateManager.GetCurrentState(menuID);
+            const GUITheme::DropdownParts parts = application.theme.DropdownPartsFor(buttonStyle);
+            auto part = [&](std::string_view name, StyleRef style, IconID icon, std::string_view text, LayoutOverride&& partConstraints)
+            {
+                const ID partID = application.idManager.AllocateDynamicID(name);
+                tachyon::Element element{ .id = partID, .styleRef = style, .flags = ElementFlags::NoInput, .state = triggerState };
+                element.textID = application.textSystem->RegisterText(partID, icon, text, style, triggerState);
+                const auto added = application.elementStorage.Add(std::move(element), std::move(partConstraints));
+                VERIFY(added.status);
+                VERIFY(application.windowRegistry.Add(added.ref));
+            };
+            VERIFY(application.elementStorage.BeginChildren());
+            [[maybe_unused]] const bool pushed = application.idManager.PushParent(menuID);   // the parts' IDs under the trigger's
+            part("content", parts.content, content.icon, content.text, LayoutOverride{});
+            if (parts.arrow.layoutStyleIndex != LayoutStyleIndex::Invalid)   // an icon menu button has none
+                part("arrow", parts.arrow, open ? application.theme.dropdownArrowUpIcon : application.theme.dropdownArrowIcon, {},
+                     LayoutOverride{}.NoGrow().NoShrink());
+            if (pushed) (void)application.idManager.PopParent();
+            VERIFY(application.elementStorage.EndChildren());
+        }
         if (open) application.guiStateManager.Construction().PopSelected();
+        if (!content.tooltip.empty())
+            application.SetTooltip(menuID, content.tooltip);
 
         // Snapshot the trigger's final screen rect after layout; next frame's BeginMenu
         // uses it to match the popup width and to detect side-flipped placement.
@@ -306,22 +334,24 @@ namespace tachyon
     }
 
 
-    bool GUIApplication::BeginMenu(ID menuID, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints)
+    bool GUIApplication::BeginMenu(ID menuID, const GUIContent& content, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints)
     {
-        const bool open = OpenMenu(menuID, text, buttonStyle, menuStyle, itemStyle, std::move(constraints));
+        const bool open = OpenMenu(menuID, content, buttonStyle, menuStyle, itemStyle, std::move(constraints));
         m_menuOpen.push_back(open);
+        if (open)   // after the trigger: a disabled or selected trigger still looks it
+            m_menuScopes.push_back(guiStateManager.Construction().SetAside());
         return open;
     }
 
-    bool GUIApplication::BeginDropdownMenu(ID menuID, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints)
+    bool GUIApplication::BeginDropdownMenu(ID menuID, const GUIContent& content, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints)
     {
         m_nextMenuIsDropdown = menuManager.currentDepth == -1;
-        const bool open = BeginMenu(menuID, text, buttonStyle, menuStyle, itemStyle, std::move(constraints));
+        const bool open = BeginMenu(menuID, content, buttonStyle, menuStyle, itemStyle, std::move(constraints));
         m_nextMenuIsDropdown = false;
         return open;
     }
 
-    bool GUIApplication::OpenMenu(ID menuID, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints)
+    bool GUIApplication::OpenMenu(ID menuID, const GUIContent& content, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle, LayoutOverride&& constraints)
     {
         auto& level = menuManager.GetOrCreateNextLevel(idManager);
 	    assert(level.windowID != ID::Invalid()); // must have a valid window ID for scroll buttons
@@ -334,7 +364,7 @@ namespace tachyon
             const bool inMenuBar = menuManager.buildingMenuBar && !std::exchange(m_nextMenuIsDropdown, false);
             if (inMenuBar)
                 menuManager.menuBarTriggers.push_back(menuID);
-		    MenuTriggerButton(*this, menuID, text, buttonStyle, inMenuBar, std::move(constraints));
+		    MenuTriggerButton(*this, menuID, content, buttonStyle, inMenuBar, std::move(constraints));
         } else
         {
             // Inside another menu: create submenu trigger item
@@ -345,7 +375,7 @@ namespace tachyon
             // arrow instead of a shortcut so triggers align with sibling items.
             MenuItemRow(menuID,
                 MakeSubmenuTriggerHandler(idManager, guiStateManager, elementStorage, menuManager, menuManager.currentDepth),
-                itemStyle, parentLevel.reserveIconColumn, IconID::Invalid, text,
+                itemStyle, parentLevel.reserveIconColumn, content.icon, content.text,
                 "\xE2\x80\xBA" /* U+203A single right angle quote */, theme.menuItemArrowStyleRef,
                 LayoutOverride{});
 
@@ -703,7 +733,14 @@ namespace tachyon
         const bool open = m_menuOpen.back();
         m_menuOpen.pop_back();
         if (open)
+        {
             CloseMenu();
+            if (!m_menuScopes.empty())
+            {
+                guiStateManager.Construction().Restore(m_menuScopes.back());
+                m_menuScopes.pop_back();
+            }
+        }
     }
 
     void GUIApplication::CloseMenu()

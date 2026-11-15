@@ -418,5 +418,66 @@ namespace tachyon
             EXPECT_EQ(layout.root->second->tabLayout, TabBarLayout::Rows);
             EXPECT_EQ(layout.root->first->tabLayout, TabBarLayout::OneRow);
         }
+
+        // A tab group's "+" follows its last tab, when the layout has a new-tab menu; its menu
+        // adds a panel there (AddPanelToLeaf), and the new tab is the selected one.
+        TEST_F(DockingTest, ATabGroupsPlusAddsATab)
+        {
+            // The "+" buttons in a leaf's tab bar: what draws there in the icon-menu-button style.
+            auto PlusButtons = [this](const DockNode* leaf) {
+                std::vector<ID> found;
+                const IntRect bar = app.GetElementRect(leaf->tabBarID);
+                const auto& storage = app.elementStorage;
+                for (uint32_t d = 0; d < storage.NumberOfDepthLevels(); d++)
+                    for (uint32_t i = 0; i < storage.DepthSizeOf(d); i++)
+                    {
+                        const ElementRef ref{ d, i };
+                        if (!storage.IsValidRef(ref) || storage.GetElementUnsafe(ref).styleRef != app.theme.iconMenuButtonStyleRef)
+                            continue;
+                        const IntRect r = storage.GetElementRectUnsafe(ref).rect;
+                        if (r.x >= bar.x && r.x + r.w <= bar.x + bar.w && r.y >= bar.y && r.y + r.h <= bar.y + bar.h)
+                            found.push_back(storage.GetElementUnsafe(ref).id);
+                    }
+                return found;
+            };
+            Frame();
+            Frame();
+            DockNode* right = layout.root->second.get();
+            EXPECT_TRUE(PlusButtons(right).empty()) << "no new-tab menu, no +";
+
+            ID added = ID::Invalid();
+            layout.newTabMenu = [this, &added](DockingLayout& in, ID leafNodeID) {
+                app.MenuItem("Notes", [this, &in, leafNodeID, &added] {
+                    added = app.CreatePanel(in.panels, "Notes", IconID::Invalid, [] {});
+                    EXPECT_TRUE(AddPanelToLeaf(in.root.get(), leafNodeID, added));
+                });
+            };
+            Frame();
+            Frame();
+            const std::vector<ID> plus = PlusButtons(right);
+            ASSERT_EQ(plus.size(), 1u);
+            const IntRect plusRect = app.GetElementRect(plus[0]);
+            const IntRect tabC = app.GetElementRect(panelC);
+            EXPECT_GE(plusRect.x, tabC.x + tabC.w) << "after the last tab";
+            EXPECT_LT(plusRect.x, tabC.x + tabC.w + app.styleManager.Px(12)) << "right after it";
+
+            app.ClickAt(app.CenterOf(plus[0]));
+            Frame();
+            Frame();
+            ASSERT_TRUE(app.menuManager.IsOpen());
+            const ID notes = app.FindByText("Notes");
+            ASSERT_NE(notes, ID::Invalid());
+            app.mouseWindow = app.menuManager.levels[0].windowID;   // the menu is a window of its own
+            app.InjectMouseMove(app.CenterOf(notes));
+            Frame();
+            app.ClickAt(app.CenterOf(notes));
+            Frame();
+            app.mouseWindow = ID::Invalid();
+            Frame();
+            ASSERT_NE(added, ID::Invalid());
+            ASSERT_EQ(right->panelIds.size(), 3u);
+            EXPECT_EQ(right->panelIds.back(), added);
+            EXPECT_EQ(right->selectedTab, 2) << "the new tab shows";
+        }
     } // namespace
 }

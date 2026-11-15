@@ -140,7 +140,7 @@ namespace
         EXPECT_EQ(commands[3].key, KeyCode::KeyB) << "the first Tool";
         EXPECT_EQ(commands[4].key, KeyCode::KeyR) << "the second Tool";
         EXPECT_EQ(commands[4].modifiers, KeyModifier::Shift);
-        EXPECT_EQ(commands[4].displayString, "Shift+R");
+        EXPECT_EQ(commands[4].displayString, "Shift R");
         EXPECT_EQ(commands[5].key, KeyCode::KeyP) << "the first Paste";
         EXPECT_EQ(commands[6].key, KeyCode::Insert) << "the second Paste";
     }

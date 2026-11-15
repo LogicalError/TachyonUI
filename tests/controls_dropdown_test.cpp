@@ -51,14 +51,29 @@ namespace tachyon
                 Frame();
             }
 
-            // An option's text in the open list (the field shows the selected one too).
+            // The text the field shows: its content part's, the first inside it.
+            std::string_view FieldText() const
+            {
+                const ElementRef field = app.elementStorage.FindElementRefByID(dropdownID);
+                const auto parts = app.elementStorage.GetChildRange(field);
+                if (parts.begin >= parts.end)
+                    return {};
+                return app.TextOf(app.elementStorage.GetElementUnsafe(ElementRef{ field.depth + 1, parts.begin }).id);
+            }
+
+            // An option's text in the open list (the field shows the selected one too, inside
+            // itself).
             ID Option(std::string_view text) const
             {
                 const auto& storage = app.elementStorage;
                 for (auto it = storage.TopDownDepthScanBegin(); it != storage.TopDownDepthScanEnd(); ++it)
                     for (const Element& e : it->GetChildren(storage))
-                        if (e.id != dropdownID && app.TextOf(e.id) == text)
+                    {
+                        const ElementRef parent = storage.GetParentRef(storage.FindElementRefByID(e.id));
+                        const bool inField = parent.IsValid() && storage.GetElementUnsafe(parent).id == dropdownID;
+                        if (e.id != dropdownID && !inField && app.TextOf(e.id) == text)
                             return e.id;
+                    }
                 return ID::Invalid();
             }
 
@@ -83,7 +98,7 @@ namespace tachyon
 
         TEST_F(DropdownTest, ShowsTheSelectedOption)
         {
-            EXPECT_EQ(app.TextOf(dropdownID), "Medium");
+            EXPECT_EQ(FieldText(), "Medium");
             EXPECT_FALSE(app.menuManager.IsOpen());
         }
 
@@ -105,7 +120,7 @@ namespace tachyon
             EXPECT_EQ(selected, 2);
             EXPECT_EQ(changes, 1) << "true on one frame only";
             EXPECT_FALSE(app.menuManager.IsOpen());
-            EXPECT_EQ(app.TextOf(dropdownID), "High") << "the field shows it from the next frame";
+            EXPECT_EQ(FieldText(), "High") << "the field shows it from the next frame";
         }
 
         TEST_F(DropdownTest, PickingTheCurrentOptionIsNoChange)

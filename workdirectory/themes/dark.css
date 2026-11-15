@@ -28,6 +28,7 @@
     --panel-border: #1C1F25;
     --line-subtle: #23272F;
     --line-node: #2A2F39;
+    --tree-guide: transparent;   /* trees go by indent alone */
     --line-strong: #2E333D;
     --line-section: #1E2128;
     --divider-hover: #6B9BFF;

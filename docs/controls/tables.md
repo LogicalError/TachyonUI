@@ -51,6 +51,8 @@ columns = {
 | `selectionBar`, `rowStyle`, `cellStyle`, `showHeaders`, `columnSeparators` | Look |
 | `onReorderColumns` | When set, headers can be dragged to reorder |
 | `onRowDoubleClick` | Row double-click callback |
+| `contextMenu` | The context menu's items, for the row right-clicked, or -1 below the rows |
+| `commandMode` | A command mode that's on while the focus is in the table |
 
 Set the options once, or every frame:
 
@@ -58,6 +60,36 @@ Set the options once, or every frame:
 tableState.selectionMode    = TableSelectionMode::Cell;   // a click selects one cell
 tableState.selectionBar     = true;
 tableState.onRowDoubleClick = [this](ID rowID) { OpenRow(rowID); };
+```
+
+A context menu on the rows: `contextMenu` builds its items while it's open.
+
+- A right-click on a row opens it with that row's dataset index.
+  - For example, row 3 of the data, wherever sorting shows it.
+- A right-click on the space below the rows opens it with -1.
+- The Menu key or Shift+F10 opens it too, as for any context menu.
+
+```cpp
+tableState.contextMenu = [this](int row) {
+    if (row >= 0)
+        MenuItem("Delete", [this, row] { DeleteRow(row); });
+    MenuItem("Add row", [this] { AddRow(); });
+};
+```
+
+Keyboard shortcuts that only work in the table: give it a `commandMode`.
+
+- The mode is on while the focus is in the table, and Default again once the focus leaves.
+- Register the mode's commands once, with the `CommandManager`.
+  - For example, Delete deletes the selected rows.
+- A key the table uses itself, such as the arrow keys, doesn't reach the commands.
+
+```cpp
+tableMode = commandManager.RegisterMode("Table");   // once
+commandManager.RegisterCommand(tableMode, KeyCode::Delete, KeyModifier::None,
+                               [this] { DeleteSelectedRows(); }, "Delete rows");
+
+tableState.commandMode = tableMode;
 ```
 
 A log that keeps showing its newest line:
@@ -215,7 +247,7 @@ void TreeCell(std::string_view text, int depth, bool* isOpen, IconID icon = Icon
 ```
 
 ```cpp
-WalkTreeViewVisibility(rows, visibleIdx);   // members: std::vector<TreeViewRow> rows; std::vector<int> visibleIdx
+WalkTreeViewVisibility(rows, visibleIdx, tableState);   // members: std::vector<TreeViewRow> rows; std::vector<int> visibleIdx
 std::vector<VirtualTableColumn> columns = {
     { .column = { .header = "Name", .initialWidth = 240 }, .generateCell = [this](int i) {
           TreeViewRow& r = rows[visibleIdx[i]];
@@ -225,6 +257,10 @@ std::vector<VirtualTableColumn> columns = {
 VirtualTable(tableID, tableState, columns, int(visibleIdx.size()), 0, {}, LayoutOverride{}.FlexGrow(1));
 ```
 
+- Pass the table's state to `WalkTreeViewVisibility`: then opening or closing an item keeps the
+  selection on the same items.
+  - Row IDs are visible positions, so without it closing an item above the selection would
+    move the selection to another item.
 - `isOpen` is null on leaf rows, the rows without children.
 - `ancestorLineMask` and `isLastSibling` draw the guide lines that connect an item to its
   parent. `RebuildTreeViewIndex` computes them (see

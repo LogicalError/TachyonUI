@@ -78,6 +78,9 @@ namespace tachyon
     public:
         /// The API it presents with; window backends make their windows for it.
         virtual GraphicsAPI GetAPI() const = 0;
+        /// The GPU it renders with, as the driver names it ("NVIDIA GeForce RTX 4070"); empty
+        /// before Initialize and for a backend without a device.
+        virtual std::string_view GetDeviceName() const { return {}; }
 
         /// Host memory functions for the graphics API's allocations. Call before Initialize.
         virtual void SetAllocationHooks(const AllocationHooks& hooks) = 0;

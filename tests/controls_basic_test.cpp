@@ -224,6 +224,25 @@ namespace tachyon
             EXPECT_EQ(app.GetElementRect(boxed).size, (int2{ 20, 40 })) << "flipped, the same aspect";
         }
 
+        // A search field's placeholder shows while it is empty, dimmer than its text, and
+        // goes once there is text.
+        TEST_F(ControlsBasicTest, ASearchFieldShowsItsPlaceholderWhileEmpty)
+        {
+            const ID id = app.idManager.CreateStaticID();
+            std::string query;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.SearchField(id, query, { app.theme.searchIcon, "Filter objects" });
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            EXPECT_EQ(app.CountByText("Filter objects"), 1);
+
+            query = "cube";
+            app.Frame(draw);
+            EXPECT_EQ(app.CountByText("Filter objects"), 0);
+        }
+
         TEST_F(ControlsBasicTest, ButtonRendersAndIsHittable)
         {
             ID buttonID = app.idManager.CreateStaticID();

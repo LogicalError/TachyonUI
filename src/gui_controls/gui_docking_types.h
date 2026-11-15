@@ -133,6 +133,11 @@ namespace tachyon
         /// A torn-off window's layout: a root leaf puts its tabs in the window's title bar.
         bool                  tabsInTitleBar = false;
         std::function<void()> onDock;   ///< the title bar's Dock button (none when unset)
+
+        /// Builds the items of a tab group's "+" menu, after its last tab: the panels that can
+        /// be added there, each adding one with AddPanelToLeaf(layout.root.get(), leafNodeID, id).
+        /// No "+" when unset. A torn-off window's layout takes its home layout's.
+        std::function<void(DockingLayout& layout, tachyon::ID leafNodeID)> newTabMenu;
     };
 
     /// Construction state of the current docking container. Valid only between
@@ -205,6 +210,8 @@ namespace tachyon
 
         /// The "+" after the last tab; none when unset.
         std::function<void()> onNew;
+        /// Every document's tab groups' "+" menu (DockingLayout::newTabMenu); none when unset.
+        std::function<void(DockingLayout& layout, tachyon::ID leafNodeID)> newTabMenu;
         /// Asked before a document is closed from its tab: false keeps it open (to ask about
         /// unsaved changes first, then CloseDocument). Unset: it closes.
         std::function<bool(Document&)> onClose;

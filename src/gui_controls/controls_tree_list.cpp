@@ -612,6 +612,15 @@ namespace tachyon
         }
     }
 
+    void GUIApplication::WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows,
+                                                std::vector<int>& visibleIdx, TableState& state)
+    {
+        WalkTreeViewVisibility(rows, visibleIdx);
+        if (state.internal.rowsRangeID != tachyon::ID::Invalid() && visibleIdx != state.internal.treeVisibleIdx)
+            RemapTreeSelection(rows, visibleIdx, state);
+        state.internal.treeVisibleIdx = visibleIdx;
+    }
+
     void GUIApplication::VirtualTreeView(tachyon::ID id,
                                          std::vector<TreeViewRow>& rows,
                                          std::vector<int>& visibleIdx,
@@ -621,10 +630,7 @@ namespace tachyon
                                          std::string_view header)
     {
         // Rebuild the visible-row list each frame from the expand/collapse state.
-        WalkTreeViewVisibility(rows, visibleIdx);
-        if (state.internal.rowsRangeID != tachyon::ID::Invalid() && visibleIdx != state.internal.treeVisibleIdx)
-            RemapTreeSelection(rows, visibleIdx, state);
-        state.internal.treeVisibleIdx = visibleIdx;
+        WalkTreeViewVisibility(rows, visibleIdx, state);
 
         // Reserve the arrow column only when some row can expand (avoids a stray indent on flat trees).
         bool anyExpandable = false;

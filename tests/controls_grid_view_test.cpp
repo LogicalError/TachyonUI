@@ -113,6 +113,29 @@ namespace tachyon
             EXPECT_FALSE(app.guiStateManager.Drag().IsDragging());
         }
 
+        // A ghost's icon can be small: a ghost window of the tree's icon size, with an icon that size.
+        TEST_F(ControlsGridViewTest, AGhostsIconTakesTheSizeAsked)
+        {
+            const ID ghostID = app.idManager.CreateStaticID();
+            const int2 size{ 16, 16 };
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.EndRootWindow();
+                if (app.BeginCursorGhostWindow(ghostID, int2{ 100, 100 }, size))
+                    app.AddGhostIcon(app.theme.addIcon, size);
+                app.EndGhostWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+            const ElementRef window = app.elementStorage.FindElementRefByID(ghostID);
+            ASSERT_TRUE(window.IsValid());
+            const auto children = app.elementStorage.GetChildRange(window);
+            ASSERT_EQ(children.end - children.begin, 1u);
+            const ElementRef icon{ window.depth + 1, children.begin };
+            EXPECT_EQ(app.elementStorage.GetElementRectUnsafe(icon).rect.size, size);
+            EXPECT_EQ(app.elementStorage.GetElementRectUnsafe(window).rect.size, size);
+        }
+
         // The item a drag would drop into stands out (:active); one that refuses it doesn't.
         TEST_F(ControlsGridViewTest, TheItemADragWouldDropIntoIsHighlighted)
         {

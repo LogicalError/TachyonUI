@@ -471,6 +471,25 @@ namespace tachyon
                 if (emitPhantom && phantomIdx >= count)
                     phantomRef = EmitPhantomTab(app, dragInfo);
 
+                // "+" right after the last tab: the panels that can be added to this group. The
+                // tabs that fit leave room for it.
+                auto& fit = app.guiStateManager.GetElementDataStore().GetOrCreate<TabBarMemory>(node->tabBarID);
+                if (layout->newTabMenu)
+                {
+                    [[maybe_unused]] const bool pushed = app.idManager.PushParent(node->tabBarID);
+                    const tachyon::ID plusID = app.idManager.AllocateDynamicID("new_tab");
+                    if (pushed) (void)app.idManager.PopParent();
+                    if (app.BeginMenu(plusID, { app.theme.addIcon, {}, "Add a tab" }, app.theme.iconMenuButtonStyleRef,
+                                      app.theme.menuStyleRef, app.theme.menuItemRowStyleRef, LayoutOverride{}.NoGrow().NoShrink()))
+                        layout->newTabMenu(*layout, node->nodeID);
+                    app.EndMenu();
+                    if (const ElementRef ref = app.elementStorage.FindElementRefByID(plusID); ref.IsValid())
+                        [[maybe_unused]] auto added = app.elementStorage.AddPostLayout(ref, [&app, barID = node->tabBarID](PostLayoutContext& ctx)
+                            { app.guiStateManager.GetElementDataStore().GetOrCreate<TabBarMemory>(barID).trailingWidth = ctx.ElementRect().w; });
+                }
+                else
+                    fit.trailingWidth = 0;
+
                 // Phantom follows the mouse and renders on top.
                 if (emitPhantom && app.elementStorage.IsValidRef(phantomRef))
                 {
@@ -1092,6 +1111,8 @@ namespace tachyon
                 // with the window's name over it.
                 fw.layout.tabsInTitleBar = fw.layout.root && fw.layout.root->isLeaf;
                 fw.layout.onDock = fw.home ? std::function<void()>([&fw] { fw.dockRequested = true; }) : std::function<void()>{};
+                if (fw.home)
+                    fw.layout.newTabMenu = fw.home->newTabMenu;
                 tachyon::ID containerID = idManager.AllocateDynamicID("floating_dock_container");
                 if (fw.layout.tabsInTitleBar)
                     BeginDockingContainer(containerID, &fw.layout);

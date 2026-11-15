@@ -157,6 +157,33 @@ namespace tachyon
             EXPECT_EQ(state.selectedRowID, RowIDAt(3)) << "selection moves to the collapsed branch";
         }
 
+        // A tree built on VirtualTable directly keeps its selection on its nodes the same way.
+        TEST_F(VirtualTreeViewTest, ATreeOnAPlainTableKeepsItsSelectionOnItsNodes)
+        {
+            BuildFlatTree(/*n*/2, /*children*/2, /*open*/true);
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    GUIApplication::WalkTreeViewVisibility(rows, visibleIdx, state);
+                    VirtualTableColumn cols[1];
+                    cols[0].column = TableColumn{ .header = {} };
+                    cols[0].generateCell = [&](int row) {
+                        TreeViewRow& r = rows[visibleIdx[row]];
+                        app.TreeCell(r.name, r.depth, r.HasChildren() ? &r.isOpen : nullptr);
+                    };
+                    app.VirtualTable(treeID, state, std::span<VirtualTableColumn>(cols, 1), int(visibleIdx.size()), 0,
+                                     StyleRef{}, LayoutOverride{}.Size(400, 300));
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            state.selectedRowID = RowIDAt(4);   // Branch1's first leaf (flat 4)
+
+            rows[0].isOpen = false;
+            frame();
+            EXPECT_EQ(state.selectedRowID, RowIDAt(2)) << "flat 4 is now visible row 2";
+        }
+
         TEST_F(VirtualTreeViewTest, MultiSelectionFollowsNodes)
         {
             BuildFlatTree(/*n*/2, /*children*/2, /*open*/true);
@@ -270,6 +297,64 @@ namespace tachyon
             };
             EXPECT_TRUE(slowReClickStartsRename(false));
             EXPECT_FALSE(slowReClickStartsRename(true));
+        }
+
+        // A gap between two rows has one drop line: below a row and above the next is the same
+        // place when the next row is where the drop goes, so it's the next row's Before.
+        TEST_F(VirtualTreeViewTest, AGapBetweenRowsHasOneDropLine)
+        {
+            BuildFlatTree(/*n*/2, /*children*/2, /*open*/true);
+            // Branch0 / Leaf / Leaf / Branch1 / Leaf / Leaf
+            struct Reorder { uintptr_t source; ID target; TreeDropPosition position; };
+            std::vector<Reorder> reorders;
+            ItemDragDropConfig dd{ .payloadType = 1 };
+            dd.getPayload = [](ID rowID) { return uintptr_t(rowID.value.subRangeParts.index); };
+            dd.onReorder  = [&](uintptr_t source, ID target, TreeDropPosition position) {
+                reorders.push_back({ source, target, position });
+            };
+            state.rowDragDrop = &dd;
+            RenderFrame();
+            RenderFrame();
+
+            // Drags row 5 to `y` in `row`; the drop target while over it.
+            auto dragTo = [&](int row, int y) {
+                const IntRect from = app.GetElementRect(RowIDAt(5));
+                const IntRect to   = app.GetElementRect(RowIDAt(row));
+                const int2 start{ from.x + 60, from.y + from.h / 2 };
+                const int2 end{ to.x + 60, to.y + y };
+                app.InjectMouseMove(start);
+                app.InjectMouseDown(start);
+                RenderFrame();
+                app.InjectMouseMove(int2{ start.x, (start.y + end.y) / 2 }, MouseButtons::Left);
+                RenderFrame();
+                app.InjectMouseMove(end, MouseButtons::Left);
+                RenderFrame();
+                const TreeDropState over = app.m_treeDropState;
+                app.InjectMouseUp(end);
+                RenderFrame();
+                RenderFrame();
+                return over;
+            };
+            const int h = app.GetElementRect(RowIDAt(0)).h;
+
+            // An open branch's bottom: its first child's top.
+            TreeDropState over = dragTo(0, h - 2);
+            EXPECT_EQ(over.targetRowID, RowIDAt(1));
+            EXPECT_EQ(over.position, TreeDropPosition::Before);
+            EXPECT_EQ(over.targetDepth, 1);
+            ASSERT_EQ(reorders.size(), 1u);
+            EXPECT_EQ(reorders[0].target, RowIDAt(1)) << "the drop goes where the line is";
+            EXPECT_EQ(reorders[0].position, TreeDropPosition::Before);
+
+            // A leaf's bottom with a sibling after it: that sibling's top.
+            over = dragTo(1, h - 2);
+            EXPECT_EQ(over.targetRowID, RowIDAt(2));
+            EXPECT_EQ(over.position, TreeDropPosition::Before);
+
+            // The last child's bottom stays its own: the next row is its parent's sibling.
+            over = dragTo(2, h - 2);
+            EXPECT_EQ(over.targetRowID, RowIDAt(2));
+            EXPECT_EQ(over.position, TreeDropPosition::After);
         }
 
         TEST_F(VirtualTreeViewTest, DoubleClickToggleTrackerIsPerTableNotShared)

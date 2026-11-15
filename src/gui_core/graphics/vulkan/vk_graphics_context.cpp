@@ -58,6 +58,14 @@ static constexpr tachyon::Diagnostics::LogCategory kLogVulkan = tachyon::Diagnos
 
 using namespace tachyon::vulkan;
 
+// The GPU's name as its driver reports it.
+static std::string PhysicalDeviceName(VkPhysicalDevice gpu)
+{
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(gpu, &properties);
+    return std::string(properties.deviceName);
+}
+
 static size_t BytesPerPixel(VkFormat format)
 {
     switch (format)
@@ -910,6 +918,7 @@ VkSurfaceKHR tachyon::vulkan::VulkanDeviceContext::CreateSurface(tachyon::OSWind
 
     device = vkbDevice.device;
     chosenGPU = physicalDevice.physical_device;
+    deviceName = PhysicalDeviceName(chosenGPU);
     graphicsQueue = queueRet.value();
     graphicsQueueFamily = queueIndexRet.value();
 
@@ -962,6 +971,7 @@ bool tachyon::vulkan::VulkanDeviceContext::AdoptExternalDevice()
 
     instance            = external.instance;
     chosenGPU           = external.physicalDevice;
+    deviceName          = PhysicalDeviceName(chosenGPU);
     device              = external.device;
     graphicsQueue       = external.graphicsQueue;
     graphicsQueueFamily = external.graphicsQueueFamily;

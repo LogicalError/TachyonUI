@@ -93,7 +93,8 @@ example to show what the user is dragging.
 ```cpp
 bool BeginGhostWindow(ID windowLayoutID, int2 position, int2 size, StyleRef styleRef);
 bool BeginCursorGhostWindow(ID windowLayoutID, int2 cursorPos);
-void AddGhostIcon(IconID icon);
+void AddGhostIcon(IconID icon);              // 28 x 28 CSS px
+void AddGhostIcon(IconID icon, int2 size);   // size in pixels
 void EndGhostWindow();
 ```
 
@@ -108,6 +109,17 @@ auto ghost = [this](int index, int2 screenPos)
 ```
 
 - Overloads leave out the size, to fit the content, or the style.
+- A small icon by the cursor: give the window and the icon the same small size.
+  - For example, a tree's item at the size the tree shows its icons, when a drop line
+    already shows where it goes.
+
+```cpp
+const int2 size{ theme.treeTableIconSize, theme.treeTableIconSize };
+if (BeginCursorGhostWindow(ghostWindowID, screenPos, size))
+    AddGhostIcon(rowIcon, size);
+EndGhostWindow();
+```
+
 - The CSS classes: `ghost-window`, and `ghost-icon` for `AddGhostIcon`.
 
 ```cpp

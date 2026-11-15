@@ -316,6 +316,8 @@ namespace tachyon::vulkan
         VmaAllocator     allocator;
         /// The GPU the device runs on.
         VkPhysicalDevice chosenGPU;
+        /// chosenGPU's name, as its driver reports it.
+        std::string      deviceName;
 
         /// Library internal: the immediate-submit fence.
         VkFence         immFence;

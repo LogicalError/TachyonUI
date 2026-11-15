@@ -2,6 +2,7 @@
 
 #include <gui_core/gui_id.h>
 #include <gui_core/input/gui_gesture.h>
+#include <gui_core/input/gui_command_manager.h>          // CommandMode
 #include <gui_core/gui_units.h>
 #include <gui_core/gui_base_types.h>
 #include <gui_core/style/gui_style.h>
@@ -147,6 +148,9 @@ namespace tachyon
             std::string* renameBuf   = nullptr;          ///< null when not renameable
             std::string  renameSeed;                     ///< original label, seeds rename Start()
             bool         hasChildren = false;            ///< drives drag-drop zone shape (thirds vs halves)
+            tachyon::ElementRef cellRef{};               ///< this frame's tree cell: the drop line starts at its items
+            tachyon::ID         cellID = tachyon::ID::Invalid();   ///< cellRef's element ID, to tell a stale ref
+            bool                expanderColumn = false;  ///< the cell reserves the arrow column before the icon
         };
         using TreeRowMap = std::unordered_map<tachyon::ID, TreeRowInfo>;  ///< row ID -> tree info
 
@@ -219,6 +223,13 @@ namespace tachyon
         LazyReorderFn                  onReorderColumns;           ///< headers become drag-to-reorder when set
         /// Replaces the default double-click branch toggle (the chevron still toggles).
         std::function<void(tachyon::ID rowID)> onRowDoubleClick;
+        /// Builds the items of the table's context menu, opened by a right-click (or the Menu
+        /// key) on a row, `row` its dataset index, or on the space below the rows, `row` -1.
+        /// No menu when unset.
+        std::function<void(int row)> contextMenu;
+        /// The command manager's mode while the focus is in the table, for its own shortcuts
+        /// (Delete for the selected rows, say); Default: none of its own.
+        CommandMode                  commandMode = CommandMode::Default;
 
         /// Written by the table each frame; not part of the API.
         struct Internal

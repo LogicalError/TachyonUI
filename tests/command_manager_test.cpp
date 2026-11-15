@@ -244,7 +244,7 @@ TEST(CommandManager, SetShortcutTakesTheKeyFromItsOwnerInItsModeOnly)
 
     m.SetShortcut(undo, KeyCode::KeyS, KeyModifier::Control);
     EXPECT_EQ(m.GetCommand(undo)->key, KeyCode::KeyS);
-    EXPECT_EQ(m.GetCommand(undo)->displayString, "Ctrl+S");
+    EXPECT_EQ(m.GetCommand(undo)->displayString, "Ctrl S");
     EXPECT_EQ(m.GetCommand(save)->key, KeyCode::None);
     EXPECT_EQ(m.GetCommand(save)->displayString, "(unbound)");
     EXPECT_EQ(m.GetCommand(brush)->key, KeyCode::KeyS) << "another mode keeps its own";
@@ -287,7 +287,7 @@ TEST(CommandManager, SetShortcutOnAChordKeepsItsSecondKey)
                                       KeyCode::KeyS, KeyModifier::Control, []() {}, "Save All");
     EXPECT_FALSE(m.GetCommand(chord)->IsRebound());
     m.SetShortcut(chord, KeyCode::KeyJ, KeyModifier::Control);
-    EXPECT_EQ(m.GetCommand(chord)->displayString, "Ctrl+J Ctrl+S");
+    EXPECT_EQ(m.GetCommand(chord)->displayString, "Ctrl J, Ctrl S");
     EXPECT_TRUE(m.GetCommand(chord)->IsRebound());
 }
 
@@ -342,12 +342,32 @@ TEST(CommandManager, IconRoundTripsThroughRegistration)
     EXPECT_EQ(m.GetCommand(noKey)->key, KeyCode::None);
 }
 
+// Keys are separated by spaces, so a "+" key reads as itself: "Ctrl +", not "Ctrl++".
 TEST(CommandManager, FormatShortcutProducesReadableText)
 {
     EXPECT_EQ(CommandManager::FormatShortcut(KeyCode::KeyD, KeyModifier::Control | KeyModifier::Shift),
-              "Ctrl+Shift+D");
+              "Ctrl Shift D");
     EXPECT_EQ(CommandManager::FormatShortcut(KeyCode::F5,   KeyModifier::None), "F5");
+    EXPECT_EQ(CommandManager::FormatShortcut(KeyCode::Plus, KeyModifier::Control), "Ctrl +");
+    EXPECT_EQ(CommandManager::FormatShortcut(KeyCode::KeyPadPlus, KeyModifier::Control), "Ctrl Num +");
     EXPECT_EQ(CommandManager::FormatShortcut(KeyCode::None, KeyModifier::Control), "(unbound)");
+}
+
+// Every key a shortcut is likely bound to has a name of its own; "?" is the "?" key's.
+TEST(CommandManager, KeysAShortcutUsesHaveNames)
+{
+    const KeyCode keys[] = {
+        KeyCode::Plus, KeyCode::Asterisk, KeyCode::Exclaim, KeyCode::Hash, KeyCode::Dollar, KeyCode::Percent,
+        KeyCode::Ampersand, KeyCode::LeftParen, KeyCode::RightParen, KeyCode::Colon, KeyCode::Less, KeyCode::Greater,
+        KeyCode::Question, KeyCode::At, KeyCode::Caret, KeyCode::Underscore, KeyCode::DoubleQuote,
+        KeyCode::Capslock, KeyCode::Printscreen, KeyCode::Scrolllock, KeyCode::Pause,
+        KeyCode::KeyPad0, KeyCode::KeyPad5, KeyCode::KeyPad9, KeyCode::KeyPadPlus, KeyCode::KeyPadMinus,
+        KeyCode::KeyPadMultiply, KeyCode::KeyPadDivide, KeyCode::KeyPadEnter, KeyCode::KeyPadPeriod, KeyCode::KeyPadEquals };
+    for (const KeyCode key : keys)
+        EXPECT_NE(CommandManager::KeyCodeName(key), "(unknown)") << uint32_t(key);
+    EXPECT_EQ(CommandManager::KeyCodeName(KeyCode::Question), "?");
+    EXPECT_EQ(CommandManager::KeyCodeName(KeyCode::KeyPad7), "Num 7");
+    EXPECT_EQ(CommandManager::KeyCodeName(KeyCode::KeyPadEnter), "Num Enter");
 }
 
 TEST(CommandManager, HeldCommandFiresBeginOnDownAndEndOnUp)
@@ -424,17 +444,17 @@ TEST(CommandManager, ReregisteringHeldAsInstantClearsEndDelegate)
     EXPECT_EQ(ends, 0);
 }
 
-TEST(CommandManager, FormatChordShortcutJoinsKeysWithSpace)
+TEST(CommandManager, FormatChordShortcutJoinsItsStepsWithAComma)
 {
     EXPECT_EQ(CommandManager::FormatChordShortcut(
                   KeyCode::KeyK, KeyModifier::Control,
                   KeyCode::KeyS, KeyModifier::Control),
-              "Ctrl+K Ctrl+S");
+              "Ctrl K, Ctrl S");
     // No second key -> degenerates to single-key format.
     EXPECT_EQ(CommandManager::FormatChordShortcut(
                   KeyCode::KeyK, KeyModifier::Control,
                   KeyCode::None, KeyModifier::None),
-              "Ctrl+K");
+              "Ctrl K");
 }
 
 // #53: the zero CommandID is invalid ("unset"), and real commands start at 1, so a

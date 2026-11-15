@@ -479,12 +479,18 @@ namespace tachyon
                                  .body = refused });
     }
 
+    // The folder tree's folders: outlined, open while expanded or a drop target.
+    IconID Application::TreeFolderIcon(bool open) const
+    {
+        return open ? showcase.filesFolderOpenIcon : showcase.filesFolderIcon;
+    }
+
     // Folders in the showcase's own icons; a file in the OS's where there is one, else the
     // showcase's own, by the extension.
     IconID Application::FileIcon(const FilesPanel& p, std::string_view name, bool isFolder, bool open)
     {
         if (isFolder)
-            return open ? showcase.folderOpenIcon : showcase.folderClosedIcon;
+            return open ? showcase.folderOpenIcon : showcase.folderClosedIcon;   // the grid's filled folders
         if (const IconID os = p.fileIcons ? p.fileIcons->Get(name, false) : IconID::Invalid; os != IconID::Invalid)
             return os;
         const std::string ext = FileIcons::Extension(name);
@@ -580,8 +586,8 @@ namespace tachyon
             // Reduced tree: only folders with search hits. Own state; clicks
             // map back to the master folder through filteredToMaster.
             for (size_t i = 0; i < p.filteredFolderRows.size(); ++i)
-                p.filteredFolderRows[i].icon = FileIcon(p, {}, true, p.filteredFolderRows[i].HasChildren() ||
-                                                                (p.fileDropFolder && p.folderPaths[size_t(p.filteredToMaster[i])] == *p.fileDropFolder));
+                p.filteredFolderRows[i].icon = TreeFolderIcon(p.filteredFolderRows[i].HasChildren() ||
+                                                              (p.fileDropFolder && p.folderPaths[size_t(p.filteredToMaster[i])] == *p.fileDropFolder));
             VirtualTreeView(idManager.AllocateDynamicID("filesFolderTree"),
                             p.filteredFolderRows, p.filteredFolderVisibleIdx, p.filteredFolderState,
                             theme.treeViewStyleRef,
@@ -605,8 +611,8 @@ namespace tachyon
             for (size_t i = 0; i < p.folderRows.size(); ++i)
             {
                 auto& row = p.folderRows[i];
-                row.icon = FileIcon(p, row.name, true, (row.HasChildren() && row.isOpen) || int(i) == dropFlat ||
-                                                    (p.fileDropFolder && p.folderPaths[i] == *p.fileDropFolder));
+                row.icon = TreeFolderIcon((row.HasChildren() && row.isOpen) || int(i) == dropFlat ||
+                                          (p.fileDropFolder && p.folderPaths[i] == *p.fileDropFolder));
                 row.renameBuffer = i == 0 ? nullptr : &row.name;
             }
 
@@ -634,13 +640,12 @@ namespace tachyon
             }
         }
 
-        // 4px draggable sizer reusing the dock-sizer style (same cursor and hit
-        // region as the dock splitter).
+        // A 4px draggable sizer drawn as a 1px line, lit while hovered or dragged.
         {
             tachyon::ID sizerID = idManager.AllocateDynamicID("filesSizer");
             tachyon::Element sizer{};
             sizer.id       = sizerID;
-            sizer.styleRef = theme.dockSizerHorzStyleRef;
+            sizer.styleRef = filesSizerStyleRef;
             sizer.state    = guiStateManager.GetCurrentState(sizerID);
             sizer.eventHandler = tachyon::MakeHorizontalSizerHandler(
                 guiStateManager, elementStorage, p.folderTreeWidth, 120, 480, nullptr, nullptr, false, styleManager.GetUIScale());
@@ -678,7 +683,7 @@ namespace tachyon
                        },
                        tachyon::LayoutOverride{}.FlexGrow(1));
 
-            if (SearchField(idManager.AllocateDynamicID("filesSearch"), p.filesSearch, showcase.findIcon,
+            if (SearchField(idManager.AllocateDynamicID("filesSearch"), p.filesSearch, { showcase.findIcon, "Search" },
                             TextEditBehavior::ContinuousUpdate,
                             tachyon::LayoutOverride{}.Width(150).NoGrow()))
                 p.gridFilterDirty = true;

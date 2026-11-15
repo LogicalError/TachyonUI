@@ -597,7 +597,7 @@ void VulkanWindowContext::PresentWindowFrame()
 
     // Layered windows don't redraw on SDL expose events, so update them explicitly.
     if ((windowFlags & tachyon::WindowFlags::Transparent) != tachyon::WindowFlags::None)
-        UpdateTransparentWindow(recordedPosition);
+        UpdateTransparentWindow();
 
     // Build time is measured from here to the next frame's submit.
     lastPresentEnd = std::chrono::steady_clock::now();
@@ -721,7 +721,7 @@ void VulkanWindowContext::TransitionTarget(VkCommandBuffer cmd, VkImageLayout fr
     vkCmdPipelineBarrier2(cmd, &dependency);
 }
 
-void VulkanWindowContext::UpdateLayeredWindowFromCache([[maybe_unused]] int screenPosX, [[maybe_unused]] int screenPosY)
+void VulkanWindowContext::UpdateLayeredWindowFromCache()
 {
 #ifdef _WIN32
     if (drawExtent.width == 0 || drawExtent.height == 0)
@@ -796,16 +796,18 @@ void VulkanWindowContext::UpdateLayeredWindowFromCache([[maybe_unused]] int scre
     
     POINT ptSrc = {0, 0};
     SIZE szWnd = {(LONG)drawExtent.width, (LONG)drawExtent.height};
-    POINT ptDst = { screenPosX, screenPosY };
-    
+
     BLENDFUNCTION blend = {};
     blend.BlendOp = AC_SRC_OVER;
     blend.SourceConstantAlpha = 255;
     blend.AlphaFormat = AC_SRC_ALPHA;
     
-    // Only the content and rect; the window backend shows and hides the window. Shown here,
-    // SDL takes it for a window the OS showed and restores it, which activates it.
-    UpdateLayeredWindow(hwnd, hdcScreen, &ptDst, &szWnd, hdcMem, &ptSrc, 0, &blend, ULW_ALPHA);
+    // Only the content and size. No position: the window stays where the window manager put
+    // it. The last recorded position is stale once the window moves without its picture
+    // changing (a drag ghost following the cursor), and setting it would move the window back
+    // each frame. The window backend shows and hides the window: shown here, SDL takes it for
+    // a window the OS showed and restores it, which activates it.
+    UpdateLayeredWindow(hwnd, hdcScreen, nullptr, &szWnd, hdcMem, &ptSrc, 0, &blend, ULW_ALPHA);
     
     SelectObject(hdcMem, hOldBmp);
     DeleteObject(hbmp);
@@ -814,12 +816,10 @@ void VulkanWindowContext::UpdateLayeredWindowFromCache([[maybe_unused]] int scre
 #endif
 }
 
-void VulkanWindowContext::UpdateTransparentWindow(tachyon::int2 screenPos)
+void VulkanWindowContext::UpdateTransparentWindow()
 {
     if (needsReadback && !cachedBitmap.empty())
-    {
-        UpdateLayeredWindowFromCache(screenPos.x, screenPos.y);
-    }
+        UpdateLayeredWindowFromCache();
 }
 
 void VulkanWindowContext::RenderWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing)
@@ -839,7 +839,6 @@ void VulkanWindowContext::RecordFrame(tachyon::GraphicsContext* graphicsContext,
     // or its acquired image is never given back.
     if (presentPending || readbackPending)
         PresentWindowFrame();
-    recordedPosition = rect.position;
     if (onGui && graphicsContext != nullptr)
     {
         uint32_t requestedWidth  = rect.size.x > 0 ? static_cast<uint32_t>(rect.size.x) : 0u;

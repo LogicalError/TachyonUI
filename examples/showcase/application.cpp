@@ -405,6 +405,9 @@ namespace tachyon
         commandManager.RegisterCommand(stateMachineMode, showcase.frameSelectedIcon, tachyon::KeyCode::KeyF, tachyon::KeyModifier::None,
                                        [this]() { FrameSelectedNodes(showcase.combatOpen ? showcase.combatMachine : showcase.enemyMachine); },
                                        "Frame Selected");
+        hierarchyMode = commandManager.RegisterMode("Hierarchy");
+        hierarchyDelete = commandManager.RegisterCommand(hierarchyMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None,
+                                       [this]() { HierarchyDeleteSelected(); }, "Delete Objects");
         commandManager.RegisterCommand(
             nodeViewMode,
             tachyon::KeyCode::Home,
@@ -732,7 +735,7 @@ namespace tachyon
                     CommitNodeViewEdit(view, edit);
                 });
                 // A frame round the selection, the selected frames in it too.
-                MenuItem("Group selection", "Ctrl+G", [this] { GroupSelection(); });
+                MenuItem("Group selection", "Ctrl G", [this] { GroupSelection(); });
                 const size_t count = showcase.nodeView.selectedNodeIDs.size();
                 const std::string deleteLabel = count > 1 ? std::format("Delete {} nodes", count) : std::string("Delete node");
                 MenuItem({ showcase.deleteIcon, deleteLabel }, "Delete", [this] { DeleteSelectedNodes(); });
@@ -758,7 +761,11 @@ namespace tachyon
     {
         hierarchyVizCellStyleRef    = theme.GetStyle("hierarchy-viz-cell");
         hierarchyVisibilityStyleRef = theme.GetStyle("hierarchy-visibility");
+        hierarchyTableStyleRef      = theme.GetStyle("hierarchy-table");
         logLevelIconStyleRef        = theme.GetStyle("log-level-icon");
+        statusDotStyleRef           = theme.GetStyle("status-dot");
+        statusReadyStyleRef         = theme.GetStyle("status-ready");
+        filesSizerStyleRef          = theme.GetStyle("files-sizer");
         logLevelWellStyleRef        = theme.GetStyle("log-level-well");
         logLevelPillStyleRefs[0]    = theme.GetStyle("log-level-info");
         logLevelPillStyleRefs[1]    = theme.GetStyle("log-level-warning");
@@ -1199,6 +1206,15 @@ namespace tachyon
                 
 				showcase.objectIcon          = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/box.svg").c_str());
 				showcase.object2Icon         = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/shapes.svg").c_str());
+                showcase.sceneIcon           = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/globe.svg").c_str());
+                showcase.groupIcon           = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/layers.svg").c_str());
+                showcase.cameraIcon          = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/video.svg").c_str());
+                showcase.lightIcon           = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/sun.svg").c_str());
+                showcase.treeFolderIcon      = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/folder.svg").c_str());
+                showcase.treeFolderOpenIcon  = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/folder-open.svg").c_str());
+                showcase.filesFolderIcon     = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/folder_outline.svg").c_str());
+                showcase.filesFolderOpenIcon = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/folder_open_outline.svg").c_str());
+                showcase.layoutsIcon         = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/panels-top-left.svg").c_str());
                                          
 				showcase.fileImageIcon       = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/file-image.svg").c_str());
 				showcase.fileAudioIcon       = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/file-audio.svg").c_str());
@@ -1631,7 +1647,7 @@ namespace tachyon
             return;
         LayoutPresets& presets = showcase.layoutPresets;
         const ID documentID = document->id;
-        if (BeginDropdownMenu(idManager.AllocateDynamicID("layoutMenu"), "Layouts"))
+        if (BeginDropdownMenu(idManager.AllocateDynamicID("layoutMenu"), { showcase.layoutsIcon, "Layouts" }))
         {
             // Picked here, given before the documents are built next frame.
             for (const LayoutPreset& preset : presets.All())
@@ -1871,6 +1887,16 @@ namespace tachyon
     void Application::SetUpDocuments(DocumentSet& documents)
     {
         DocumentSet* const set = &documents;
+        // A tab group's "+": every kind of panel, added as a tab there.
+        documents.newTabMenu = [this](DockingLayout& layout, ID leafNodeID) {
+            static constexpr std::string_view kPanels[] = {
+                "Hierarchy", "Inspector", "Viewport", "NodeView", "StateMachine", "Files", "Log", "Timeline", "Curves",
+                "Profiler", "Settings", "Table", "TreeTable", "FrozenTable", "Reorderable", "Sketch", "BoxTest", "Misc" };
+            for (const std::string_view title : kPanels)
+                MenuItem(title, [this, &layout, leafNodeID, title] {
+                    (void)AddPanelToLeaf(layout.root.get(), leafNodeID, CreateShowcasePanel(layout, title));
+                });
+        };
         documents.onNew = [this, set] {
             Document& created = CreateDocument(*set, std::format("Untitled {}", ++showcase.untitledCount),
                                                ".level", "level", showcase.documentLevelIcon);
@@ -1936,7 +1962,7 @@ namespace tachyon
                     AskBeforeClosingDocument(window.documents);
                     AskLayoutName(window.documents);
                     DocumentPanels(window.documents);
-                    RenderStatusBar(window.documents);
+                    RenderStatusBar();
                     EmitFloatingDockWindows(window.documents);
                     if (!showcase.mainWindowOpen)
                         Toasts();   // in the first document window while the main one is closed
@@ -1996,8 +2022,9 @@ namespace tachyon
             showcase.closingDocument = nullptr;
     }
 
-    // Status bar: state on the left, frame time on the right.
-    void Application::RenderStatusBar(const DocumentSet& documents)
+    // Status bar: the state and the renderer on the left, the frame time and the theme on the
+    // right. The title bar's tabs name the active document.
+    void Application::RenderStatusBar()
     {
         const std::array<FrameTimingSample, kFrameHistoryCount>& history = frameTimings;
         constexpr int kAveraged = 60;
@@ -2007,10 +2034,15 @@ namespace tachyon
         const float frameMs = totalMs / float(kAveraged);
 
         BeginStatusBar(idManager.AllocateDynamicID("statusBar"));
-        StatusText("Ready");
-        const Document* document = documents.Active();
-        StatusText(document ? document->name + document->extension : std::string(), LayoutOverride::Auto().FlexGrow(1));
+        BeginHorizontal(idManager.AllocateDynamicID("statusReady"), statusReadyStyleRef, LayoutOverride{}.NoGrow());
+            AddBox(int2{ styleManager.Px(7), styleManager.Px(7) }, statusDotStyleRef);
+            StatusText("Ready");
+        EndHorizontal();
+        const std::string_view gpu = graphicsContext->GetDeviceName();
+        const std::string_view api = graphicsContext->GetAPI() == GraphicsAPI::Vulkan ? "Vulkan" : "No GPU";
+        StatusText(gpu.empty() ? std::string(api) : std::format("{} \u00B7 {}", api, gpu), LayoutOverride::Auto().FlexGrow(1));
         StatusText(std::format("{:.2f} ms \u00B7 {:.0f} fps", frameMs, frameMs > 0.0f ? 1000.0f / frameMs : 0.0f));
+        StatusText(GetThemePath());
         EndStatusBar();
     }
 
@@ -2072,7 +2104,7 @@ namespace tachyon
                     AskLayoutName(showcase.documents);
                     DocumentPanels(showcase.documents);
 
-                    RenderStatusBar(showcase.documents);
+                    RenderStatusBar();
 
                     // Must be emitted inside the main window's scope so main becomes
                     // their OS owner; otherwise SDL's hidden helper owns them and they

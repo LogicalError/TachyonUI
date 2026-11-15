@@ -369,8 +369,9 @@ namespace tachyon
         VERIFY(windowRegistry.Add(bRes.ref));
 
         // Tree-reorder drop indicator on the row backdrop (spans the whole section):
-        // a line at Before / After, or Inside (indented). The line starts at the
-        // target's depth indent, added explicitly since the backdrop isn't indented.
+        // a line at Before / After, or Inside (indented). The line starts where the
+        // tree cell's items do at the target's depth: columns before the tree's and the
+        // cell's padding come first.
         [[maybe_unused]] auto cdRes = elementStorage.AddCustomDraw(bRes.ref,
             [this, rowID, tableState, isLastSection,
              lineColor = theme.treeDropIndicatorStyle]
@@ -392,13 +393,28 @@ namespace tachyon
                 const int32_t kIndent = theme.treeTableIndent;
                 const int32_t kThick  = styleManager.Px(3);
                 const int32_t half    = kThick / 2;   // insets that keep the line inside the row
-                // Same x as the target's chevron / leaf-spacer column, so the
-                // line aligns with the row's existing visual structure.
-                const int32_t depthX = leftX + m_treeDropState.targetDepth * kIndent;
+                // Where the tree cell's items start: its content edge, the x its indent and
+                // guide lines start from. The row's edge when it has no tree cell this frame.
+                int32_t itemsX = leftX;
+                int32_t expanderW = 0;   // the arrow column before an item's icon, when the tree has one
+                if (const auto* info = tableState ? tableState->FindTreeRow(rowID) : nullptr;
+                    info && elementStorage.IsValidRef(info->cellRef)
+                    && elementStorage.GetElementUnsafe(info->cellRef).id == info->cellID)
+                {
+                    itemsX = ctx.GetElementRect(info->cellRef).x;
+                    const tachyon::StyleRef cellStyle = elementStorage.GetElementUnsafe(info->cellRef).styleRef;
+                    if (const tachyon::LayoutStyle* ls = styleManager.GetLayoutStyle(cellStyle.layoutStyleIndex))
+                        itemsX += ls->borderWidths.left + ls->padding.left;
+                    if (info->expanderColumn) expanderW = theme.treeTableExpanderWidth;
+                }
+                // The target's arrow column: the box around a row for InsideLast starts there.
+                const int32_t depthX = itemsX + m_treeDropState.targetDepth * kIndent;
+                // A line marks where the item lands: it starts at the icons of the items at
+                // that depth, past their arrow column.
+                const int32_t lineX  = depthX + expanderW;
 
                 // On the rightmost section, always stop short of the V-scrollbar
                 // overlay (+2 px gap), whether or not the bar is currently shown.
-                (void)tableState;
                 const int32_t scrollbarPad = isLastSection
                     ? theme.scrollbarThickness + styleManager.Px(2) : 0;
                 const int32_t rightEdge = leftX + w - scrollbarPad;
@@ -426,15 +442,15 @@ namespace tachyon
                 switch (m_treeDropState.position)
                 {
                     case TreeDropPosition::Before:
-                        lineLeft = depthX;
+                        lineLeft = lineX;
                         y        = topY + half;       // just inside row top
                         break;
                     case TreeDropPosition::After:
-                        lineLeft = depthX;
+                        lineLeft = lineX;
                         y        = topY + h - 1 - half;
                         break;
                     case TreeDropPosition::Inside:
-                        lineLeft = depthX + kIndent;
+                        lineLeft = lineX + kIndent;
                         y        = topY + h - 1 - half;
                         break;
                     default: return;
@@ -1521,6 +1537,36 @@ namespace tachyon
         VERIFY(elementStorage.EndChildren()); // table container
         m_tableEmit = std::move(m_outerTableEmits.back());
         m_outerTableEmits.pop_back();
+
+        // Its shortcuts while the focus is in it; Default again once it leaves.
+        if (state.commandMode != CommandMode::Default)
+        {
+            if (guiStateManager.Interaction().IsFocusWithin(id))
+            {
+                if (commandManager.GetMode() != state.commandMode)
+                    commandManager.SetMode(state.commandMode);
+            }
+            else if (commandManager.GetMode() == state.commandMode)
+                commandManager.SetMode(CommandMode::Default);
+        }
+
+        // The context menu: a shown row's, for that row; the sections' bodies', below the rows.
+        if (state.contextMenu)
+        {
+            for (int visualIdx = firstVisible; visualIdx < lastVisible && rowsRangeID != tachyon::ID::Invalid(); visualIdx++)
+            {
+                const int datasetIdx = state.VisualToDataset(visualIdx);
+                if (BeginContextMenu(idManager.GetSubID(rowsRangeID, static_cast<uint32_t>(datasetIdx))))
+                    state.contextMenu(datasetIdx);
+                EndContextMenu();
+            }
+            for (int i = 0; i < state.internal.sectionCount; i++)
+            {
+                if (BeginContextMenu(state.SectionBodyID(i)))
+                    state.contextMenu(-1);
+                EndContextMenu();
+            }
+        }
     }
 
 }

@@ -345,6 +345,7 @@ namespace tachyon
         // Branches always reserve the arrow / leaf-spacer column (the arrow lives
         // there); leaves only when reserveExpander is set.
         const bool hasExpanderColumn = reserveExpander || (isOpen != nullptr);
+        info.expanderColumn = hasExpanderColumn;
         int32_t prefix = (depth > 0 ? depth * theme.treeTableIndent : 0)
                        + (hasExpanderColumn ? theme.treeTableExpanderWidth : 0)
                        + (icon != IconID::Invalid ? theme.treeTableIconSize : 0);
@@ -357,7 +358,8 @@ namespace tachyon
         const StyleRef cellStyleRef = cellMode ? theme.treeTableCellStyleRef
                                                : theme.treeTableCellRowModeStyleRef;
 
-        EmitDirectCellTree(emit.columns[c], emit,
+        info.cellID  = cellID;
+        info.cellRef = EmitDirectCellTree(emit.columns[c], emit,
                            cellID, cellState, cellFlags, cellStyleRef, std::move(cellHandler),
                            cellSelected, bodyTextID,
                            depth, isOpen, icon, ancestorLineMask, isLastSibling,
@@ -429,7 +431,7 @@ namespace tachyon
     }
 
 
-    void GUIApplication::EmitDirectCellTree(const VirtualTableColumn& column, TableEmit& emit,
+    tachyon::ElementRef GUIApplication::EmitDirectCellTree(const VirtualTableColumn& column, TableEmit& emit,
                                             tachyon::ID cellID, tachyon::ElementState cellState, tachyon::ElementFlags cellFlags,
                                             tachyon::StyleRef cellStyleRef, tachyon::EventHandler cellHandler,
                                             bool cellSelected,
@@ -536,6 +538,7 @@ namespace tachyon
 
         if (cellSelected) guiStateManager.Construction().PopSelected();
         VERIFY(elementStorage.EndChildren());
+        return cRes.ref;
     }
 
 

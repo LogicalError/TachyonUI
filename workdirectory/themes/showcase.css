@@ -163,6 +163,40 @@
 }
 .log-level-icon::highlight(selected) { color: var(--text-1); }
 
+/* The files panel's tree | grid split: a 4px handle drawn as a 1px line, lit while
+   hovered or dragged. */
+.files-sizer {
+    border-width: 0px 0px 0px 1px;
+    border-color: var(--line-subtle);
+    padding: 0px;
+    background-color: transparent;
+    cursor: col-resize;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.files-sizer:hover  { background-color: var(--divider-hover); border-color: var(--divider-hover); }
+.files-sizer:active { background-color: var(--divider-hover); border-color: var(--divider-hover); }
+
+/* The status bar's "Ready": a 7px dot in the ok color, 6px before the text. */
+.status-ready {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    flex-shrink: 0;
+}
+.status-dot {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 4px;
+    background-color: var(--ok);
+}
+
 /* ---- Log level filter ------------------------------------------------------ */
 /* A well of level toggles: a colored dot and the level's count, pressed while
    the level shows. */
@@ -389,9 +423,32 @@
    element fills the whole narrow column edge-to-edge - no dead side strips
    that would hover differently from the eye. Vertical metrics mirror
    .table-cell so the row height stays in step with the tree column. */
+/* The hierarchy's tree: rows inset 4px from the panel's sides. Else as .table-fill. */
+.hierarchy-table {
+    border-width: 0px;
+    border-radius: 0px;
+    margin: 0px;
+    padding: 0px 4px 8px 4px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    vertical-align: baseline;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    background-color: var(--bg-panel);
+    border-color: transparent;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+}
+
+/* 22px rows: 3px above and below the 16px line. */
 .hierarchy-viz-cell {
     margin: 0px;
-    padding: 3px 0px 4px 0px;
+    padding: 3px 0px 3px 0px;
     overflow: hidden;
     background-color: transparent;   /* the eye column reads as part of the row */
     color: var(--text-3);

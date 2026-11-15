@@ -369,7 +369,7 @@ namespace tachyon
         }
         RenderMainMenu(c.windowID, c.documentsID, c.documents, /*withSearch*/ false);
         DocumentPanels(c.documents);
-        RenderStatusBar(c.documents);
+        RenderStatusBar();
         EmitFloatingDockWindows(c.documents);
     }
 
@@ -523,7 +523,7 @@ namespace tachyon
                 RenderMainMenu(c.windowID, showcase.documentsID, showcase.documents);
                 AskBeforeExit(c.windowID);
                 DocumentPanels(showcase.documents);
-                RenderStatusBar(showcase.documents);
+                RenderStatusBar();
                 if (shot.act == CaptureAct::Toasts)
                 {
                     UpdateDemoToasts();

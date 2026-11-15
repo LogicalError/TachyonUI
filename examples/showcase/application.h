@@ -110,14 +110,20 @@ namespace tachyon
 		ViewMode        viewMode         = ViewMode::Default;   // View mode toolbar buttons toggle these flags
         CommandMode     nodeViewMode = CommandMode::Default;   // the node view's shortcuts; copied into each NodeView's commandMode
         CommandMode     stateMachineMode = CommandMode::Default;   // the state machines' shortcuts (Delete)
+        CommandMode     hierarchyMode = CommandMode::Default;      // a Hierarchy's shortcuts while its tree has the focus
+        CommandID       hierarchyDelete{};
+        std::weak_ptr<HierarchyPanel> focusedHierarchy;           // the Hierarchy whose tree has the focus, if any
         // The transform tool the left toolbar picks (the showcase's own, not a library mode).
 
         std::vector<StyleRef> boxStyleRefs;
         StyleRef borderTestStyleRef;
 
         // Classes from themes/showcase.css, looked up after each theme load.
-        StyleRef hierarchyVizCellStyleRef, hierarchyVisibilityStyleRef;
+        StyleRef hierarchyVizCellStyleRef, hierarchyVisibilityStyleRef, hierarchyTableStyleRef;
         StyleRef logLevelIconStyleRef, logLevelWellStyleRef;
+        StyleRef statusDotStyleRef;     ///< the status bar's "ready" dot
+        StyleRef statusReadyStyleRef;   ///< the dot and "Ready", close together
+        StyleRef filesSizerStyleRef;    ///< the files panel's tree | grid split
         StyleRef logLevelPillStyleRefs[3];   // indexed by LogLevel
         StyleRef iconToggleStyleRef, logMessageStyleRef, logCellStyleRef, logCellTimeStyleRef, logCountBadgeStyleRef;
         StyleRef logTableStyleRef, filesToolbarStyleRef, appIconStyleRef;
@@ -415,6 +421,16 @@ namespace tachyon
                                        
             IconID objectIcon          = IconID::Invalid;
             IconID object2Icon         = IconID::Invalid;
+            // The hierarchy's kinds of object, drawn in the row's icon color.
+            IconID sceneIcon           = IconID::Invalid;
+            IconID groupIcon           = IconID::Invalid;
+            IconID cameraIcon          = IconID::Invalid;
+            IconID lightIcon           = IconID::Invalid;
+            IconID treeFolderIcon      = IconID::Invalid;   ///< an outlined folder, in the row's icon color
+            IconID treeFolderOpenIcon  = IconID::Invalid;
+            IconID filesFolderIcon     = IconID::Invalid;   ///< the files tree's folders: outlined, in the folders' amber
+            IconID filesFolderOpenIcon = IconID::Invalid;
+            IconID layoutsIcon         = IconID::Invalid;   ///< the Layouts dropdown's
                                        
             IconID fileImageIcon       = IconID::Invalid;
             IconID fileAudioIcon       = IconID::Invalid;
@@ -647,6 +663,12 @@ namespace tachyon
         /// The Inspector's Levels plot: the demo image's histogram and black, gray and white handles.
         void SeedLevels();
         void RenderHierarchyPanel(HierarchyPanel& panel);
+        /// The objects the Hierarchy can add: its search row's "+" and its context menu. Each new
+        /// object goes under `parent` (a node's ID), or at the end of the scene when it's invalid,
+        /// and is selected.
+        void HierarchyAddMenuItems(HierarchyPanel& panel, ID parent = ID::Invalid());
+        /// Deletes what's selected in the focused Hierarchy's tree: the Delete key.
+        void HierarchyDeleteSelected();
         void RenderNodeViewPanel();
         /// The StateMachine panel: the enemy's machine, or Combat's once opened; Step and Restart.
         void RenderStateMachinePanel();
@@ -718,7 +740,7 @@ namespace tachyon
         /// the front when it's open already; `icon` for a type the showcase has none for.
         void OpenFileAsDocument(DocumentSet& set, std::string_view fileName, IconID icon);
         /// State on the left, the active document in `documents`, frame time on the right.
-        void RenderStatusBar(const DocumentSet& documents);
+        void RenderStatusBar();
         /// The frame timings the status bar and the Profiler show, and whether they take new
         /// ones this frame. A readout of the frame time changes with every frame drawn, so it
         /// would ask for the next one forever: unless every frame is drawn anyway, it takes
@@ -773,6 +795,8 @@ namespace tachyon
         void ApplyFileRenames(FilesPanel& panel);
         void AddDroppedFiles(FilesPanel& panel, const std::vector<std::string>& paths, const std::string& folder);
         IconID FileIcon(const FilesPanel& panel, std::string_view name, bool isFolder, bool open = false);
+        /// The folder tree's folder icon, open or closed.
+        IconID TreeFolderIcon(bool open) const;
         IconID FileIcon(const FilesPanel& panel, const FileEntry& file, bool open = false);
 
         // Build/tear down panel data; wired into CreatePanel's onEnable/onDisable.

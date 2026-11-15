@@ -360,8 +360,9 @@ namespace tachyon
         /// True while a chord prefix was pressed and awaits its second key.
         bool IsChordPending() const { return m_pendingChord.key != KeyCode::None; }
 
-        /// Formats a chord shortcut as "Ctrl+K Ctrl+S"; the single-key form when `k2` is None,
-        /// "(unbound)" when `k1` is None.
+        /// Formats a chord shortcut as "Ctrl K, Ctrl S": its steps apart by a comma, as each
+        /// step's keys are by spaces. The single-key form when `k2` is None, "(unbound)" when
+        /// `k1` is None.
         static std::string FormatChordShortcut(KeyCode k1, KeyModifier m1,
                                                KeyCode k2, KeyModifier m2)
         {
@@ -369,14 +370,16 @@ namespace tachyon
             std::string out = FormatShortcut(k1, m1);
             if (k2 != KeyCode::None)
             {
-                out += ' ';
+                out += ", ";
                 out += FormatShortcut(k2, m2);
             }
             return out;
         }
 
-        /// Formats a (key, modifiers) combo as a human-readable string like "Ctrl+Shift+D".
-        /// An unbound shortcut (KeyCode::None) renders as "(unbound)" regardless of modifiers.
+        /// Formats a (key, modifiers) combo as a human-readable string like "Ctrl Shift D".
+        /// The keys are apart by spaces, so a key that is itself a "+" or "-" reads as such:
+        /// "Ctrl +". An unbound shortcut (KeyCode::None) renders as "(unbound)" regardless of
+        /// modifiers.
         static std::string FormatShortcut(KeyCode key, KeyModifier modifiers)
         {
             if (key == KeyCode::None) return "(unbound)";
@@ -385,7 +388,7 @@ namespace tachyon
             {
                 if ((modifiers & bit) != KeyModifier::None)
                 {
-                    if (!out.empty()) out += '+';
+                    if (!out.empty()) out += ' ';
                     out += name;
                 }
             };
@@ -395,12 +398,13 @@ namespace tachyon
             addMod(KeyModifier::Command, "Cmd");
             addMod(KeyModifier::Option,  "Opt");
 
-            if (!out.empty()) out += '+';
+            if (!out.empty()) out += ' ';
             out += KeyCodeName(key);
             return out;
         }
 
-        /// A short human-readable key name, e.g. "A", "F5", "Enter", "["; "?" for unknown keys.
+        /// A short human-readable key name, e.g. "A", "F5", "Enter", "[", "Num +" (the numeric
+        /// keypad's); "(unknown)" for a key without one (the "?" key is "?").
         static std::string KeyCodeName(KeyCode k)
         {
             switch (k)
@@ -432,15 +436,47 @@ namespace tachyon
                 case KeyCode::Left:        return "Left";
                 case KeyCode::Down:        return "Down";
                 case KeyCode::Up:          return "Up";
+                case KeyCode::Exclaim:     return "!";
+                case KeyCode::DoubleQuote: return "\"";
+                case KeyCode::Hash:        return "#";
+                case KeyCode::Dollar:      return "$";
+                case KeyCode::Percent:     return "%";
+                case KeyCode::Ampersand:   return "&";
+                case KeyCode::LeftParen:   return "(";
+                case KeyCode::RightParen:  return ")";
+                case KeyCode::Asterisk:    return "*";
+                case KeyCode::Plus:        return "+";
+                case KeyCode::Colon:       return ":";
+                case KeyCode::Less:        return "<";
+                case KeyCode::Greater:     return ">";
+                case KeyCode::Question:    return "?";
+                case KeyCode::At:          return "@";
+                case KeyCode::Caret:       return "^";
+                case KeyCode::Underscore:  return "_";
+                case KeyCode::Capslock:    return "CapsLock";
+                case KeyCode::Printscreen: return "PrintScreen";
+                case KeyCode::Scrolllock:  return "ScrollLock";
+                case KeyCode::Pause:       return "Pause";
+                case KeyCode::KeyPadDivide:   return "Num /";
+                case KeyCode::KeyPadMultiply: return "Num *";
+                case KeyCode::KeyPadMinus:    return "Num -";
+                case KeyCode::KeyPadPlus:     return "Num +";
+                case KeyCode::KeyPadEnter:    return "Num Enter";
+                case KeyCode::KeyPadPeriod:   return "Num .";
+                case KeyCode::KeyPadEquals:   return "Num =";
+                case KeyCode::KeyPadComma:    return "Num ,";
+                case KeyCode::KeyPad0:        return "Num 0";
                 default: break;
             }
+            if (k >= KeyCode::KeyPad1 && k <= KeyCode::KeyPad9)
+                return "Num " + std::string(1, char('1' + (uint32_t(k) - uint32_t(KeyCode::KeyPad1))));
             if (k >= KeyCode::KeyA && k <= KeyCode::KeyZ)
                 return std::string(1, char('A' + (uint32_t(k) - uint32_t(KeyCode::KeyA))));
             if (k >= KeyCode::Key0 && k <= KeyCode::Key9)
                 return std::string(1, char('0' + (uint32_t(k) - uint32_t(KeyCode::Key0))));
             if (k >= KeyCode::F1 && k <= KeyCode::F12)
                 return "F" + std::to_string(1 + int(uint32_t(k) - uint32_t(KeyCode::F1)));
-            return "?";
+            return "(unknown)";
         }
 
     private:

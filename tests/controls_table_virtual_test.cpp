@@ -306,6 +306,72 @@ namespace tachyon
                 << " px — mixing cell types in one table requires uniform row height";
         }
 
+        // A table's context menu (TableState::contextMenu) opens on a right-click on a row, for
+        // that row, and on the empty space below the rows, for none (-1).
+        TEST_F(TableVirtualScrollTest, ARightClickOpensTheTablesContextMenuForTheRowUnderIt)
+        {
+            tachyon::TableState state{};
+            int menuRow = -2;
+            state.contextMenu = [this, &menuRow](int row) {
+                menuRow = row;
+                app.MenuItem("Delete", nullptr);
+            };
+            auto frame = [&] { app.Frame([&] { Emit(state, 3); }); };
+            frame();
+            frame();
+            auto rightClick = [&](int2 at) {
+                app.menuManager.CloseAll(app.guiStateManager);
+                menuRow = -2;
+                app.InjectMouseMove(at);
+                frame();
+                app.ClickAt(at, MouseButtons::Right);
+                frame();
+                frame();
+            };
+
+            const IntRect row1 = app.GetElementRect(state.RowIDForIndex(1));
+            ASSERT_GT(row1.h, 0);
+            rightClick({ row1.x + 20, row1.y + row1.h / 2 });
+            EXPECT_EQ(menuRow, 1) << "the row under the pointer";
+
+            const IntRect row2 = app.GetElementRect(state.RowIDForIndex(2));
+            rightClick({ row2.x + 20, row2.y + row2.h + 40 });
+            EXPECT_EQ(menuRow, -1) << "below the rows: no row";
+        }
+
+        // A table's command mode (TableState::commandMode) is the command manager's while the
+        // focus is in the table: its shortcuts (Delete) work there and nowhere else.
+        TEST_F(TableVirtualScrollTest, ATablesCommandModeIsOnWhileItHasTheFocus)
+        {
+            app.inputManager->PushGlobalHandler(app.commandManager.MakeHandler());
+            const CommandMode mode = app.commandManager.RegisterMode("Table");
+            int deletes = 0;
+            app.commandManager.RegisterCommand(mode, KeyCode::Delete, KeyModifier::None, [&deletes] { ++deletes; }, "Delete rows");
+            tachyon::TableState state{};
+            state.commandMode = mode;
+            auto frame = [&] { app.Frame([&] { Emit(state, 3); }); };
+            frame();
+            frame();
+
+            app.InjectKey(KeyCode::Delete);
+            frame();
+            EXPECT_EQ(deletes, 0) << "not focused: not its mode";
+
+            const IntRect row0 = app.GetElementRect(state.RowIDForIndex(0));
+            app.ClickAt({ row0.x + 20, row0.y + row0.h / 2 });
+            frame();
+            frame();
+            EXPECT_EQ(app.commandManager.GetMode(), mode);
+            app.InjectKey(KeyCode::Delete);
+            frame();
+            EXPECT_EQ(deletes, 1);
+
+            app.guiStateManager.Interaction().SetFocusID(ID::Invalid());
+            frame();
+            frame();
+            EXPECT_EQ(app.commandManager.GetMode(), CommandMode::Default) << "the focus left: back to Default";
+        }
+
         // A flat button in a cell reads as the cell's text: the cell gives the padding, so the
         // row is as tall as a plain one and the button's text sits where plain text does.
         TEST_F(TableVirtualScrollTest, AFlatButtonCellLinesUpWithPlainCells)
@@ -335,7 +401,7 @@ namespace tachyon
             const ID buttonID = app.idManager.CreateStaticID();
             columns[0].generateCell = [this, buttonID](int r) {
                 app.Cell([this, buttonID, r]() {
-                    app.Button(r == 0 ? buttonID : app.idManager.AllocateDynamicID("btn"), "Ctrl+S", []() {},
+                    app.Button(r == 0 ? buttonID : app.idManager.AllocateDynamicID("btn"), "Ctrl S", []() {},
                                app.theme.flatButtonStyleRef);
                 });
             };
