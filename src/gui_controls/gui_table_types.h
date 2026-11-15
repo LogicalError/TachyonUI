@@ -217,7 +217,8 @@ namespace tachyon
         StyleRef              cellStyle        = StyleRef::Invalid();
         /// False omits the header row (and with it reorder, resize and sort).
         bool                  showHeaders      = true;
-        /// 1px lines between the columns of a headerless table.
+        /// 1px lines between the columns: all of them in a headerless table; with headers,
+        /// the ones after columns that can't be resized (a resizable column keeps its sizer).
         bool                  columnSeparators = true;
 
         LazyReorderFn                  onReorderColumns;           ///< headers become drag-to-reorder when set

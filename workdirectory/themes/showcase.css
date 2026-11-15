@@ -517,7 +517,49 @@
     flex-shrink: 0;
 }
 
-/* ---- Profiler header -------------------------------------------------------- */
+/* ---- Profiler ------------------------------------------------------------------ */
+/* The panel's content, in from its edges; the table at the bottom takes the rest
+   of the height (flex-basis 0, as .flex-fill-col). */
+.profiler-body {
+    border-width: 0px;
+    padding: 10px;
+    margin: 0px;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 0px;
+    overflow: hidden;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+}
+
+/* The frame-time bar chart: a bar per frame, one dashed budget line. */
+.profiler-graph {
+    border-width: 0px;
+    border-radius: var(--radius-md);
+    padding: 0px;
+    margin: 4px 0px 8px 0px;
+    overflow: hidden;
+    background-color: var(--bg-input);
+    border-color: transparent;
+}
+/* The budget line's label, above it on the left. */
+.profiler-graph-label {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    color: var(--text-3);
+    font-family: monospace;
+    font-size: 10px;
+    background-color: transparent;
+    border-color: transparent;
+}
+
 /* Recording toggle (a red dot while recording), pause toggle, then the frame
    time and rate on the right. */
 .profiler-header {
@@ -525,7 +567,7 @@
     flex-direction: row;
     align-items: center;
     gap: 6px;
-    padding: 0px 0px 6px 0px;
+    padding: 0px;
     margin: 0px;
     border-width: 0px;
     background-color: transparent;

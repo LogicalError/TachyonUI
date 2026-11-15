@@ -210,3 +210,5 @@ First public preview. The API is not stable yet.
 - Ghost windows: `AddGhostIcon(icon, size)` adds an icon of a given size, for a small one by the cursor.
 - Showcase: dragging in the Hierarchy shows the object's icon by the cursor as small as the tree shows it, not 28 px.
 - Windows: a transparent window (a drag ghost) stays where it's moved. Showing its last frame again put it back where that frame was drawn, so a ghost following the cursor without changing jumped between the cursor and where the drag began.
+- Tables: TableState::columnSeparators off leaves out the lines after columns that can't be resized in a table with headers too; a resizable column keeps its sizer.
+- Showcase: the Profiler as designed: padded; the frame graph a bar per frame with one dashed reference line that follows the frame times (green, amber over the 60 fps budget, the newest in the accent color); the flame chart as tall as its rows; the table without stripes or column lines, Scope taking the width and the numbers theirs.

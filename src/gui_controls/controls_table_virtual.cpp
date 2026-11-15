@@ -1028,6 +1028,9 @@ namespace tachyon
             VirtualTableColumn& vcol = emit.columns[c];
             const TableColumn& col = vcol.column;
             const bool isDraggable = (col.sizing == ColumnSizing::Resizable) && (c < firstStretchCol);
+            // One that can't be dragged is only a line between the columns.
+            if (!isDraggable && !emit.columnSeparators)
+                return;
 
             tachyon::EventHandler sizerHandler{};
             tachyon::ElementFlags sizerFlags = tachyon::ElementFlags::NoInput;

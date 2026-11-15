@@ -922,6 +922,25 @@ namespace tachyon
                     << " missing after scrolling deep into the table";
         }
 
+        // With columnSeparators off, a table with headers draws no line between columns that
+        // can't be resized; a column that can keeps its sizer, to drag.
+        TEST_F(TableVirtualScrollTest, NoSeparatorsLeaveOnlyTheSizersToDrag)
+        {
+            columns[0].column.sizing = ColumnSizing::Resizable;
+            columns[1].column.sizing = ColumnSizing::Fixed;
+            columns[2].column.sizing = ColumnSizing::Fixed;
+            tachyon::TableState state{};
+            auto frames = [&] { app.Frame([&] { Emit(state); }); app.Frame([&] { Emit(state); }); };
+            frames();
+            EXPECT_TRUE(app.HasElement(columns[1].internal.sizerID)) << "separators are on by default";
+
+            state.columnSeparators = false;
+            frames();
+            EXPECT_TRUE(app.HasElement(columns[0].internal.sizerID)) << "a sizer to drag stays";
+            EXPECT_FALSE(app.HasElement(columns[1].internal.sizerID)) << "no line after a fixed column";
+            EXPECT_FALSE(app.HasElement(columns[2].internal.sizerID));
+        }
+
         // ---------------------------------------------------------------
         // End must scroll the last row fully into view, its bottom clear of the
         // H-scrollbar overlay.

@@ -7,9 +7,11 @@
 #include <gui_core/style/gui_style.h>
 #include <gui_core/text/gui_text_system.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <iterator>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -120,28 +122,33 @@ namespace tachyon
     static StyleRef                      selBarStyle{};
     static StyleRef                      waitBarStyle{};
     static StyleRef                      flameClipStyle{};
-    static int                           flameHeight = 150;   // resizable (CSS px); content clipped, not scaled
+    static int                           flameHeight = 150;   // CSS px: its rows' height, or less once resized
+    static bool                          flameSized  = false; // the sizer made it shorter than its rows
 
     // Frame-graph (per-frame CPU build-time history) state.
     static tachyon::ID                       frameGraphID = tachyon::ID::Invalid();
     static bool                          frameGraphStylesInit = false;
-    static StyleRef                      frameGraphBgStyle{};         // container background
     static VisualColorStyleIndex         frameGraphBarUnderStyle{};   // build <= budget (green)
     static VisualColorStyleIndex         frameGraphBarOverStyle{};    // build  > budget
+    static VisualColorStyleIndex         frameGraphCurrentStyle{};    // the frame shown (accent)
     static VisualColorStyleIndex         frameGraphBudgetStyle{};     // the 60fps budget line
-    static constexpr float               kFrameBudgetMs   = 16.67f;
+    static constexpr float               kFrameBudgetMs    = 16.67f;
     static constexpr int                 kFrameGraphHeight = 60;
 
-    // Frame-rate budget reference lines (ms, ascending). Each has a static ID so
-    // its label doesn't churn the text registry.
+    // The graph's one dashed line is the reference just above most frames; it sits at
+    // kRefLineAt of the graph's height, so the bars fill most of it at any frame rate and a
+    // spike is cut off at the top rather than flattening the rest.
     struct FrameRefLine { float ms; const char* label; };
     static constexpr FrameRefLine kFrameRefs[] = {
-        {   2.08f, "2 ms"    }, {   4.17f, "4 ms"   }, {   8.33f, "8 ms"   },
-        {  16.67f, "16.7 ms" }, {  33.33f, "33 ms"  }, {  66.67f, "67 ms"  },
-        { 100.00f, "100 ms"  }, { 200.00f, "200 ms" },
+        {   0.5f,  "0.5 ms"  }, {   1.0f,  "1 ms"    }, {   2.0f,  "2 ms"   }, {   4.17f, "4.2 ms" },
+        {   8.33f, "8.3 ms"  }, {  16.67f, "16.7 ms" }, {  33.33f, "33 ms"  }, {  66.67f, "67 ms"  },
+        { 100.0f,  "100 ms"  }, { 200.0f,  "200 ms"  },
     };
-    static constexpr int kFrameRefCount = int(sizeof(kFrameRefs) / sizeof(kFrameRefs[0]));
-    static tachyon::ID frameGraphLabelIDs[kFrameRefCount] = {};
+    static constexpr int                 kFrameRefCount    = int(std::size(kFrameRefs));
+    static constexpr float               kRefLineAt        = 0.72f;
+    static constexpr float               kRefPercentile    = 0.9f;    // "most frames"
+    static int                           frameGraphRef     = 5;       // the line now: 16.7 ms to start
+    static tachyon::ID                   frameGraphLabelID = tachyon::ID::Invalid();   // static: its text stays registered
 
     void Application::EnableProfilerTreePanel()
     {
@@ -152,8 +159,7 @@ namespace tachyon
             flameRootID     = idManager.CreateStaticID();
             flameSizerID    = idManager.CreateStaticID();
             frameGraphID    = idManager.CreateStaticID();
-            for (int i = 0; i < kFrameRefCount; ++i)
-                frameGraphLabelIDs[i] = idManager.CreateStaticID();
+            frameGraphLabelID = idManager.CreateStaticID();
         }
         flameStylesInit      = false;
         frameGraphStylesInit = false;
@@ -163,15 +169,10 @@ namespace tachyon
     {
         if (profilerTableID == tachyon::ID::Invalid())
             return;
-        for (tachyon::ID* id : { &profilerTableID, &flameRootID, &flameSizerID, &frameGraphID })
+        for (tachyon::ID* id : { &profilerTableID, &flameRootID, &flameSizerID, &frameGraphID, &frameGraphLabelID })
         {
             idManager.ReleaseStaticID(*id);
             *id = tachyon::ID::Invalid();
-        }
-        for (tachyon::ID& id : frameGraphLabelIDs)
-        {
-            idManager.ReleaseStaticID(id);
-            id = tachyon::ID::Invalid();
         }
     }
 
@@ -226,7 +227,7 @@ namespace tachyon
 
             std::snprintf(buf, sizeof(buf), "%.3f",  s.totalMs);   r.totalStr = buf;
             std::snprintf(buf, sizeof(buf), "%.3f",  s.selfMs);    r.selfStr  = buf;
-            std::snprintf(buf, sizeof(buf), "%.1f %%", r.pctFrame); r.pctStr  = buf;
+            std::snprintf(buf, sizeof(buf), "%.1f%%", r.pctFrame); r.pctStr  = buf;
             std::snprintf(buf, sizeof(buf), "%d",    s.callCount); r.callsStr = buf;
 
             // Open state lives in the persistent map; TreeCell gets a pointer into
@@ -258,8 +259,10 @@ namespace tachyon
                 s_selectedKey = rows[visibleIdx[vis]].key;
         }
 
-        // The table's flex-fill row (flex-basis:0) must be a direct child of the
-        // dock-content column to bound to its height; otherwise it overflows.
+        // The panel's content, padded. The body has flex-basis 0, as the table's flex-fill row
+        // inside it does, so the table is bounded to the panel's height instead of overflowing.
+        BeginVertical(idManager.AllocateDynamicID("profilerBody"), profilerBodyStyleRef,
+                      LayoutOverride::Auto().FlexGrow(1));
 
         // ---- Header: record and pause toggles, frame time and rate ----------
         BeginHorizontal(idManager.AllocateDynamicID("profilerHeader"), profilerHeaderStyleRef,
@@ -281,21 +284,16 @@ namespace tachyon
         EndHorizontal();
 
         // ---- Frame graph: per-frame CPU build-time history ---------------
-        // Bars = CPU work between presents; the faint line is full frame time
-        // (incl. any vsync wait). The Y scale snaps to the next budget line above the peak.
-        // Sampled in Run() only while profiling is on.
+        // A bar per frame, the CPU work between presents: green within the 60 fps budget,
+        // amber over it, the newest (the frame the table shows) in the accent color. One
+        // dashed reference line, chosen from the frames shown (see kFrameRefs). Sampled in
+        // Run() only while profiling is on.
         {
             if (!frameGraphStylesInit)
             {
-                Style bg;
-                bg.SetOverflow(tachyon::Overflow::Hidden);
-                bg.padding = tachyon::BoxEdges(0);   // inner height == kFrameGraphHeight
-                bg.margin  = tachyon::BoxEdges(2,0,4,0);
-                for (int i = 0; i < Style::kStateCount; ++i)
-                    bg.states[i].backgroundColor = ColorStyle::Create(theme.GetColor("--bg-input", color4f{ 0.12f, 0.12f, 0.13f, 1.0f }));
-                frameGraphBgStyle       = styleManager.Register(bg);
                 frameGraphBarUnderStyle = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--frame-bar")));
                 frameGraphBarOverStyle  = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--frame-bar-over")));
+                frameGraphCurrentStyle  = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--accent")));
                 frameGraphBudgetStyle   = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--budget-line")));
                 frameGraphStylesInit = true;
             }
@@ -303,92 +301,72 @@ namespace tachyon
             std::array<GUIApplication::FrameTimingSample, GUIApplication::kFrameHistoryCount> hist = frameTimings;
             if (live)
                 GetFrameTimingHistory(hist);
-            constexpr int N = int(GUIApplication::kFrameHistoryCount);
-            const int H = styleManager.Px(kFrameGraphHeight);   // bg padding is 0, so inner height == border height
 
-            // Peak across both series drives the auto-scale.
-            float dataMax = 0.0f;
-            for (int i = 0; i < N; ++i)
+            // The line: the smallest reference at or above most frames' time. It moves down
+            // only once they're well under the next one down, so it doesn't flicker between
+            // two references.
             {
-                if (hist[size_t(i)].buildMs > dataMax) dataMax = hist[size_t(i)].buildMs;
-                if (hist[size_t(i)].totalMs > dataMax) dataMax = hist[size_t(i)].totalMs;
+                std::array<float, GUIApplication::kFrameHistoryCount> times{};
+                size_t count = 0;
+                for (const auto& sample : hist)
+                    if (sample.buildMs > 0.0f) times[count++] = sample.buildMs;
+                if (count > 0)
+                {
+                    const size_t k = std::min(count - 1, size_t(float(count) * kRefPercentile));
+                    std::nth_element(times.begin(), times.begin() + ptrdiff_t(k), times.begin() + ptrdiff_t(count));
+                    const float typical = times[k];
+                    while (frameGraphRef + 1 < kFrameRefCount && typical > kFrameRefs[frameGraphRef].ms)
+                        ++frameGraphRef;
+                    while (frameGraphRef > 0 && typical < kFrameRefs[frameGraphRef - 1].ms * 0.75f)
+                        --frameGraphRef;
+                }
             }
+            const FrameRefLine refLine = kFrameRefs[frameGraphRef];
 
-            // Snap the ceiling to the smallest budget above the peak; beyond the
-            // coarsest reference, fall back to peak + headroom.
-            const float target = dataMax * 1.10f;
-            float scaleMax = kFrameRefs[kFrameRefCount - 1].ms;
-            for (int i = 0; i < kFrameRefCount; ++i)
-                if (kFrameRefs[i].ms >= target) { scaleMax = kFrameRefs[i].ms; break; }
-            if (target > scaleMax) scaleMax = target;
-            if (scaleMax < kFrameRefs[0].ms) scaleMax = kFrameRefs[0].ms;
-
-            auto yAt = [&](float ms) { int y = H - int(ms * float(H) / scaleMax + 0.5f); return y < 0 ? 0 : (y > H ? H : y); };
-
-            // Keep reference lines that fit, top-down, dropping any that would
-            // crowd the previous one so labels stay legible at every scale.
-            struct Grid { float ms; bool budget; tachyon::TextID tid; int w; int h; };
-            std::vector<Grid> grids;
-            const int minGap = styleManager.Px(13);
-            int lastY = -minGap;
-            for (int i = kFrameRefCount - 1; i >= 0; --i)
-            {
-                if (kFrameRefs[i].ms > scaleMax + 0.01f) continue;
-                const int y = yAt(kFrameRefs[i].ms);
-                if (!grids.empty() && (y - lastY) < minGap) continue;
-                const tachyon::TextID tid = textSystem->RegisterText(frameGraphLabelIDs[i], kFrameRefs[i].label,
-                                                                 theme.staticTextStyleRef, tachyon::ElementState::None);
-                const auto m = textSystem->GetTextMeasurement(tid);
-                grids.push_back({ kFrameRefs[i].ms, kFrameRefs[i].ms == kFrameBudgetMs, tid, m.maxWidth, m.minHeight });
-                lastY = y;
-            }
+            const tachyon::TextID refLabel = textSystem->RegisterText(frameGraphLabelID, refLine.label,
+                                                                      profilerGraphLabelStyleRef, tachyon::ElementState::None);
+            const auto labelSize = textSystem->GetTextMeasurement(refLabel);
 
             tachyon::Element graphEl{};
             graphEl.id       = frameGraphID;
-            graphEl.styleRef = frameGraphBgStyle;
+            graphEl.styleRef = profilerGraphStyleRef;
             const auto graphRef = RegisterElement(std::move(graphEl),
                                                   LayoutOverride{}.Height(CssPx(kFrameGraphHeight)).NoShrink());
 
             VERIFY(elementStorage.AddCustomDraw(graphRef,
-                [this, hist, grids, scaleMax](tachyon::CustomDrawContext& ctx)
+                [this, hist, refLine, refLabel, labelSize](tachyon::CustomDrawContext& ctx)
                 {
                     const IntRect inner = ctx.ElementInnerRect();   // local space, origin (0,0) top-left
                     const int W = inner.w, H = inner.h;
                     if (W <= 0 || H <= 0) return;
                     constexpr int N = int(GUIApplication::kFrameHistoryCount);
-                    const float pxPerMs = float(H) / scaleMax;
+                    const float pxPerMs = float(H) * kRefLineAt / refLine.ms;
                     auto yOf = [&](float ms) { int y = H - int(ms * pxPerMs + 0.5f); return y < 0 ? 0 : (y > H ? H : y); };
+                    const int gap = styleManager.Px(1);
 
-                    // Bars: CPU build time, colored against the 60fps budget.
                     for (int i = 0; i < N; ++i)
                     {
                         const int x0 = int(float(i)     / float(N) * float(W) + 0.5f);
                         int       x1 = int(float(i + 1) / float(N) * float(W) + 0.5f);
                         if (x1 > W) x1 = W;
-                        int bw = x1 - x0; if (bw < 1) bw = 1;
-                        const int top = yOf(hist[size_t(i)].buildMs);
-                        const IntRect bar{ .position = { x0, top }, .size = { bw, H - top } };
-                        ctx.RenderQuad(bar, (hist[size_t(i)].buildMs > kFrameBudgetMs) ? frameGraphBarOverStyle
-                                                                                       : frameGraphBarUnderStyle, 0.0f);
+                        int bw = x1 - x0;
+                        if (bw > 2 * gap) bw -= gap;   // apart, while bars are wide enough to keep one
+                        if (bw < 1) bw = 1;
+                        const float ms  = hist[size_t(i)].buildMs;
+                        const int   top = yOf(ms);
+                        if (top >= H) continue;
+                        const VisualColorStyleIndex color = (i == N - 1)      ? frameGraphCurrentStyle
+                                                          : ms > kFrameBudgetMs ? frameGraphBarOverStyle
+                                                                                : frameGraphBarUnderStyle;
+                        ctx.RenderQuad(IntRect{ x0, top, bw, H - top }, color, 0.0f);
                     }
 
-                    // Faint overlay line: full frame time (incl. any vsync wait).
-                    std::array<int2, N> pts{};
-                    for (int i = 0; i < N; ++i)
-                        pts[size_t(i)] = { int((float(i) + 0.5f) / float(N) * float(W) + 0.5f), yOf(hist[size_t(i)].totalMs) };
-                    ctx.RenderPolyline(std::span<const int2>(pts.data(), pts.size()), false,
-                                       tachyon::LineStyle{ .colorStyleIndex = theme.lineGrayStyle, .lineWidth = styleManager.Px(1.0f) });
-
-                    // Reference lines + ms labels; the 60fps budget line is brighter.
-                    for (const auto& g : grids)
-                    {
-                        const int y = yOf(g.ms);
-                        ctx.RenderLine({ 0, y }, { W, y },
-                                       tachyon::LineStyle{ .colorStyleIndex = g.budget ? frameGraphBudgetStyle : theme.lineGrayStyle,
+                    const int y = yOf(refLine.ms);
+                    ctx.RenderLine({ 0, y }, { W, y },
+                                   tachyon::LineStyle{ .colorStyleIndex = frameGraphBudgetStyle,
                                                        .lineWidth = styleManager.Px(1.0f), .dashSize = styleManager.Px(4.0f) });
-                        const int ly = (y - g.h >= 0) ? (y - g.h) : (y + styleManager.Px(1));
-                        ctx.RenderText(g.tid, IntRect{ .position = { styleManager.Px(3), ly }, .size = { g.w + styleManager.Px(2), g.h } });
-                    }
+                    const int ly = std::max(0, y - labelSize.minHeight - styleManager.Px(1));
+                    ctx.RenderText(refLabel, IntRect{ styleManager.Px(4), ly, labelSize.maxWidth + styleManager.Px(2), labelSize.minHeight });
                 }));
         }
 
@@ -450,12 +428,18 @@ namespace tachyon
             }
 
             // A vertical canvas of per-depth rows; its custom draw captures the
-            // inner width for next frame's pixel layout.
+            // inner width for next frame's pixel layout. As tall as its rows until the
+            // sizer below it makes it smaller; never taller than its rows.
+            const float uiScale      = styleManager.GetUIScale();
+            const int   rowsHeight   = (maxDepth + 1) * rowH;
+            const int   rowsUnits    = int(std::ceil(float(rowsHeight) / uiScale));   // flameHeight is CSS px
+            if (!flameSized || flameHeight > rowsUnits)
+                flameHeight = rowsUnits;
             tachyon::Element flameRoot{};
             flameRoot.id       = flameRootID;
             flameRoot.styleRef = flameClipStyle;   // column + overflow:hidden -> clips the bottom, no scaling
             const auto flameRef = RegisterElement(std::move(flameRoot),
-                                                  LayoutOverride{}.Height(CssPx(flameHeight)).FlexShrink(1));
+                                                  LayoutOverride{}.Height(Pixels{ std::min(styleManager.Px(flameHeight), rowsHeight) }).FlexShrink(1));
             VERIFY(elementStorage.AddCustomDraw(flameRef,
                 [](tachyon::CustomDrawContext& ctx) { s_flameWidth = ctx.ElementInnerRect().w; }));
 
@@ -516,16 +500,18 @@ namespace tachyon
             (void)idManager.PopParent();
             VERIFY(elementStorage.EndChildren());
 
-            // Draggable divider below the flame: drag it to resize the flame's
-            // height. The icicle is clipped (overflow:hidden), not scaled.
+            // Draggable divider below the flame: drag it to make the flame shorter, down to
+            // a row; it's clipped (overflow:hidden), not scaled. Auto-size fits its rows again.
             tachyon::Element flameSizer{};
             flameSizer.id           = flameSizerID;
             flameSizer.styleRef     = theme.dockSizerVertStyleRef;
             flameSizer.state        = guiStateManager.GetCurrentState(flameSizer.id);
-            const float uiScale = styleManager.GetUIScale();
             const int   rowUnits = int(std::ceil(float(rowH) / uiScale));   // rowH is pixels; flameHeight CSS px
-            flameSizer.eventHandler = tachyon::MakeVerticalSizerHandler(guiStateManager, elementStorage, flameHeight, rowUnits, 40 * rowUnits,
-                                                                    nullptr, nullptr, false, uiScale);
+            flameSizer.eventHandler = tachyon::MakeVerticalSizerHandler(guiStateManager, elementStorage, flameHeight,
+                                                                    rowUnits, std::max(rowUnits, rowsUnits),
+                                                                    [](int) { flameSized = true; },
+                                                                    [rowsUnits] { flameSized = false; return rowsUnits; },
+                                                                    false, uiScale);
             RegisterElement(std::move(flameSizer), LayoutOverride::FixedHeight(5));
         }
 
@@ -533,7 +519,8 @@ namespace tachyon
         static std::vector<VirtualTableColumn> columns =
         {
             {
-                { .header = "Scope", .initialWidth = 200, .minWidth = 100, .maxWidth = 600, .locked = true },
+                // Scope takes the width the numbers leave; they keep theirs.
+                { .header = "Scope", .initialWidth = 200, .minWidth = 100, .maxWidth = 600, .locked = true, .sizing = ColumnSizing::Stretch },
                 [this](int rowIdx) {
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     ProfRow& r = rows[visibleIdx[rowIdx]];
@@ -543,21 +530,21 @@ namespace tachyon
                 }
             },
             {
-                { .header = "Total ms", .initialWidth = 72, .minWidth = 56, .maxWidth = 160 },
+                { .header = "Total ms", .initialWidth = 72, .minWidth = 56, .maxWidth = 160, .sizing = ColumnSizing::Fixed },
                 [this](int rowIdx) {
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     Cell(rows[visibleIdx[rowIdx]].totalStr);
                 }
             },
             {
-                { .header = "Self ms", .initialWidth = 72, .minWidth = 56, .maxWidth = 160 },
+                { .header = "Self ms", .initialWidth = 72, .minWidth = 56, .maxWidth = 160, .sizing = ColumnSizing::Fixed },
                 [this](int rowIdx) {
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     Cell(rows[visibleIdx[rowIdx]].selfStr);
                 }
             },
             {
-                { .header = "% frame", .initialWidth = 108, .minWidth = 96, .maxWidth = 160 },
+                { .header = "% frame", .initialWidth = 108, .minWidth = 96, .maxWidth = 160, .sizing = ColumnSizing::Fixed },
                 [this](int rowIdx) {
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     // A bar at the cell's left (so the bars line up), the number right-aligned.
@@ -577,7 +564,7 @@ namespace tachyon
                 }
             },
             {
-                { .header = "Calls", .initialWidth = 52, .minWidth = 40, .maxWidth = 100 },
+                { .header = "Calls", .initialWidth = 52, .minWidth = 40, .maxWidth = 100, .sizing = ColumnSizing::Fixed },
                 [this](int rowIdx) {
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     Cell(rows[visibleIdx[rowIdx]].callsStr);
@@ -589,6 +576,9 @@ namespace tachyon
         for (size_t i = 1; i < columns.size(); ++i)
             columns[i].column.cellStyle = theme.tableCellNumberStyleRef;
         columns[3].column.cellStyle = profilerPctCellStyleRef;
+        // Plain rows (no stripes) and no lines between the columns.
+        tableState.rowStyle         = theme.tableRowStyleRef;
+        tableState.columnSeparators = false;
 
         // The flex-fill row (flex-basis:0) bounds the table to the panel height
         // so its body scrolls internally instead of overflowing the panel.
@@ -603,6 +593,7 @@ namespace tachyon
                      int(visibleIdx.size()), 0, theme.tableStyleRef,
                      LayoutOverride{}.FlexGrow(1));
         EndHorizontal();
+        EndVertical();
 
         // ---- Reflect a changed selection onto the tree -------------------
         // Only on change, so the table's own scroll is never fought.

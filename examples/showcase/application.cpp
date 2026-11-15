@@ -788,6 +788,9 @@ namespace tachyon
         inspectorSectionStyleRef    = theme.GetStyle("inspector-section");
         inspectorSectionFirstStyleRef= theme.GetStyle("inspector-section-first");
         inspectorSectionBodyStyleRef= theme.GetStyle("inspector-section-body");
+        profilerBodyStyleRef        = theme.GetStyle("profiler-body");
+        profilerGraphStyleRef       = theme.GetStyle("profiler-graph");
+        profilerGraphLabelStyleRef  = theme.GetStyle("profiler-graph-label");
         profilerHeaderStyleRef      = theme.GetStyle("profiler-header");
         profilerRecordStyleRef      = theme.GetStyle("profiler-record");
         profilerPauseStyleRef       = theme.GetStyle("profiler-pause");

@@ -128,6 +128,7 @@ namespace tachyon
         StyleRef iconToggleStyleRef, logMessageStyleRef, logCellStyleRef, logCellTimeStyleRef, logCountBadgeStyleRef;
         StyleRef logTableStyleRef, filesToolbarStyleRef, appIconStyleRef;
         StyleRef inspectorPairHalfStyleRef, inspectorCaptionStyleRef, inspectorHeaderStyleRef, inspectorObjectIconStyleRef, inspectorObjectNamesStyleRef, inspectorObjectTitleStyleRef, inspectorObjectPathStyleRef, inspectorSearchRowStyleRef, inspectorSectionStyleRef, inspectorSectionFirstStyleRef, inspectorSectionBodyStyleRef;
+        StyleRef profilerBodyStyleRef, profilerGraphStyleRef, profilerGraphLabelStyleRef;
         StyleRef profilerHeaderStyleRef, profilerRecordStyleRef, profilerPauseStyleRef, profilerMsStyleRef, profilerFpsStyleRef;
         StyleRef profilerPctCellStyleRef, profilerPctTrackStyleRef, profilerPctFillStyleRef, profilerPctTextStyleRef;
         StyleRef logDetailPaneStyleRef, logDetailTextStyleRef;
