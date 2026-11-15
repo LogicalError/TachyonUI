@@ -170,10 +170,10 @@ namespace tachyon
             SetTooltip("Single-line text field");
             if (BeginContextMenu())
             {
-                MenuItem("Cut",        "Ctrl+X", []() { TACHYON_LOG_INFO(kLogShowcase, "Cut"); });
-                MenuItem("Copy",       "Ctrl+C", []() { TACHYON_LOG_INFO(kLogShowcase, "Copy"); });
-                MenuItem("Paste",      "Ctrl+V", []() { TACHYON_LOG_INFO(kLogShowcase, "Paste"); });
-                MenuItem("Select All", "Ctrl+A", []() { TACHYON_LOG_INFO(kLogShowcase, "Select All"); });
+                MenuItem("Cut",        "Ctrl X", []() { TACHYON_LOG_INFO(kLogShowcase, "Cut"); });
+                MenuItem("Copy",       "Ctrl C", []() { TACHYON_LOG_INFO(kLogShowcase, "Copy"); });
+                MenuItem("Paste",      "Ctrl V", []() { TACHYON_LOG_INFO(kLogShowcase, "Paste"); });
+                MenuItem("Select All", "Ctrl A", []() { TACHYON_LOG_INFO(kLogShowcase, "Select All"); });
             }
             EndContextMenu();
         });

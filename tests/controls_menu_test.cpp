@@ -176,6 +176,78 @@ namespace tachyon
             EXPECT_EQ(app.menuManager.menuBarTriggers, (std::vector<ID>{ fileID, helpID }));
         }
 
+        // A dropdown's trigger lays out its content (an icon, if any, and its text), then its
+        // arrow, as parts of its own; a menu bar's menu has no arrow. A click on the text
+        // opens the menu, as one anywhere on the trigger does.
+        TEST_F(ControlsMenuTest, ADropdownShowsItsContentThenItsArrow)
+        {
+            const ID fileID = app.idManager.CreateStaticID();
+            const ID layoutID = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.BeginMenuBar();
+                if (app.BeginMenu(fileID, "File", app.theme.menuBarTriggerStyleRef, app.theme.menuStyleRef, app.theme.menuItemRowStyleRef))
+                    app.MenuItem("New", nullptr);
+                app.EndMenu();
+                if (app.BeginDropdownMenu(layoutID, { app.theme.deleteIcon, "Layouts" }))
+                    app.MenuItem("Graph", nullptr);
+                app.EndMenu();
+                app.EndMenuBar();
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+
+            auto parts = [&](ID trigger) {
+                std::vector<ElementRef> refs;
+                const ElementRef ref = app.elementStorage.FindElementRefByID(trigger);
+                const auto children = app.elementStorage.GetChildRange(ref);
+                for (uint32_t i = children.begin; i < children.end; ++i)
+                    refs.push_back(ElementRef{ ref.depth + 1, i });
+                return refs;
+            };
+            EXPECT_TRUE(parts(fileID).empty()) << "a menu bar's menu: its text only";
+            const std::vector<ElementRef> layout = parts(layoutID);
+            ASSERT_EQ(layout.size(), 2u);
+            const IntRect content = app.elementStorage.GetElementRectUnsafe(layout[0]).rect;
+            const IntRect arrow   = app.elementStorage.GetElementRectUnsafe(layout[1]).rect;
+            EXPECT_EQ(app.CountByText("Layouts"), 1);
+            EXPECT_GT(content.w, 0);
+            EXPECT_GT(arrow.w, 0);
+            EXPECT_LE(content.x + content.w, arrow.x) << "the arrow after the content";
+
+            app.ClickAt({ content.x + content.w / 2, content.y + content.h / 2 });
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.IsOpen());
+            EXPECT_EQ(app.menuManager.levels[0].triggerID, layoutID);
+        }
+
+        // An icon menu button is its icon alone, without an arrow; a click opens its menu.
+        TEST_F(ControlsMenuTest, AnIconMenuButtonHasNoArrow)
+        {
+            const ID moreID = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow();
+                if (app.BeginMenu(moreID, { app.theme.addIcon, {}, "More" }, app.theme.iconMenuButtonStyleRef,
+                                  app.theme.menuStyleRef, app.theme.menuItemRowStyleRef))
+                    app.MenuItem("Rename", nullptr);
+                app.EndMenu();
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.Frame(draw);
+            const ElementRef ref = app.elementStorage.FindElementRefByID(moreID);
+            const auto children = app.elementStorage.GetChildRange(ref);
+            EXPECT_EQ(children.end - children.begin, 1u) << "the icon, no arrow";
+
+            app.ClickAt(app.CenterOf(moreID));
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.IsOpen());
+            EXPECT_TRUE(app.HasElement(app.FindByText("Rename")));
+        }
+
         // A disabled item shows but can't be chosen: a click doesn't run it, and opening
         // the menu doesn't put the keyboard on it. A destructive item takes its own styles.
         TEST_F(ControlsMenuTest, DisabledItemsCantBeChosenAndDestructiveOnesStandOut)
@@ -225,7 +297,7 @@ namespace tachyon
         }
 
         // A shortcut stays at least 24px from its label, however long both are: a menu as wide
-        // as its widest row ("Save As..." and "Ctrl+Shift+S" touched).
+        // as its widest row ("Save As..." and "Ctrl Shift S" touched).
         TEST_F(ControlsMenuTest, AShortcutKeepsItsDistanceFromTheLabel)
         {
             const ID menuID = app.idManager.CreateStaticID();
@@ -234,8 +306,8 @@ namespace tachyon
                 app.BeginRootWindow();
                 if (app.BeginMenu(menuID, "File"))
                 {
-                    app.MenuItem(app.idManager.CreateStaticID(), { app.theme.deleteIcon, "Open" }, "Ctrl+O", [] {});
-                    app.MenuItem(itemID, { app.theme.deleteIcon, "Save a Copy of Everything As..." }, "Ctrl+Shift+Alt+S", [] {});
+                    app.MenuItem(app.idManager.CreateStaticID(), { app.theme.deleteIcon, "Open" }, "Ctrl O", [] {});
+                    app.MenuItem(itemID, { app.theme.deleteIcon, "Save a Copy of Everything As..." }, "Ctrl Shift Alt S", [] {});
                 }
                 app.EndMenu();
                 app.EndRootWindow();
@@ -418,6 +490,48 @@ namespace tachyon
             const auto rect = app.GetElementRect(app.menuManager.levels[0].windowID);
             EXPECT_EQ(rect.x, 300);
             EXPECT_EQ(rect.y, 200);
+        }
+
+        // A menu opened inside a selected scope (a selected tab's context menu) isn't selected:
+        // its items show no checkmark unless they are selected themselves.
+        TEST_F(ControlsMenuTest, AMenuBuiltInASelectedScopeIsntSelected)
+        {
+            const ID target = app.idManager.CreateStaticID();
+            const ID itemID = app.idManager.CreateStaticID();
+            const ID dropID = app.idManager.CreateStaticID();
+            const ID dropItemID = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.guiStateManager.Construction().PushSelected();
+                app.Button(target, "Target", nullptr);
+                if (app.BeginContextMenu(target))
+                    app.MenuItem(itemID, "Close", nullptr);
+                app.EndContextMenu();
+                if (app.BeginMenu(dropID, "Open"))
+                    app.MenuItem(dropItemID, "Rename", nullptr);
+                app.EndMenu();
+                EXPECT_TRUE(app.guiStateManager.Construction().IsSelected()) << "the scope around the menus is back";
+                app.guiStateManager.Construction().PopSelected();
+                app.EndRootWindow();
+            };
+            auto selected = [&](ID id) {
+                return (app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(id)).state & ElementState::Selected)
+                       != ElementState::None;
+            };
+            app.Frame(draw);
+            app.OpenContextMenu(target, app.CenterOf(target));
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.HasElement(itemID));
+            EXPECT_FALSE(selected(itemID));
+
+            app.menuManager.CloseAll(app.guiStateManager);
+            app.Frame(draw);
+            app.ClickAt(app.CenterOf(dropID));
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.HasElement(dropItemID));
+            EXPECT_FALSE(selected(dropItemID));
         }
 
         // A right-click opens the menu where it was clicked, also deep inside a tall target;

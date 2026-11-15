@@ -58,6 +58,7 @@ namespace tachyon::vulkan
         VulkanGraphicsContext();
 
         tachyon::GraphicsAPI GetAPI() const override { return tachyon::GraphicsAPI::Vulkan; }
+        std::string_view GetDeviceName() const override { return deviceContext.deviceName; }
 
         // ---- Setup, before GUIApplication::Initialize (see VulkanDeviceContext) ----
         /// Render on the host's device instead of creating one.

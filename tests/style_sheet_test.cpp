@@ -848,6 +848,23 @@ namespace tachyon
         }
     }
 
+    // Trees go by indent alone in the shipped themes: their guide lines are see-through.
+    TEST(StyleSheet, ShippedThemesDrawNoTreeGuides)
+    {
+        for (const char* palette : { "themes/dark.css", "themes/light.css" })
+        {
+            std::ifstream paletteFile(palette), stylesFile("themes/styles.css");
+            ASSERT_TRUE(paletteFile.good() && stylesFile.good()) << palette;
+            std::ostringstream ss;
+            ss << paletteFile.rdbuf() << '\n' << stylesFile.rdbuf();
+            const StyleSheet s = ParseStyleSheet(ss.view());
+            const CustomProperty* guide = s.GetCustomProperty("--tree-guide");
+            ASSERT_NE(guide, nullptr) << palette;
+            ASSERT_TRUE(guide->hasColor) << palette;
+            EXPECT_EQ(guide->color.a, 0) << palette;
+        }
+    }
+
     // Bars, separators and toolbar thumbs get their sizes from the stylesheet.
     TEST(StyleSheet, ShippedChromeSizesComeFromTheStylesheet)
     {

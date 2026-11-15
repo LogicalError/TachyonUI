@@ -68,6 +68,7 @@ namespace
         NullBackendApp app;
         ASSERT_TRUE(app.Start());
         EXPECT_EQ(app.graphicsContext->GetAPI(), tachyon::GraphicsAPI::None);
+        EXPECT_TRUE(app.graphicsContext->GetDeviceName().empty()) << "no GPU";
         EXPECT_TRUE(app.Run());
         EXPECT_EQ(app.frame, app.frames);
         EXPECT_NE(app.windowManager->GetWindowHandle(app.windowID), nullptr) << "the window exists";

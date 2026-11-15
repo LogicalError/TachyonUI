@@ -42,8 +42,13 @@ Field(logText, TextEditBehavior::Multiline | TextEditBehavior::ReadOnly);
 
 A text field with an icon at the start, inside the border.
 
+- The icon is a `GUIContent`'s icon; its text is the placeholder.
+  - The placeholder shows, dimmed, while the field is empty.
+    - For example, "Filter objects" until something is typed.
+  - An icon alone converts to a `GUIContent`, for a field without one.
+
 ```cpp
-bool SearchField(ID id, std::string& value, IconID icon, TextEditBehavior textEditBehavior,
+bool SearchField(ID id, std::string& value, const GUIContent& content, TextEditBehavior textEditBehavior,
                  StyleRef style, LayoutOverride&& constraints = {});
 ```
 
@@ -52,7 +57,13 @@ if (SearchField(filter, searchIcon))   // member: IconID searchIcon
     filterDirty = true;
 ```
 
-Classes: `search-textbox`, `search-textbox-icon`, `search-textbox-field`.
+```cpp
+if (SearchField(filter, { searchIcon, "Filter objects" }))   // with a placeholder
+    filterDirty = true;
+```
+
+Classes: `search-textbox`, `search-textbox-icon`, `search-textbox-field`, and `field-placeholder` for
+the placeholder.
 
 ## AutocompleteField
 

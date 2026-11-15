@@ -42,6 +42,7 @@ namespace
         EXPECT_GT(app.styleManager.LayoutStyleCount(), 1u) << "the theme is loaded, not only the fallback style";
         EXPECT_TRUE(static_cast<bool>(app.onGui)) << "windows repaint during an OS resize";
         EXPECT_TRUE(app.inputManager->PopGlobalHandler()) << "command shortcuts are routed";
+        EXPECT_FALSE(app.graphicsContext->GetDeviceName().empty()) << "the GPU it renders with is named";
         app.Cleanup();
     }
 

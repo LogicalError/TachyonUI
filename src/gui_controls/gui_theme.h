@@ -336,6 +336,7 @@ namespace tachyon
         ///@{
         StyleRef commandSearchStyleRef {};
         StyleRef commandSearchHintStyleRef {};
+        StyleRef fieldPlaceholderStyleRef {};   ///< a field's placeholder while it is empty (SearchField)
         StyleRef commandSearchKeyStyleRef {};
         StyleRef commandSearchListStyleRef {};
         StyleRef commandSearchCurrentRowStyleRef {};
@@ -392,6 +393,19 @@ namespace tachyon
         StyleRef menuBarStyleRef {};        ///< horizontal strip at the top of the main window
         StyleRef menuBarTriggerStyleRef {}; ///< flat top-level trigger inside the menu bar
         StyleRef menuBarDropdownStyleRef {}; ///< a dropdown in the menu bar or title bar (BeginDropdownMenu)
+        /// A menu opened from an icon alone, without an arrow ("+", "..."): BeginMenu's button style.
+        StyleRef iconMenuButtonStyleRef {};
+
+        /// A dropdown trigger's parts, laid out inside its box: its content (an icon, if any,
+        /// and the text) and then the arrow. CSS: `<trigger class>-text`, `<trigger class>-arrow`.
+        struct DropdownParts
+        {
+            StyleRef content {};
+            StyleRef arrow {};
+        };
+        /// The parts of the trigger in `button`'s style; the plain `dropdown-text` and
+        /// `dropdown-arrow` for a style without parts of its own.
+        DropdownParts DropdownPartsFor(StyleRef button) const;
         StyleRef titleBarStyleRef {};            ///< a window's own title bar (BeginTitleBar)
         StyleRef titleBarButtonStyleRef {};      ///< its minimize and maximize buttons
         StyleRef titleBarCloseButtonStyleRef {}; ///< its close button
@@ -754,7 +768,7 @@ namespace tachyon
         tachyon::VisualColorStyleIndex lineYellowStyle;        ///< --warn
         tachyon::VisualColorStyleIndex lineWhiteStyle;         ///< --text-1
         tachyon::VisualColorStyleIndex lineDarkStyle;          ///< --bg-app
-        tachyon::VisualColorStyleIndex treeGuideLineStyle;     ///< --line-node: tree guide lines
+        tachyon::VisualColorStyleIndex treeGuideLineStyle;     ///< --tree-guide: tree guide lines (transparent: none)
         tachyon::VisualColorStyleIndex dividerHoverLineStyle; ///< a hovered divider drawn as a line (label sizer)
         tachyon::VisualColorStyleIndex nanTextColor;          ///< a number field's NaN
         /// TimelineEditor's keys: a key, its edge, a selected key and its edge, a group's
@@ -873,6 +887,9 @@ namespace tachyon
         bool m_isLight = false;
         std::map<std::string, StyleRef, std::less<>> m_classStyles;  ///< every class in the style files
         mutable std::set<std::string, std::less<>>   m_missingWarned;
+        /// Each dropdown trigger style's parts (DropdownPartsFor); a few, so a vector.
+        std::vector<std::pair<StyleRef, DropdownParts>> m_dropdownParts;
+        DropdownParts                                   m_plainDropdownParts;
     };
 
     /// @}

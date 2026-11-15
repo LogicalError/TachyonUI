@@ -569,7 +569,12 @@ namespace tachyon
                     if (value.IsString())
                         variables[name] = value.AsString();
             }
-            if (restored != m_themeVariables)
+            // A theme without changes is the same whether it has an empty set or none.
+            auto withoutEmpty = [](decltype(m_themeVariables) sets) {
+                std::erase_if(sets, [](const auto& entry) { return entry.second.empty(); });
+                return sets;
+            };
+            if (withoutEmpty(restored) != withoutEmpty(m_themeVariables))
             {
                 m_themeVariables = std::move(restored);
                 m_themeReloadPending = true;

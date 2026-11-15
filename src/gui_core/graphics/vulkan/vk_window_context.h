@@ -111,7 +111,6 @@ namespace tachyon::vulkan
         /// Recorded and submitted, waiting for PresentWindowFrame.
         bool                     presentPending{ false };
         FrameData*               readbackPending{ nullptr };
-        tachyon::int2         recordedPosition{};
 
         /// Transparent window: each frame is read back for the Windows layered window.
         bool                     needsReadback{ false };
@@ -153,7 +152,7 @@ namespace tachyon::vulkan
         void TransitionTarget(VkCommandBuffer cmd, VkImageLayout from, VkImageLayout to,
                               VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess,
                               VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess);
-        void UpdateLayeredWindowFromCache(int screenX, int screenY);
+        void UpdateLayeredWindowFromCache();
 
         static VulkanWindowContext* Create(tachyon::ID id, void* nativeHandle, tachyon::OSWindowHandle osHandle, tachyon::int2 size, tachyon::WindowFlags windowFlags, VulkanDeviceContext* deviceContext, tachyon::OnGuiFunc onGUI);
         void Destroy();
@@ -167,7 +166,7 @@ namespace tachyon::vulkan
         bool NeedsRecord() const override { return resize_requested; }
         void RecordFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing);
         
-        void UpdateTransparentWindow(tachyon::int2 screenPos) override;
+        void UpdateTransparentWindow() override;
 
         tachyon::OSWindowHandle GetWindowHandle() const override { return osHandle; }
     };

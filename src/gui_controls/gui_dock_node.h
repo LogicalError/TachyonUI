@@ -135,6 +135,10 @@ namespace tachyon
     DockNode*       FindNode(DockNode* root, ID nodeID);
     const DockNode* FindNode(const DockNode* root, ID nodeID);
 
+    /// Adds `panelID` as the last tab of the leaf with `leafNodeID` and selects it. False
+    /// when there is no such leaf.
+    bool AddPanelToLeaf(DockNode* root, ID leafNodeID, ID panelID);
+
     /// An inclusive splitSize range, in CSS px.
     struct SplitSizeRange { int min; int max; };
     /// Allowed splitSize range: min = the pinned child's minimum,

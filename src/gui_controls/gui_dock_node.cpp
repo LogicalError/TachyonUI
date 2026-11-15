@@ -211,6 +211,16 @@ namespace tachyon
 
     // ---- Lookup --------------------------------------------------------------
 
+    bool AddPanelToLeaf(DockNode* root, ID leafNodeID, ID panelID)
+    {
+        DockNode* leaf = FindNode(root, leafNodeID);
+        if (!leaf || !leaf->isLeaf)
+            return false;
+        leaf->panelIds.push_back(panelID);
+        leaf->selectedTab = int(leaf->panelIds.size()) - 1;
+        return true;
+    }
+
     DockNode* FindNode(DockNode* root, ID nodeID)
     {
         if (!root) return nullptr;

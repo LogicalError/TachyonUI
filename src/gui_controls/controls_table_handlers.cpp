@@ -474,6 +474,29 @@ namespace tachyon
                     return TreeDropPosition::After;
                 };
 
+                // A gap between two rows has one drop line. Below this row is the same place
+                // as above the next one when the next row is where the drop goes: a sibling
+                // after this row, or an open branch's first child. Then it's the next row's
+                // Before.
+                struct DropTarget { tachyon::ID rowID; TreeDropPosition position; int depth; };
+                auto resolveTarget = [&](TreeDropPosition pos) -> DropTarget
+                {
+                    const auto* info  = state->FindTreeRow(rowID);
+                    const int   depth = info ? info->depth : 0;
+                    if ((pos != TreeDropPosition::After && pos != TreeDropPosition::Inside)
+                        || rowID.GetMode() != tachyon::IDMode::SubRange)
+                        return { rowID, pos, depth };
+                    const int vis = state->DatasetToVisual(int(rowID.value.subRangeParts.index));
+                    if (vis < 0 || vis + 1 >= state->internal.totalRowCount)
+                        return { rowID, pos, depth };
+                    const tachyon::ID next = state->RowIDInRange(state->VisualToDataset(vis + 1));
+                    const auto* nextInfo = state->FindTreeRow(next);
+                    const int lineDepth = pos == TreeDropPosition::Inside ? depth + 1 : depth;
+                    if (nextInfo && nextInfo->depth == lineDepth)
+                        return { next, TreeDropPosition::Before, nextInfo->depth };
+                    return { rowID, pos, depth };
+                };
+
                 // Auto-scroll near the body's top/bottom edge during a drag. Edge zones
                 // start below the sticky header and above the H-scrollbar.
                 auto autoScrollY = [&]() {
@@ -543,10 +566,15 @@ namespace tachyon
                             if (m_treeDropState.targetRowID == rowID) m_treeDropState = {};
                             return true;
                         }
-                        const auto* info = state->FindTreeRow(rowID);
-                        m_treeDropState.targetRowID  = rowID;
-                        m_treeDropState.position     = computeZone(event.rect->rect);
-                        m_treeDropState.targetDepth  = info ? info->depth : 0;
+                        const DropTarget target = resolveTarget(computeZone(event.rect->rect));
+                        if (target.rowID == event.state.dragSourceID)   // right above the dragged row: it stays
+                        {
+                            m_treeDropState = {};
+                            return true;
+                        }
+                        m_treeDropState.targetRowID  = target.rowID;
+                        m_treeDropState.position     = target.position;
+                        m_treeDropState.targetDepth  = target.depth;
                         return true;
                     }
                     case tachyon::EventType::DragOut:
@@ -564,11 +592,11 @@ namespace tachyon
                             m_treeDropState = {};
                             return true;
                         }
-                        TreeDropPosition pos = event.rect
+                        const DropTarget target = resolveTarget(event.rect
                             ? computeZone(event.rect->rect)
-                            : TreeDropPosition::None;
-                        if (pos != TreeDropPosition::None && dd->onReorder)
-                            dd->onReorder(event.state.dragPayloadValue, rowID, pos);
+                            : TreeDropPosition::None);
+                        if (target.position != TreeDropPosition::None && dd->onReorder)
+                            dd->onReorder(event.state.dragPayloadValue, target.rowID, target.position);
                         m_treeDropState = {};
                         return true;
                     }

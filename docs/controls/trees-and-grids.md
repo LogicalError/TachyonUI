@@ -19,6 +19,7 @@ void VirtualTreeView(ID id, std::vector<TreeViewRow>& rows, std::vector<int>& vi
                      StyleRef style = {}, LayoutOverride&& constraints = {}, std::string_view header = {});
 static void RebuildTreeViewIndex(std::vector<TreeViewRow>& rows);
 static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows, std::vector<int>& visibleIdx);
+static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows, std::vector<int>& visibleIdx, TableState& state);
 ID TreeDropTargetRow() const;
 ```
 

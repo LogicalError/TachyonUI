@@ -307,6 +307,7 @@ namespace tachyon
                 ReportMisuse("GUIApplication: a BeginWindow / BeginMenu / BeginTooltip / BeginCached without its End at end of frame (closed)");
                 m_windowOpen.clear();
                 m_menuOpen.clear();
+                m_menuScopes.clear();
                 m_tooltipOpen.clear();
                 m_cachedOpen.clear();
             }

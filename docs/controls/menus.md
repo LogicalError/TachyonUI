@@ -15,17 +15,32 @@ What `BeginMenu` draws depends on where you call it:
 either way.
 
 ```cpp
-bool BeginMenu(ID id, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle,
+bool BeginMenu(ID id, const GUIContent& content, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle,
                LayoutOverride&& constraints = {});
 void EndMenu();
 ```
 
+- `content` is the trigger's text, with an optional icon before it and an optional tooltip.
+  - A plain string converts to it: `BeginMenu("View")`.
 - `buttonStyle` is the trigger's style, `menuStyle` the popup's, `itemStyle` the items'.
+- A dropdown button lays out its content and then the arrow, as parts of its own.
+  - Each trigger class has its parts: `<class>-text` and `<class>-arrow`, such as `menu-trigger-text`.
+  - A class without parts of its own uses `dropdown-text` and `dropdown-arrow`.
 - The CSS classes:
   - `menu-trigger` for the trigger
   - `toolbar-menu-trigger` for a trigger in a toolbar
   - `menu` for the popup
   - `menu-item-row` for the items
+
+A menu opened from an icon alone, such as a tab group's "+", takes the
+`icon-menu-button` style: a 24px square with no arrow.
+
+```cpp
+if (BeginMenu(addMenuID, { addIcon, {}, "Add object" }, theme.iconMenuButtonStyleRef,
+              theme.menuStyleRef, theme.menuItemRowStyleRef))
+    MenuItem("Cube", [this] { AddCube(); });
+EndMenu();
+```
 
 ```cpp
 if (BeginMenu(menuID, "Choose...", LayoutOverride{}.NoGrow().NoShrink()))
@@ -63,7 +78,7 @@ To let the user pick one value from a list, use [`Dropdown`](fields.md#dropdown)
 `BeginDropdownMenu` is a `BeginMenu` that stays a dropdown button inside a menu bar or
 title bar:
 
-- It has the dropdown arrow after its text.
+- It has the dropdown arrow after its text, and an icon before it when `content` has one.
   - In the theme's style, `menu-bar-dropdown`: flat like the bar's menus, with a small
     arrow on the right, as the document bar's "N open".
 - It isn't one of the bar's menus: Left and Right in the bar skip it.
@@ -71,15 +86,15 @@ title bar:
   picker in its title bar.
 
 ```cpp
-bool BeginDropdownMenu(ID id, std::string_view text, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle,
+bool BeginDropdownMenu(ID id, const GUIContent& content, StyleRef buttonStyle, StyleRef menuStyle, StyleRef itemStyle,
                        LayoutOverride&& constraints = {});
-bool BeginDropdownMenu(ID id, std::string_view text, LayoutOverride&& constraints = {});   // menu-bar-dropdown
+bool BeginDropdownMenu(ID id, const GUIContent& content, LayoutOverride&& constraints = {});   // menu-bar-dropdown
 ```
 
 ```cpp
 BeginTitleBar(titleBarID);
 // ... File, Edit, View ...
-if (BeginDropdownMenu(layoutMenuID, "Layouts"))
+if (BeginDropdownMenu(layoutMenuID, { layoutsIcon, "Layouts" }))
 {
     for (const LayoutPreset& preset : presets.All())
         MenuItem(preset.name, [this, name = preset.name] { pendingPreset = name; });
@@ -119,7 +134,7 @@ bool MenuItem(CommandID command);
 - An item shows, from left to right:
   - an optional icon
   - its label
-  - optional shortcut text, such as "Ctrl+C"
+  - optional shortcut text, such as "Ctrl C" (keys apart by spaces, as registered commands show theirs)
 - If any item in the menu has an icon or is selected, all its items leave room for the
   icon, so the labels line up.
 - `content` is a [`GUIContent`](../overview/values.md#guicontent): text, an icon, or both.
@@ -129,7 +144,7 @@ bool MenuItem(CommandID command);
   - `menu-item-arrow` for the arrow of an item that opens a submenu
 
 ```cpp
-MenuItem("Copy", "Ctrl+C", [this] { Copy(); });
+MenuItem("Copy", "Ctrl C", [this] { Copy(); });
 ```
 
 The `CommandID` form takes the icon, label, shortcut and callback from a command you
@@ -154,7 +169,7 @@ if (BeginMenu("Edit"))
 {
     MenuFilter();
     MenuHeader("Clipboard");
-    MenuItem("Copy", "Ctrl+C", [this] { Copy(); });
+    MenuItem("Copy", "Ctrl C", [this] { Copy(); });
     MenuSeparator();
     DestructiveMenuItem({ theme.deleteIcon, "Delete" }, "Del", [this] { DeleteSelection(); });
 }
@@ -204,7 +219,7 @@ WindowHitArea TitleBarHitTest(ID windowID, int2 screenPos) const;
 BeginMenuBar();
 if (BeginMenu("File"))
 {
-    MenuItem("Open", "Ctrl+O", [this] { Open(); });
+    MenuItem("Open", "Ctrl O", [this] { Open(); });
     MenuSeparator();
     MenuItem("Quit", [this] { applicationQuit = true; });
 }

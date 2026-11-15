@@ -482,6 +482,8 @@ namespace tachyon
     {
         const bool open = OpenContextMenuWindow(targetID);
         m_menuOpen.push_back(open);   // EndContextMenu is EndMenu
+        if (open)
+            m_menuScopes.push_back(guiStateManager.Construction().SetAside());
         return open;
     }
 

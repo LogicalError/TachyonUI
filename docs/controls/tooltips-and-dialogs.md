@@ -34,7 +34,7 @@ void EndTooltip();
 
 ```cpp
 Button(saveIcon, [this] { Save(); });
-SetTooltip("Save scene", "Ctrl+S");
+SetTooltip("Save scene", "Ctrl S");
 ```
 
 ```cpp

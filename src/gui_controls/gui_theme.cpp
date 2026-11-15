@@ -285,6 +285,14 @@ namespace tachyon
         return it != m_variableValues.end() ? &it->second : nullptr;
     }
 
+    GUITheme::DropdownParts GUITheme::DropdownPartsFor(StyleRef button) const
+    {
+        for (const auto& [trigger, parts] : m_dropdownParts)
+            if (trigger == button)
+                return parts;
+        return m_plainDropdownParts;
+    }
+
     VisualColorStyleIndex GUITheme::VariableColor(StyleManager& styleManager, const char* name, color4f fallback)
     {
         const auto it = m_variableValues.find(name);
@@ -443,7 +451,7 @@ namespace tachyon
         lineYellowStyle    = lineColorFromCSS("--warn", color4f{ 1.0f, 0.8f, 0.2f, 1.0f });
         lineWhiteStyle     = lineColorFromCSS("--text-1", color4f{ 1.0f, 1.0f, 1.0f, 1.0f });
         lineDarkStyle      = lineColorFromCSS("--bg-app", color4f{ 0.1f, 0.1f, 0.1f, 1.0f });
-        treeGuideLineStyle = lineColorFromCSS("--line-node", color4f{ 0.5f, 0.5f, 0.5f, 1.0f });
+        treeGuideLineStyle = lineColorFromCSS("--tree-guide", color4f{ 0.5f, 0.5f, 0.5f, 1.0f });
         dividerHoverLineStyle = lineColorFromCSS("--divider-hover", color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
         progressTrackColor    = lineColorFromCSS("--line-subtle", color4f{ 0.14f, 0.15f, 0.18f, 1.0f });
         progressArcColor      = lineColorFromCSS("--accent", color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
@@ -778,6 +786,7 @@ namespace tachyon
         statusTextStyleRef                = registerCSS("status-text");
         commandSearchStyleRef             = registerCSS("command-search");
         commandSearchHintStyleRef         = registerCSS("command-search-hint");
+        fieldPlaceholderStyleRef          = registerCSS("field-placeholder");
         commandSearchKeyStyleRef          = registerCSS("command-search-key");
         commandSearchListStyleRef         = registerCSS("command-search-list");
         commandSearchCurrentRowStyleRef   = registerCSS("command-search-current-row");
@@ -1109,6 +1118,24 @@ namespace tachyon
         menuBarStyleRef                   = registerCSS("menu-bar");
         menuBarTriggerStyleRef            = registerCSS("menu-bar-trigger");
         menuBarDropdownStyleRef           = registerCSS("menu-bar-dropdown");
+        iconMenuButtonStyleRef            = registerCSS("icon-menu-button");
+        // Each dropdown trigger's parts: its content, then its arrow.
+        {
+            auto partsOf = [&](std::string_view trigger) {
+                const std::string name(trigger);
+                return DropdownParts{ registerCSS(name + "-text"), registerCSS(name + "-arrow") };
+            };
+            m_plainDropdownParts = partsOf("dropdown");
+            m_dropdownParts = {
+                { regularControls.menuTrigger, partsOf("menu-trigger") },
+                { toolbarControls.menuTrigger, partsOf("toolbar-menu-trigger") },
+                { menuBarDropdownStyleRef,     partsOf("menu-bar-dropdown") },
+                { documentListStyleRef,        partsOf("document-list") },
+                { tabOverflowStyleRef,         partsOf("tab-overflow") },
+                { timelineFpsStyleRef,         partsOf("timeline-fps") },
+                { iconMenuButtonStyleRef,      DropdownParts{ registerCSS("icon-menu-button-text"), StyleRef::Invalid() } },
+            };
+        }
         titleBarStyleRef                  = registerCSS("title-bar");
         titleBarButtonStyleRef            = registerCSS("title-bar-button");
         titleBarCloseButtonStyleRef       = registerCSS("title-bar-close-button");

@@ -92,8 +92,9 @@ namespace tachyon
         /// (its swapchain is out of date). False by default.
         virtual bool NeedsRecord() const { return false; }
         /// A transparent window the OS composites from a CPU copy (a layered window on
-        /// Windows): shows its last frame again at screenPos (screen pixels). The default does nothing.
-        virtual void UpdateTransparentWindow(int2 /*screenPos*/) {}
+        /// Windows): shows its last frame again, where the window is. Only its picture: the
+        /// window manager places it. The default does nothing.
+        virtual void UpdateTransparentWindow() {}
 
         /// The last rendered frame, BGRA8 with tightly packed rows; bgra holds width x
         /// height x 4 bytes of the window's pixel size. False when it can't be read.

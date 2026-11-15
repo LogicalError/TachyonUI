@@ -146,7 +146,7 @@ namespace tachyon
         return modified;
     }
 
-    bool GUIApplication::SearchField(ID id, std::string& value, IconID icon, TextEditBehavior textEditBehavior, StyleRef style, LayoutOverride&& constraints, ID* outFieldID)
+    bool GUIApplication::SearchField(ID id, std::string& value, const GUIContent& content, TextEditBehavior textEditBehavior, StyleRef style, LayoutOverride&& constraints, ID* outFieldID)
     {
         // The container draws the textbox chrome and takes the inner field's
         // hover/focus state (PropagatesDescendantState); the field itself is borderless.
@@ -163,7 +163,7 @@ namespace tachyon
             const tachyon::ID iconID = idManager.AllocateDynamicID("searchIcon");
             tachyon::Element iconElem{};
             iconElem.id       = iconID;
-            iconElem.iconID   = icon;
+            iconElem.iconID   = content.icon;
             iconElem.flags    = ElementFlags::NoInput;
             iconElem.state    = guiStateManager.GetCurrentState(iconID);
             iconElem.styleRef = theme.searchTextboxIconStyleRef;
@@ -178,6 +178,11 @@ namespace tachyon
                                     value, textEditBehavior,
                                     theme.searchTextboxFieldStyleRef,
                                     tachyon::LayoutOverride{}.FlexGrow(1));
+        // The placeholder lies over the empty field, where its text would start.
+        if (value.empty() && !content.text.empty())
+            RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("placeholder"), .styleRef = theme.fieldPlaceholderStyleRef,
+                                              .flags = ElementFlags::NoInput },
+                            content.text, LayoutOverride{}.Anchored(fieldID, AnchorPlacement::InsideLeft | AnchorPlacement::CenterVert));
 
         if (pushed) (void)idManager.PopParent();
         VERIFY(elementStorage.EndChildren());

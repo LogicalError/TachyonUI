@@ -166,4 +166,41 @@ TEST(GpuGhostWindow, ACursorGhostWindowIsShownWithItsIcon)
     EXPECT_GT(opaque, 0u) << "the ghost's icon and background reached the layered window";
     app.Cleanup();
 }
+
+// A ghost follows the cursor without what it draws changing, so its frames aren't drawn
+// again. It stays where it moved to: showing its last frame doesn't put it back where that
+// frame was drawn.
+TEST(GpuGhostWindow, AGhostMovedWithoutChangingStaysWhereItMoved)
+{
+    GhostApp app;
+    if (!app.Initialize())
+    {
+        app.Cleanup();
+        GTEST_SKIP() << "no Vulkan device or window system available";
+    }
+    app.ghostID = app.idManager.CreateStaticID();
+    auto frames = [&](int count) {
+        for (int frame = 0; frame < count && app.UpdateFrame(); ++frame)
+        {
+            if (!app.RecordFrame()) return false;
+            app.PresentFrame();
+        }
+        return true;
+    };
+    ASSERT_TRUE(frames(4));
+    const tachyon::OSWindowHandle handle = app.windowManager->GetWindowHandle(app.ghostID);
+    ASSERT_NE(handle, nullptr);
+    const HWND hwnd = static_cast<HWND>(app.windowBackend->GetNativeHandle(handle));
+    ASSERT_NE(hwnd, nullptr);
+    RECT first{};
+    GetWindowRect(hwnd, &first);
+
+    app.cursor += tachyon::int2{ 150, 80 };
+    ASSERT_TRUE(frames(4));
+    RECT moved{};
+    GetWindowRect(hwnd, &moved);
+    EXPECT_EQ(moved.left - first.left, 150) << "the window is where the cursor took it";
+    EXPECT_EQ(moved.top - first.top, 80);
+    app.Cleanup();
+}
 #endif

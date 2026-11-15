@@ -223,6 +223,7 @@ if(TACHYON_SDL)
     gpu/gpu_cut_text_test.cpp
     gpu/gpu_message_dialog_test.cpp
     gpu/gpu_node_view_test.cpp
+    gpu/gpu_tree_drop_line_test.cpp
     gpu/gpu_invalid_field_test.cpp
     gpu/gpu_theme_crossfade_test.cpp
     gpu/gpu_sdl_host_event_loop_test.cpp

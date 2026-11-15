@@ -495,6 +495,31 @@ namespace tachyon
             EXPECT_EQ(app.theme.GetVariable("--radius-md")->number, 5.0f);
         }
 
+        // No changes saved and none made: restoring loads nothing, though the theme has been
+        // asked for its (empty) set of changes, which an empty set saved is the same as.
+        TEST_F(ThemeVariableChanges, RestoringNoChangesDoesntLoadTheThemeAgain)
+        {
+            app.PersistThemeVariables("themeVariables");
+            Frame();
+            const std::string saved = app.SaveUIState();
+            app.ClearThemeVariables();   // asks for the theme's set of changes: none
+            Frame();
+
+            int loads = 0;
+            auto counter = [](const Diagnostics::LogRecord& record, void* context) {
+                if (record.messageTemplate.starts_with("loaded "))
+                    ++*static_cast<int*>(context);
+            };
+            const Diagnostics::LogSeverity before = Diagnostics::GetMinimumLogSeverity();
+            Diagnostics::SetMinimumLogSeverity(Diagnostics::LogSeverity::Info);   // the load is an info record
+            ASSERT_TRUE(Diagnostics::AddLogSink(counter, &loads));
+            ASSERT_TRUE(app.RestoreUIState(saved));
+            Frame();
+            Diagnostics::RemoveLogSink(counter, &loads);
+            Diagnostics::SetMinimumLogSeverity(before);
+            EXPECT_EQ(loads, 0);
+        }
+
         // Shut down right after a reset, with the reload still to come: nothing left dangling.
         TEST_F(ThemeVariableChanges, ShutsDownAfterAReset)
         {

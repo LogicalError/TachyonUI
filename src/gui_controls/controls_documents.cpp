@@ -415,6 +415,7 @@ namespace tachyon
     {
         if (Document* const active = set.Active())
         {
+            active->layout.newTabMenu = set.newTabMenu;
             BeginDockingContainer(active->internal.dockID, &active->layout, theme.dockContainerMainStyleRef, std::move(constraints));
             EndDockingContainer();
         }
