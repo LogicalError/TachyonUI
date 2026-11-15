@@ -3216,7 +3216,7 @@ namespace tachyon
         /// Releases the captured frames.
         void EndThemeCrossfade();
         float       m_displayScale { 1.0f };
-        FrameClock  m_frameClock;   ///< animation time, vsync-paced
+        FrameClock  m_frameClock;   ///< animation time, snapped to the refresh while vsync-locked
         bool        m_themeReloadPending { false };
 
         // ---- Redrawing only when needed (SetRedrawMode) ----
@@ -3229,9 +3229,13 @@ namespace tachyon
         int64_t        m_frameTickNanos = 0;             ///< steady-clock ns the frame clock last ticked at
         bool           m_paceFrames     = false;         ///< Run is the loop: PresentFrame paces frames to the display
         std::thread::id m_uiThread;                      ///< Initialize's: a request from any other wakes the backend
-        /// In PresentFrame under Run: when the frame took less than a refresh period (present
-        /// didn't wait for vsync), sleeps the rest of it (FramePaceWaitSeconds).
-        void PaceFrame();
+        VsyncLock      m_vsyncLock;                      ///< whether presents wait for the vsync
+        /// In PresentFrame under Run: when the frame took less than a refresh period of `hz`
+        /// (present didn't wait for vsync), sleeps the rest of it (FramePaceWaitSeconds).
+        void PaceFrame(float hz);
+        /// The rate the frame clock snaps to: the windows' common refresh rate while presents
+        /// are locked to the vsync; 0 (the wall clock) otherwise.
+        float AnimationRefreshRate() const;
         /// A frame at frame-clock time `frameSecs`, for a control that changes by itself later
         /// (a toast hiding). Call while building.
         void ScheduleFrameAt(float frameSecs) { m_buildTimerAt = std::min(m_buildTimerAt, frameSecs); }

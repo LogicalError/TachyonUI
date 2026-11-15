@@ -11,8 +11,8 @@ namespace tachyon
     /// vsyncs, a whole number of refresh periods after the previous one, but the CPU
     /// sees those intervals with jitter. The clock advances by whole periods,
     /// rounded against the wall clock, so animations step evenly and never drift
-    /// from real time by more than half a period. Without a known refresh rate it
-    /// follows the wall clock.
+    /// from real time by more than half a period. Without a refresh rate (0: unknown,
+    /// or frames not locked to one, see VsyncLock) it follows the wall clock.
     class FrameClock
     {
     public:
@@ -46,5 +46,30 @@ namespace tachyon
     /// `frameStartNanos` and `nowNanos` are SteadyClockNowNanos timestamps; `refreshHz` is
     /// 0 when unknown, taken as 60 Hz. 0 when the frame needs no wait.
     double FramePaceWaitSeconds(int64_t frameStartNanos, int64_t nowNanos, float refreshHz);
+
+    /// Whether frames are locked to the vsync, told by how long presenting them waited. A
+    /// window the driver flips on the vsync waits most of a period in present; one the OS
+    /// compositor draws (an unfocused window on Windows, a mailbox swapchain) returns at
+    /// once, and its frames are shown on whichever vsync the compositor picks. FrameClock
+    /// snaps to the refresh only while locked. It switches after kFramesToSwitch presents
+    /// in a row say so, so one long frame, which leaves present nothing to wait for, doesn't
+    /// unlock it.
+    class VsyncLock
+    {
+    public:
+        /// Presents in a row that waited, or didn't, before the lock changes.
+        static constexpr int    kFramesToSwitch = 3;
+        /// The share of a refresh period present must wait to count as a vsync wait.
+        static constexpr double kWaitedShare    = 0.1;
+
+        /// After presenting a frame: the seconds present took; `refreshHz` 0 when unknown,
+        /// which counts as not waiting.
+        void NotePresent(double presentSeconds, float refreshHz);
+        bool IsLocked() const { return m_locked; }
+
+    private:
+        int8_t m_streak = 0;   ///< presents in a row that disagree with m_locked
+        bool   m_locked = false;
+    };
     /// @}
 }

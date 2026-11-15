@@ -162,7 +162,7 @@ namespace tachyon::vulkan
 
         void RenderWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing) override;
         void RecordWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect) override;
-        void PresentWindowFrame() override;
+        std::optional<double> PresentWindowFrame() override;
         bool NeedsRecord() const override { return resize_requested; }
         void RecordFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing);
         

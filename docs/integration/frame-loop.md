@@ -83,6 +83,23 @@ for.
     waits for the other.
 - In your own loop you pace frames yourself: `PresentFrame` doesn't sleep.
 
+### Animation time
+
+Animations (transitions, spinners, smooth scrolling) read the frame's time, and it's chosen to
+make motion look even.
+
+- While presents wait for the vsync and every window is on a monitor of the same refresh
+  rate, the time moves in whole refresh periods.
+  - Frames reach the screen exactly one period apart, but the CPU starts them with jitter;
+    whole periods hide that jitter, so a scroll moves the same distance every frame.
+  - For example, at 120 Hz each frame is 8.33 ms later, though the CPU saw 7.9, 8.8, 8.1 ms.
+- Otherwise it's the wall clock at the start of the frame:
+  - when the compositor draws the window, which then shows frames on whichever refresh it
+    picks
+  - when the windows are on monitors of different rates, such as 60 Hz and 144 Hz, where no
+    single period fits both
+- It switches after a few frames agree, so one slow frame doesn't change it.
+
 ### When your app changes something by itself
 
 The library sees input and its own animations. It can't see a change that comes from your

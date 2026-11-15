@@ -720,11 +720,19 @@ namespace tachyon
         return {};
     }
 
-    void GUIApplication::PaceFrame()
+    float GUIApplication::AnimationRefreshRate() const
     {
-        // The fastest monitor with a window on it: each gets a frame every refresh, and the
-        // compositor drops the extra ones a slower monitor can't show.
-        const float   hz    = windowManager ? windowManager->FastestRefreshRate() : 0.0f;
+        // Snapping to the refresh evens out the CPU's jitter only when frames reach the screen
+        // a whole number of periods apart: presents locked to the vsync, every window on a
+        // monitor of the same rate. Otherwise the wall clock is nearer the truth.
+        if (!windowManager || !m_vsyncLock.IsLocked())
+            return 0.0f;
+        const float fastest = windowManager->FastestRefreshRate();
+        return fastest == windowManager->SlowestRefreshRate() ? fastest : 0.0f;
+    }
+
+    void GUIApplication::PaceFrame(float hz)
+    {
         const int64_t start = std::chrono::duration_cast<std::chrono::nanoseconds>(m_frameStart.time_since_epoch()).count();
         const double  wait  = FramePaceWaitSeconds(start, SteadyClockNowNanos(), hz);
         if (wait <= 0.0 || windowBackend == nullptr)
@@ -880,13 +888,26 @@ namespace tachyon
 
     void GUIApplication::PresentFrame()
     {
-        windowManager->ForEachAliveWindowContext([](IWindowContext* context, IntRect) { context->PresentWindowFrame(); });
+        // The longest present: under a vsync-flipped window the first one waits for the vsync
+        // and the others then find their image free.
+        std::optional<double> presentSeconds;
+        windowManager->ForEachAliveWindowContext([&presentSeconds](IWindowContext* context, IntRect)
+        {
+            if (const std::optional<double> seconds = context->PresentWindowFrame())
+                presentSeconds = std::max(presentSeconds.value_or(0.0), *seconds);
+        });
+        // The fastest monitor with a window on it: each gets a frame every refresh, and the
+        // compositor drops the extra ones a slower monitor can't show.
+        const float hz = windowManager->FastestRefreshRate();
+        // A frame that presented nothing says nothing about the vsync.
+        if (presentSeconds)
+            m_vsyncLock.NotePresent(*presentSeconds, hz);
 
         // A present that doesn't wait for vsync (mailbox, a window the compositor draws, or
         // nothing presented) would let Run spin; it waits out the refresh instead. A host's
         // own loop paces itself.
         if (m_paceFrames)
-            PaceFrame();
+            PaceFrame(hz);
 
         // frameTime includes any vsync or pace wait; frameBuildTime is just the CPU build.
         TACHYON_PROFILE_FRAME_END();
@@ -1646,7 +1667,7 @@ namespace tachyon
 
         // Once per frame; shared by transitions and GPU push constants.
         m_frameTickNanos = SteadyClockNowNanos();
-        m_frameClock.Tick(m_frameTickNanos, windowManager ? windowManager->MainRefreshRate() : 0.0f);
+        m_frameClock.Tick(m_frameTickNanos, AnimationRefreshRate());
         const float elapsedTimeSecs = static_cast<float>(m_frameClock.Seconds());
         m_buildTimerAt = INFINITY;
 

@@ -10,6 +10,11 @@
 //   - a frame whose present waited for vsync, or that ran long, doesn't wait
 //   - a wait too short to be worth sleeping for is skipped
 //   - without a refresh rate it paces to 60 Hz
+// and VsyncLock, whether presents wait for the vsync:
+//   - unlocked at first; locked after a few presents that waited
+//   - one present that didn't wait (a long frame) doesn't unlock it
+//   - a few presents in a row that returned at once unlock it
+//   - without a refresh rate it never locks
 
 #include <gtest/gtest.h>
 
@@ -139,5 +144,73 @@ namespace tachyon
     TEST(FramePaceTest, TheWaitFollowsTheRefreshRate)
     {
         EXPECT_NEAR(FramePaceWaitSeconds(kStart, Ms(1.0), 240.0f), kFramePaceShare / 240.0 - 0.001, 1e-9);
+    }
+
+    namespace
+    {
+        // A focused window at 120 Hz: about 1.5 ms of work, then present waits for the vsync.
+        constexpr double kWaited   = 0.0068;
+        // The compositor draws the window: present returns at once.
+        constexpr double kReturned = 0.00002;
+    }
+
+    TEST(VsyncLockTest, LocksAfterAFewPresentsThatWaited)
+    {
+        VsyncLock lock;
+        EXPECT_FALSE(lock.IsLocked()) << "unknown at first: the wall clock";
+        for (int i = 1; i < VsyncLock::kFramesToSwitch; ++i)
+        {
+            lock.NotePresent(kWaited, 120.0f);
+            EXPECT_FALSE(lock.IsLocked()) << "present " << i;
+        }
+        lock.NotePresent(kWaited, 120.0f);
+        EXPECT_TRUE(lock.IsLocked());
+    }
+
+    // Work that filled the period leaves present nothing to wait for, once: still locked.
+    TEST(VsyncLockTest, OneLongFrameDoesNotUnlock)
+    {
+        VsyncLock lock;
+        for (int i = 0; i < VsyncLock::kFramesToSwitch; ++i)
+            lock.NotePresent(kWaited, 120.0f);
+        lock.NotePresent(kReturned, 120.0f);
+        EXPECT_TRUE(lock.IsLocked());
+        lock.NotePresent(kWaited, 120.0f);
+        for (int i = 1; i < VsyncLock::kFramesToSwitch; ++i)
+            lock.NotePresent(kReturned, 120.0f);
+        EXPECT_TRUE(lock.IsLocked()) << "the count starts again after a present that waited";
+    }
+
+    // The window loses the focus and the compositor draws it.
+    TEST(VsyncLockTest, PresentsThatReturnAtOnceUnlock)
+    {
+        VsyncLock lock;
+        for (int i = 0; i < VsyncLock::kFramesToSwitch; ++i)
+            lock.NotePresent(kWaited, 120.0f);
+        for (int i = 0; i < VsyncLock::kFramesToSwitch; ++i)
+            lock.NotePresent(kReturned, 120.0f);
+        EXPECT_FALSE(lock.IsLocked());
+    }
+
+    // The share of the period counts, not the time: 0.8 ms waited is a short wait at 120 Hz
+    // and a vsync wait at 1000 Hz.
+    TEST(VsyncLockTest, AWaitIsMeasuredAgainstThePeriod)
+    {
+        VsyncLock slow, fast;
+        for (int i = 0; i < VsyncLock::kFramesToSwitch; ++i)
+        {
+            slow.NotePresent(0.0008, 120.0f);
+            fast.NotePresent(0.0008, 1000.0f);
+        }
+        EXPECT_FALSE(slow.IsLocked());
+        EXPECT_TRUE(fast.IsLocked());
+    }
+
+    TEST(VsyncLockTest, NeverLocksWithoutARefreshRate)
+    {
+        VsyncLock lock;
+        for (int i = 0; i < 2 * VsyncLock::kFramesToSwitch; ++i)
+            lock.NotePresent(kWaited, 0.0f);
+        EXPECT_FALSE(lock.IsLocked());
     }
 }

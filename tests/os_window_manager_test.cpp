@@ -1322,8 +1322,9 @@ namespace tachyon
     }
 
     // The frame loop paces to the fastest monitor any window is on, so a window on a 144 Hz
-    // monitor isn't held to the 60 Hz of the main window's.
-    TEST_F(OSWindowManagerTest, FastestRefreshRateIsTheFastestMonitorWithAWindow)
+    // monitor isn't held to the 60 Hz of the main window's. The slowest tells whether all
+    // the windows refresh together.
+    TEST_F(OSWindowManagerTest, FastestAndSlowestRefreshRateAreOfMonitorsWithAWindow)
     {
         ON_CALL(*mockBackend, GetMonitors()).WillByDefault([] {
             return std::vector<MonitorInfo>{
@@ -1338,6 +1339,7 @@ namespace tachyon
         });
         OSWindowManager wm(nullptr, mockBackend);
         EXPECT_FLOAT_EQ(wm.FastestRefreshRate(), 60.0f) << "no window yet: the primary monitor";
+        EXPECT_FLOAT_EQ(wm.SlowestRefreshRate(), 60.0f) << "no window yet: the primary monitor";
 
         wm.BeginFrame();
         wm.GetOrCreateWindow(CreateTestID(1), "Main", IntRect{ 100, 100, 800, 600 }, nullptr, WindowFlags::DefaultFlags);
@@ -1347,6 +1349,7 @@ namespace tachyon
         wm.BeginFrame();
         EXPECT_FLOAT_EQ(wm.MainRefreshRate(), 60.0f);
         EXPECT_FLOAT_EQ(wm.FastestRefreshRate(), 144.0f) << "not the 240 Hz monitor: no window is on it";
+        EXPECT_FLOAT_EQ(wm.SlowestRefreshRate(), 60.0f);
         wm.EndFrame();
     }
 

@@ -207,10 +207,11 @@ namespace tachyon
                     applicationQuit = true;
             }
 
-            bool Start()
+            // `refreshHz`: the monitor's; 0 is unknown.
+            bool Start(float refreshHz = 0.0f)
             {
                 SetGraphicsBackend(std::make_unique<NullGraphicsContext>());
-                SetWindowBackend(std::make_unique<NullWindowBackend>());
+                SetWindowBackend(std::make_unique<NullWindowBackend>(IntRect{ 0, 0, 1920, 1080 }, refreshHz));
                 if (!Initialize())
                     return false;
                 windowID = idManager.CreateStaticID();
@@ -243,6 +244,7 @@ namespace tachyon
                 }
                 return n;
             }
+            double FrameClockSeconds() const { return m_frameClock.Seconds(); }
             uint64_t Recorded() const
             {
                 return static_cast<const NullGraphicsContext*>(graphicsContext)->RecordedFrames(windowID);
@@ -523,6 +525,26 @@ namespace tachyon
             // The wait is in the profiled frame and in frameTime, beside the build.
             EXPECT_GT(app.frameTime, 0.010f) << "about a 60 Hz period";
             EXPECT_LT(app.frameBuildTime, app.frameTime);
+        }
+
+        // Presents that return at once (the null backends') aren't locked to the vsync, so the
+        // animation clock follows the wall clock, not the 60 Hz monitor's whole periods.
+        TEST(RedrawClock, WithoutVsyncLockTheClockFollowsTheWallClock)
+        {
+            RedrawApp app;
+            ASSERT_TRUE(app.Start(60.0f));
+            app.SetRedrawMode(RedrawMode::Always);
+            const double period = 1.0 / 60.0;
+            bool offTheGrid = false;
+            for (int i = 0; i < 6; ++i)
+            {
+                app.Frame();
+                const double periods = app.FrameClockSeconds() / period;
+                offTheGrid = offTheGrid || std::abs(periods - std::round(periods)) * period > 0.0005;
+                std::this_thread::sleep_for(std::chrono::milliseconds(3));
+            }
+            EXPECT_TRUE(offTheGrid) << "every frame's time a whole 60 Hz period: snapped";
+            app.Cleanup();
         }
 
         // Something animating in WhenNeeded asks for a frame every frame: still one a refresh.

@@ -25,6 +25,7 @@ namespace tachyon
         using GUIApplication::FireStateTransitions;
         using GUIApplication::NoteFrameNeeds;
         using GUIApplication::m_moreFrames;
+        using GUIApplication::m_frameClock;
 
         using GUIApplication::controlStylesStack;
         using GUIApplication::tooltipWindowID;
