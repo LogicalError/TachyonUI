@@ -160,6 +160,10 @@ namespace tachyon
         /// wait ends it at once. The default sleeps a sixtieth of a second at most, so the app
         /// looks again at the frame rate.
         virtual void WaitForEvents(float timeoutSecs);
+        /// Sleeps `secs`, whatever happens meanwhile; GUIApplication::Run uses it to pace frames
+        /// to the display. It should be precise to well under a millisecond: the default,
+        /// std::this_thread::sleep_for, may not be on every OS.
+        virtual void SleepFor(float secs);
         /// Ends a WaitForEvents early, or the next one when none runs; counts as an event.
         /// Safe from any thread.
         virtual void Wake() {}

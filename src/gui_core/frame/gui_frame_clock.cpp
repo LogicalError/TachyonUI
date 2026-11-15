@@ -31,4 +31,12 @@ namespace tachyon
         m_deltaSeconds = next - m_seconds;
         m_seconds      = next;
     }
+
+    double FramePaceWaitSeconds(int64_t frameStartNanos, int64_t nowNanos, float refreshHz)
+    {
+        const double hz      = refreshHz > 0.0f ? double(refreshHz) : 60.0;
+        const double elapsed = double(nowNanos - frameStartNanos) * 1e-9;
+        const double wait    = kFramePaceShare / hz - elapsed;
+        return wait >= kFramePaceMinWaitSeconds ? wait : 0.0;
+    }
 }

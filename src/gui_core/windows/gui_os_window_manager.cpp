@@ -2,6 +2,7 @@
 #include <gui_core/windows/gui_os_window_manager.h>
 #include <gui_core/gui_easing.h>
 
+#include <algorithm>
 #include <assert.h>
 
 #include <gui_core/diagnostics/gui_logging.h>
@@ -760,6 +761,17 @@ namespace tachyon
             if (monitor.isPrimary)
                 return monitor.refreshRate;
         return 0.0f;
+    }
+
+    float OSWindowManager::FastestRefreshRate() const
+    {
+        const std::vector<MonitorInfo> current = monitors.empty() ? windowBackendManager->GetMonitors() : monitors;
+        float fastest = 0.0f;
+        for (const Window& window : windows)
+            if (window.state == WindowState::Alive && window.monitorIndex >= 0
+                && window.monitorIndex < static_cast<int32_t>(current.size()))
+                fastest = std::max(fastest, current[static_cast<size_t>(window.monitorIndex)].refreshRate);
+        return fastest > 0.0f ? fastest : MainRefreshRate();
     }
 
     float OSWindowManager::MainDisplayScale() const

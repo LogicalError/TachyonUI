@@ -31,5 +31,20 @@ namespace tachyon
         double  m_seconds      = 0.0;
         double  m_deltaSeconds = 0.0;
     };
+
+    /// The share of a refresh period a frame takes at least when GUIApplication::Run paces
+    /// it. Under 1, so a refresh rate reported a little low, or a vsync-paced frame that
+    /// ends a little early, never waits and misses the next vsync.
+    inline constexpr double kFramePaceShare = 0.95;
+    /// A wait shorter than this is skipped: it costs about as much as it saves.
+    inline constexpr double kFramePaceMinWaitSeconds = 0.00025;
+
+    /// How long to wait after presenting a frame, in seconds, so the loop doesn't run
+    /// faster than the display shows frames. A present that blocked until the vsync already
+    /// took about a period, so nothing is left to wait; one that returned at once (mailbox
+    /// present, or a window the compositor draws) leaves the rest of the period.
+    /// `frameStartNanos` and `nowNanos` are SteadyClockNowNanos timestamps; `refreshHz` is
+    /// 0 when unknown, taken as 60 Hz. 0 when the frame needs no wait.
+    double FramePaceWaitSeconds(int64_t frameStartNanos, int64_t nowNanos, float refreshHz);
     /// @}
 }

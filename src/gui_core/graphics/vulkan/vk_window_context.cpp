@@ -154,8 +154,9 @@ void VulkanWindowContext::CreateSwapchain()
     swapchain.swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
     // Prefer MAILBOX: no tearing, and the newest frame replaces the waiting one,
-    // so present doesn't block. The loop is then NOT paced to the refresh; it
-    // runs as fast as build + render allow. It needs triple buffering. Otherwise
+    // so present doesn't block. Present then doesn't pace the loop to the refresh;
+    // GUIApplication::Run sleeps the rest of the period instead (PaceFrame). It
+    // needs triple buffering. Otherwise
     // FIFO, double-buffered (the only guaranteed mode, blocking to the refresh)
     // rather than vk-bootstrap's larger default.
     VkPresentModeKHR presentMode   = VK_PRESENT_MODE_FIFO_KHR;

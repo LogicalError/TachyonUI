@@ -54,6 +54,7 @@ namespace tachyon
         uint32_t GetFocusChangeCount() const override;
         void PollEvents(std::function<void(OSWindowHandle, IWindowContext*)> cleanup) override;
         void WaitForEvents(float timeoutSecs) override { m_os.WaitForEvents(timeoutSecs); }
+        void SleepFor(float secs) override { m_os.SleepFor(secs); }
         void Wake() override { m_os.Wake(); }
         uint64_t GetEventCount() const override { return m_os.GetEventCount(); }
         bool TakeWindowsExposed() override { return m_os.TakeWindowsExposed(); }

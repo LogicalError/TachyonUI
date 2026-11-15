@@ -287,7 +287,7 @@ namespace tachyon
         bool applicationQuit = false;
         /// Internal: when the current frame started (set by UpdateFrame).
         std::chrono::steady_clock::time_point m_frameStart{};
-        /// The last frame's duration in seconds, including any vsync wait.
+        /// The last frame's duration in seconds, including any vsync wait or Run's pace wait.
         float frameTime = 0.0f;
         /// CPU work per frame, excluding the vsync stall in present.
         float frameBuildTime = 0.0f;
@@ -542,7 +542,9 @@ namespace tachyon
         /// UpdateFrame pumps OS events and input (false once the app quits). RecordFrame builds
         /// the UI and records and submits every window; render-to-image windows are done then.
         /// A lost GPU device is made again first; an error when it can't be (a host's device).
-        /// PresentFrame presents the OS windows and may wait for vsync.
+        /// PresentFrame presents the OS windows and may wait for vsync. Run also keeps frames
+        /// to the display's refresh rate when presenting doesn't wait (a mailbox swapchain, a
+        /// window the compositor draws); a host's loop paces its own frames.
         bool         UpdateFrame();
         /// See UpdateFrame.
         Result<void> RecordFrame();
@@ -3225,8 +3227,11 @@ namespace tachyon
         int64_t        m_timerAt        = INT64_MAX;     ///< the library's next timer (a tooltip's delay), steady-clock ns
         float          m_buildTimerAt   = INFINITY;      ///< ScheduleFrameAt during this build, frame-clock seconds
         int64_t        m_frameTickNanos = 0;             ///< steady-clock ns the frame clock last ticked at
-        bool           m_recordedAny    = false;         ///< the last RecordFrame recorded a window
+        bool           m_paceFrames     = false;         ///< Run is the loop: PresentFrame paces frames to the display
         std::thread::id m_uiThread;                      ///< Initialize's: a request from any other wakes the backend
+        /// In PresentFrame under Run: when the frame took less than a refresh period (present
+        /// didn't wait for vsync), sleeps the rest of it (FramePaceWaitSeconds).
+        void PaceFrame();
         /// A frame at frame-clock time `frameSecs`, for a control that changes by itself later
         /// (a toast hiding). Call while building.
         void ScheduleFrameAt(float frameSecs) { m_buildTimerAt = std::min(m_buildTimerAt, frameSecs); }
