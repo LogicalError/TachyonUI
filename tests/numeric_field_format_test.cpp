@@ -121,6 +121,24 @@ namespace tachyon
         EXPECT_EQ(value, 1.0f);
     }
 
+    // A fixed-decimals converter shows that many digits after the point, NaN and infinities
+    // as such; what's typed in is kept as typed, not rounded.
+    TEST(TextConverterTest, FixedDecimalsShowThatManyDigits)
+    {
+        const TextConverter<float>& two = FixedDecimalsConverter<float>(2);
+        EXPECT_EQ(two.Format(1.0f, false), "1.00");
+        EXPECT_EQ(two.Format(-2.5f, true), "-2.50") << "editing starts from the same text";
+        EXPECT_EQ(two.Format(std::numeric_limits<float>::quiet_NaN(), false), "NaN");
+        EXPECT_EQ(two.Format(std::numeric_limits<float>::infinity(), true), "0");
+        float value = 0.0f;
+        ASSERT_TRUE(two.Parse("3.14159", value));
+        EXPECT_FLOAT_EQ(value, 3.14159f);
+
+        EXPECT_EQ(FixedDecimalsConverter<double>(0).Format(4.0, false), "4");
+        EXPECT_EQ(FixedDecimalsConverter<double>(3).Format(0.5, false), "0.500");
+        EXPECT_EQ(&FixedDecimalsConverter<float>(2), &two) << "one converter per count: it outlives the fields";
+    }
+
     // Which characters each kind of number field takes as typed.
     TEST(TextConverterTest, NumberCharacters)
     {

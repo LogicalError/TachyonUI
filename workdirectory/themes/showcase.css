@@ -68,6 +68,74 @@
 }
 
 /* The table panels' toolbar: "Selection mode" and Row | Cell, padded, with a line under it. */
+/* The StateMachine panel's toolbar: Step, Restart, a divider, the breadcrumb, and the run
+   state at the end. */
+.state-machine-toolbar {
+    border-width: 0px 0px 1px 0px;
+    border-color: var(--line-subtle);
+    padding: 0px 12px;
+    margin: 0px;
+    height: 36px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    background-color: transparent;
+}
+/* Step and Restart: secondary buttons, as wide as their icon and text. */
+.state-machine-button {
+    -tachyon-state-layer: content;   /* hover and pressed: the text color over the background */
+    -tachyon-icon-size: 14px;
+    -tachyon-icon-text-gap: 6px;
+    border-width: var(--border);
+    border-radius: var(--radius-md);
+    border-color: var(--line-strong);
+    background-color: var(--bg-control);
+    color: var(--text-2);
+    margin: 0px;
+    padding: 3px 10px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    font-size: var(--font-size);
+    flex-grow: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.state-machine-button:hover  { color: var(--text-1); }
+.state-machine-button:active { color: var(--text-1); }
+.state-machine-button:focus-visible { box-shadow: var(--focus-ring); }
+.state-machine-divider {
+    width: 1px;
+    height: 18px;
+    margin: 0px 4px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: var(--line-subtle);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.state-machine-status {
+    margin: 0px;
+    padding: 0px;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+    vertical-align: middle;
+}
+.status-dot-ok {
+    width: 6px;
+    height: 6px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 3px;
+    background-color: var(--ok);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+
 .table-toolbar {
     border-width: 0px 0px 1px 0px;
     border-color: var(--line-subtle);

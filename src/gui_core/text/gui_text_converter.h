@@ -2,8 +2,11 @@
 
 #include <gui_core/text/gui_numeric_text.h>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -44,12 +47,25 @@ namespace tachyon
     template<NumericFieldType T>
     struct TextConverter<T> : ITextValidator
     {
+        /// For floats and doubles: the digits shown after the point (2: "1.00"); -1 shows as
+        /// few as the value needs. Typed text is parsed as it is, not rounded to them.
+        int decimals = -1;
+
         std::string Format(const T& value, bool editing) const
         {
             // NaN and infinities aren't text to start editing from: start from 0.
             if constexpr (std::is_floating_point_v<T>)
+            {
                 if (editing && !std::isfinite(value))
                     return "0";
+                if (decimals >= 0 && std::isfinite(value))
+                {
+                    char buffer[64];
+                    const int written = std::snprintf(buffer, sizeof(buffer), "%.*f", decimals, double(value));
+                    if (written > 0 && written < int(sizeof(buffer)))
+                        return std::string(buffer, size_t(written));
+                }
+            }
             NumericValue number{};
             const NumericType type = CopyNumericTypeTo(value, number);
             return FormatNumber(type, number);
@@ -75,6 +91,23 @@ namespace tachyon
     {
         static const TextConverter<T> converter;
         return converter;
+    }
+
+    /// The converter that shows a float or double with `decimals` digits after the point (0
+    /// to 9; less shows as few as the value needs). One per count, so it outlives the fields.
+    template<typename T>
+        requires std::is_floating_point_v<T>
+    const TextConverter<T>& FixedDecimalsConverter(int decimals)
+    {
+        static const auto converters = [] {
+            std::array<TextConverter<T>, 10> all{};
+            for (int i = 0; i < int(all.size()); ++i)
+                all[size_t(i)].decimals = i;
+            return all;
+        }();
+        if (decimals < 0)
+            return DefaultTextConverter<T>();
+        return converters[size_t(std::min(decimals, int(converters.size()) - 1))];
     }
     /// @}
 }

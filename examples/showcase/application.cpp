@@ -135,6 +135,7 @@ namespace tachyon
         animatedHueStyle = tachyon::VisualColorStyleIndex::Invalid;
         InitializeShowcaseStyles();
         ApplyNodeCategories();
+        ApplyStateColors();
     }
 
     void Application::ApplyNodeCategories()
@@ -534,7 +535,7 @@ namespace tachyon
             mix.properties.push_back(NodeProperty
             {
                 .input       = PropertyEndpoint{},
-                .renderBody  = [this]() { Label("Gain"); Field(showcase.nodeGain); },
+                .renderBody  = [this]() { Label("Gain"); Field(showcase.nodeGain, TextEditBehavior::ContinuousUpdate, NumericFieldConfig<float>{ .decimals = 2 }); },
                 .socketColor = kAmber
             });
             mix.properties.push_back(NodeProperty
@@ -822,6 +823,11 @@ namespace tachyon
         settingsTitleRowStyleRef    = theme.GetStyle("settings-title-row");
         settingsSplitStyleRef       = theme.GetStyle("settings-split");
         tableToolbarStyleRef        = theme.GetStyle("table-toolbar");
+        stateMachineToolbarStyleRef = theme.GetStyle("state-machine-toolbar");
+        stateMachineButtonStyleRef  = theme.GetStyle("state-machine-button");
+        stateMachineDividerStyleRef = theme.GetStyle("state-machine-divider");
+        stateMachineStatusStyleRef  = theme.GetStyle("state-machine-status");
+        statusDotOkStyleRef         = theme.GetStyle("status-dot-ok");
         sketchPadStyleRef           = theme.GetStyle("sketch-pad");
         {
             const char* kSideTag[4]   = { "left", "right", "top", "bottom" };
@@ -1249,6 +1255,8 @@ namespace tachyon
                 showcase.addIcon             = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/plus.svg").c_str());
                 showcase.removeIcon          = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/minus.svg").c_str());
                 showcase.undoIcon            = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/undo-2.svg").c_str());
+        showcase.stepIcon            = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/skip-forward.svg").c_str());
+        showcase.restartIcon         = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/rotate-ccw.svg").c_str());
                 showcase.redoIcon            = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/redo-2.svg").c_str());
                 showcase.cutIcon             = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/scissors.svg").c_str());
                 showcase.copyIcon            = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/copy.svg").c_str());

@@ -1840,5 +1840,54 @@ namespace tachyon
             EXPECT_EQ(tip.y - window.y, boxLayout->margin.top);
         }
 
+        // A number field in a node is the node's own: mono, at the end of its box; with
+        // decimals set, it shows them. Outside the nodes, fields are as they were.
+        TEST_F(NodeViewControlTest, ANodesNumberFieldsAreTheNodesOwnAndShowTheirDecimals)
+        {
+            float gain = 1.0f;
+            view.nodes[0].properties[0].renderBody = [this, &gain] {
+                app.Label("Gain");
+                app.Field(app.idManager.AllocateDynamicID("gain"), gain, NumericFieldConfig<float>{ .decimals = 2 });
+            };
+            Settle();
+            const ID field = app.FindByText("1.00");
+            ASSERT_NE(field, ID::Invalid()) << "two decimals";
+            EXPECT_EQ(app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(field)).styleRef,
+                      app.theme.nodeControls.number);
+            EXPECT_EQ(app.theme.controls, &app.theme.regularControls) << "back to the regular ones after the node";
+
+            const tachyon::LayoutStyle* style = app.styleManager.GetLayoutStyle(app.theme.nodeControls.number.layoutStyleIndex);
+            ASSERT_NE(style, nullptr);
+            EXPECT_EQ(style->textLayoutStyle.horizontalAlignment, TextAlign::End) << "at the end of its box";
+        }
+
+        // The zoom bar: -, the zoom, +, a divider, then Fit.
+        TEST_F(NodeViewControlTest, TheZoomBarHasADividerBeforeFit)
+        {
+            Settle();
+            const ID fit = app.FindByText("Fit");
+            ASSERT_NE(fit, ID::Invalid());
+            const std::vector<tachyon::IntRect> dividers = RectsWithStyle(app.theme.nodeViewOverlayDividerStyleRef);
+            ASSERT_EQ(dividers.size(), 1u);
+            const tachyon::IntRect fitRect = app.GetElementRect(fit);
+            const tachyon::IntRect plus = app.GetElementRect(app.FindByText("+"));
+            EXPECT_GE(dividers[0].x, plus.x + plus.w) << "after +";
+            EXPECT_LE(dividers[0].x + dividers[0].w, fitRect.x) << "before Fit";
+            EXPECT_GT(dividers[0].h, 0);
+        }
+
+        // A text row with a socket on both sides reads from the start, as one with an input
+        // only does: the output's at the end anyway.
+        TEST_F(NodeViewControlTest, ATextRowWithSocketsOnBothSidesIsAtTheStart)
+        {
+            view.nodes[0].properties[0].input = PropertyEndpoint{};
+            view.nodes[0].properties[0].renderBody = [this] { app.NodeText("Bypass"); };
+            Settle();
+            const ID text = app.FindByText("Bypass");
+            ASSERT_NE(text, ID::Invalid());
+            EXPECT_EQ(app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(text)).styleRef,
+                      app.theme.nodeTextLeftStyleRef);
+        }
+
     } // namespace
 }

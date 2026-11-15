@@ -25,6 +25,7 @@ namespace tachyon
         double  stepPerPixel = 0.01; ///< value change per pixel dragged
         double  minVal       = -DBL_MAX; ///< lowest allowed value
         double  maxVal       = DBL_MAX; ///< highest allowed value
+        int     decimals     = -1;      ///< digits shown after the point (2: "1.00"); -1: as few as the value needs
 
         /// The value after dragging `offset` pixels from startValue; speedScale is the modifier
         /// factor (Ctrl 0.1, Shift 10). The result is clamped to the range.
@@ -43,6 +44,7 @@ namespace tachyon
         double  stepPerPixel = 0.01; ///< value change per pixel dragged
         float   minVal       = -FLT_MAX; ///< lowest allowed value
         float   maxVal       = FLT_MAX; ///< highest allowed value
+        int     decimals     = -1;      ///< digits shown after the point (2: "1.00"); -1: as few as the value needs
 
         /// The value after dragging `offset` pixels from startValue; speedScale is the modifier
         /// factor (Ctrl 0.1, Shift 10). The result is clamped to the range.

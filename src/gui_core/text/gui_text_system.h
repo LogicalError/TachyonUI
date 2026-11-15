@@ -280,12 +280,17 @@ namespace tachyon
             return textId;
         }
 
-        /// Registers an editable number, clamped to `config`'s [minVal, maxVal] after an edit.
+        /// Registers an editable number, clamped to `config`'s [minVal, maxVal] after an edit, a
+        /// float or double shown with `config.decimals` digits after the point.
         template<typename T>
         TextID RegisterEditableNumber(ID elementId, T& value, TextEditBehavior behavior, StyleRef styleIndex, ElementState state, bool& wasModified, NumericFieldConfig<T> config = {})
         {
             bool edited = false;
-            const TextID textId = RegisterEditableValue(elementId, value, behavior, styleIndex, state, edited);
+            TextID textId{};
+            if constexpr (std::is_floating_point_v<T>)
+                textId = RegisterEditableValue(elementId, value, behavior, styleIndex, state, edited, FixedDecimalsConverter<T>(config.decimals));
+            else
+                textId = RegisterEditableValue(elementId, value, behavior, styleIndex, state, edited);
             if (edited)
             {
                 wasModified = true;

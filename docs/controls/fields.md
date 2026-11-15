@@ -148,9 +148,21 @@ The field shows an editable number:
 - `NumericFieldConfig` sets the range and the drag speed:
   - `minVal` and `maxVal`: the lowest and highest value
   - `stepPerPixel`: the change per pixel dragged
+  - `decimals`, for a float or double: the digits shown after the point, 0 to 9.
+    - For example, 2 shows 1 as "1.00".
+    - -1, the default, shows as few as the value needs.
+    - What's typed is kept as typed, not rounded to them.
 - NaN shows in a warning color.
 
-Class: `number-field`. In a toolbar: `toolbar-number-field`.
+Class: `number-field`. In a toolbar: `toolbar-number-field`. In a node's row:
+`node-number-field`.
+
+```cpp
+Field(gain, TextEditBehavior::ContinuousUpdate, NumericFieldConfig<float>{ .decimals = 2 });   // "1.00"
+```
+
+`FixedDecimalsConverter<float>(2)` is the converter it uses, for a field of your own made with
+`RegisterEditableValue`.
 
 ```cpp
 Field(floatValue);

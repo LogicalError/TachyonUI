@@ -508,6 +508,20 @@ namespace tachyon
             disabledOpacity = std::clamp(prop->number, 0.0f, 1.0f);
         else
             disabledOpacity = 0.4f;
+        {
+            auto tint = [&](const char* name, float& out) {
+                if (const auto* prop = sheet.GetCustomProperty(name); prop && prop->hasNumber && prop->dimCount == 1)
+                    out = std::clamp(prop->number, 0.0f, 1.0f);
+            };
+            nodeTints = {};
+            tint("--node-header-tint", nodeTints.header);
+            tint("--node-header-line-tint", nodeTints.headerLine);
+            tint("--state-tint", nodeTints.state);
+            tint("--state-border-tint", nodeTints.stateBorder);
+            tint("--frame-fill-tint", nodeTints.frameFill);
+            tint("--frame-band-tint", nodeTints.frameBand);
+            tint("--frame-border-tint", nodeTints.frameBorder);
+        }
         if (const Style* link = sheet.GetStyle("link"))
             linkStyle = LinkStyle{ .color      = link->states[ElementState::None].textColor.GetFirstColor(),
                                    .hoverColor = link->states[ElementState::Hover].textColor.GetFirstColor(),
@@ -574,6 +588,9 @@ namespace tachyon
         toolbarControls.textbox      = registerCSS("toolbar-textbox");
         toolbarControls.number       = registerCSS("toolbar-number-field");
         toolbarControls.menuTrigger  = registerCSS("toolbar-menu-trigger");
+
+        nodeControls                 = regularControls;
+        nodeControls.number          = registerCSS("node-number-field");
 
         labelStyleRef                     = registerCSS("label");
         iconLabelStyleRef                 = registerCSS("icon-label");
@@ -716,6 +733,10 @@ namespace tachyon
         colorPickerPreviewStyleRef        = registerCSS("color-picker-preview");
         colorPickerNewStyleRef            = registerCSS("color-picker-new");
         gradientSwatchStyleRef            = registerCSS("gradient-swatch");
+        nodeFrameMenuStyleRef             = registerCSS("node-frame-menu");
+        nodeViewOverlayDividerStyleRef    = registerCSS("node-view-overlay-divider");
+        nodeStateTimeStyleRef             = registerCSS("node-state-time");
+        nodeStateNestedMarkStyleRef       = registerCSS("node-state-nested-mark");
         gradientEditorStyleRef            = registerCSS("gradient-editor");
         gradientEditorBarStyleRef         = registerCSS("gradient-editor-bar");
         dialogSmallButtonStyleRef             = registerCSS("dialog-small-button");

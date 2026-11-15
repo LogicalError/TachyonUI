@@ -102,16 +102,30 @@ namespace tachyon
         // with its transition, so a label shows which arrow it belongs to.
         struct TransitionLabel { ID transition; TextID text; int2 size; IntRect chip; ElementState state; };
 
+        // What a state machine marks its states with, beyond their own elements: the time in the
+        // active state (its text and size; none while timeSize is 0), the halo round that state,
+        // and a nested state's second box, stacked behind it, in its fill and edge.
+        struct NestedBack { ID state; VisualColorStyleIndex fill; VisualBoxStyleIndex edge; };
+        struct StateMarks
+        {
+            TextID                  timeText {};
+            int2                    timeSize {};
+            VisualColorStyleIndex   activeHalo {};
+            VisualColorStyleIndex   canvas {};       // under the time's pill
+            std::vector<NestedBack> nested;
+        };
+
         // A state machine's marks and arrows, in the canvas's own draw (content-box space:
-        // node.pos + gridOrigin). The states are the nodes, drawn as nodes are.
+        // node.pos + gridOrigin), under the states. The states are the nodes, drawn as nodes are.
         //   - the initial state: a dot and a short arrow into its left edge
-        //   - the state the machine is in: a ring round it
-        //   - a state holding a machine: two small stacked boxes at its bottom right
+        //   - the state the machine is in: a ring round it in a soft halo, and its time under it,
+        //     over the arrows
+        //   - a state holding a machine: a second box stacked behind it
         //   - a state whose edge is hovered (or being drawn from): a ring round it
         //   - each transition: an arrow, lit hovered, in the accent selected, its label on it
         //   - a transition being drawn: dashed, to the state under the pointer, or the pointer
         void DrawStateMachine(CustomDrawContext& ctx, const GUITheme& theme, const StyleManager& styles, const NodeView& view,
-                              int2 gridOrigin, std::span<const TransitionLabel> labels, int32_t gap, int32_t loop,
+                              int2 gridOrigin, std::span<const TransitionLabel> labels, const StateMarks& marks, int32_t gap, int32_t loop,
                               bool canvasHovered, int2 pointer, ID pointedState, ID bandLit, int32_t band)
         {
             auto box = [&](const NodeModel& node) {
@@ -131,12 +145,32 @@ namespace tachyon
             };
             auto f = [](int2 p) { return float2{ float(p.x), float(p.y) }; };
 
+            for (const NestedBack& nested : marks.nested)
+            {
+                const int n = NodeIndex(view, nested.state);
+                if (n < 0) continue;
+                const NodeModel& node = view.nodes[size_t(n)];
+                if (node.hidden || node.lastSize.x <= 0 || node.lastSize.y <= 0) continue;
+                const int32_t o = styles.Px(4);
+                const IntRect b = box(node);
+                const IntRect back{ b.x - o, b.y - o, b.w, b.h };
+                const BoxCorners* r = nullptr;
+                if (const VisualBoxStyle* s = styles.GetVisualBoxStyle(nested.edge, ElementState::None)) r = &s->borderRadius;
+                ctx.RenderQuad(back, nested.fill, r ? float(r->topLeft) : 0.0f);
+                ctx.RenderBox(back, nested.edge);
+            }
             for (const NodeModel& node : view.nodes)
             {
                 if (node.hidden || node.lastSize.x <= 0 || node.lastSize.y <= 0) continue;
                 const IntRect b = box(node);
                 if (node.stableID == view.activeState)
+                {
+                    const int32_t halo = styles.Px(3);
+                    const VisualBoxStyle* active = styles.GetVisualBoxStyle(theme.nodeStateActiveStyleRef.visualBoxStyleIndex, ElementState::None);
+                    const float radius = active ? float(active->borderRadius.topLeft) : 0.0f;
+                    ctx.RenderQuad(around(b, ring + halo), marks.activeHalo, radius + float(halo));
                     ctx.RenderBox(around(b, ring), theme.nodeStateActiveStyleRef.visualBoxStyleIndex);
+                }
                 // The band a transition is drawn from, along its middle: faint while the pointer
                 // is on the state or round it, lit on the band itself.
                 if (node.stableID == pointedState)
@@ -150,13 +184,6 @@ namespace tachyon
                     ctx.RenderDisc(start, float(radius), theme.nodeInitialStateColor);
                     ctx.RenderLine(start, { into.x - styles.Px(8), into.y }, LineStyle{ .colorStyleIndex = theme.nodeInitialStateColor, .lineWidth = styles.Px(2.0f) });
                     head(f(into), f(start), theme.nodeInitialStateColor);
-                }
-                if (node.subMachine)
-                {
-                    const int32_t s = styles.Px(7), o = styles.Px(3), m = styles.Px(6);
-                    const IntRect back{ b.x + b.w - m - s, b.y + b.h - m - s - o, s, s };
-                    ctx.RenderBox(back, theme.nodeStateNestedStyleRef.visualBoxStyleIndex);
-                    ctx.RenderBox(IntRect{ back.x - o, back.y + o, s, s }, theme.nodeStateNestedStyleRef.visualBoxStyleIndex);
                 }
             }
 
@@ -192,6 +219,23 @@ namespace tachyon
                 ctx.RenderBox(chip, theme.nodeTransitionLabelStyleRef.visualBoxStyleIndex, label.state);
                 ctx.RenderText(label.text, IntRect{ chip.x + (chip.w - label.size.x) / 2, chip.y + (chip.h - label.size.y) / 2,
                                                     label.size.x, label.size.y });
+            }
+            // How long the machine has been in its state, in a pill under it, over the arrows as
+            // the labels are.
+            if (const int active = NodeIndex(view, view.activeState); active >= 0 && marks.timeSize.x > 0)
+            {
+                const NodeModel& node = view.nodes[size_t(active)];
+                if (!node.hidden && node.lastSize.x > 0 && node.lastSize.y > 0)
+                {
+                    const IntRect b = box(node);
+                    const int2 pad{ styles.Px(6), styles.Px(2) };
+                    const IntRect pill{ b.x + (b.w - marks.timeSize.x) / 2 - pad.x, b.y + b.h + ring + styles.Px(5),
+                                        marks.timeSize.x + 2 * pad.x, marks.timeSize.y + 2 * pad.y };
+                    const VisualBoxStyle* pillStyle = styles.GetVisualBoxStyle(theme.nodeStateTimeStyleRef.visualBoxStyleIndex, ElementState::None);
+                    ctx.RenderQuad(pill, marks.canvas, pillStyle ? float(pillStyle->borderRadius.topLeft) : 0.0f);   // no arrow through it
+                    ctx.RenderBox(pill, theme.nodeStateTimeStyleRef.visualBoxStyleIndex);
+                    ctx.RenderText(marks.timeText, IntRect{ pill.x + pad.x, pill.y + pad.y, marks.timeSize.x, marks.timeSize.y });
+                }
             }
 
             // The transition being drawn: dashed, to the state under the pointer, or to it.
@@ -1165,6 +1209,22 @@ namespace tachyon
         int32_t nodeBorderV = 0;
         if (const tachyon::LayoutStyle* stateLS = styleManager.GetLayoutStyle(theme.nodeStateStyleRef.layoutStyleIndex))
             nodeBorderV = stateLS->borderWidths.top;
+        // A state's edge in its own color: the border and corners its style has.
+        BoxEdges   stateEdgeWidths = BoxEdges(uint16_t(std::max(1, styleManager.Px(1))));
+        BoxCorners stateEdgeRadius {};
+        if (const VisualBoxStyle* stateBox = styleManager.GetVisualBoxStyle(theme.nodeStateStyleRef.visualBoxStyleIndex, ElementState::None))
+        {
+            stateEdgeWidths = stateBox->borderWidths;
+            stateEdgeRadius = stateBox->borderRadius;
+        }
+        // A node's own color over its body (--node-bg), `amount` of the way: opaque, as the
+        // body is under it. A node without a color of its own has the accent.
+        const tachyon::color4f nodeBody = theme.GetColor("--node-bg", tachyon::color4f{ 0.12f, 0.14f, 0.16f, 1.0f });
+        const tachyon::color4f accentColor = theme.GetColor("--accent", tachyon::color4f{ 0.42f, 0.61f, 1.0f, 1.0f });
+        auto OverNodeBody = [&nodeBody](tachyon::color4f color, float amount) {
+            auto mix = [amount](float a, float b) { return a + (b - a) * amount; };
+            return tachyon::color4f{ mix(nodeBody.r, color.r), mix(nodeBody.g, color.g), mix(nodeBody.b, color.b), 1.0f };
+        };
 
         // A field over a title or a label being renamed, the focus in it (view.renameText).
         // Enter keeps the new text, as does going elsewhere; Escape keeps the old one. True
@@ -1214,6 +1274,25 @@ namespace tachyon
 
         // ---- State machine: the transitions' labels, and the field relabelling one ----
         std::vector<TransitionLabel> transitionLabels;
+        // The time in the active state, its text and size; and each nested state's stacked
+        // box behind it, in the state's colors.
+        StateMarks stateMarks;
+        if (stateMachine && view.activeStateTime >= 0.0f && view.activeState != ID::Invalid())
+        {
+            char time[32];
+            std::snprintf(time, sizeof(time), "%.2f s", double(view.activeStateTime));
+            stateMarks.timeText = textSystem->RegisterText(idManager.AllocateDynamicID("state-time"), time, theme.nodeStateTimeStyleRef, ElementState::None);
+            const TextMeasurement m = textSystem->MeasureText(stateMarks.timeText, TextWrapContext{});
+            stateMarks.timeSize = { m.maxWidth, m.maxHeight };
+        }
+        if (stateMachine)
+        {
+            tachyon::color4f halo = theme.GetColor("--ok", tachyon::color4f{ 0.31f, 0.77f, 0.54f, 1.0f });
+            halo.a *= 0.18f;
+            stateMarks.activeHalo = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(halo));
+            stateMarks.canvas = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
+                theme.GetColor("--bg-canvas", tachyon::color4f{ 0.05f, 0.06f, 0.07f, 1.0f })));
+        }
         const int2    labelPad{ styleManager.Px(6), styleManager.Px(1) };   // the chip round a label's text
         const int32_t labelMargin = styleManager.Px(4);                     // between a label and its arrow
         view.transitionLabelBoxes.clear();
@@ -1281,7 +1360,18 @@ namespace tachyon
         view.gridSize = theme.nodeGridSize;
         const int32_t frameGrid = std::max(1, theme.nodeGridSize);
         const int32_t frameBar  = 2 * frameGrid;   // the title bar: one row pitch, as a node's header
-        struct DrawnFrame { ElementRef title; int2 size; ElementState state; tachyon::VisualColorStyleIndex fill, band; };
+        struct DrawnFrame { ElementRef title; int2 size; ElementState state; tachyon::VisualColorStyleIndex fill, band; VisualBoxStyleIndex edge; };
+        // A frame's edge while nothing lights it: its color, or the theme's for one without.
+        BoxCorners frameRadius {};
+        if (const VisualBoxStyle* frameBox = styleManager.GetVisualBoxStyle(theme.nodeFrameStyleRef.visualBoxStyleIndex, ElementState::None))
+            frameRadius = frameBox->borderRadius;
+        const BoxEdges frameEdgeWidths = BoxEdges(uint16_t(std::max(1, styleManager.Px(1))));
+        auto frameEdge = [&](tachyon::color4f c) {
+            return styleManager.RegisterOutline(frameEdgeWidths, frameRadius,
+                tachyon::color4b{ uint8_t(std::lround(std::clamp(c.r, 0.0f, 1.0f) * 255.0f)), uint8_t(std::lround(std::clamp(c.g, 0.0f, 1.0f) * 255.0f)),
+                                  uint8_t(std::lround(std::clamp(c.b, 0.0f, 1.0f) * 255.0f)), uint8_t(std::lround(std::clamp(c.a, 0.0f, 1.0f) * 255.0f)) });
+        };
+        const VisualBoxStyleIndex neutralFrameEdge = frameEdge(theme.GetColor("--frame-border", tachyon::color4f{ 0.56f, 0.59f, 0.65f, 0.28f }));
         std::vector<DrawnFrame> drawnFrames;
         // Nodes inside a collapsed frame: which frame (-1: none), and, for those with wires
         // crossing its edge, the box and their sockets on it (property, output, row).
@@ -1629,6 +1719,30 @@ namespace tachyon
                 VERIFY(titleRes.status);
                 VERIFY(windowRegistry.Add(titleRes.ref));
 
+                // With a menu for frames, a "..." button at the title bar's end opens it under the
+                // button, the frame selected as a right click does.
+                if (view.onFrameContextMenu && view.renamingFrame != frameID)
+                {
+                    const int32_t size = std::min(styleManager.Px(18), frameBar);
+                    const int32_t pad  = (frameBar - size) / 2;
+                    if (box.w > 2 * size)
+                    {
+                        const ID menuButtonID = idManager.AllocateDynamicID("frame-menu-button");
+                        Button(menuButtonID, "...", [this, &view, frameID, menuButtonID, frameMenuID, openMenu] {
+                            if (!view.selectedFrameIDs.contains(frameID))
+                            {
+                                view.selectedNodeIDs.clear();
+                                view.selectedFrameIDs = { frameID };
+                            }
+                            const IntRect at = elementStorage.ElementRectOnScreen(elementStorage.FindElementRefByID(menuButtonID));
+                            openMenu(frameMenuID, int2{ at.x, at.y + at.h }, std::nullopt, std::nullopt, std::nullopt, frameID);
+                        }, theme.nodeFrameMenuStyleRef,
+                        LayoutOverride{}.FixedSize(Pixels{ size }, Pixels{ size })
+                                        .Absolute(frame.pos.x + box.w - pad - size, frame.pos.y + pad));
+                        SetTooltip("Frame menu");
+                    }
+                }
+
                 if (view.renamingFrame == frameID)
                 {
                     bool keep = false;
@@ -1719,13 +1833,15 @@ namespace tachyon
                 if (frame.collapsed)
                     continue;
                 tachyon::VisualColorStyleIndex fill{}, band{};
+                VisualBoxStyleIndex edge = neutralFrameEdge;
                 if (frame.color.a > 0.0f)
                 {
                     const tachyon::color4f c = frame.color;
-                    fill = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4f{ c.r, c.g, c.b, c.a * 0.14f }));
-                    band = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4f{ c.r, c.g, c.b, c.a * 0.32f }));
+                    fill = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4f{ c.r, c.g, c.b, c.a * theme.nodeTints.frameFill }));
+                    band = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4f{ c.r, c.g, c.b, c.a * theme.nodeTints.frameBand }));
+                    edge = frameEdge(tachyon::color4f{ c.r, c.g, c.b, c.a * theme.nodeTints.frameBorder });
                 }
-                drawnFrames.push_back({ titleRes.ref, frame.size, state, fill, band });
+                drawnFrames.push_back({ titleRes.ref, frame.size, state, fill, band, edge });
             }
         }
 
@@ -2184,7 +2300,11 @@ namespace tachyon
             }
 
             // ---- Header: [category square] title ... category ----
-            // Static title bar: NoInput throughout so clicks reach the node.
+            // Static title bar: NoInput throughout so clicks reach the node. It's the node's color
+            // over the body: a node's tinted, the line under it stronger; a state's, all of it,
+            // filled, and its edge stronger again unless the state's border shows a hover or a
+            // selection.
+            const tachyon::color4f ownColor = node.categoryColor.a > 0.0f ? node.categoryColor : accentColor;
             ID headerID = idManager.AllocateDynamicID("node-header");
             Element header
             {
@@ -2193,6 +2313,21 @@ namespace tachyon
                 .flags    = ElementFlags::NoInput,
                 .state    = outerState
             };
+            header.colorStyleIndex = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
+                OverNodeBody(ownColor, stateMachine ? theme.nodeTints.state : theme.nodeTints.header)));
+            if (stateMachine)
+            {
+                const tachyon::color4f edge = OverNodeBody(ownColor, theme.nodeTints.stateBorder);
+                const VisualBoxStyleIndex outline = styleManager.RegisterOutline(stateEdgeWidths, stateEdgeRadius,
+                    tachyon::color4b{ uint8_t(std::lround(edge.r * 255.0f)), uint8_t(std::lround(edge.g * 255.0f)), uint8_t(std::lround(edge.b * 255.0f)), 255 });
+                if ((outerState & (ElementState::Hover | ElementState::Active | ElementState::Focused | ElementState::Selected)) == ElementState::None)
+                    VERIFY(elementStorage.AddCustomDraw(outerRes.ref, [outline](tachyon::CustomDrawContext& ctx) {
+                        ctx.RenderBox(ctx.ElementRect(), outline);
+                    }));
+                // A nested machine's second box, behind it, in its colors.
+                if (node.subMachine)
+                    stateMarks.nested.push_back({ node.stableID, header.colorStyleIndex, outline });
+            }
             // Top chrome + header == one row pitch (2*grid), so rows start on a grid line.
             const int32_t rowPitch = 2 * grid;
             LayoutOverride headerLayout = LayoutOverride{}.Auto();
@@ -2204,6 +2339,16 @@ namespace tachyon
             auto headerRes = elementStorage.Add(std::move(header), std::move(headerLayout));
             VERIFY(headerRes.status);
             VERIFY(windowRegistry.Add(headerRes.ref));
+            if (!stateMachine)
+            {
+                // The line under the header, over the border the style draws there.
+                const VisualColorStyleIndex line = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
+                    OverNodeBody(ownColor, theme.nodeTints.headerLine)));
+                VERIFY(elementStorage.AddCustomDraw(headerRes.ref, [line, width = std::max(1, styleManager.Px(1))](tachyon::CustomDrawContext& ctx) {
+                    const IntRect r = ctx.ElementRect();
+                    ctx.RenderQuad(IntRect{ r.x, r.y + r.h - width, r.w, width }, line);
+                }));
+            }
             VERIFY(elementStorage.BeginChildren());
             {
                 auto addHeaderPart = [&](const char* name, StyleRef style, std::string_view text,
@@ -2226,6 +2371,22 @@ namespace tachyon
                 addHeaderPart("node-title", theme.nodeTitleStyleRef, node.title, {});
                 if (!node.category.empty())
                     addHeaderPart("node-caption", theme.nodeCaptionStyleRef, node.category, {});
+                // A state holding a machine of its own: its mark at the end, two stacked boxes.
+                if (stateMachine && node.subMachine)
+                {
+                    const ID markID = idManager.AllocateDynamicID("node-nested-mark");
+                    auto mark = elementStorage.Add(Element{ .id = markID, .styleRef = theme.nodeStateNestedMarkStyleRef,
+                                                            .flags = ElementFlags::NoInput, .state = outerState }, LayoutOverride{}.Auto());
+                    VERIFY(mark.status);
+                    VERIFY(windowRegistry.Add(mark.ref));
+                    VERIFY(elementStorage.AddCustomDraw(mark.ref,
+                        [box = theme.nodeStateNestedStyleRef.visualBoxStyleIndex, o = styleManager.Px(3)](tachyon::CustomDrawContext& ctx) {
+                            const IntRect r = ctx.ElementInnerRect();
+                            const int32_t s = std::max(1, std::min(r.w, r.h) - o);
+                            ctx.RenderBox(IntRect{ r.x + o, r.y, s, s }, box);
+                            ctx.RenderBox(IntRect{ r.x, r.y + o, s, s }, box);
+                        }));
+                }
             }
             VERIFY(elementStorage.EndChildren());
 
@@ -2282,14 +2443,16 @@ namespace tachyon
                     BeginLabelGroup(nodeLabelGroupID, /*defaultWidth=*/60,
                                     /*minWidth=*/30, /*maxWidth=*/120,
                                     /*resizable=*/false);
-                    // A text-only body (NodeText) aligns to its sockets: left
-                    // dot => left, right dot => right, both => centre.
-                    nodeRowTextAlign = (prop.input.has_value() && prop.output) ? TextAlign::Center
-                                     :  prop.output                                ? TextAlign::End
-                                     :                                                       TextAlign::Start;
-                    // Value-fields fill the body (minus the label) with room to spare.
+                    // A text-only body (NodeText) aligns to its sockets: an output alone puts it
+                    // at the end, by its dot; otherwise it reads from the start.
+                    nodeRowTextAlign = (prop.output && !prop.input.has_value()) ? TextAlign::End : TextAlign::Start;
+                    // Value-fields fill the body (minus the label) with room to spare, numbers
+                    // in the node's own style.
                     nodeRowFieldMinWidth = theme.nodeGridSize * 4;
+                    const ControlStyles* outerControls = theme.controls;
+                    theme.controls = &theme.nodeControls;
                     if (prop.renderBody) prop.renderBody();
+                    theme.controls       = outerControls;
                     nodeRowTextAlign     = TextAlign::Start;
                     nodeRowFieldMinWidth = 0;
                     EndLabelGroup();
@@ -2422,7 +2585,7 @@ namespace tachyon
         // Endpoints are CANVAS_LAY, so they pan/zoom with the sockets and clip to the viewport.
         VERIFY(elementStorage.AddCustomDraw(canvasRes.ref,
             [this, &view, socketRefs = std::move(socketRefs), nodeRefs = std::move(nodeRefs), drawnFrames = std::move(drawnFrames),
-             transitionLabels = std::move(transitionLabels), transitionGap, transitionLoop, pointedState, bandLit, stateBand,
+             transitionLabels = std::move(transitionLabels), stateMarks = std::move(stateMarks), transitionGap, transitionLoop, pointedState, bandLit, stateBand,
              canvasHovered = guiStateManager.Interaction().GetHoveredID() == canvasID,
              handleHoveredWire, mouseScreen = windowManager->GetScreenMousePos()](tachyon::CustomDrawContext& ctx)
             {
@@ -2462,15 +2625,18 @@ namespace tachyon
                 for (const DrawnFrame& frame : drawnFrames)
                 {
                     const tachyon::IntRect title = ctx.GetElementRect(frame.title);
-                    ctx.RenderBox(tachyon::IntRect{ title.x, title.y, frame.size.x, frame.size.y },
-                                  theme.nodeFrameStyleRef.visualBoxStyleIndex, frame.state, frame.fill);
+                    const tachyon::IntRect box{ title.x, title.y, frame.size.x, frame.size.y };
+                    ctx.RenderBox(box, theme.nodeFrameStyleRef.visualBoxStyleIndex, frame.state, frame.fill);
                     ctx.RenderBox(title, theme.nodeFrameBandStyleRef.visualBoxStyleIndex, frame.state, frame.band);
+                    // At rest, edged in its color; hovered or selected, its style's border shows that.
+                    if ((frame.state & (ElementState::Hover | ElementState::Active | ElementState::Selected)) == ElementState::None)
+                        ctx.RenderBox(box, frame.edge);
                 }
 
                 // A state machine: transitions between the states in place of wires.
                 if (view.kind == NodeViewKind::StateMachine)
                 {
-                    DrawStateMachine(ctx, theme, styleManager, view, gridOrigin, transitionLabels, transitionGap, transitionLoop,
+                    DrawStateMachine(ctx, theme, styleManager, view, gridOrigin, transitionLabels, stateMarks, transitionGap, transitionLoop,
                                      canvasHovered, ctx.ScreenToCurrent(view.transitionPointer), pointedState, bandLit,
                                      int32_t(std::lround(stateBand * NodeViewZoom(view))));
                     view.wireHandleCache.clear();
@@ -2783,6 +2949,8 @@ namespace tachyon
                 const std::string percent = std::to_string(int(std::lround(NodeViewZoom(view) * 100.0f))) + "%";
                 Button(idManager.AllocateDynamicID(), percent, [&view] { ZoomNodeView(view, 1.0f / NodeViewZoom(view)); }, button);
                 Button(idManager.AllocateDynamicID(), "+", [&view] { ZoomNodeView(view, kZoomStep); }, button);
+                RegisterElement(Element{ .id = idManager.AllocateDynamicID("divider"), .styleRef = theme.nodeViewOverlayDividerStyleRef,
+                                         .flags = ElementFlags::NoInput }, LayoutOverride{});
                 Button(idManager.AllocateDynamicID(), "Fit", [&view] { FrameSelectedNodes(view); }, button);
                 if (pushed)
                     (void)idManager.PopParent();

@@ -81,6 +81,7 @@ namespace tachyon
     public:
         ControlStyles regularControls {};                   ///< .button, .toggle, .textbox, .number-field, .menu-trigger
         ControlStyles toolbarControls {};                   ///< the .toolbar-* variants of those
+        ControlStyles nodeControls {};                      ///< in a node's rows: the regular ones, numbers in .node-number-field
         const ControlStyles* controls = &regularControls;   ///< the bundle in use
 
         StyleRef emptyHorzStyleRef;     ///< horizontal flex, no wrap; groups elements without drawing anything
@@ -227,6 +228,10 @@ namespace tachyon
         StyleRef colorPickerPreviewStyleRef {};         ///< color picker: the color preview
         StyleRef colorPickerNewStyleRef{};              ///< color picker: the add-swatch button
         StyleRef gradientSwatchStyleRef {};             ///< GradientField: the swatch
+        StyleRef nodeFrameMenuStyleRef {};              ///< a node frame's "..." button, at its title bar's end
+        StyleRef nodeViewOverlayDividerStyleRef {};     ///< the line before Fit in a node view's zoom bar
+        StyleRef nodeStateTimeStyleRef {};              ///< the pill under a state machine's active state: its time in it
+        StyleRef nodeStateNestedMarkStyleRef {};        ///< the mark at the end of a state holding a machine (its size)
         StyleRef gradientEditorStyleRef {};             ///< gradient editor: the window
         StyleRef gradientEditorBarStyleRef {};          ///< gradient editor: the gradient bar with its stops
         StyleRef dialogSmallButtonStyleRef {};              ///< dialog: a short button (Save preset, Reverse)
@@ -796,6 +801,18 @@ namespace tachyon
         /// --disabled-opacity: a disabled control, with all its parts, is drawn this opaque,
         /// unless its style sets an opacity for :disabled.
         float                          disabledOpacity = 0.4f;
+        /// How strongly a node view's colors show, each over what's under it (0 to 1): a node's
+        /// header and the line under it over --node-bg, a state's fill and border over
+        /// --node-bg, and a frame's box, title bar and border over the canvas.
+        /// --node-header-tint, --node-header-line-tint, --state-tint, --state-border-tint,
+        /// --frame-fill-tint, --frame-band-tint, --frame-border-tint.
+        struct NodeTints
+        {
+            float header = 0.24f, headerLine = 0.38f;
+            float state = 0.26f, stateBorder = 0.50f;
+            float frameFill = 0.07f, frameBand = 0.20f, frameBorder = 0.45f;
+        };
+        NodeTints                      nodeTints {};
         /// An invalid control's border color (--error) and the halo around it (--invalid-halo).
         tachyon::color4b               invalidColor {};
         tachyon::VisualShadow          invalidHalo {};
