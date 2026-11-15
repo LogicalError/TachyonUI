@@ -62,6 +62,19 @@ tableState.selectionBar     = true;
 tableState.onRowDoubleClick = [this](ID rowID) { OpenRow(rowID); };
 ```
 
+A plain table, without stripes or lines between the columns:
+
+- `rowStyle = theme.tableRowStyleRef`: every row as the even ones, so no stripes.
+- `columnSeparators = false`: no 1px lines between the columns.
+  - Without a header row, none at all.
+  - With one, none after the columns that can't be resized (`ColumnSizing::Fixed`, or after a
+    Stretch column). A resizable column keeps its sizer, to drag.
+
+```cpp
+tableState.rowStyle         = theme.tableRowStyleRef;
+tableState.columnSeparators = false;
+```
+
 A context menu on the rows: `contextMenu` builds its items while it's open.
 
 - A right-click on a row opens it with that row's dataset index.
