@@ -181,6 +181,7 @@ namespace tachyon
             bool        spinner  = false;
             bool        still    = false;   // an element marked Animated that looks the same each frame
             int         builds   = 0;
+            int         quitAfter = 0;            // quit at this many builds; 0: never
             std::atomic<bool> quitSoon = false;   // set from another thread: quit at the next build
             int2        buttonCenter{ 0, 0 };
 
@@ -203,7 +204,7 @@ namespace tachyon
                     EndVertical();
                 }
                 EndWindow();
-                if (quitSoon)
+                if (quitSoon || (quitAfter > 0 && builds >= quitAfter))
                     applicationQuit = true;
             }
 
@@ -494,19 +495,42 @@ namespace tachyon
             EXPECT_LT(app.builds, 30) << "not a frame every pass while idle";
         }
 
+        // Runs until `frames` frames are built, and returns how long that took in seconds. A
+        // watchdog quits it after 10 s, so a Run that stops building fails instead of hanging.
+        // Counted in frames, not time: a slow machine makes it take longer, never fewer frames.
+        double RunFrames(RedrawApp& app, int frames)
+        {
+            app.quitAfter = frames;
+            std::atomic<bool> done = false;
+            std::thread watchdog([&] {
+                const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+                while (!done && std::chrono::steady_clock::now() < until)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                if (!done)
+                {
+                    app.quitSoon = true;
+                    app.RequestRedraw();
+                }
+            });
+            const auto start = std::chrono::steady_clock::now();
+            EXPECT_TRUE(app.Run());
+            const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+            done = true;
+            watchdog.join();
+            return seconds;
+        }
+        // At least this long for `frames` frames, one a 60 Hz refresh (the first right away),
+        // with room for a timer that wakes a little early.
+        constexpr double PacedSeconds(int frames) { return double(frames - 1) / 60.0 * 0.75; }
+
         // Run() in WhenChanged: a frame each refresh even when nothing is presented, not as
         // fast as it can.
         TEST_F(RedrawTest, RunWhenChangedPacesItself)
         {
             app.SetRedrawMode(RedrawMode::WhenChanged);
-            std::thread worker([this] {
-                std::this_thread::sleep_for(std::chrono::milliseconds(150));
-                app.quitSoon = true;
-            });
-            EXPECT_TRUE(app.Run());
-            worker.join();
-            EXPECT_GT(app.builds, 3) << "it keeps building";
-            EXPECT_LT(app.builds, 60) << "about one a refresh";
+            const double seconds = RunFrames(app, 10);
+            EXPECT_EQ(app.builds, 10) << "it keeps building";
+            EXPECT_GE(seconds, PacedSeconds(10)) << "about one a refresh, not as fast as it can";
         }
 
         // Run() with presents that don't wait for vsync (none here): Always draws a frame each
@@ -514,14 +538,9 @@ namespace tachyon
         TEST_F(RedrawTest, RunAlwaysPacesItselfToTheRefresh)
         {
             app.SetRedrawMode(RedrawMode::Always);
-            std::thread worker([this] {
-                std::this_thread::sleep_for(std::chrono::milliseconds(150));
-                app.quitSoon = true;
-            });
-            EXPECT_TRUE(app.Run());
-            worker.join();
-            EXPECT_GT(app.builds, 3) << "it keeps drawing";
-            EXPECT_LT(app.builds, 30) << "about one a refresh (60 Hz without a known display)";
+            const double seconds = RunFrames(app, 10);
+            EXPECT_EQ(app.builds, 10) << "it keeps drawing";
+            EXPECT_GE(seconds, PacedSeconds(10)) << "about one a refresh (60 Hz without a known display)";
             // The wait is in the profiled frame and in frameTime, beside the build.
             EXPECT_GT(app.frameTime, 0.010f) << "about a 60 Hz period";
             EXPECT_LT(app.frameBuildTime, app.frameTime);
@@ -551,14 +570,9 @@ namespace tachyon
         TEST_F(RedrawTest, RunPacesAnAnimationToTheRefresh)
         {
             app.spinner = true;
-            std::thread worker([this] {
-                std::this_thread::sleep_for(std::chrono::milliseconds(150));
-                app.quitSoon = true;
-            });
-            EXPECT_TRUE(app.Run());
-            worker.join();
-            EXPECT_GT(app.builds, 3) << "it keeps drawing";
-            EXPECT_LT(app.builds, 30) << "about one a refresh (60 Hz without a known display)";
+            const double seconds = RunFrames(app, 10);
+            EXPECT_EQ(app.builds, 10) << "it keeps drawing";
+            EXPECT_GE(seconds, PacedSeconds(10)) << "about one a refresh (60 Hz without a known display)";
         }
     }
 }
