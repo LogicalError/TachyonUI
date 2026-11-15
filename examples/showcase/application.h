@@ -120,7 +120,8 @@ namespace tachyon
 
         // Classes from themes/showcase.css, looked up after each theme load.
         StyleRef hierarchyVizCellStyleRef, hierarchyVisibilityStyleRef, hierarchyTableStyleRef;
-        StyleRef logLevelIconStyleRef, logLevelWellStyleRef;
+        StyleRef logLevelDotStyleRefs[3];    // indexed by LogLevel
+        StyleRef logLevelWellStyleRef, logToolbarStyleRef, logDetailSizerStyleRef;
         StyleRef statusDotStyleRef;     ///< the status bar's "ready" dot
         StyleRef statusReadyStyleRef;   ///< the dot and "Ready", close together
         StyleRef filesSizerStyleRef;    ///< the files panel's tree | grid split

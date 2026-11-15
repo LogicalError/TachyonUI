@@ -144,24 +144,55 @@
 }
 .log-cell-time::highlight(selected) { color: var(--text-1); }
 
-/* ---- logLevelIconStyle ---------------------------------------------------- */
-/* Level icon (info / warning / error) in the console log. The icon is drawn
-   to fit the element box, so width/height set its rendered size. */
-.log-level-icon {
-    width: 16px;
+/* ---- Log level dots ----------------------------------------------------------- */
+/* A row's level: a 7px dot in the level's color. */
+.log-level-dot-info, .log-level-dot-warning, .log-level-dot-error {
+    width: 7px;
+    height: 7px;
     margin: 0px;
     padding: 0px;
-    -tachyon-icon-size: 16px;
-    -tachyon-vertical-text-align: middle;
+    -tachyon-icon-size: 7px;
     border-width: 0px;
     background-color: transparent;
     border-color: transparent;
-    color: var(--text-2);
     align-self: center;
     flex-grow: 0;
     flex-shrink: 0;
 }
-.log-level-icon::highlight(selected) { color: var(--text-1); }
+.log-level-dot-info    { color: var(--info); }
+.log-level-dot-warning { color: var(--warn); }
+.log-level-dot-error   { color: var(--error); }
+
+/* The Log's toolbar: Clear, the filter, the level counts and collapse, padded, with a
+   line under it. */
+.log-toolbar {
+    border-width: 0px 0px 1px 0px;
+    border-color: var(--line-subtle);
+    padding: 6px 8px;
+    margin: 0px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 6px;
+    background-color: transparent;
+}
+
+/* Between the log and its detail pane: a 4px handle drawn as a 1px line, lit while
+   hovered or dragged. */
+.log-detail-sizer {
+    border-width: 1px 0px 0px 0px;
+    border-color: var(--line-subtle);
+    padding: 0px;
+    margin: 0px;
+    background-color: transparent;
+    cursor: row-resize;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.log-detail-sizer:hover  { background-color: var(--divider-hover); border-color: var(--divider-hover); }
+.log-detail-sizer:active { background-color: var(--divider-hover); border-color: var(--divider-hover); }
 
 /* The files panel's tree | grid split: a 4px handle drawn as a 1px line, lit while
    hovered or dragged. */
@@ -359,9 +390,8 @@
     flex-grow: 0;
     flex-shrink: 0;
     margin: 0px;
-    padding: 6px 8px;
-    border-width: 1px 0px 0px 0px;
-    border-color: var(--line-subtle);
+    padding: 8px 12px;
+    border-width: 0px;
     background-color: var(--bg-panel);
     overflow: hidden;
 }
@@ -373,7 +403,9 @@
     margin: 0px;
     padding: 0px;
     color: var(--text-2);
-    font-size: var(--font-size);
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 18px;
     text-wrap: wrap;
     flex-grow: 1;
     align-self: stretch;

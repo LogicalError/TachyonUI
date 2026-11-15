@@ -762,7 +762,11 @@ namespace tachyon
         hierarchyVizCellStyleRef    = theme.GetStyle("hierarchy-viz-cell");
         hierarchyVisibilityStyleRef = theme.GetStyle("hierarchy-visibility");
         hierarchyTableStyleRef      = theme.GetStyle("hierarchy-table");
-        logLevelIconStyleRef        = theme.GetStyle("log-level-icon");
+        logLevelDotStyleRefs[0]     = theme.GetStyle("log-level-dot-info");
+        logLevelDotStyleRefs[1]     = theme.GetStyle("log-level-dot-warning");
+        logLevelDotStyleRefs[2]     = theme.GetStyle("log-level-dot-error");
+        logToolbarStyleRef          = theme.GetStyle("log-toolbar");
+        logDetailSizerStyleRef      = theme.GetStyle("log-detail-sizer");
         statusDotStyleRef           = theme.GetStyle("status-dot");
         statusReadyStyleRef         = theme.GetStyle("status-ready");
         filesSizerStyleRef          = theme.GetStyle("files-sizer");
