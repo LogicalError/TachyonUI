@@ -816,6 +816,10 @@ namespace tachyon
         textGlowSampleStyleRef      = theme.GetStyle("text-glow-sample");
         settingsTitleStyleRef       = theme.GetStyle("settings-title");
         settingsScrollStyleRef      = theme.GetStyle("settings-scroll");
+        settingsBodyStyleRef        = theme.GetStyle("settings-body");
+        settingsHeadStyleRef        = theme.GetStyle("settings-head");
+        settingsTitleRowStyleRef    = theme.GetStyle("settings-title-row");
+        settingsSplitStyleRef       = theme.GetStyle("settings-split");
         sketchPadStyleRef           = theme.GetStyle("sketch-pad");
         {
             const char* kSideTag[4]   = { "left", "right", "top", "bottom" };
@@ -1222,6 +1226,11 @@ namespace tachyon
                 showcase.filesFolderIcon     = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/folder_outline.svg").c_str());
                 showcase.filesFolderOpenIcon = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/folder_open_outline.svg").c_str());
                 showcase.layoutsIcon         = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/panels-top-left.svg").c_str());
+                showcase.settingsShortcutsIcon  = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/keyboard.svg").c_str());
+                showcase.settingsAppearanceIcon = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/palette.svg").c_str());
+                showcase.settingsGeneralIcon    = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/sliders-horizontal.svg").c_str());
+                showcase.settingsAdvancedIcon   = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/code.svg").c_str());
+                showcase.settingsAboutIcon      = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/info.svg").c_str());
                                          
 				showcase.fileImageIcon       = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/file-image.svg").c_str());
 				showcase.fileAudioIcon       = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/file-audio.svg").c_str());

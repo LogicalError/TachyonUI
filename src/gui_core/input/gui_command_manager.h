@@ -357,6 +357,20 @@ namespace tachyon
                                           : FormatShortcut(s.key, s.modifiers);
         }
 
+        /// Gives every command the shortcut it was registered with back (a chord, its first key)
+        /// and cancels a rebind in progress: Reset to defaults.
+        void ResetShortcuts()
+        {
+            m_rebinding = {};
+            for (Command& s : m_commands)
+            {
+                s.key           = s.defaultKey;
+                s.modifiers     = s.defaultModifiers;
+                s.displayString = s.IsChord() ? FormatChordShortcut(s.key, s.modifiers, s.chord2Key, s.chord2Mods)
+                                              : FormatShortcut(s.key, s.modifiers);
+            }
+        }
+
         /// True while a chord prefix was pressed and awaits its second key.
         bool IsChordPending() const { return m_pendingChord.key != KeyCode::None; }
 
@@ -383,24 +397,34 @@ namespace tachyon
         static std::string FormatShortcut(KeyCode key, KeyModifier modifiers)
         {
             if (key == KeyCode::None) return "(unbound)";
+            std::vector<std::string> keys;
+            ShortcutKeys(key, modifiers, keys);
             std::string out;
+            for (const std::string& name : keys)
+            {
+                if (!out.empty()) out += ' ';
+                out += name;
+            }
+            return out;
+        }
+
+        /// Appends the names of a (key, modifiers) combo's keys to `out`, one per key as a
+        /// keycap shows them: the modifiers, then the key ("Ctrl", "Shift", "D"). A key whose
+        /// name has a space is one name ("Num +"). Nothing for KeyCode::None.
+        static void ShortcutKeys(KeyCode key, KeyModifier modifiers, std::vector<std::string>& out)
+        {
+            if (key == KeyCode::None) return;
             auto addMod = [&](KeyModifier bit, const char* name)
             {
                 if ((modifiers & bit) != KeyModifier::None)
-                {
-                    if (!out.empty()) out += ' ';
-                    out += name;
-                }
+                    out.emplace_back(name);
             };
             addMod(KeyModifier::Control, "Ctrl");
             addMod(KeyModifier::Shift,   "Shift");
             addMod(KeyModifier::Alt,     "Alt");
             addMod(KeyModifier::Command, "Cmd");
             addMod(KeyModifier::Option,  "Opt");
-
-            if (!out.empty()) out += ' ';
-            out += KeyCodeName(key);
-            return out;
+            out.push_back(KeyCodeName(key));
         }
 
         /// A short human-readable key name, e.g. "A", "F5", "Enter", "[", "Num +" (the numeric

@@ -366,22 +366,27 @@ Two panes: a tree of pages and the selected page's content, with a sizer between
 - It renders into the current container.
 - Add pages with stable IDs: IDs made once with `idManager.CreateStaticID()`.
 - Each page's `render` function builds its content.
+- A page can have an icon before its name in the list.
+- `header` is a small caption above the list, for example "Preferences".
 
 ```cpp
 void RenderSettingsPanel(SettingsPanelState& state);
 ID   SettingsPanelState::AddPage(ID id, std::string_view name, std::function<void()> render);
+ID   SettingsPanelState::AddPage(ID id, std::string_view name, IconID icon, std::function<void()> render);
 ```
 
 ```cpp
 if (settings.pages.empty())   // member: SettingsPanelState settings
 {
-    settings.AddPage(idManager.CreateStaticID(), "General",    [this] { Switch(autosave, "Autosave"); });
-    settings.AddPage(idManager.CreateStaticID(), "Appearance", [this] { Dropdown(themeIndex, { "Dark", "Light" }); });
+    settings.header = "Preferences";
+    settings.AddPage(idManager.CreateStaticID(), "General",    slidersIcon, [this] { Switch(autosave, "Autosave"); });
+    settings.AddPage(idManager.CreateStaticID(), "Appearance", paletteIcon, [this] { Dropdown(themeIndex, { "Dark", "Light" }); });
 }
 RenderSettingsPanel(settings);
 ```
 
-Classes: `settings-page`, `settings-page-selection`.
+Classes: `settings-page`, `settings-page-selection`, and `settings-sizer` between the two
+panes.
 
 ---
 

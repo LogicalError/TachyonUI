@@ -692,6 +692,10 @@ namespace tachyon
 
         StyleRef settingsPageSelectionRef {};   ///< the settings page list (.settings-page-selection)
         StyleRef settingsPageStyleRef     {};   ///< settings page body - dock-content layout + left padding off the sizer
+        StyleRef settingsSizerStyleRef    {};   ///< between the page list and the page: a 1px line, lit while hovered
+        StyleRef shortcutButtonStyleRef   {};   ///< ShortcutButton: a flat row of keycaps
+        StyleRef keycapStyleRef           {};   ///< a key in a ShortcutButton
+        StyleRef shortcutMutedStyleRef    {};   ///< a ShortcutButton's "Unassigned" and the comma between a chord's steps
 
         /// @name Built-in icons
         /// Registered by InitializeDefaultStyles.

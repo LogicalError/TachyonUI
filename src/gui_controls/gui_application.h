@@ -642,6 +642,11 @@ namespace tachyon
         bool        Button(ID id, const GUIContent& content, std::function<void()> onClick, StyleRef style, LayoutOverride&& constraints = {});
         /// As above, in the theme's button style.
         inline bool Button(ID id, const GUIContent& content, std::function<void()> onClick,                 LayoutOverride&& constraints = {}) { return Button(id,  content, std::move(onClick), theme.controls->button, std::move(constraints)); }
+        /// A command's shortcut as keycaps, one per key ("Ctrl" "C"); a chord's two steps apart
+        /// by a comma. Without one, `unassigned` in a muted color. A flat button: onClick runs
+        /// on a click anywhere on it (to rebind the shortcut, say).
+        bool        ShortcutButton(ID id, const CommandManager::Command& command, std::function<void()> onClick,
+                                   std::string_view unassigned = "Unassigned", LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
         inline bool Button(       const GUIContent& content, std::function<void()> onClick, StyleRef style, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Button(idManager.AllocateDynamicID(site), content, std::move(onClick), style, std::move(constraints)); }
         /// As above, with the call site as the ID, in the theme's button style.
@@ -2769,10 +2774,14 @@ namespace tachyon
                 std::string           name;
                 /// Builds the page's content while it is selected.
                 std::function<void()> render;
+                /// Before its name in the page list; optional.
+                IconID                icon = IconID::Invalid;
             };
 
             /// Added with AddPage.
             std::vector<Page> pages;
+            /// Above the page list, as a small caption ("Preferences"); none when empty.
+            std::string       header;
             /// The page shown; a click in the tree changes it.
             tachyon::ID           selectedID = tachyon::ID::Invalid();
             /// The page tree's width; its sizer changes it.
@@ -2787,10 +2796,16 @@ namespace tachyon
             } internal;
 
             /// `id` must be stable. The first page added is selected initially.
-            tachyon::ID AddPage(tachyon::ID id, std::string_view name, 
+            tachyon::ID AddPage(tachyon::ID id, std::string_view name,
                             std::function<void()> render)
             {
-                pages.push_back({ id, std::string(name), std::move(render) });
+                return AddPage(id, name, IconID::Invalid, std::move(render));
+            }
+            /// As above, with an icon before its name in the page list.
+            tachyon::ID AddPage(tachyon::ID id, std::string_view name, IconID icon,
+                            std::function<void()> render)
+            {
+                pages.push_back({ id, std::string(name), std::move(render), icon });
                 if (selectedID == tachyon::ID::Invalid()) selectedID = id;
                 return id;
             }

@@ -508,6 +508,52 @@ namespace tachyon
         return guiStateManager.Interaction().HasBeenClicked(id);
     }
 
+    bool GUIApplication::ShortcutButton(ID id, const CommandManager::Command& command, std::function<void()> onClick,
+                                        std::string_view unassigned, LayoutOverride&& constraints)
+    {
+        // The keys of each step.
+        std::vector<std::string> first, second;
+        CommandManager::ShortcutKeys(command.key, command.modifiers, first);
+        if (command.IsChord() && !first.empty())
+            CommandManager::ShortcutKeys(command.chord2Key, command.chord2Mods, second);
+
+        (void)RegisterControl(
+            Element{ .id = id, .eventHandler = MakeButtonHandler(std::move(onClick)), .styleRef = theme.shortcutButtonStyleRef },
+            std::move(constraints));
+
+        // Its parts take no input, so a click anywhere on it is the button's; they're drawn in
+        // its state.
+        const ElementState state = guiStateManager.GetCurrentState(id);
+        auto part = [&](std::string_view text, StyleRef style) {
+            const ID partID = idManager.AllocateDynamicID();
+            Element el{};
+            el.id       = partID;
+            el.flags    = ElementFlags::NoInput;
+            el.state    = state;
+            el.styleRef = style;
+            el.textID   = textSystem->RegisterText(partID, text, style, state);
+            auto res = elementStorage.Add(std::move(el), LayoutOverride::Auto());
+            VERIFY(res.status);
+            VERIFY(windowRegistry.Add(res.ref));
+        };
+        VERIFY(elementStorage.BeginChildren());
+        [[maybe_unused]] const bool pushed = idManager.PushParent(id);
+        if (first.empty())
+            part(unassigned, theme.shortcutMutedStyleRef);
+        for (const std::string& key : first)
+            part(key, theme.keycapStyleRef);
+        if (!second.empty())
+        {
+            part(",", theme.shortcutMutedStyleRef);
+            for (const std::string& key : second)
+                part(key, theme.keycapStyleRef);
+        }
+        if (pushed)
+            (void)idManager.PopParent();
+        VERIFY(elementStorage.EndChildren());
+        return guiStateManager.Interaction().HasBeenClicked(id);
+    }
+
     bool GUIApplication::Breadcrumb(ID id, std::span<const std::string> segments, std::function<void(int)> onSelect, StyleRef style, LayoutOverride&& constraints)
     {
         bool clicked = false;

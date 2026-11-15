@@ -7,6 +7,7 @@ list(APPEND GUI_CORE_TEST_FILES
   file_system_test.cpp
   file_thumbnails_test.cpp
   controls_menu_test.cpp
+  controls_settings_test.cpp
   transition_manager_test.cpp
   layered_fade_test.cpp
   controls_scrollbar_test.cpp

@@ -6,6 +6,7 @@
 #include <gui_core/input/gui_input_state.h>
 
 #include <string>
+#include <vector>
 
 using tachyon::CommandManager;
 using tachyon::CommandID;
@@ -278,6 +279,42 @@ TEST(CommandManager, ACommandIsReboundWhileItsShortcutIsNotItsOwn)
     m.SetShortcut(noKey, KeyCode::KeyO, KeyModifier::Control);
     EXPECT_TRUE(m.GetCommand(noKey)->IsRebound());
     EXPECT_TRUE(m.GetCommand(other)->IsRebound()) << "left without one";
+}
+
+// Reset to defaults: every command gets the shortcut it was registered with back, the one a
+// rebind left without one too; a chord keeps its second key.
+TEST(CommandManager, ResetShortcutsGivesEveryCommandItsOwnBack)
+{
+    CommandManager m;
+    CommandID save  = m.RegisterCommand(KeyCode::KeyS, KeyModifier::Control, []() {}, "Save");
+    CommandID open  = m.RegisterCommand(KeyCode::KeyO, KeyModifier::Control, []() {}, "Open");
+    CommandID chord = m.RegisterChord(CommandMode::Default, KeyCode::KeyK, KeyModifier::Control,
+                                      KeyCode::KeyS, KeyModifier::Control, []() {}, "Save All");
+    m.SetShortcut(save, KeyCode::KeyO, KeyModifier::Control);   // takes Open's
+    m.SetShortcut(chord, KeyCode::KeyJ, KeyModifier::Control);
+    m.BeginRebind(open);
+
+    m.ResetShortcuts();
+    for (CommandID id : { save, open, chord })
+        EXPECT_FALSE(m.GetCommand(id)->IsRebound());
+    EXPECT_EQ(m.GetCommand(save)->displayString, "Ctrl S");
+    EXPECT_EQ(m.GetCommand(open)->displayString, "Ctrl O");
+    EXPECT_EQ(m.GetCommand(chord)->displayString, "Ctrl K, Ctrl S");
+    EXPECT_FALSE(m.IsRebinding()) << "a rebind in progress is cancelled";
+}
+
+// A shortcut's keys one by one, as keycaps show them; FormatShortcut joins them.
+TEST(CommandManager, ShortcutKeysListsTheModifiersThenTheKey)
+{
+    std::vector<std::string> keys;
+    CommandManager::ShortcutKeys(KeyCode::KeyD, KeyModifier::Control | KeyModifier::Shift, keys);
+    EXPECT_EQ(keys, (std::vector<std::string>{ "Ctrl", "Shift", "D" }));
+    keys.clear();
+    CommandManager::ShortcutKeys(KeyCode::KeyPadPlus, KeyModifier::Control, keys);
+    EXPECT_EQ(keys, (std::vector<std::string>{ "Ctrl", "Num +" })) << "a key whose name has a space is one key";
+    keys.clear();
+    CommandManager::ShortcutKeys(KeyCode::None, KeyModifier::Control, keys);
+    EXPECT_TRUE(keys.empty()) << "unbound: no keys";
 }
 
 TEST(CommandManager, SetShortcutOnAChordKeepsItsSecondKey)
