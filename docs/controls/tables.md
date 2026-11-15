@@ -128,13 +128,23 @@ Keyboard:
 - Space or Enter on a header sorts by its column. Pressing it again reverses the order.
 - Alt+Left and Alt+Right move the column. The focus moves with it.
 
+A header lines up with its column's cells:
+
+- Over cells aligned to the end, such as `table-cell-number`'s, the header is aligned to the end
+  too, and its sort chevron goes before the label.
+  - For example, a "Size" column's header sits over the right edge of its numbers.
+- Otherwise it's at the start, with the chevron after the label.
+- Right-align only what's counted or measured (a count, a size, a duration): codes and text read
+  better at the start.
+
 The CSS classes:
 
 - `table` for the table, or `table-fill` to fill the parent
-- `table-header`
+- `table-header` for a header that sorts or moves, `table-header-locked` for one that doesn't,
+  and `table-header-end`, `table-header-locked-end` over cells aligned to the end
 - `table-row` and `table-row-alt` for the rows, alternating
 - `table-cell`, and `table-cell-number` for numbers
-- `table-sizer` for the handle that resizes a column
+- `table-sizer` for the handle that resizes a column: unseen until hovered
 - `table-separator`
 
 ## BeginTable / BeginRow / Cell

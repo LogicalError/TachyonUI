@@ -922,6 +922,54 @@ namespace tachyon
                     << " missing after scrolling deep into the table";
         }
 
+        // The header row is as tall as its text and padding, not taller (the design's is 28px),
+        // and the first row starts right under it. Real icon sizes are checked on the GPU
+        // (GpuTableHeader); here icons have no size.
+        TEST_F(TableVirtualScrollTest, TheHeaderRowIsAsTallAsItsText)
+        {
+            columns[0].sortAscending = [](int a, int b) { return a < b; };   // a sortable header, with its chevron
+            columns[0].column.locked = true;                                  // a landmark that doesn't move
+            tachyon::TableState state{};
+            state.sortColumn = 0;
+            state.selectionBar = true;
+            state.onReorderColumns = [](int, int) {};
+            for (size_t c = 1; c < columns.size(); ++c)
+                columns[c].column.cellStyle = app.theme.tableCellNumberStyleRef;   // numbers, as a data table's
+            auto emit = [&] {
+                app.BeginRootWindow();
+                app.BeginVertical(app.idManager.AllocateDynamicID("pane"), app.theme.emptyVertStyleRef, LayoutOverride{}.Size(500, 400));
+                std::span<tachyon::VirtualTableColumn> span(columns.data(), columns.size());
+                app.VirtualTable(tableID, state, span, 200, 0, app.theme.tableFillStyleRef,
+                                 LayoutOverride::Auto().FlexGrow(1).MinHeight(0));
+                app.EndVertical();
+                app.EndRootWindow();
+            };
+            app.Frame(emit);
+            app.Frame(emit);
+            const ElementRef header = columns[0].internal.headerRef;
+            ASSERT_TRUE(header.IsValid());
+            const IntRect headerRect = app.elementStorage.GetElementRectUnsafe(header).rect;
+            const IntRect row0 = app.GetElementRect(state.RowIDForIndex(0));
+            EXPECT_LE(headerRect.h, 30) << "header row " << headerRect.h << "px";
+            EXPECT_EQ(row0.y, headerRect.y + headerRect.h) << "the first row starts right under the header";
+        }
+
+        // A column whose cells are aligned to the end (numbers) has its header aligned so too, so
+        // the header sits over its values; a text column's header stays at the start.
+        TEST_F(TableVirtualScrollTest, AHeaderIsAlignedAsItsColumnsCells)
+        {
+            columns[1].column.cellStyle = app.theme.tableCellNumberStyleRef;   // right-aligned numbers
+            columns[2].sortAscending = [](int a, int b) { return a < b; };       // sortable
+            columns[2].column.cellStyle = app.theme.tableCellNumberStyleRef;
+            tachyon::TableState state{};
+            app.Frame([&] { Emit(state); });
+            app.Frame([&] { Emit(state); });
+            auto headerStyle = [&](size_t c) { return app.elementStorage.GetElementUnsafe(columns[c].internal.headerRef).styleRef; };
+            EXPECT_EQ(headerStyle(0), app.theme.tableHeaderLockedStyleRef) << "text: at the start";
+            EXPECT_EQ(headerStyle(1), app.theme.tableHeaderLockedEndStyleRef) << "numbers: at the end";
+            EXPECT_EQ(headerStyle(2), app.theme.tableHeaderEndStyleRef) << "numbers, sortable: at the end";
+        }
+
         // With columnSeparators off, a table with headers draws no line between columns that
         // can't be resized; a column that can keeps its sizer, to drag.
         TEST_F(TableVirtualScrollTest, NoSeparatorsLeaveOnlyTheSizersToDrag)

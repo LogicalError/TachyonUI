@@ -42,9 +42,9 @@ namespace tachyon
 
     /// Placement of a text + icon pair inside `rect`:
     ///   * The icon always sits adjacent to its label, never at a stretched rect's edge.
-    ///   * Left / Right: icon and text share one centre line. For Left, textRect is
-    ///     shifted past the icon so text-align: end can't render across it; for
-    ///     Right, textRect keeps rect.x and shrinks to reserve the icon area.
+    ///   * Left / Right: icon and text share one centre line. textRect is the rect less
+    ///     the icon area (IconAwareLayoutMaxWidth): for Left it starts past the icon at
+    ///     rect.x, for Right it keeps rect.x and shrinks; text-align places the text in it.
     ///   * Top / Bottom: icon is centred on the [icon, text] column. Top hugs rect's
     ///     top; Bottom sits iconTextGap below the text, not at rect's bottom.
     ///   * Left / Right icons taller than the text may extend outside rect; the
@@ -110,6 +110,9 @@ namespace tachyon
             case IconSide::None: break;
             case IconSide::Left:
             {
+                // The text is laid out (and aligned) in the rect less the icon and gap
+                // (IconAwareLayoutMaxWidth), so its area is that: from past the icon at the
+                // rect's start to the rect's end. The icon sits just before the aligned text.
                 const int32_t combinedStartX = rect.x + textAlignmentOffsetX;
                 out.iconRect = IntRect{
                     .x = combinedStartX,
@@ -117,8 +120,8 @@ namespace tachyon
                     .w = iconMeasurement.width,
                     .h = iconMeasurement.height
                 };
-                out.textRect.x = combinedStartX + iconMeasurement.width + iconTextGap;
-                out.textRect.w = (rect.x + rect.w) - out.textRect.x;
+                out.textRect.x = rect.x + iconMeasurement.width + iconTextGap;
+                out.textRect.w = std::max(0, rect.w - iconMeasurement.width - iconTextGap);
                 out.textRect.y = blockY + (combinedHeight - textHeight) / 2;
                 break;
             }

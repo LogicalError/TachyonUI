@@ -88,6 +88,22 @@ namespace tachyon
         EXPECT_FALSE(RectsOverlap(p.textRect, p.iconRect));
     }
 
+    // A left icon with the text aligned to the end (a number column's sorted header): the
+    // text is laid out in the rect less the icon and gap, so its area starts past the icon at
+    // the rect's start and runs to its end; the text system aligns it there. The icon sits
+    // just before the text.
+    TEST(IconTextPlacement, LeftIcon_EndAligned_TextAreaIsTheRectPastTheIcon)
+    {
+        const IntRect rect{ .x = 10, .y = 0, .w = 200, .h = 24 };
+        const auto p = ComputeIconTextPlacement(rect, kTextW, kTextH, kIcon,
+                                                IconSide::Left, kGap, TextAlign::End);
+        EXPECT_EQ(p.textRect.x, rect.x + kIcon.width + kGap);
+        EXPECT_EQ(p.textRect.w, IconAwareLayoutMaxWidth(rect.w, kIcon, IconSide::Left, kGap, true))
+            << "as wide as the text is laid out in";
+        EXPECT_EQ(p.textRect.x + p.textRect.w, rect.x + rect.w);
+        EXPECT_EQ(p.iconRect.x, rect.x + rect.w - kTextW - kGap - kIcon.width) << "just before the text";
+    }
+
     TEST(IconTextPlacement, RightIcon_ContentSizedRect_TextFirstThenIcon)
     {
         const IntRect rect{ .x = 0, .y = 0, .w = 72, .h = 24 };
@@ -204,15 +220,17 @@ namespace tachyon
     }
 
     // Left icon + text-align: end - mirror of the above. Text must not be
-    // placed beneath the icon.
+    // placed beneath the icon: the text system aligns it in textRect, so its
+    // glyphs start at textRect.x plus the alignment's offset.
     TEST(IconTextPlacement, LeftIcon_Stretched_AlignEnd_NoHorizontalOverlap)
     {
         const IntRect rect{ .x = 0, .y = 0, .w = 400, .h = 24 };
         const auto p = ComputeIconTextPlacement(rect, kTextW, kTextH, kIcon,
                                                 IconSide::Left, kGap, TextAlign::End);
 
-        // Text starts after the icon.
-        EXPECT_GE(p.textRect.x, p.iconRect.x + p.iconRect.w);
+        const int32_t glyphsX = p.textRect.x + HorizontalAlignOffset(TextAlign::End, p.textRect.w, kTextW);
+        EXPECT_GE(glyphsX, p.iconRect.x + p.iconRect.w) << "the text starts after the icon";
+        EXPECT_EQ(glyphsX + kTextW, rect.x + rect.w) << "and ends at the rect's end";
     }
 
     // ---- Alignment sanity --------------------------------------------------
@@ -348,14 +366,16 @@ namespace tachyon
         EXPECT_GE(p.iconRect.x, p.textRect.x + p.textRect.w);
     }
 
-    // Left box: mirror - the icon must not be drawn over the text.
+    // Left box: mirror - the icon must not be drawn over the text, which the text
+    // system aligns to the end of textRect.
     TEST(IconTextPlacement, Regression_MiscPanelLeftBox_IconDoesNotCoverText)
     {
         const IntRect rect{ .x = 0, .y = 0, .w = 400, .h = 24 };
         const auto p = ComputeIconTextPlacement(rect, kTextW, kTextH, kIcon,
                                                 IconSide::Left, kGap, TextAlign::End);
 
-        EXPECT_GE(p.textRect.x, p.iconRect.x + p.iconRect.w);
+        const int32_t glyphsX = p.textRect.x + HorizontalAlignOffset(TextAlign::End, p.textRect.w, kTextW);
+        EXPECT_GE(glyphsX, p.iconRect.x + p.iconRect.w);
     }
 
     // ---- Icon-only (no text) ---------------------------------------------

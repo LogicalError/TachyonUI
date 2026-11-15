@@ -1913,7 +1913,7 @@
     background-color: var(--bg-panel);
 }
 
-.table-header {
+.table-header, .table-header-end {
     -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     margin: 0px;
     padding: 6px 8px;
@@ -1929,12 +1929,12 @@
     -tachyon-icon-text-gap: 4px;
     -tachyon-icon-size: 12px;   /* the sort chevron */
 }
-.table-header:hover { cursor: pointer; }
+.table-header:hover, .table-header-end:hover { cursor: pointer; }
 
 /* The header of a column that can't be sorted or moved, and a tree view's header
    ("Category"): the same small, muted text as .table-header, on the panel's
    background, with the default arrow cursor. */
-.table-header-locked {
+.table-header-locked, .table-header-locked-end {
     -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     margin: 0px;
     padding: 6px 8px;
@@ -1950,7 +1950,14 @@
     -tachyon-icon-text-gap: 4px;
     cursor: default;
 }
-.table-header-locked:hover { cursor: default; }
+.table-header-locked:hover, .table-header-locked-end:hover { cursor: default; }
+
+/* Over cells aligned to the end (numbers): the label at the end, over its values, and the
+   sort chevron before it. */
+.table-header-end, .table-header-locked-end {
+    text-align: end;
+    -tachyon-icon-side: left;
+}
 
 .table-cell {
     margin: 0px;
@@ -8825,7 +8832,7 @@
 }
 
 /* Tabs, rows and menu items sit flush with their neighbours: an outline inside them instead. */
-.tab:focus-visible, .tab-panel-focused:focus-visible, .title-bar-tab:focus-visible, .title-bar-tab-panel-focused:focus-visible, .tab-overflow:focus-visible, .table-header:focus-visible,
+.tab:focus-visible, .tab-panel-focused:focus-visible, .title-bar-tab:focus-visible, .title-bar-tab-panel-focused:focus-visible, .tab-overflow:focus-visible, .table-header:focus-visible, .table-header-end:focus-visible,
 .document-tab:focus-visible, .document-tab-level:focus-visible, .document-tab-material:focus-visible,
 .document-tab-layout:focus-visible, .document-tab-prefab:focus-visible, .document-tab-animation:focus-visible,
 .document-close:focus-visible, .document-new:focus-visible, .document-list:focus-visible,

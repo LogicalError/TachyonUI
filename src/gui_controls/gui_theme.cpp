@@ -1083,6 +1083,8 @@ namespace tachyon
         listRowStyleRef                   = registerCSS("list-row");
         tableHeaderStyleRef               = registerCSS("table-header");
         tableHeaderLockedStyleRef         = registerCSS("table-header-locked");
+        tableHeaderEndStyleRef            = registerCSS("table-header-end");
+        tableHeaderLockedEndStyleRef      = registerCSS("table-header-locked-end");
         tableSizerStyleRef                = registerCSS("table-sizer");
         tableSeparatorStyleRef            = registerCSS("table-separator");
         tableCellStyleRef                 = registerCSS("table-cell");

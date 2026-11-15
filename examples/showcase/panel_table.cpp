@@ -48,8 +48,9 @@ namespace tachyon
     void Application::SelectionModeSwitch(TableSelectionMode& mode)
     {
         static constexpr std::string_view kModes[] = { "Row", "Cell" };   // TableSelectionMode's order
-        BeginHorizontal(LayoutOverride{}.NoGrow().NoShrink());
-            Text(idManager.AllocateDynamicID(), "Select", theme.staticTextStyleRef);
+        // A toolbar above the table, padded, with a line under it.
+        BeginHorizontal(idManager.AllocateDynamicID("selectionModeBar"), tableToolbarStyleRef, LayoutOverride::Auto().NoShrink());
+            Text(idManager.AllocateDynamicID(), "Selection mode", theme.staticTextStyleRef);
             Segmented(mode, kModes);
         EndHorizontal();
     }
@@ -65,7 +66,8 @@ namespace tachyon
             // The row-index column is locked - fixed landmark on the
             // left, and other columns can't be dragged past it.
             {
-                .column = { .header = "#", .initialWidth = 80,  .minWidth = 40, .maxWidth = 160, .locked = true },
+                .column = { .header = "#", .initialWidth = 64,  .minWidth = 40, .maxWidth = 160, .locked = true,
+                            .sizing = ColumnSizing::Fixed },
                 .generateCell = [this, &rows](int rowIdx) {
                     char buf[16]; std::snprintf(buf, sizeof(buf), "%d", rows[rowIdx].index); Cell(buf);
                 },
@@ -86,7 +88,7 @@ namespace tachyon
                 .sortAscending = [&rows](int a, int b) { return rows[a].hex < rows[b].hex; },
             },
             {
-                .column = { .header = "Multiple", .initialWidth = 120, .minWidth = 60, .maxWidth = 400 },
+                .column = { .header = "Multiple", .initialWidth = 140, .minWidth = 60, .maxWidth = 400 },
                 .generateCell = [this, &rows](int rowIdx) {
                     char buf[40]; std::snprintf(buf, sizeof(buf), "%d x 7 = %d", rows[rowIdx].index, rows[rowIdx].multiple); Cell(buf);
                 },
@@ -106,9 +108,13 @@ namespace tachyon
             else           std::rotate(colsPtr->begin() + to, colsPtr->begin() + from, colsPtr->begin() + from + 1);
         };
 
-        // Every column but Name holds a number; set each frame as styles reload.
+        // The row number is a count: right-aligned, so its digits line up. Hex codes and the
+        // multiplications read as text, at the start, in the mono font. Set each frame as
+        // styles reload.
         for (VirtualTableColumn& c : columns)
-            c.column.cellStyle = c.column.header == "Name" ? StyleRef::Invalid() : dataTableNumberStyleRef;
+            c.column.cellStyle = c.column.header == "#"    ? dataTableNumberStyleRef
+                               : c.column.header == "Name" ? StyleRef::Invalid()
+                                                           : dataTableCodeStyleRef;
 
         const int kTotalRows = int(rows.size());
         std::span<VirtualTableColumn> columnSpan(columns.data(), columns.size());

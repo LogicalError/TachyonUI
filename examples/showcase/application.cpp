@@ -812,6 +812,7 @@ namespace tachyon
         shortcutCellStyleRef        = theme.GetStyle("shortcut-cell");
         dataTableCellStyleRef       = theme.GetStyle("data-table-cell");
         dataTableNumberStyleRef     = theme.GetStyle("data-table-number");
+        dataTableCodeStyleRef       = theme.GetStyle("data-table-code");
         textShadowSampleStyleRef    = theme.GetStyle("text-shadow-sample");
         textGlowSampleStyleRef      = theme.GetStyle("text-glow-sample");
         settingsTitleStyleRef       = theme.GetStyle("settings-title");
@@ -820,6 +821,7 @@ namespace tachyon
         settingsHeadStyleRef        = theme.GetStyle("settings-head");
         settingsTitleRowStyleRef    = theme.GetStyle("settings-title-row");
         settingsSplitStyleRef       = theme.GetStyle("settings-split");
+        tableToolbarStyleRef        = theme.GetStyle("table-toolbar");
         sketchPadStyleRef           = theme.GetStyle("sketch-pad");
         {
             const char* kSideTag[4]   = { "left", "right", "top", "bottom" };
