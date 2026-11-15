@@ -24,6 +24,7 @@ Button("Delete", onDelete, theme.GetStyle("my-danger-button"));  // your own cla
 | `Label`, `DragLabel` | `label`, `drag-label` (`group-label`, `group-drag-label` in a resizable label group) |
 | `Image` | none (built in code) |
 | `Button`, `CommandButton`, `BusyButton` | `button` |
+| `ShortcutButton` | `shortcut-button`; keys `keycap`, "Unassigned" `shortcut-muted` |
 | `Toggle`, `Field(bool&)` | `toggle` |
 | `Switch` | `switch` |
 | `Checkbox` | `checkbox` |

@@ -27,7 +27,7 @@ namespace tachyon
                 r.id    = state.pages[i].id;
                 r.name  = state.pages[i].name;
                 r.depth = 0;
-                r.icon  = tachyon::IconID::Invalid;
+                r.icon  = state.pages[i].icon;
                 state.internal.rows.push_back(std::move(r));
             }
             RebuildTreeViewIndex(state.internal.rows);
@@ -58,15 +58,16 @@ namespace tachyon
             const tachyon::ID treeID = idManager.AllocateDynamicID();
             VirtualTreeView(treeID, state.internal.rows, state.internal.visibleIdx,
                             state.internal.tableState, theme.settingsPageSelectionRef,
-                            tachyon::LayoutOverride::Auto().FixedWidth(state.treeWidth).NoGrow());
+                            tachyon::LayoutOverride::Auto().FixedWidth(state.treeWidth).NoGrow(),
+                            state.header);
         }
 
-        // Middle: draggable sizer, styled like the dock splitter.
+        // Middle: draggable sizer, drawn as a 1px line.
         {
             tachyon::ID sizerID = idManager.AllocateDynamicID();
             tachyon::Element sizer{};
             sizer.id       = sizerID;
-            sizer.styleRef = theme.dockSizerHorzStyleRef;
+            sizer.styleRef = theme.settingsSizerStyleRef;
             sizer.state    = guiStateManager.GetCurrentState(sizerID);
             sizer.eventHandler = tachyon::MakeHorizontalSizerHandler(
                 guiStateManager, elementStorage, state.treeWidth.value, 120, 500, nullptr, nullptr, false, styleManager.GetUIScale());

@@ -2,9 +2,76 @@
    after the library's (GUIApplication::SetStyleFiles) and looks classes up
    with GUITheme::GetStyle. */
 
+/* ---- Settings pages ------------------------------------------------------------ */
+/* A page's content, padded; it takes the page's height (flex-basis 0), so a part that
+   runs long scrolls inside it. */
+.settings-body {
+    border-width: 0px;
+    padding: 16px;
+    margin: 0px;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 12px;
+    overflow: hidden;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+}
+/* The Shortcuts page's head: its title row and search, padded, above the split. */
+.settings-head {
+    border-width: 0px;
+    padding: 16px 16px 12px 16px;
+    margin: 0px;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 12px;
+    background-color: transparent;
+    border-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+/* A page's title, and a button at the right end of its row (Reset to defaults). */
+.settings-title-row {
+    border-width: 0px;
+    padding: 0px;
+    margin: 0px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+    background-color: transparent;
+    border-color: transparent;
+}
+/* The Shortcuts page's categories | table, under a line, as wide as the page. */
+.settings-split {
+    border-width: 1px 0px 0px 0px;
+    border-color: var(--line-subtle);
+    padding: 0px;
+    margin: 0px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0px;
+    overflow: hidden;
+    background-color: transparent;
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
+}
+
+/* The Shortcuts page's category list: its rows inset from the edges. */
 .shortcut-category {
     border-width: 0px;
-    margin: 0px 3px 0px 0px;
+    margin: 0px;
+    padding: 4px 8px;
     gap: 0px;
     flex-grow: 1;
     flex-shrink: 0;
@@ -527,20 +594,20 @@
     border-color: transparent;
 }
 
-/* Header line above each settings page's body - larger font, bold-ish, with
-   a bottom margin so it visually separates from the field rows. */
+/* A settings page's title; the page's gap keeps it apart from what follows. */
 .settings-title {
     border-width: 0px;
     border-radius: 0px;
-    padding: 4px 0px 8px 6px;
+    padding: 0px;
     overflow: visible;
     direction: initial;
     text-wrap: nowrap;
     text-align: start;
     vertical-align: middle;
     color: var(--text-1);
-    font-size: 18px;
-    line-height: 1.4;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 22px;
     background-color: transparent;
     border-color: transparent;
     break-after: always;

@@ -1170,6 +1170,10 @@ namespace tachyon
         tooltipPinValueStyleRef           = registerCSS("tooltip-pin-value");
         settingsPageSelectionRef          = registerCSS("settings-page-selection");
         settingsPageStyleRef              = registerCSS("settings-page");
+        settingsSizerStyleRef             = registerCSS("settings-sizer");
+        shortcutButtonStyleRef            = registerCSS("shortcut-button");
+        keycapStyleRef                    = registerCSS("keycap");
+        shortcutMutedStyleRef             = registerCSS("shortcut-muted");
 
         return true;
     }

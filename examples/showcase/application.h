@@ -134,6 +134,7 @@ namespace tachyon
         StyleRef profilerPctCellStyleRef, profilerPctTrackStyleRef, profilerPctFillStyleRef, profilerPctTextStyleRef;
         StyleRef logDetailPaneStyleRef, logDetailTextStyleRef;
         StyleRef shortcutCategoryStyleRef, shortcutTableStyleRef, shortcutCellStyleRef, settingsTitleStyleRef, settingsScrollStyleRef, sketchPadStyleRef;
+        StyleRef settingsBodyStyleRef, settingsHeadStyleRef, settingsTitleRowStyleRef, settingsSplitStyleRef;
         StyleRef dataTableCellStyleRef, dataTableNumberStyleRef;
         StyleRef textShadowSampleStyleRef, textGlowSampleStyleRef;
         StyleRef iconVAlignDemoStyleRefs[4][3];   // [IconSide L/R/T/B][top/mid/bot]
@@ -433,6 +434,10 @@ namespace tachyon
             IconID filesFolderIcon     = IconID::Invalid;   ///< the files tree's folders: outlined, in the folders' amber
             IconID filesFolderOpenIcon = IconID::Invalid;
             IconID layoutsIcon         = IconID::Invalid;   ///< the Layouts dropdown's
+            // The Settings pages': Shortcuts, Appearance, General, Advanced, About.
+            IconID settingsShortcutsIcon = IconID::Invalid, settingsAppearanceIcon = IconID::Invalid,
+                   settingsGeneralIcon   = IconID::Invalid, settingsAdvancedIcon   = IconID::Invalid,
+                   settingsAboutIcon     = IconID::Invalid;
                                        
             IconID fileImageIcon       = IconID::Invalid;
             IconID fileAudioIcon       = IconID::Invalid;
@@ -569,6 +574,7 @@ namespace tachyon
             // Misc dummy page values
             std::string settingsUserName = "Player One";
             bool        settingsAutosave = true;
+            bool        settingsLogToConsole = true;   // Diagnostics::SetLogConsoleOutput; on by default
             int         settingsMaxUndo = 64;
 
             // Shortcuts page state. Lists shortcuts whose mode is in the category
@@ -626,6 +632,8 @@ namespace tachyon
         void InitSettingsPages();
         void RenderSettingsAppearance();
         void RenderSettingsGeneral();
+        void RenderSettingsAdvanced();
+        void RenderSettingsAbout();
         /// The font scale, as a percentage: 100 to 300 in steps of 10, the theme reloaded at it.
         void SetFontScale(float percent);
         void RenderSettingsShortcuts();

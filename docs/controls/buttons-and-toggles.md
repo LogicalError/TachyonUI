@@ -83,6 +83,39 @@ cmdUndo = commandManager.RegisterCommand(undoIcon, KeyCode::KeyZ, KeyModifier::C
 
 Class: `button`.
 
+## ShortcutButton
+
+A command's shortcut as keycaps, one small chip per key: `Ctrl` `C`.
+
+- A chord's two steps are apart by a comma: `Ctrl` `K` , `Ctrl` `S`.
+- A command without a shortcut reads "Unassigned", muted; pass other text to say it another
+  way.
+- It's a flat button: a click anywhere on it runs `onClick`.
+  - For example, to rebind the shortcut with `commandManager.BeginRebind`.
+
+```cpp
+bool ShortcutButton(ID id, const CommandManager::Command& command, std::function<void()> onClick,
+                    std::string_view unassigned = "Unassigned", LayoutOverride&& constraints = {});
+```
+
+```cpp
+// In a shortcuts table's cell: the keys, or a prompt while they're being rebound.
+if (commandManager.RebindTarget() == commandID)
+    Button(buttonID, "Press a key... (Esc to cancel)", [this] { commandManager.CancelRebind(); });
+else
+    ShortcutButton(buttonID, *commandManager.GetCommand(commandID),
+                   [this] { commandManager.BeginRebind(commandID); });
+```
+
+Its parts come from `CommandManager`:
+
+- `CommandManager::ShortcutKeys(key, modifiers, out)` lists a shortcut's key names, one per
+  key: "Ctrl", "Shift", "D". A key whose name has a space ("Num +") is one name.
+- `commandManager.ResetShortcuts()` gives every command the shortcut it was registered with
+  back: a "Reset to defaults" button.
+
+Classes: `shortcut-button`, `keycap`, and `shortcut-muted` for "Unassigned" and the comma.
+
 ## Toggle
 
 A button that stays pressed while on.

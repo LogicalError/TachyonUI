@@ -3,6 +3,10 @@
 // The showcase's Settings pages and their registration with `showcase.settings`. The panel
 // chrome lives in gui_controls/controls_settings.cpp.
 
+#include <gui_core/diagnostics/gui_logging.h>
+#include <gui_core/diagnostics/gui_profiler.h>
+#include <gui_core/gui_version.h>
+
 #include <algorithm>
 #include <cmath>
 #include <string>
@@ -34,10 +38,13 @@ namespace tachyon
     // are valid). The first registered page becomes the initial selection.
     void Application::InitSettingsPages()
     {
-        showcase.settings.AddPage(idManager.CreateStaticID(), "Shortcuts",  [this]() { RenderSettingsShortcuts(); });
-        showcase.settings.AddPage(idManager.CreateStaticID(), "Appearance", [this]() { RenderSettingsAppearance(); });
-        showcase.settings.AddPage(idManager.CreateStaticID(), "General",    [this]() { RenderSettingsGeneral(); });
-        showcase.settings.treeWidth = 120; // narrower than the default page list
+        showcase.settings.header = "Preferences";
+        showcase.settings.AddPage(idManager.CreateStaticID(), "Shortcuts",  showcase.settingsShortcutsIcon,  [this]() { RenderSettingsShortcuts(); });
+        showcase.settings.AddPage(idManager.CreateStaticID(), "Appearance", showcase.settingsAppearanceIcon, [this]() { RenderSettingsAppearance(); });
+        showcase.settings.AddPage(idManager.CreateStaticID(), "General",    showcase.settingsGeneralIcon,    [this]() { RenderSettingsGeneral(); });
+        showcase.settings.AddPage(idManager.CreateStaticID(), "Advanced",   showcase.settingsAdvancedIcon,   [this]() { RenderSettingsAdvanced(); });
+        showcase.settings.AddPage(idManager.CreateStaticID(), "About",      showcase.settingsAboutIcon,      [this]() { RenderSettingsAbout(); });
+        showcase.settings.treeWidth = 160; // narrower than the default page list
     }
 
     // ---------------------------------------------------------------------------
@@ -46,6 +53,7 @@ namespace tachyon
 
     void Application::RenderSettingsAppearance()
     {
+        BeginVertical(idManager.AllocateDynamicID("settingsBody"), settingsBodyStyleRef, LayoutOverride::Auto().FlexGrow(1));
         // Labels have break-after: avoid, so each stays on one row with its field.
         Text(idManager.AllocateDynamicID("settingsTitle"), "Appearance", settingsTitleStyleRef);
 
@@ -88,10 +96,12 @@ namespace tachyon
         // The theme's colors and sizes; a change to Dark or Light goes into a copy of it.
         RenderThemeEditor();
         EndArea();
+        EndVertical();
     }
 
     void Application::RenderSettingsGeneral()
     {
+        BeginVertical(idManager.AllocateDynamicID("settingsBody"), settingsBodyStyleRef, LayoutOverride::Auto().FlexGrow(1));
         Text(idManager.AllocateDynamicID("settingsTitle"), "General", settingsTitleStyleRef);
         BeginLabelGroup(140);
 
@@ -124,12 +134,63 @@ namespace tachyon
         Field(showcase.settingsMaxUndo, TextEditBehavior::None);
 
         EndLabelGroup();
+        EndVertical();
+    }
+
+    void Application::RenderSettingsAdvanced()
+    {
+        BeginVertical(idManager.AllocateDynamicID("settingsBody"), settingsBodyStyleRef, LayoutOverride::Auto().FlexGrow(1));
+        Text(idManager.AllocateDynamicID("settingsTitle"), "Advanced", settingsTitleStyleRef);
+        BeginLabelGroup(140);
+
+        // What the Profiler panel shows: the frames' scopes, timed.
+        Label("Frame timings");
+        SetTooltip("Time each frame's scopes, for the Profiler. Costs a little time per frame.");
+        const bool profiling = Diagnostics::IsProfilingEnabled();
+        Switch(profiling, profiling ? "Recording" : "Off", [](bool on) { Diagnostics::SetProfilingEnabled(on); });
+
+        // The log's own console output; the Log panel keeps every line either way.
+        Label("Log to console");
+        SetTooltip("Also write each log line to stdout and the debugger's output.");
+        Switch(showcase.settingsLogToConsole, showcase.settingsLogToConsole ? "On" : "Off",
+               [this](bool on) { showcase.settingsLogToConsole = on; Diagnostics::SetLogConsoleOutput(on); });
+
+        Label("GPU");
+        Text(idManager.AllocateDynamicID("settingsGpu"), graphicsContext ? graphicsContext->GetDeviceName() : std::string_view{});
+
+        EndLabelGroup();
+        EndVertical();
+    }
+
+    void Application::RenderSettingsAbout()
+    {
+        BeginVertical(idManager.AllocateDynamicID("settingsBody"), settingsBodyStyleRef, LayoutOverride::Auto().FlexGrow(1));
+        Text(idManager.AllocateDynamicID("settingsTitle"), "About", settingsTitleStyleRef);
+        BeginLabelGroup(140);
+        Label("Application");
+        Text(idManager.AllocateDynamicID("settingsAboutName"), "TachyonUI showcase");
+        Label("Version");
+        Text(idManager.AllocateDynamicID("settingsAboutVersion"), TACHYON_VERSION_STRING);
+        Label("Renderer");
+        Text(idManager.AllocateDynamicID("settingsAboutRenderer"), "Vulkan, SDL3");
+        EndLabelGroup();
+        EndVertical();
     }
 
     void Application::RenderSettingsShortcuts()
     {
-        // Layout: category tree | sizer | shortcuts table.
-        Text(idManager.AllocateDynamicID("settingsTitle"), "Shortcuts", settingsTitleStyleRef);
+        // Layout: the head (title, Reset to defaults, search), then category tree | sizer |
+        // shortcuts table, as wide as the page.
+        BeginVertical(idManager.AllocateDynamicID("shortcutHead"), settingsHeadStyleRef, LayoutOverride::Auto().NoShrink());
+        BeginHorizontal(idManager.AllocateDynamicID("shortcutTitleRow"), settingsTitleRowStyleRef);
+        Text(idManager.AllocateDynamicID("settingsTitle"), "Shortcuts", settingsTitleStyleRef, LayoutOverride::Auto().FlexGrow(1));
+        Button(idManager.AllocateDynamicID("shortcutReset"), "Reset to defaults",
+               [this] {
+                   commandManager.ResetShortcuts();
+                   showcase.settingsShortcutsFilterMask = 0;   // the shortcuts changed: filter and sort again
+               }, LayoutOverride{}.NoGrow().NoShrink());
+        SetTooltip("Give every command its own shortcut back");
+        EndHorizontal();
 
         const auto& entries      = commandManager.GetCommands();
         const uint32_t modeCount = commandManager.GetModeCount();
@@ -149,7 +210,7 @@ namespace tachyon
         BeginHorizontal(idManager.AllocateDynamicID("shortcutSearchRow"),
                         theme.searchRowStyleRef,
                         tachyon::LayoutOverride::Auto().NoShrink());
-        if (SearchField(showcase.settingsShortcutsSearch, showcase.findIcon,
+        if (SearchField(showcase.settingsShortcutsSearch, { showcase.findIcon, "Search commands or shortcuts" },
                         TextEditBehavior::ContinuousUpdate,
                         tachyon::LayoutOverride{}.FlexGrow(1)))
         {
@@ -159,6 +220,7 @@ namespace tachyon
                 showcase.settingsShortcutsSearchLower += (c >= 'A' && c <= 'Z') ? char(c + 32) : c;
         }
         EndHorizontal();
+        EndVertical();   // shortcutHead
 
         const std::string& query = showcase.settingsShortcutsSearchLower;
         auto matchesSearch = [&](std::string_view desc) -> bool
@@ -178,10 +240,10 @@ namespace tachyon
             return false;
         };
 
-        // flexFillRow (flex-basis:0) bounds the split to the page height so the
-        // table scrolls (the outer split in controls_settings.cpp is bounded too).
+        // The split has flex-basis 0, bounding it to the page height so the table scrolls
+        // (the outer split in controls_settings.cpp is bounded too).
         BeginHorizontal(idManager.AllocateDynamicID("shortcutSplit"),
-                        theme.flexFillRowStyleRef,
+                        settingsSplitStyleRef,
                         tachyon::LayoutOverride::Auto().FlexGrow(1));
 
         // Row IDs are the static category IDs, so the sync below can map
@@ -254,7 +316,7 @@ namespace tachyon
             tachyon::ID sizerID = idManager.AllocateDynamicID("shortcutSizer");
             tachyon::Element sizer{};
             sizer.id       = sizerID;
-            sizer.styleRef = theme.dockSizerHorzStyleRef;
+            sizer.styleRef = theme.settingsSizerStyleRef;
             sizer.state    = guiStateManager.GetCurrentState(sizerID);
             sizer.eventHandler = tachyon::MakeHorizontalSizerHandler(
                 guiStateManager, elementStorage, showcase.settingsShortcutsCategoryWidth, 100, 400, nullptr, nullptr, false, styleManager.GetUIScale());
@@ -303,7 +365,8 @@ namespace tachyon
                     std::string_view desc = e.description.empty()
                         ? std::string_view("(no description)")
                         : std::string_view(e.description);
-                    if (!matchesSearch(desc)) continue;
+                    // The query matches the command or its shortcut ("ctrl c").
+                    if (!matchesSearch(desc) && !(e.HasShortcut() && matchesSearch(e.displayString))) continue;
                     visRows.push_back({ mode, i });
                 }
             }
@@ -320,8 +383,10 @@ namespace tachyon
         {
             cols.resize(4);
 
-            // Command - optional per-command icon shown inline before the name.
-            cols[0].column = { .header = "Command", .initialWidth = 180, .minWidth = 80, .maxWidth = 600 };
+            // Command - optional per-command icon shown inline before the name. It takes the
+            // width the other columns leave.
+            cols[0].column = { .header = "Command", .initialWidth = 180, .minWidth = 80, .maxWidth = 600,
+                               .sizing = ColumnSizing::Stretch };
             cols[0].sortAscending = [this](int a, int b) {
                 const auto& vr   = showcase.settingsShortcutsVisRows;
                 const auto& cmds = commandManager.GetCommands();
@@ -371,8 +436,8 @@ namespace tachyon
                 Cell(commandManager.GetModeName(tachyon::CommandMode(vr[rowIdx].mode)));
             };
 
-            // Shortcut - the bound key combo (a flat rebind button).
-            cols[2].column = { .header = "Shortcut", .initialWidth = 140, .minWidth = 80, .maxWidth = 400 };
+            // Shortcut - the bound keys as keycaps; a click rebinds them.
+            cols[2].column = { .header = "Shortcut", .initialWidth = 160, .minWidth = 80, .maxWidth = 400 };
             cols[2].sortAscending = [this](int a, int b) {
                 const auto& vr   = showcase.settingsShortcutsVisRows;
                 const auto& cmds = commandManager.GetCommands();
@@ -383,24 +448,20 @@ namespace tachyon
                 auto& vr = showcase.settingsShortcutsVisRows;
                 if (rowIdx < 0 || rowIdx >= int(vr.size())) return;
                 const uint32_t i = vr[rowIdx].entryIdx;
-                const auto& e = commandManager.GetCommands()[i];
-                const bool rebinding = (commandManager.RebindTarget() == CommandManager::IDAt(i));
-                // Unbound commands show an empty cell (rather than the
-                // formatted "(unbound)" string) until a key is bound.
-                const bool unset = !rebinding && !e.HasShortcut();
-                const std::string label = rebinding ? rebindPrompt
-                                        : unset      ? std::string()
-                                                     : e.displayString;
-                Cell([this, label, i]() {
-                    Button(idManager.AllocateDynamicID("shortcutBtn"),
-                           label,
-                           [this, i]() {
-                               if (commandManager.RebindTarget() == CommandManager::IDAt(i))
-                                   commandManager.CancelRebind();
-                               else
-                                   commandManager.BeginRebind(CommandManager::IDAt(i));
-                           },
-                           theme.flatButtonStyleRef);
+                // A click starts a rebind, or cancels the one in progress; while one is, the
+                // cell asks for the keys.
+                Cell([this, i]() {
+                    auto toggleRebind = [this, i]() {
+                        if (commandManager.RebindTarget() == CommandManager::IDAt(i))
+                            commandManager.CancelRebind();
+                        else
+                            commandManager.BeginRebind(CommandManager::IDAt(i));
+                    };
+                    const tachyon::ID buttonID = idManager.AllocateDynamicID("shortcutBtn");
+                    if (commandManager.RebindTarget() == CommandManager::IDAt(i))
+                        Button(buttonID, rebindPrompt, toggleRebind, theme.flatButtonStyleRef);
+                    else
+                        ShortcutButton(buttonID, commandManager.GetCommands()[i], toggleRebind);
                 });
             };
 
@@ -425,9 +486,9 @@ namespace tachyon
         auto& active = showcase.settingsShortcutsActiveColumns;
         active.clear();
         active.push_back(cols[0]);                       // Command
+        active.push_back(cols[2]);                       // Shortcut
         if (showCategoryCol) active.push_back(cols[1]);  // Context (multi-category only)
         active.push_back(cols[3]);                       // Type
-        active.push_back(cols[2]);                       // Shortcut
 
         // Toggling the Context column changes the column count and shifts what
         // each index means, so on the transition we drop persisted widths and
