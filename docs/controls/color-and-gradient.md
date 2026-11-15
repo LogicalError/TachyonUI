@@ -62,11 +62,13 @@ if (GradientField(gradient))   // true when the gradient changed
     RebuildRamp();
 ```
 
-- The swatch shows each stop under it: a box of the stop's color with a pointer up to the bar.
-- Classes:
-  - `gradient-field` for the row the swatch is in
-  - `gradient-swatch` for the swatch
-  - `gradient-hdr-chip` for the brightness chip of a `GradientF` (below)
+- The swatch shows the gradient as a color swatch shows a color:
+  - its top half has the colors without their alpha
+  - its bottom half has them as they are, over a checkerboard
+  - For example, a gradient that fades out has its faded end solid on top and see-through
+    below.
+- The stops show in the editor, where they can be moved.
+- Class: `gradient-swatch`.
 - The editor's classes: `gradient-editor` and `gradient-editor-*`.
 
 ### Float gradients (GradientF)
@@ -109,8 +111,8 @@ Converting:
 - The selected stop has a "To next" choice: how it blends to the next stop.
 - The swatch and the bar show it clamped to 0..1, as the screen can't show more.
 - Where it's brighter than 1, a thin band runs over the swatch.
-- After the swatch, a chip says how bright it gets: "HDR ×8.0" for a stop 8 times as bright
-  as white.
+- The swatch's tooltip says how bright it gets: "Up to 8.0 × white" for a stop 8 times as
+  bright as white.
 
 ```cpp
 bool GradientField(ID id, GradientF& value, StyleRef style, LayoutOverride&& constraints = {});

@@ -222,28 +222,37 @@ namespace
             });
     }
 
-    // A gradient brighter than 1 says how bright, in a chip after its bar, within the field's width.
-    TEST_F(GradientFEditorDialog, AnHdrGradientsFieldShowsItsBrightestValue)
+    // Points at the swatch and waits past the tooltip's delay.
+    void HoverTheSwatch(HeadlessGUIApp& app, GradientF& gradient, ID swatch)
+    {
+        app.InjectMouseMove(app.CenterOf(swatch));
+        for (int i = 0; i < 8; ++i)
+        {
+            app.AdvanceTime(100);
+            EmitInARow(app, gradient);
+        }
+    }
+
+    // A gradient brighter than 1 says how bright in the swatch's tooltip; the bar stays the
+    // whole field.
+    TEST_F(GradientFEditorDialog, AnHdrGradientsTooltipSaysHowBrightItGets)
     {
         floatGradient.AddStop(color4f{ 0.0f, 0.0f, 0.0f, 1.0f }, 0.0f);
         floatGradient.AddStop(color4f{ 8.0f, 6.0f, 2.0f, 1.0f }, 1.0f);
         EmitInARow(app, floatGradient);
-        const ID chip = app.FindByText("HDR \xC3\x97" "8.0");
-        ASSERT_NE(chip, ID::Invalid());
-        const IntRect bar  = app.GetElementRect(FindByStyle(app.theme.gradientSwatchStyleRef));
-        const IntRect text = app.GetElementRect(chip);
-        EXPECT_GT(text.x, bar.x + bar.w) << "after the bar";
-        EXPECT_LE(text.x + text.w - bar.x, app.styleManager.Px(300)) << "inside the field's width";
+        const ID swatch = FindByStyle(app.theme.gradientSwatchStyleRef);
+        EXPECT_EQ(app.GetElementRect(swatch).w, app.styleManager.Px(300)) << "the bar is the whole field";
+        HoverTheSwatch(app, floatGradient, swatch);
+        EXPECT_NE(app.FindByText("Up to 8.0 \xC3\x97 white"), ID::Invalid());
     }
 
-    TEST_F(GradientFEditorDialog, AGradientUpToOneHasNoHdrChip)
+    TEST_F(GradientFEditorDialog, AGradientUpToOneHasNoBrightnessTooltip)
     {
         floatGradient.AddStop(color4f{ 0.0f, 0.0f, 0.0f, 1.0f }, 0.0f);
         floatGradient.AddStop(color4f{ 1.0f, 1.0f, 1.0f, 1.0f }, 1.0f);
         EmitInARow(app, floatGradient);
-        EXPECT_EQ(app.FindByText("HDR \xC3\x97" "1.0"), ID::Invalid());
-        EXPECT_EQ(app.GetElementRect(FindByStyle(app.theme.gradientSwatchStyleRef)).w, app.styleManager.Px(300))
-            << "the bar is the whole field";
+        HoverTheSwatch(app, floatGradient, FindByStyle(app.theme.gradientSwatchStyleRef));
+        EXPECT_EQ(app.FindByText("Up to 1.0 \xC3\x97 white"), ID::Invalid());
     }
 
     TEST_F(GradientFEditorDialog, ReverseKeepsEachStretchsBlend)
