@@ -47,6 +47,9 @@ int main()
         return 1;
     }
     app.windowID = app.idManager.CreateStaticID();
+    // A frame each refresh: a still UI otherwise waits for input after its first frames,
+    // and nothing here gives it any, so it would never get to its third.
+    app.SetRedrawMode(tachyon::RedrawMode::Always);
     if (const auto ran = app.Run(); !ran)
     {
         std::printf("GUIApplication::Run failed: %s\n", ran.GetError().message.c_str());
