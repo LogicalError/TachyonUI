@@ -31,6 +31,29 @@ namespace
     {
         return { std::clamp(c.r, 0.0f, 1.0f), std::clamp(c.g, 0.0f, 1.0f), std::clamp(c.b, 0.0f, 1.0f), std::clamp(c.a, 0.0f, 1.0f) };
     }
+
+    float Brightest(tachyon::color4f c) { return std::max({ c.r, c.g, c.b }); }
+
+    // The gradient where it's brighter than 1, see-through elsewhere (in the same color, so
+    // the edges don't darken): the band over an HDR gradient's bar.
+    void SetHdrBandStyle(tachyon::StyleManager& sm, tachyon::VisualColorStyleIndex& idx, const tachyon::GradientF& gradient)
+    {
+        std::array<tachyon::color4b, 256> row{};
+        for (size_t i = 0; i < row.size(); ++i)
+        {
+            const tachyon::color4f c = gradient.Sample(float(i) / float(row.size() - 1));
+            const tachyon::color4f k = Clamp01(c);
+            row[i] = tachyon::color4b{ uint8_t(std::lround(k.r * 255.0f)), uint8_t(std::lround(k.g * 255.0f)),
+                                       uint8_t(std::lround(k.b * 255.0f)), uint8_t(Brightest(c) > 1.0f ? 255 : 0) };
+        }
+        tachyon::ColorStyle cs;
+        cs.type = tachyon::ColorType::LinearGradient;
+        cs.SetTransformation(tachyon::float3(0, 1, 0), tachyon::float3(1, 0, 0)); // horizontal
+        if (idx == tachyon::VisualColorStyleIndex::Invalid)
+            idx = sm.CreateColorStyle(cs, row);
+        else
+            sm.UpdateColorStyle(idx, cs, row);
+    }
 }
 
 
@@ -145,34 +168,64 @@ namespace tachyon
             }
         });
 
-        const ElementRef swatchRef = RegisterControl(std::move(swatch), std::move(constraints));
+        // The bar, and after it the brightest value of a gradient brighter than 1.
+        float brightest = 0.0f;
+        for (const GradientStop& stop : value.stops)
+            brightest = std::max(brightest, Brightest(stop.color));
+        const bool hdr = brightest > 1.0f;
+        BeginHorizontal(idManager.AllocateDynamicID("gradient_field"), theme.gradientFieldStyleRef, std::move(constraints));
+        const ElementRef swatchRef = RegisterControl(std::move(swatch), LayoutOverride{});
 
-        // The stops, as diamonds on the bar's bottom edge: light with a dark outline.
+        // A band over the bar where the gradient is brighter than 1.
+        VisualColorStyleIndex band = VisualColorStyleIndex::Invalid;
+        if (hdr)
         {
-            std::vector<float> offsets;
-            for (int i = 0; i < value.StopCount(); i++)
-                offsets.push_back(std::clamp(value.stops[size_t(i)].offset, 0.0f, 1.0f));
-            const VisualColorStyleIndex fill    = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--text-1", color4f{ 0.9f, 0.9f, 0.9f, 1.0f })));
-            const VisualColorStyleIndex outline = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--bg-app", color4f{ 0.05f, 0.05f, 0.05f, 1.0f })));
+            const ID bandID = idManager.AllocateDynamicID("gradient_hdr_band");
+            NoteSwatchClaim(bandID);
+            auto& bandStyle = m_gradientEditorSub->ClaimSwatchStyle(bandID);
+            SetHdrBandStyle(styleManager, bandStyle, value);
+            band = bandStyle;
+        }
+
+        // Each stop: a pointer up to the bar's bottom edge and a box of the stop's color under
+        // it, both edged in the text color.
+        {
+            struct StopDraw { float t; VisualColorStyleIndex color; };
+            std::vector<StopDraw> stops;
+            for (const GradientStop& stop : value.stops)
+                stops.push_back({ std::clamp(stop.offset, 0.0f, 1.0f), styleManager.RegisterColorStyle(ColorStyle::Create(Clamp01(stop.color))) });
+            const VisualColorStyleIndex edge = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--text-1", color4f{ 0.91f, 0.92f, 0.94f, 1.0f })));
             VERIFY(elementStorage.AddCustomDraw(swatchRef,
-                [offsets = std::move(offsets), fill, outline, half = float(styleManager.Px(4)), edge = float(styleManager.Px(1))](CustomDrawContext& ctx)
+                [stops = std::move(stops), edge, band, box = styleManager.Px(10), pointer = float(styleManager.Px(4)),
+                 border = std::max(1, int(std::lround(1.5f * float(styleManager.Px(10)) / 10.0f))),
+                 bandH = styleManager.Px(3), bandGap = styleManager.Px(2), radius = float(styleManager.Px(2))](CustomDrawContext& ctx)
                 {
-                    const auto outer = ctx.ElementRect();
+                    const IntRect outer = ctx.ElementRect();
                     if (outer.w <= 0 || outer.h <= 0) return;
-                    auto diamond = [&ctx](float2 c, float r, VisualColorStyleIndex color) {
-                        const float2 corners[] = { { c.x - r, c.y }, { c.x, c.y - r }, { c.x + r, c.y }, { c.x, c.y + r } };
-                        ctx.RenderFilledPolygon(corners, color);
-                    };
-                    for (const float offset : offsets)
+                    if (band != VisualColorStyleIndex::Invalid)
+                        ctx.RenderQuad(IntRect{ .position = { outer.x, outer.y - bandGap - bandH }, .size = { outer.w, bandH } }, band, float(bandH) * 0.5f);
+                    const int half = box / 2;
+                    const int bottom = outer.y + outer.h;
+                    for (const StopDraw& stop : stops)
                     {
                         // Kept inside the bar's ends so the end stops stay whole.
-                        const float x = float(outer.x) + half + offset * float(std::max(0, outer.w) - 2.0f * half);
-                        const float2 center{ x, float(outer.y + outer.h) };
-                        diamond(center, half + edge, outline);
-                        diamond(center, half, fill);
+                        const int x = outer.x + half + int(std::lround(stop.t * float(std::max(0, outer.w - 2 * half))));
+                        ctx.RenderTriangle({ float(x), float(bottom) }, { float(x) + pointer, float(bottom) + pointer },
+                                           { float(x) - pointer, float(bottom) + pointer }, edge);
+                        const IntRect boxRect{ .position = { x - half, bottom + int(pointer) }, .size = { box, box } };
+                        ctx.RenderQuad(boxRect, edge, radius);
+                        const IntRect fill{ .position = { boxRect.x + border, boxRect.y + border }, .size = { box - 2 * border, box - 2 * border } };
+                        ctx.RenderQuad(fill, stop.color, std::max(0.0f, radius - float(border)));
                     }
                 }));
         }
+        if (hdr)
+        {
+            char chip[32];
+            std::snprintf(chip, sizeof(chip), "HDR \xC3\x97%.1f", double(brightest));
+            Text(idManager.AllocateDynamicID("gradient_hdr_chip"), chip, theme.gradientHdrChipStyleRef);
+        }
+        EndHorizontal();
 
         // ---- Editor popup ----
         if (editorIsOpen && ge.windowID != ID::Invalid())

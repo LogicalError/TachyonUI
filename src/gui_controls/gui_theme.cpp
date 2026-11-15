@@ -715,7 +715,9 @@ namespace tachyon
         colorPickerRecentStyleRef         = registerCSS("color-picker-recent");
         colorPickerPreviewStyleRef        = registerCSS("color-picker-preview");
         colorPickerNewStyleRef            = registerCSS("color-picker-new");
+        gradientFieldStyleRef             = registerCSS("gradient-field");
         gradientSwatchStyleRef            = registerCSS("gradient-swatch");
+        gradientHdrChipStyleRef           = registerCSS("gradient-hdr-chip");
         gradientEditorStyleRef            = registerCSS("gradient-editor");
         gradientEditorBarStyleRef         = registerCSS("gradient-editor-bar");
         dialogSmallButtonStyleRef             = registerCSS("dialog-small-button");

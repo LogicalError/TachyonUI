@@ -70,16 +70,15 @@ namespace tachyon
         falloff.clampValues = true;
         falloff.onEdit = onEdit(&falloff, "Edit curve");
 
-        // A color's curves, as a Curves node has them: each straight, the red lifted a little.
+        // A grade's red, green and blue: the red lifted, the green with more contrast, the blue
+        // lifted in the shadows.
         CurveView& color = showcase.demoColorCurves;
-        const CurvePreset& linear = DefaultCurvePresets()[1];
-        const std::pair<const char*, CurveChannelColor> channels[] = {
-            { "R", CurveChannelColor::Red }, { "G", CurveChannelColor::Green }, { "B", CurveChannelColor::Blue },
-            { "A", CurveChannelColor::Alpha } };
-        for (const auto& [name, tint] : channels)
-            color.channels.push_back(CurveChannel{ .name = name, .color = tint, .curve = withIDs(linear.curve) });
-        static constexpr float2 kRed[] = { { 0.0f, 0.0f }, { 0.5f, 0.62f }, { 1.0f, 1.0f } };
-        color.channels[0].curve = withIDs(MakeCurve(kRed));
+        static constexpr float2 kRed[]   = { { 0.0f, 0.0f }, { 0.5f, 0.62f }, { 1.0f, 1.0f } };
+        static constexpr float2 kGreen[] = { { 0.0f, 0.0f }, { 0.3f, 0.16f }, { 0.7f, 0.86f }, { 1.0f, 1.0f } };
+        static constexpr float2 kBlue[]  = { { 0.0f, 0.0f }, { 0.25f, 0.36f }, { 1.0f, 1.0f } };
+        color.channels = { CurveChannel{ .name = "R", .color = CurveChannelColor::Red,   .curve = withIDs(MakeCurve(kRed)) },
+                           CurveChannel{ .name = "G", .color = CurveChannelColor::Green, .curve = withIDs(MakeCurve(kGreen)) },
+                           CurveChannel{ .name = "B", .color = CurveChannelColor::Blue,  .curve = withIDs(MakeCurve(kBlue)) } };
         color.clampValues = true;
         color.onEdit = onEdit(&color, "Edit color curves");
     }

@@ -222,3 +222,6 @@ First public preview. The API is not stable yet.
 - Tables: a header over cells aligned to the end (numbers) is aligned to the end too, its sort chevron before the label (`table-header-end`, `table-header-locked-end`).
 - Text: a left icon with text aligned to the end or the center draws the text where it belongs. The text was laid out past the icon from the rect's start but drawn from after the moved icon, so it could land outside its box: a sorted number column's header lost its label.
 - Showcase: the table panels' toolbar is padded and reads "Selection mode". In the Table panel the row number is a fixed, right-aligned column; Hex and Multiple are left-aligned in the mono font, and Name and Hex can be resized.
+- `GradientField`: each stop is a box of its color under the bar, with a pointer up to it (were white diamonds); the bar is 16px. A `GradientF` brighter than 1 has a band over that part of the bar and an "HDR ×8.0" chip after it (`gradient-field`, `gradient-hdr-chip`). A hovered swatch's border lightens.
+- `CurveField`: a 44px plot (was 24px), a single value's curve in the accent color, a color's curves over a dashed identity line, a line at 0 when the range spans it, and an open button in the corner while hovered.
+- Showcase: the Inspector's Color curves are red, green and blue, each bent its own way.
