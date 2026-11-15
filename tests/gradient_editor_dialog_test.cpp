@@ -209,6 +209,43 @@ namespace
         EXPECT_FLOAT_EQ(floatGradient.stops[1].color.r, 4.0f) << "its color: the step's, over 1";
     }
 
+    // In a row 300 wide, as in an inspector.
+    void EmitInARow(HeadlessGUIApp& app, GradientF& gradient)
+    {
+        for (int i = 0; i < 2; ++i)
+            app.Frame([&] {
+                app.BeginRootWindow({ 1200, 900 });
+                app.BeginHorizontal(app.idManager.AllocateDynamicID("row"), app.theme.emptyHorzStyleRef, LayoutOverride::FixedWidth(300));
+                app.GradientField(gradient);
+                app.EndHorizontal();
+                app.EndRootWindow();
+            });
+    }
+
+    // A gradient brighter than 1 says how bright, in a chip after its bar, within the field's width.
+    TEST_F(GradientFEditorDialog, AnHdrGradientsFieldShowsItsBrightestValue)
+    {
+        floatGradient.AddStop(color4f{ 0.0f, 0.0f, 0.0f, 1.0f }, 0.0f);
+        floatGradient.AddStop(color4f{ 8.0f, 6.0f, 2.0f, 1.0f }, 1.0f);
+        EmitInARow(app, floatGradient);
+        const ID chip = app.FindByText("HDR \xC3\x97" "8.0");
+        ASSERT_NE(chip, ID::Invalid());
+        const IntRect bar  = app.GetElementRect(FindByStyle(app.theme.gradientSwatchStyleRef));
+        const IntRect text = app.GetElementRect(chip);
+        EXPECT_GT(text.x, bar.x + bar.w) << "after the bar";
+        EXPECT_LE(text.x + text.w - bar.x, app.styleManager.Px(300)) << "inside the field's width";
+    }
+
+    TEST_F(GradientFEditorDialog, AGradientUpToOneHasNoHdrChip)
+    {
+        floatGradient.AddStop(color4f{ 0.0f, 0.0f, 0.0f, 1.0f }, 0.0f);
+        floatGradient.AddStop(color4f{ 1.0f, 1.0f, 1.0f, 1.0f }, 1.0f);
+        EmitInARow(app, floatGradient);
+        EXPECT_EQ(app.FindByText("HDR \xC3\x97" "1.0"), ID::Invalid());
+        EXPECT_EQ(app.GetElementRect(FindByStyle(app.theme.gradientSwatchStyleRef)).w, app.styleManager.Px(300))
+            << "the bar is the whole field";
+    }
+
     TEST_F(GradientFEditorDialog, ReverseKeepsEachStretchsBlend)
     {
         floatGradient.AddStop(color4f{ 1, 0, 0, 1 }, 0.0f, StopInterpolation::Constant);

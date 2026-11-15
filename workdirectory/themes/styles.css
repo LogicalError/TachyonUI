@@ -7208,9 +7208,9 @@
     border-color: var(--line-subtle);
     background-color: var(--curve-plot);
     margin: 1px;
-    padding: 2px 4px;
+    padding: 3px;
     min-width: 60px;
-    height: 24px;
+    height: 44px;
     flex-grow: 1;
     flex-shrink: 1;
     cursor: pointer;
@@ -8050,21 +8050,48 @@
 .checkbox-label::highlight(selected) { color: var(--text-1); }
 
 /* ---- Gradient editor ------------------------------------------------------ */
+/* GradientField: the bar, and after it an HDR gradient's brightest value in a chip */
+.gradient-field {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin: 0px;
+    padding: 0px;
+    min-width: 60px;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
 .gradient-swatch {
-    height: 20px;
+    height: 16px;
     border-width: var(--border);
-    border-radius: var(--radius-md);
+    border-radius: 3px;
     border-color: var(--line-strong);
     background-color: transparent;
-    margin: 2px 0px 4px 0px;   /* room for the stop diamonds below */
+    margin: 6px 0px 14px 0px;   /* room for the HDR band above and the stops below */
     padding: 0px;
     min-width: 60px;
     cursor: pointer;
     flex-grow: 1;
-    align-self: stretch;
+    flex-shrink: 1;
     overflow: visible;
 }
-.gradient-swatch:hover { border-color: var(--line-strong); }
+.gradient-swatch:hover { border-color: var(--text-3); }
+.gradient-hdr-chip {
+    height: 20px;
+    padding: 0px 6px;
+    margin: 0px 0px 8px 0px;   /* level with the bar */
+    border-radius: var(--radius-sm);
+    background-color: var(--bg-well);
+    color: var(--text-2);
+    font-family: monospace;
+    font-size: 10.5px;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
 
 .gradient-editor {
     width: 720px;

@@ -15,7 +15,12 @@ easing over time, a color's channels in a Curves node.
 bool CurveField(ID id, CurveView& view, LayoutOverride&& constraints = {});
 ```
 
-- It draws the curves over `view.range`, the active channel's on top.
+- It draws the curves over `view.range`, in a 44px plot, the active channel's on top.
+  - A single value (`CurveChannelColor::Value`) in the accent color.
+  - A color's red, green and blue channels in the axis colors, over a dashed line where the
+    output equals the input, to compare against.
+  - A line at 0 when the range goes below and above it.
+- Hovered, it shows a small open button in its top-right corner.
 - A click opens the editor under it; another click, Escape, or a click outside closes it.
   - Escape gives the keyboard back to the field.
 - It returns true on the frame after a change, as a field does.

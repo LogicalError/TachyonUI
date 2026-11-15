@@ -388,19 +388,63 @@ namespace tachyon
             std::move(constraints));
         if (wasOpen) EndSelected();
 
-        // The curves over the range, the active channel's on top.
-        VERIFY(elementStorage.AddCustomDraw(fieldRef, [this, v](CustomDrawContext& ctx)
+        // The zero line, the curves over the range with the active channel's on top, and a color's
+        // curves over a dashed identity line. Hovered, an open button in the top-right corner.
+        const bool hovered = (guiStateManager.GetCurrentState(id) & ElementState::Hover) != ElementState::None;
+        const VisualColorStyleIndex identityColor = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--text-2", color4f{ 0.68f, 0.71f, 0.75f, 1.0f })));
+        const VisualColorStyleIndex buttonColor   = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--bg-control", color4f{ 0.12f, 0.13f, 0.16f, 1.0f })));
+        VERIFY(elementStorage.AddCustomDraw(fieldRef, [this, v, hovered, identityColor, buttonColor](CustomDrawContext& ctx)
         {
             const CurvePlot plot{ ctx.ElementInnerRect(), Sane(v->range) };
-            const float width = float(std::max(1, styleManager.Px(1))) * 1.5f;
+            const float px = float(std::max(1, styleManager.Px(1)));
+            const IntRect& r = plot.rect;
+            if (plot.shown.valueMin < 0.0f && plot.shown.valueMax > 0.0f)
+            {
+                const int y = int(std::lround(plot.Y(0.0f)));
+                ctx.RenderLine({ r.x, y }, { r.x + r.w, y }, LineStyle{ .colorStyleIndex = theme.curveGridMajorColor, .lineWidth = px });
+            }
+            bool colorChannels = false;
+            for (const CurveChannel& channel : v->channels)
+                colorChannels = colorChannels || channel.color == CurveChannelColor::Red || channel.color == CurveChannelColor::Green
+                                              || channel.color == CurveChannelColor::Blue;
             for (int n = 0; n < (int)v->channels.size(); ++n)
             {
                 const int c = n == (int)v->channels.size() - 1 ? v->activeChannel : (n >= v->activeChannel ? n + 1 : n);
                 if (c < 0 || c >= (int)v->channels.size() || !v->channels[size_t(c)].visible)
                     continue;
-                const VisualColorStyleIndex color = theme.curveChannelColors[size_t(v->channels[size_t(c)].color)];
-                const LineStyle style{ .colorStyleIndex = color, .lineWidth = width };
+                // A single value in the accent color; a color's channels in theirs.
+                const CurveChannelColor tint = v->channels[size_t(c)].color;
+                const LineStyle style = tint == CurveChannelColor::Value
+                    ? LineStyle{ .colorStyleIndex = theme.accentColor, .lineWidth = px * 1.75f }
+                    : LineStyle{ .colorStyleIndex = theme.curveChannelColors[size_t(tint)], .lineWidth = px * 1.5f };
                 DrawCurve(ctx, plot, v->channels[size_t(c)].curve, style, style);
+            }
+            if (colorChannels)
+            {
+                // Where output equals input, from the range's corner as far as both spans go.
+                const float lo = std::max(plot.shown.timeMin, plot.shown.valueMin);
+                const float hi = std::min(plot.shown.timeMax, plot.shown.valueMax);
+                if (lo < hi)
+                    ctx.RenderLine({ int(std::lround(plot.X(lo))), int(std::lround(plot.Y(lo))) },
+                                   { int(std::lround(plot.X(hi))), int(std::lround(plot.Y(hi))) },
+                                   LineStyle{ .colorStyleIndex = identityColor, .lineWidth = px, .dashSize = px * 3.0f });
+            }
+            if (hovered)
+            {
+                const IntRect outer = ctx.ElementRect();
+                const int size = styleManager.Px(18), inset = styleManager.Px(4);
+                const IntRect button{ .position = { outer.x + outer.w - inset - size, outer.y + inset }, .size = { size, size } };
+                if (button.x > outer.x)
+                {
+                    ctx.RenderQuad(button, buttonColor, float(styleManager.Px(4)));
+                    // A chevron pointing right, 11px across.
+                    const float2 c{ float(button.x) + float(size) * 0.5f, float(button.y) + float(size) * 0.5f };
+                    const float s = float(styleManager.Px(11)) / 24.0f;
+                    const int2 chevron[] = { { int(std::lround(c.x - 3.0f * s)), int(std::lround(c.y - 6.0f * s)) },
+                                             { int(std::lround(c.x + 3.0f * s)), int(std::lround(c.y)) },
+                                             { int(std::lround(c.x - 3.0f * s)), int(std::lround(c.y + 6.0f * s)) } };
+                    ctx.RenderPolyline(chevron, false, LineStyle{ .colorStyleIndex = identityColor, .lineWidth = px });
+                }
             }
         }));
 
