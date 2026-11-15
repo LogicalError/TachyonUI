@@ -2,6 +2,7 @@
 
 #include <gui_core/diagnostics/gui_logging.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -12,7 +13,7 @@
 
 //
 // Console panel: the application log (tachyon::Diagnostics) as a virtual table of
-// time / level icon / message, plus a detail pane for the selected record.
+// time / level dot / [category] message, plus a detail pane for the selected record.
 // "Collapse duplicates" folds identical lines anywhere in the log into one row.
 //
 
@@ -25,17 +26,36 @@ namespace tachyon
         // Timestamps show the time since start-up (static init is close enough).
         const int64_t logEpochNanos = SteadyClockNowNanos();
 
-        // Source path from the repository's src/ folder on, so the detail pane shows
-        // a short, recognisable file:line.
-        std::string_view ShortSourcePath(std::string_view file)
+        // The repository's root, from this file's path (examples/showcase/panel_console.cpp).
+        std::string_view RepositoryRoot()
         {
-            for (std::string_view marker : { "src/", "src\\" })
+            std::string_view self = __FILE__;
+            for (int up = 0; up < 3; ++up)
             {
-                const size_t at = file.rfind(marker);
-                if (at != std::string_view::npos)
-                    return file.substr(at);
+                const size_t slash = self.find_last_of("/\\");
+                if (slash == std::string_view::npos) return {};
+                self = self.substr(0, slash);
             }
-            return file;
+            return self;
+        }
+
+        // A source path from the repository's root on, with '/', so the detail pane shows a
+        // short, recognisable file:line ("src/gui_controls/gui_theme.cpp"). A path outside
+        // the repository stays whole.
+        std::string ShortSourcePath(std::string_view file)
+        {
+            const std::string_view root = RepositoryRoot();
+            auto sameChar = [](char a, char b) {
+                const bool slashes = (a == '/' || a == '\\') && (b == '/' || b == '\\');
+                return slashes || std::tolower((unsigned char)a) == std::tolower((unsigned char)b);
+            };
+            if (!root.empty() && file.size() > root.size() + 1
+                && std::equal(root.begin(), root.end(), file.begin(), sameChar)
+                && (file[root.size()] == '/' || file[root.size()] == '\\'))
+                file.remove_prefix(root.size() + 1);
+            std::string path(file);
+            std::replace(path.begin(), path.end(), '\\', '/');
+            return path;
         }
     }
 
@@ -105,14 +125,16 @@ namespace tachyon
             std::snprintf(ts, sizeof(ts), "%02d:%02d:%02d.%03d", int(ms / 3600000), int(ms / 60000 % 60),
                           int(ms / 1000 % 60), int(ms % 1000));
 
-            char message[1024];
-            Diagnostics::FormatLogMessage(record, message);
+            char formatted[1024];
+            Diagnostics::FormatLogMessage(record, formatted);
 
-            std::string details = std::string(Diagnostics::LogSeverityName(record.severity)) + " ["
-                                + std::string(record.category.name) + "] " + message;
+            // The row shows the category before the message, as the detail pane does, and
+            // the filter matches it too.
+            std::string message = "[" + std::string(record.category.name) + "] " + formatted;
+            std::string details  = std::string(Diagnostics::LogSeverityName(record.severity)) + " " + message;
             if (record.file[0] != '\0')
-                details += "\n  at " + std::string(ShortSourcePath(record.file)) + ":" + std::to_string(record.line);
-            logEntries.push_back({ ToLogLevel(record.severity), ts, message, std::move(details) });
+                details += "\nat " + ShortSourcePath(record.file) + ":" + std::to_string(record.line);
+            logEntries.push_back({ ToLogLevel(record.severity), ts, std::move(message), std::move(details) });
         }
 
         // Appends the records logged since the last pull. Returns true if any arrived.
@@ -219,29 +241,26 @@ namespace tachyon
         p.logColumns.clear();
         p.logColumns.resize(3);
         // Timestamp - fixed-width, first column.
-        p.logColumns[0].column = { .initialWidth = 112, .minWidth = 112, .maxWidth = 112,
+        p.logColumns[0].column = { .initialWidth = 104, .minWidth = 104, .maxWidth = 104,
                                  .sizing = ColumnSizing::Fixed };
         p.logColumns[0].generateCell = [this, &p](int rowIdx) {
             if (rowIdx < 0 || rowIdx >= int(p.logVisible.size())) return;
             Cell(p.logEntries[p.logVisible[rowIdx]].timestamp.c_str());
         };
-        // Level icon - fixed-width landmark, after the timestamp.
-        p.logColumns[1].column = { .initialWidth = 32, .minWidth = 32, .maxWidth = 32,
+        // Level - a dot in the level's color, after the timestamp.
+        p.logColumns[1].column = { .initialWidth = 24, .minWidth = 24, .maxWidth = 24,
                                  .sizing = ColumnSizing::Fixed };
         p.logColumns[1].generateCell = [this, &p](int rowIdx) {
             if (rowIdx < 0 || rowIdx >= int(p.logVisible.size())) return;
-            const LogPanel::LogLevel level = p.logEntries[p.logVisible[rowIdx]].level;
-            const IconID   icon  = (level == LogPanel::LogLevel::Error)   ? showcase.errorIcon
-                                 : (level == LogPanel::LogLevel::Warning) ? showcase.warningIcon
-                                 :                                showcase.infoIcon;
-            Cell([this, icon]() {
+            const StyleRef dotStyle = logLevelDotStyleRefs[int(p.logEntries[p.logVisible[rowIdx]].level)];
+            Cell([this, dotStyle]() {
                 const tachyon::ID iconID = idManager.AllocateDynamicID();
                 tachyon::Element iconElem{};
                 iconElem.id       = iconID;
-                iconElem.iconID   = icon;
+                iconElem.iconID   = showcase.dotIcon;
                 iconElem.flags    = tachyon::ElementFlags::NoInput;
                 iconElem.state    = guiStateManager.GetCurrentState(iconID);
-                iconElem.styleRef = logLevelIconStyleRef;
+                iconElem.styleRef = dotStyle;
                 auto res = elementStorage.Add(std::move(iconElem),
                                               tachyon::LayoutOverride{});
                 VERIFY(res.status);
@@ -298,7 +317,7 @@ namespace tachyon
 
         // Top row: clear button | search box | level toggles | collapse toggle.
         BeginHorizontal(idManager.AllocateDynamicID("logSearchRow"),
-                        theme.searchRowStyleRef, tachyon::LayoutOverride::Auto().NoShrink());
+                        logToolbarStyleRef, tachyon::LayoutOverride::Auto().NoShrink());
         {
             Button(idManager.AllocateDynamicID("logClear"), "Clear",
                 [&p]() {
@@ -314,7 +333,7 @@ namespace tachyon
                 tachyon::LayoutOverride{}.NoGrow().NoShrink());
             SetTooltip("Clear the log");
 
-            if (SearchField(p.logSearch, showcase.findIcon,
+            if (SearchField(p.logSearch, { showcase.findIcon, "Filter messages" },
                             TextEditBehavior::ContinuousUpdate,
                             tachyon::LayoutOverride{}.FlexGrow(1)))
                             p.logFilterDirty = true;
@@ -407,7 +426,7 @@ namespace tachyon
             const tachyon::ID sizerID = idManager.AllocateDynamicID("logDetailSizer");
             tachyon::Element sizer{};
             sizer.id       = sizerID;
-            sizer.styleRef = theme.dockSizerVertStyleRef;
+            sizer.styleRef = logDetailSizerStyleRef;
             sizer.state    = guiStateManager.GetCurrentState(sizerID);
             sizer.eventHandler = tachyon::MakeVerticalSizerHandler(
                 guiStateManager, elementStorage, p.logDetailHeight, 48, 480, nullptr, nullptr, /*invert*/ true, styleManager.GetUIScale());
