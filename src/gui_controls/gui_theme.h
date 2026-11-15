@@ -226,9 +226,7 @@ namespace tachyon
         StyleRef colorPickerRecentStyleRef {};          ///< color picker: a recent color
         StyleRef colorPickerPreviewStyleRef {};         ///< color picker: the color preview
         StyleRef colorPickerNewStyleRef{};              ///< color picker: the add-swatch button
-        StyleRef gradientFieldStyleRef {};              ///< GradientField: the row holding the swatch and the HDR chip
         StyleRef gradientSwatchStyleRef {};             ///< GradientField: the swatch
-        StyleRef gradientHdrChipStyleRef {};            ///< GradientField: an HDR gradient's brightest value, after the swatch
         StyleRef gradientEditorStyleRef {};             ///< gradient editor: the window
         StyleRef gradientEditorBarStyleRef {};          ///< gradient editor: the gradient bar with its stops
         StyleRef dialogSmallButtonStyleRef {};              ///< dialog: a short button (Save preset, Reverse)

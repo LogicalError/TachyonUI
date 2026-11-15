@@ -12,12 +12,32 @@
 namespace
 {
     // Create/update a VisualColorStyleIndex that draws a gradient horizontally, from its
-    // samples (a GradientF's colors clamped for display).
+    // samples (a GradientF's colors clamped for display); `opaque` drops the alpha.
     void SetGradientPreviewStyle(tachyon::StyleManager& sm, tachyon::VisualColorStyleIndex& idx,
-                                 const tachyon::GradientF& gradient)
+                                 const tachyon::GradientF& gradient, bool opaque = false)
     {
         std::array<tachyon::color4b, 256> row{};
         gradient.WriteTo(std::span<tachyon::color4b>(row));
+        if (opaque)
+        {
+            // A fully see-through sample's color counts for nothing in the blend (the colors
+            // are weighted by alpha), so it takes its nearest visible neighbour's: a gradient
+            // fading in from a transparent stop is that first visible color right to its end.
+            const auto first = std::find_if(row.begin(), row.end(), [](tachyon::color4b c) { return c.a > 0; });
+            if (first != row.end())
+            {
+                tachyon::color4b last = *first;
+                for (tachyon::color4b& c : row)
+                {
+                    if (c.a > 0) last = c;
+                    else c = last;
+                    c.a = 255;
+                }
+            }
+            else
+                for (tachyon::color4b& c : row)
+                    c.a = 255;
+        }
         tachyon::ColorStyle cs;
         cs.type = tachyon::ColorType::LinearGradient;
         cs.SetTransformation(tachyon::float3(0, 1, 0), tachyon::float3(1, 0, 0)); // horizontal
@@ -135,16 +155,22 @@ namespace tachyon
         }
         const bool editorIsOpen = (ge.triggerID == swatchID); // this field's editor, not just any
 
-        // Get or create a persistent style index for this swatch
+        // Persistent style indices for this swatch: the gradient as it is, and opaque. Copied
+        // out, as a later claim can move the stored ones.
         NoteSwatchClaim(swatchID);
         auto& swatchStyle = m_gradientEditorSub->ClaimSwatchStyle(swatchID);
         SetGradientPreviewStyle(styleManager, swatchStyle, value);
+        const VisualColorStyleIndex withAlpha = swatchStyle;
+        const ID opaqueID = idManager.AllocateDynamicID("gradient_opaque");
+        NoteSwatchClaim(opaqueID);
+        auto& opaqueStyle = m_gradientEditorSub->ClaimSwatchStyle(opaqueID);
+        SetGradientPreviewStyle(styleManager, opaqueStyle, value, /*opaque*/ true);
+        const VisualColorStyleIndex opaque = opaqueStyle;
 
         Element swatch {};
         swatch.id              = swatchID;
         swatch.styleRef        = style;
         swatch.state           = guiStateManager.GetCurrentState(swatchID);
-        swatch.colorStyleIndex = swatchStyle;
         // A copy: the editor starts from the gradient as drawn, whatever becomes of the caller's.
         swatch.eventHandler = MakeButtonHandler([this, value, original8, limits, swatchID, editorIsOpen, context]()
         {
@@ -168,13 +194,18 @@ namespace tachyon
             }
         });
 
-        // The bar, and after it the brightest value of a gradient brighter than 1.
         float brightest = 0.0f;
         for (const GradientStop& stop : value.stops)
             brightest = std::max(brightest, Brightest(stop.color));
         const bool hdr = brightest > 1.0f;
-        BeginHorizontal(idManager.AllocateDynamicID("gradient_field"), theme.gradientFieldStyleRef, std::move(constraints));
-        const ElementRef swatchRef = RegisterControl(std::move(swatch), LayoutOverride{});
+        const ElementRef swatchRef = RegisterControl(std::move(swatch), std::move(constraints));
+        // How bright a gradient brighter than 1 gets, which the bar can't show.
+        if (hdr)
+        {
+            char tip[48];
+            std::snprintf(tip, sizeof(tip), "Up to %.1f \xC3\x97 white", double(brightest));
+            SetTooltip(tip);
+        }
 
         // A band over the bar where the gradient is brighter than 1.
         VisualColorStyleIndex band = VisualColorStyleIndex::Invalid;
@@ -187,45 +218,29 @@ namespace tachyon
             band = bandStyle;
         }
 
-        // Each stop: a pointer up to the bar's bottom edge and a box of the stop's color under
-        // it, both edged in the text color.
+        // The gradient's colors opaque in the top half, and in the bottom half as they are over a
+        // checkerboard, as a color swatch shows its alpha. The stops are the editor's to show.
         {
-            struct StopDraw { float t; VisualColorStyleIndex color; };
-            std::vector<StopDraw> stops;
-            for (const GradientStop& stop : value.stops)
-                stops.push_back({ std::clamp(stop.offset, 0.0f, 1.0f), styleManager.RegisterColorStyle(ColorStyle::Create(Clamp01(stop.color))) });
-            const VisualColorStyleIndex edge = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--text-1", color4f{ 0.91f, 0.92f, 0.94f, 1.0f })));
+            ColorSwatchLook look = SwatchLook();
+            look.radius = float(styleManager.Px(2));
             VERIFY(elementStorage.AddCustomDraw(swatchRef,
-                [stops = std::move(stops), edge, band, box = styleManager.Px(10), pointer = float(styleManager.Px(4)),
-                 border = std::max(1, int(std::lround(1.5f * float(styleManager.Px(10)) / 10.0f))),
-                 bandH = styleManager.Px(3), bandGap = styleManager.Px(2), radius = float(styleManager.Px(2))](CustomDrawContext& ctx)
+                [look, withAlpha, opaque, band, bandH = styleManager.Px(3), bandGap = styleManager.Px(2)](CustomDrawContext& ctx)
                 {
                     const IntRect outer = ctx.ElementRect();
-                    if (outer.w <= 0 || outer.h <= 0) return;
+                    const IntRect inner = ctx.ElementInnerRect();
+                    if (inner.w <= 0 || inner.h <= 0) return;
+                    const int topH = inner.h / 2;
+                    const IntRect top{ .position = inner.position, .size = { inner.w, topH } };
+                    const IntRect bottom{ .position = { inner.x, inner.y + topH }, .size = { inner.w, inner.h - topH } };
+                    ColorSwatchLook checker = look;
+                    checker.checkerSize = std::max(2, bottom.h / 2);   // two rows of squares
+                    DrawCheckerboard(ctx, inner, bottom, checker);
+                    ctx.RenderQuad(inner, bottom, withAlpha, look.radius);
+                    ctx.RenderQuad(inner, top, opaque, look.radius);
                     if (band != VisualColorStyleIndex::Invalid)
                         ctx.RenderQuad(IntRect{ .position = { outer.x, outer.y - bandGap - bandH }, .size = { outer.w, bandH } }, band, float(bandH) * 0.5f);
-                    const int half = box / 2;
-                    const int bottom = outer.y + outer.h;
-                    for (const StopDraw& stop : stops)
-                    {
-                        // Kept inside the bar's ends so the end stops stay whole.
-                        const int x = outer.x + half + int(std::lround(stop.t * float(std::max(0, outer.w - 2 * half))));
-                        ctx.RenderTriangle({ float(x), float(bottom) }, { float(x) + pointer, float(bottom) + pointer },
-                                           { float(x) - pointer, float(bottom) + pointer }, edge);
-                        const IntRect boxRect{ .position = { x - half, bottom + int(pointer) }, .size = { box, box } };
-                        ctx.RenderQuad(boxRect, edge, radius);
-                        const IntRect fill{ .position = { boxRect.x + border, boxRect.y + border }, .size = { box - 2 * border, box - 2 * border } };
-                        ctx.RenderQuad(fill, stop.color, std::max(0.0f, radius - float(border)));
-                    }
                 }));
         }
-        if (hdr)
-        {
-            char chip[32];
-            std::snprintf(chip, sizeof(chip), "HDR \xC3\x97%.1f", double(brightest));
-            Text(idManager.AllocateDynamicID("gradient_hdr_chip"), chip, theme.gradientHdrChipStyleRef);
-        }
-        EndHorizontal();
 
         // ---- Editor popup ----
         if (editorIsOpen && ge.windowID != ID::Invalid())

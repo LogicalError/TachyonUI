@@ -1,5 +1,5 @@
-// The Inspector's gradient and curve fields on a real device: a gradient's stops as boxes of
-// their color under the bar, a band over where an HDR gradient passes 1.0, and a curve field
+// The Inspector's gradient and curve fields on a real device: a gradient's see-through parts
+// over a checkerboard, a band over where an HDR gradient passes 1.0, and a curve field
 // as a 44px plot with its curve in the accent color, an identity line behind color curves and
 // an open button while hovered.
 
@@ -9,6 +9,7 @@
 
 #include "gpu_injected_input.h"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -27,7 +28,9 @@ namespace
         ID gradientID = ID::Invalid();
         ID curveID    = ID::Invalid();
         ID colorsID   = ID::Invalid();
-        GradientF gradient;
+        ID fadeID     = ID::Invalid();
+        ID fadeInID   = ID::Invalid();
+        GradientF gradient, fade, fadeIn;
         CurveView curve, colors;
 
         void OnGUI() override
@@ -42,6 +45,8 @@ namespace
                     EndHorizontal();
                 };
                 row("gradientRow", [this] { GradientField(gradientID, gradient); });
+                row("fadeRow",     [this] { GradientField(fadeID, fade); });
+                row("fadeInRow",   [this] { GradientField(fadeInID, fadeIn); });
                 row("curveRow",    [this] { CurveField(curveID, curve); });
                 row("colorsRow",   [this] { CurveField(colorsID, colors); });
             }
@@ -57,6 +62,15 @@ namespace
             gradientID = idManager.CreateStaticID();
             curveID    = idManager.CreateStaticID();
             colorsID   = idManager.CreateStaticID();
+            fadeID     = idManager.CreateStaticID();
+            // Red, opaque for its first half, then fading out.
+            fade.AddStop(color4f{ 1.0f, 0.0f, 0.0f, 1.0f }, 0.0f);
+            fade.AddStop(color4f{ 1.0f, 0.0f, 0.0f, 1.0f }, 0.5f);
+            fade.AddStop(color4f{ 1.0f, 0.0f, 0.0f, 0.0f }, 1.0f);
+            // From a see-through blue (a color that counts for nothing) in to red.
+            fadeInID = idManager.CreateStaticID();
+            fadeIn.AddStop(color4f{ 0.0f, 0.0f, 1.0f, 0.0f }, 0.0f);
+            fadeIn.AddStop(color4f{ 1.0f, 0.0f, 0.0f, 1.0f }, 1.0f);
             // Red, green, then 8 times white: brighter than 1 past the middle.
             gradient.colorSpace = ColorSpace::LinearRGB;
             gradient.AddStop(color4f{ 1.0f, 0.0f, 0.0f, 1.0f }, 0.0f);
@@ -127,16 +141,41 @@ namespace
         int Px(int css) { return app.styleManager.Px(css); }
     };
 
-    // Each stop: a pointer up to the bar and a box of the stop's color under it.
-    TEST_F(GpuInspectorFields, AGradientsStopsAreBoxesOfTheirColorUnderTheBar)
+    // The swatch shows only the gradient, as a color swatch shows a color: opaque in its top
+    // half, at its alpha over a checkerboard in its bottom half. No stops under it.
+    TEST_F(GpuInspectorFields, AGradientSwatchShowsItsAlphaOverACheckerboardInItsBottomHalf)
     {
-        const IntRect bar = app.RectOf(app.gradientID);
-        const int half = Px(5);
-        const int x = bar.x + half + (bar.w - 2 * half) / 2;   // the middle stop, green
-        const int bottom = bar.y + bar.h;
-        EXPECT_LT(Distance(app.At(x, bottom + Px(4) + half), Rgb{ 0, 255, 0 }), 40) << "the box is the stop's color";
-        const Rgb pointer = app.At(x, bottom + Px(3));
-        EXPECT_GT(pointer.r + pointer.g + pointer.b, 500) << "the pointer is light";
+        const IntRect bar = app.RectOf(app.fadeID);
+        const int topRow    = bar.y + bar.h / 4;
+        const int bottomRow = bar.y + bar.h * 3 / 4;
+        // The most two pixels differ along a stretch of a row, a few checker squares long.
+        auto spread = [&](float t, int y) {
+            const int from = bar.x + int(t * float(bar.w));
+            int most = 0;
+            for (int x = from; x < from + Px(24); ++x)
+                most = std::max(most, Distance(app.At(x, y), app.At(from, y)));
+            return most;
+        };
+        EXPECT_LT(spread(0.1f, bottomRow), 12) << "opaque: one color";
+        EXPECT_GT(spread(0.9f, bottomRow), 20) << "see-through: the checkerboard shows below";
+        EXPECT_LT(spread(0.9f, topRow), 12) << "the top half is opaque";
+        EXPECT_LT(Distance(app.At(bar.x + bar.w * 9 / 10, topRow), Rgb{ 255, 0, 0 }), 40) << "the color itself, without its alpha";
+
+        // Fading in from a fully see-through stop, the top half is the first visible color from
+        // its very start: the see-through stop's own color isn't shown.
+        const IntRect fadeIn = app.RectOf(app.fadeInID);
+        for (int x : { fadeIn.x + Px(2), fadeIn.x + fadeIn.w / 2 })
+            EXPECT_LT(Distance(app.At(x, fadeIn.y + fadeIn.h / 4), Rgb{ 255, 0, 0 }), 40) << "red at " << x - fadeIn.x;
+
+        // Under the other gradient's stops (0, a half, 1): the background.
+        const IntRect stops = app.RectOf(app.gradientID);
+        const int under = stops.y + stops.h + Px(4);
+        const Rgb background = app.At(app.width - 10, under);
+        for (float t : { 0.0f, 0.5f, 1.0f })
+        {
+            const int x = std::clamp(stops.x + int(t * float(stops.w)), stops.x + Px(5), stops.x + stops.w - Px(5));
+            EXPECT_LT(Distance(app.At(x, under), background), 10) << "nothing under the bar at " << t;
+        }
     }
 
     // A band over the bar where the gradient is brighter than 1: here its second half.
