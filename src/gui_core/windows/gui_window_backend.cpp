@@ -13,4 +13,10 @@ namespace tachyon
         if (secs > 0.0f)
             std::this_thread::sleep_for(std::chrono::duration<float>(secs));
     }
+
+    void IWindowBackend::SleepFor(float secs)
+    {
+        if (secs > 0.0f)
+            std::this_thread::sleep_for(std::chrono::duration<float>(secs));
+    }
 }

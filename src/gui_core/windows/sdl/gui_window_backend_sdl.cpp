@@ -1379,6 +1379,12 @@ namespace tachyon
         SDL_WaitEventTimeout(nullptr, ms >= float(INT32_MAX) ? INT32_MAX : Sint32(ms));
     }
 
+    void SDLWindowBackend::SleepFor(float secs)
+    {
+        if (secs > 0.0f)
+            SDL_DelayNS(Uint64(double(secs) * 1e9));
+    }
+
     void SDLWindowBackend::Wake()
     {
         if (!m_sdlInitialized)

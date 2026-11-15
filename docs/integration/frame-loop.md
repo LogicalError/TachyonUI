@@ -60,6 +60,29 @@ rest.
   app.SetRedrawMode(tachyon::RedrawMode::Always);
   ```
 
+### Keeping to the display's refresh rate
+
+`Run()` draws at most one frame per refresh of the display, however often frames are asked
+for.
+
+- Usually presenting a frame waits for the display's next refresh (vsync), and that keeps the
+  pace by itself.
+  - For example, a focused window on a 120 Hz monitor: about 8 ms per frame, nearly all of it
+    in the profiler's "Present (vsync wait)" scope.
+- Sometimes presenting doesn't wait, and the loop could run hundreds of frames a second that
+  are never shown:
+  - a window the OS compositor draws, such as an unfocused window on Windows
+  - a frame that presents nothing, such as one in `RedrawMode::WhenChanged` where no window
+    changed
+- Then `Run()` sleeps the rest of the refresh period itself.
+  - The profiler shows that sleep as "Pace (refresh wait)", next to the build.
+  - `frameTime` includes it, as it includes a vsync wait; `frameBuildTime` doesn't.
+- The refresh rate is that of the fastest monitor with one of the app's windows on it, 60 Hz
+  when it's unknown.
+  - For example, windows on a 60 Hz and a 144 Hz monitor: 144 frames a second, so neither
+    waits for the other.
+- In your own loop you pace frames yourself: `PresentFrame` doesn't sleep.
+
 ### When your app changes something by itself
 
 The library sees input and its own animations. It can't see a change that comes from your

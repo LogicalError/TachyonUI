@@ -74,6 +74,8 @@ namespace tachyon
         void PollEvents(std::function<void(OSWindowHandle, IWindowContext*)> cleanup) override;
         /// SDL_WaitEventTimeout; with pumpEvents off it doesn't wait, the host runs SDL's loop.
         void WaitForEvents(float timeoutSecs) override;
+        /// SDL_DelayNS: a high-resolution timer where the OS has one.
+        void SleepFor(float secs) override;
         /// Pushes an event of its own, which ends SDL's wait.
         void Wake() override;
         uint64_t GetEventCount() const override { return m_events.load(); }

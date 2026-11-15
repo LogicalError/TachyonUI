@@ -368,6 +368,9 @@ namespace tachyon
         /// Refresh rate in Hz of the monitor showing the main window, or of the
         /// primary monitor before there is one; 0 when unknown.
         float MainRefreshRate() const;
+        /// Refresh rate in Hz of the fastest monitor with a window of the app on it, so frames
+        /// come often enough for each; MainRefreshRate when no window's monitor is known.
+        float FastestRefreshRate() const;
 
         /// The window's context; nullptr when the window doesn't exist.
         IWindowContext* GetWindowContext(ID id) const

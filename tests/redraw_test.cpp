@@ -81,6 +81,16 @@ namespace tachyon
             EXPECT_LT(SecondsSince(start), 1.0f);
         }
 
+        // SleepFor sleeps its time: a Wake doesn't end it, as it does a WaitForEvents.
+        TEST(RedrawBackend, SleepForIsNotEndedByAWake)
+        {
+            NullWindowBackend backend;
+            backend.Wake();
+            const Clock::time_point start = Clock::now();
+            backend.SleepFor(0.02f);
+            EXPECT_GE(SecondsSince(start), 0.015f);
+        }
+
         // ---------------------------------------------------------------------
         // The renderer: whether a window's draws changed
         // ---------------------------------------------------------------------
@@ -495,6 +505,38 @@ namespace tachyon
             worker.join();
             EXPECT_GT(app.builds, 3) << "it keeps building";
             EXPECT_LT(app.builds, 60) << "about one a refresh";
+        }
+
+        // Run() with presents that don't wait for vsync (none here): Always draws a frame each
+        // refresh, not as fast as it can.
+        TEST_F(RedrawTest, RunAlwaysPacesItselfToTheRefresh)
+        {
+            app.SetRedrawMode(RedrawMode::Always);
+            std::thread worker([this] {
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                app.quitSoon = true;
+            });
+            EXPECT_TRUE(app.Run());
+            worker.join();
+            EXPECT_GT(app.builds, 3) << "it keeps drawing";
+            EXPECT_LT(app.builds, 30) << "about one a refresh (60 Hz without a known display)";
+            // The wait is in the profiled frame and in frameTime, beside the build.
+            EXPECT_GT(app.frameTime, 0.010f) << "about a 60 Hz period";
+            EXPECT_LT(app.frameBuildTime, app.frameTime);
+        }
+
+        // Something animating in WhenNeeded asks for a frame every frame: still one a refresh.
+        TEST_F(RedrawTest, RunPacesAnAnimationToTheRefresh)
+        {
+            app.spinner = true;
+            std::thread worker([this] {
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                app.quitSoon = true;
+            });
+            EXPECT_TRUE(app.Run());
+            worker.join();
+            EXPECT_GT(app.builds, 3) << "it keeps drawing";
+            EXPECT_LT(app.builds, 30) << "about one a refresh (60 Hz without a known display)";
         }
     }
 }

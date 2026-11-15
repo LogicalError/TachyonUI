@@ -1321,6 +1321,35 @@ namespace tachyon
         wm.EndFrame();
     }
 
+    // The frame loop paces to the fastest monitor any window is on, so a window on a 144 Hz
+    // monitor isn't held to the 60 Hz of the main window's.
+    TEST_F(OSWindowManagerTest, FastestRefreshRateIsTheFastestMonitorWithAWindow)
+    {
+        ON_CALL(*mockBackend, GetMonitors()).WillByDefault([] {
+            return std::vector<MonitorInfo>{
+                MonitorInfo{ .rect = IntRect{ 0, 0, 1920, 1080 }, .isPrimary = true, .refreshRate = 60.0f },
+                MonitorInfo{ .rect = IntRect{ 1920, 0, 2560, 1440 }, .refreshRate = 144.0f },
+                MonitorInfo{ .rect = IntRect{ 4480, 0, 1920, 1080 }, .refreshRate = 240.0f },
+            };
+        });
+        // Each window on the monitor its handle says: the first on 0, the second on 1.
+        ON_CALL(*mockBackend, GetMonitorFromWindow(_)).WillByDefault([](OSWindowHandle handle) {
+            return int(reinterpret_cast<uintptr_t>(handle)) - 1;
+        });
+        OSWindowManager wm(nullptr, mockBackend);
+        EXPECT_FLOAT_EQ(wm.FastestRefreshRate(), 60.0f) << "no window yet: the primary monitor";
+
+        wm.BeginFrame();
+        wm.GetOrCreateWindow(CreateTestID(1), "Main", IntRect{ 100, 100, 800, 600 }, nullptr, WindowFlags::DefaultFlags);
+        wm.GetOrCreateWindow(CreateTestID(2), "Other", IntRect{ 2000, 100, 800, 600 }, nullptr, WindowFlags::DefaultFlags);
+        wm.EndFrame();
+
+        wm.BeginFrame();
+        EXPECT_FLOAT_EQ(wm.MainRefreshRate(), 60.0f);
+        EXPECT_FLOAT_EQ(wm.FastestRefreshRate(), 144.0f) << "not the 240 Hz monitor: no window is on it";
+        wm.EndFrame();
+    }
+
     // ============================================================================
     // Popups fading in and out
     // ============================================================================

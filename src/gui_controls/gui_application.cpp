@@ -700,6 +700,7 @@ namespace tachyon
     Result<void> GUIApplication::Run()
     {
         applicationQuit = false;
+        m_paceFrames    = true;
         for (;;)
         {
             // Asleep until there's something to draw.
@@ -709,17 +710,27 @@ namespace tachyon
             if (!UpdateFrame())
                 break;
             if (Result<void> frame = RecordFrame(); !frame)
-                return frame;
-            PresentFrame();
-            // Nothing presented, so no vsync wait: the next build waits for the refresh instead.
-            if (m_redrawMode == RedrawMode::WhenChanged && !m_recordedAny)
             {
-                const float hz = windowManager ? windowManager->MainRefreshRate() : 0.0f;
-                const auto period = std::chrono::duration<double>(1.0 / double(hz > 0.0f ? hz : 60.0f));
-                std::this_thread::sleep_until(m_frameStart + std::chrono::duration_cast<std::chrono::steady_clock::duration>(period));
+                m_paceFrames = false;
+                return frame;
             }
+            PresentFrame();
         }
+        m_paceFrames = false;
         return {};
+    }
+
+    void GUIApplication::PaceFrame()
+    {
+        // The fastest monitor with a window on it: each gets a frame every refresh, and the
+        // compositor drops the extra ones a slower monitor can't show.
+        const float   hz    = windowManager ? windowManager->FastestRefreshRate() : 0.0f;
+        const int64_t start = std::chrono::duration_cast<std::chrono::nanoseconds>(m_frameStart.time_since_epoch()).count();
+        const double  wait  = FramePaceWaitSeconds(start, SteadyClockNowNanos(), hz);
+        if (wait <= 0.0 || windowBackend == nullptr)
+            return;
+        TACHYON_PROFILE_SCOPE_WAIT("Pace (refresh wait)");
+        windowBackend->SleepFor(float(wait));
     }
 
     void GUIApplication::RequestRedraw()
@@ -852,7 +863,6 @@ namespace tachyon
             const bool all = drawAll || graphicsContext->TakeContentChanged()
                           || (windowBackend && windowBackend->TakeWindowsExposed());
             bool anyChanged = false;
-            m_recordedAny = false;
             windowManager->ForEachAliveWindowContext
                 ([&](IWindowContext* context, IntRect rect)
                 {
@@ -860,7 +870,6 @@ namespace tachyon
                     anyChanged = anyChanged || changed;
                     if (!all && !changed && !context->NeedsRecord())
                         return;
-                    m_recordedAny = true;
                     context->RecordWindowFrame(graphicsContext, rect);
                 });
             // Changed draws may change again (sizes measured this frame): one more to see.
@@ -873,7 +882,13 @@ namespace tachyon
     {
         windowManager->ForEachAliveWindowContext([](IWindowContext* context, IntRect) { context->PresentWindowFrame(); });
 
-        // frameTime includes any vsync wait; frameBuildTime is just the CPU build.
+        // A present that doesn't wait for vsync (mailbox, a window the compositor draws, or
+        // nothing presented) would let Run spin; it waits out the refresh instead. A host's
+        // own loop paces itself.
+        if (m_paceFrames)
+            PaceFrame();
+
+        // frameTime includes any vsync or pace wait; frameBuildTime is just the CPU build.
         TACHYON_PROFILE_FRAME_END();
         frameTime = std::chrono::duration<float>(std::chrono::steady_clock::now() - m_frameStart).count();
 
