@@ -281,6 +281,8 @@ namespace tachyon
         StyleRef tableHeaderStyleRef {};    ///< a column header
         /// Locked column headers: default cursor, since they can't be dragged.
         StyleRef tableHeaderLockedStyleRef {};
+        StyleRef tableHeaderEndStyleRef {};       ///< as tableHeaderStyleRef, over cells aligned to the end (numbers)
+        StyleRef tableHeaderLockedEndStyleRef {}; ///< as tableHeaderLockedStyleRef, over cells aligned to the end
         StyleRef tableSizerStyleRef {};     ///< a column's resize handle
         StyleRef tableSeparatorStyleRef {}; ///< the divider between table sections
         StyleRef tableCellStyleRef {};      ///< a cell

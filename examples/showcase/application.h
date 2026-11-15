@@ -135,7 +135,8 @@ namespace tachyon
         StyleRef logDetailPaneStyleRef, logDetailTextStyleRef;
         StyleRef shortcutCategoryStyleRef, shortcutTableStyleRef, shortcutCellStyleRef, settingsTitleStyleRef, settingsScrollStyleRef, sketchPadStyleRef;
         StyleRef settingsBodyStyleRef, settingsHeadStyleRef, settingsTitleRowStyleRef, settingsSplitStyleRef;
-        StyleRef dataTableCellStyleRef, dataTableNumberStyleRef;
+        StyleRef tableToolbarStyleRef;
+        StyleRef dataTableCellStyleRef, dataTableNumberStyleRef, dataTableCodeStyleRef;
         StyleRef textShadowSampleStyleRef, textGlowSampleStyleRef;
         StyleRef iconVAlignDemoStyleRefs[4][3];   // [IconSide L/R/T/B][top/mid/bot]
 

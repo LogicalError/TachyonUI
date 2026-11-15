@@ -40,8 +40,15 @@ namespace tachyon
         const bool isLocked      = columns[c].column.locked;
         const bool isReorderable = static_cast<bool>(state->onReorderColumns) && !isLocked;
         const bool isInteractive = isSortable || isReorderable;
-        const StyleRef headerStyle = isInteractive ? theme.tableHeaderStyleRef
-                                                   : theme.tableHeaderLockedStyleRef;
+        // Over cells aligned to the end (numbers), the header is too, so it sits over its values.
+        bool cellsAtEnd = false;
+        if (const LayoutStyle* cs = styleManager.GetLayoutStyle(columns[c].column.cellStyle.layoutStyleIndex))
+        {
+            const TextAlign align = cs->textLayoutStyle.horizontalAlignment;
+            cellsAtEnd = align == TextAlign::End || align == TextAlign::Right;
+        }
+        const StyleRef headerStyle = isInteractive ? (cellsAtEnd ? theme.tableHeaderEndStyleRef : theme.tableHeaderStyleRef)
+                                                   : (cellsAtEnd ? theme.tableHeaderLockedEndStyleRef : theme.tableHeaderLockedStyleRef);
 
         // Stable per-column header ID from VirtualTable's prologue: emit order changes
         // during a drag (dragged column last), which would shift a dynamic ID and lose capture.
@@ -54,8 +61,11 @@ namespace tachyon
         cell.state    = cellState;
         cell.styleRef = headerStyle;
 
+        // The sort chevron: in the text, at the header's icon size; a header without text is
+        // only the chevron. (An element's own icon counts at its full size in layout, so
+        // with text too it made the header row taller.)
         const bool isSortCol = (c == effectiveSortCol);
-        if (isSortCol)
+        if (isSortCol && columns[c].column.header.empty())
             cell.iconID = sortIcon;
 
         if (!columns[c].column.header.empty())

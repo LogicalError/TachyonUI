@@ -67,6 +67,20 @@
     flex-basis: 0;
 }
 
+/* The table panels' toolbar: "Selection mode" and Row | Cell, padded, with a line under it. */
+.table-toolbar {
+    border-width: 0px 0px 1px 0px;
+    border-color: var(--line-subtle);
+    padding: 6px 12px;
+    margin: 0px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 10px;
+    background-color: transparent;
+}
+
 /* The Shortcuts page's category list: its rows inset from the edges. */
 .shortcut-category {
     border-width: 0px;
@@ -144,6 +158,24 @@
 }
 .data-table-number:hover { background-color: var(--bg-hover); }
 .data-table-number::highlight(selected) { background-color: var(--accent-soft); color: var(--text-1); }
+
+/* Codes and expressions (0x00001A, 3 x 7 = 21): the mono font, at the start like text. */
+.data-table-code {
+    margin: 0px;
+    padding: 4px 8px;
+    overflow: hidden;
+    vertical-align: baseline;
+    text-align: start;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-2);
+    font-family: monospace;
+    font-size: 11.5px;
+    line-height: 16px;
+    background-color: transparent;
+}
+.data-table-code:hover { background-color: var(--bg-hover); }
+.data-table-code::highlight(selected) { background-color: var(--accent-soft); color: var(--text-1); }
 
 /* Shortcuts list rows: 27 high. */
 .shortcut-cell {
