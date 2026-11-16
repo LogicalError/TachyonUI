@@ -435,13 +435,11 @@ namespace tachyon
 
         BeginHorizontal(idManager.AllocateDynamicID("zoom"), theme.timelineZoomStyleRef);
         RegisterElement(Element{ .id = idManager.AllocateDynamicID("zoomOut"), .iconID = theme.timelineZoomOutIcon,
-                                 .styleRef = theme.timelineZoomStyleRef, .flags = ElementFlags::NoInput },
-                        LayoutOverride{}.FlexGrow(0));
+                                 .styleRef = theme.timelineZoomIconStyleRef, .flags = ElementFlags::NoInput }, LayoutOverride{});
         Slider(idManager.AllocateDynamicID("zoomSlider"), view.zoom, 0, 100, LayoutOverride{}.Width(110));
         SetTooltip("Zoom (the wheel over the lanes)");
         RegisterElement(Element{ .id = idManager.AllocateDynamicID("zoomIn"), .iconID = theme.timelineZoomInIcon,
-                                 .styleRef = theme.timelineZoomStyleRef, .flags = ElementFlags::NoInput },
-                        LayoutOverride{}.FlexGrow(0));
+                                 .styleRef = theme.timelineZoomIconStyleRef, .flags = ElementFlags::NoInput }, LayoutOverride{});
         EndHorizontal();
         EndHorizontal();
 
@@ -844,6 +842,21 @@ namespace tachyon
                 {
                     case EventType::MouseDown:
                     {
+                        // A right press: what the menu it opens is for. It selects the key under
+                        // it as a click does, keeping a selection it's part of.
+                        if (event.state.RightPressed())
+                        {
+                            const Hit hit = hitAt(float(at.x));
+                            v->menuKeys      = hit.ids;
+                            v->menuTrack     = track;
+                            v->menuTime      = g.TimeAt(float(at.x));
+                            v->menuByPointer = true;
+                            if (track >= 0)
+                                v->selectedTrack = v->tracks[size_t(track)].stableID;
+                            if (!hit.ids.empty() && !std::all_of(hit.ids.begin(), hit.ids.end(), [v](ID id) { return v->selectedKeys.contains(id); }))
+                                v->selectedKeys = std::unordered_set<ID>(hit.ids.begin(), hit.ids.end());
+                            return false;   // the context menu opens on it
+                        }
                         if (!event.state.LeftPressed())
                             return false;
                         TakeFocus(gsm, event.id);
@@ -1110,6 +1123,70 @@ namespace tachyon
                      .state = guiStateManager.GetCurrentState(lanesID) },
             LayoutOverride{}.MinHeight(Pixels{ lanesHeight }).FlexGrow(1));
         VERIFY(elementStorage.AddPostLayout(lanesRef, [v](PostLayoutContext& ctx) { v->lanesWidth = ctx.ElementInnerRect().w; }));
+
+        // The lanes' menu: on a key or event, delete it (the selection, when it's in it); on a
+        // lane, a key there, the playhead there, select all.
+        if (!disabled && BeginContextMenu(lanesID))
+        {
+            if (view.menuOpening != ContextMenuOpenings())
+            {
+                view.menuOpening = ContextMenuOpenings();
+                if (!view.menuByPointer)
+                {
+                    // From the keyboard: the selection, or the selected track at the playhead.
+                    view.menuKeys.assign(view.selectedKeys.begin(), view.selectedKeys.end());
+                    view.menuTrack = -1;
+                    for (int t = 0; t < (int)view.tracks.size(); ++t)
+                        if (view.tracks[size_t(t)].stableID == view.selectedTrack)
+                            view.menuTrack = t;
+                    view.menuTime = view.playback.time;
+                }
+                view.menuByPointer = false;
+            }
+            if (!view.menuKeys.empty())
+            {
+                const size_t count = std::max(view.menuKeys.size(), view.selectedKeys.size());
+                bool isEvent = false;
+                for (const TimelineTrack& tr : view.tracks)
+                    for (const TimelineEvent& e : tr.events)
+                        isEvent |= e.stableID == view.menuKeys[0];
+                const std::string label = count > 1 ? std::format("Delete {} keys", count) : isEvent ? "Delete event" : "Delete key";
+                MenuItem(label, "Del", [v] { CommitTimelineEdit(*v, DeleteSelectedKeysEdit(*v)); });
+            }
+            else
+            {
+                const int t = view.menuTrack;
+                if (t >= 0 && t < (int)view.tracks.size() && view.tracks[size_t(t)].kind == TimelineTrackKind::Property)
+                {
+                    const bool locked = IsTrackLocked(view, t);   // shown, but it can't add one
+                    if (locked) BeginDisabled();
+                    MenuItem("Add key", [this, v, t] {
+                        const ID keyID = idManager.CreateStaticID();
+                        const TimelineEdit edit = AddKeyEdit(*v, t, v->menuTime, keyID);
+                        if (edit.empty())
+                            return;
+                        CommitTimelineEdit(*v, edit);
+                        v->selectedKeys = { keyID };
+                    });
+                    if (locked) EndDisabled();
+                }
+                MenuItem("Move playhead here", [v, playbackChanged] {
+                    v->playback.time = std::clamp(SnappedTime(*v, v->menuTime), 0.0f, LengthOf(*v));
+                    v->playback.playing = false;
+                    playbackChanged();
+                });
+                MenuSeparator();
+                MenuItem("Select all", "Ctrl+A", [v] {
+                    for (const TimelineTrack& tr : v->tracks)
+                    {
+                        for (const TimelineKey& key : tr.keys) v->selectedKeys.insert(key.stableID);
+                        for (const TimelineEvent& e : tr.events) v->selectedKeys.insert(e.stableID);
+                    }
+                });
+            }
+        }
+        if (!disabled)
+            EndContextMenu();
         {
             // What the draw needs, by row: the track, whether it's selected, its keys.
             struct RowDraw

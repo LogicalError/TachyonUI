@@ -962,7 +962,7 @@ namespace tachyon
         timelineEditorStyleRef            = registerCSS("timeline-editor");
         timelineToolbarStyleRef           = registerCSS("timeline-toolbar");
         timelineDividerStyleRef           = registerCSS("timeline-divider");
-        timelineFpsStyleRef               = registerCSS("timeline-fps");
+        curveFrameAllStyleRef             = registerCSS("curve-frame-all");        timelineFpsStyleRef               = registerCSS("timeline-fps");
         timelineSnapStyleRef              = registerCSS("timeline-snap");
         boxSidesLinkStyleRef              = registerCSS("box-sides-link");
         curveFieldStyleRef                = registerCSS("curve-field");
@@ -975,7 +975,6 @@ namespace tachyon
         curveBoxSelectStyleRef            = registerCSS("curve-box-select");
         curvePresetStyleRef               = registerCSS("curve-preset");
         curvePlotFramesStyleRef           = registerCSS("curve-plot-frames");
-        curveToolbarLabelStyleRef         = registerCSS("curve-toolbar-label");
         curveTreeStyleRef                 = registerCSS("curve-tree");
         curveTreeHeaderStyleRef           = registerCSS("curve-tree-header");
         curveTreeGroupStyleRef            = registerCSS("curve-tree-group");
@@ -997,6 +996,7 @@ namespace tachyon
         viewportToolStyleRef              = registerCSS("viewport-tool");
         viewportAxisLabelStyleRef         = registerCSS("viewport-axis-label");
         timelineZoomStyleRef              = registerCSS("timeline-zoom");
+        timelineZoomIconStyleRef          = registerCSS("timeline-zoom-icon");
         timelineHeaderStyleRef            = registerCSS("timeline-header");
         timelineListHeaderStyleRef        = registerCSS("timeline-list-header");
         timelineListTitleStyleRef         = registerCSS("timeline-list-title");

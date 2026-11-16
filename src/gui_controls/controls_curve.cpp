@@ -348,8 +348,8 @@ namespace tachyon
 
         std::string Number(float v)
         {
-            if (std::fabs(v) < 5e-5f) v = 0.0f;   // no "-0.000"
-            return std::format("{:.3f}", v);
+            if (std::fabs(v) < 5e-3f) v = 0.0f;   // no "-0.00"
+            return std::format("{:.2f}", v);
         }
     }
 
@@ -679,37 +679,15 @@ namespace tachyon
         BeginVertical(id, theme.emptyVertStyleRef, std::move(constraints));
         const bool pushed = idManager.PushParent(id);
 
-        // ---- Over the plot: the channels or the modes, the selected key, frame all --
+        // ---- Over the plot: the channels, the selected key, frame all --------------
+        // A key's interpolation and tangents are in its menu (a right click on it).
         BeginHorizontal(idManager.AllocateDynamicID("curve_top"), theme.curveToolbarStyleRef, LayoutOverride::Auto().NoShrink());
         if (animation)
         {
-            // The selected keys' interpolation and tangents; the first selected key's lit.
-            const CurveKey* first = nullptr;
-            for (const CurveChannel& channel : view.channels)
-                for (const CurveKey& k : channel.curve.keys)
-                    if (!first && view.selectedKeys.contains(k.stableID))
-                        first = &k;
-            Text(idManager.AllocateDynamicID("curve_interpolation_label"), "Interpolation", theme.curveToolbarLabelStyleRef);
-            BeginToggleGroup(LayoutOverride{}.NoGrow());
-            const std::tuple<CurveInterpolation, IconID, const char*> interpolations[] = {
-                { CurveInterpolation::Constant, theme.curveConstantIcon, "Constant" },
-                { CurveInterpolation::Linear,   theme.curveLinearIcon,   "Linear" },
-                { CurveInterpolation::Bezier,   theme.curveBezierIcon,   "Bezier" } };
-            for (const auto& [i, icon, name] : interpolations)
-                Toggle(idManager.AllocateDynamicID(std::string("curve_interpolation_") + name), first && first->interpolation == i,
-                       GUIContent{ icon, name }, [v, i = i](bool) { CommitCurveEdit(*v, SetCurveInterpolationEdit(*v, i)); });
-            EndToggleGroup();
-            Text(idManager.AllocateDynamicID("curve_tangents_label"), "Tangents", theme.curveToolbarLabelStyleRef);
-            BeginToggleGroup(LayoutOverride{}.NoGrow());
-            const std::pair<CurveTangentMode, const char*> modes[] = {
-                { CurveTangentMode::Auto, "Auto" }, { CurveTangentMode::Aligned, "Aligned" },
-                { CurveTangentMode::Free, "Free" }, { CurveTangentMode::Flat, "Flat" } };
-            for (const auto& [m, name] : modes)
-                Toggle(idManager.AllocateDynamicID(std::string("curve_tangents_") + name), first && first->tangents == m,
-                       GUIContent{ name }, [v, m = m](bool) { CommitCurveEdit(*v, SetCurveTangentModeEdit(*v, m)); });
-            EndToggleGroup();
-            Button(idManager.AllocateDynamicID("curve_frame_all"), { theme.curveFrameAllIcon, "Frame all", "Frame all (A)" },
-                   [v]() { FrameAll(*v); }, theme.controls->button, LayoutOverride{}.NoGrow());   // its icon and text, no wider
+            const ID frameAllID = idManager.AllocateDynamicID("curve_frame_all");
+            Button(frameAllID, { theme.curveFrameAllIcon, "Frame all" }, [v]() { FrameAll(*v); },
+                   theme.curveFrameAllStyleRef, LayoutOverride{}.NoGrow());   // its icon and text, no wider
+            SetTooltip(frameAllID, "Frame all", "A");
         }
         else if (channelCount > 1 && !tree)
         {
@@ -1274,9 +1252,10 @@ namespace tachyon
         // A right click: on a key, its delete and tangent modes; elsewhere, a key there.
         if (!disabled && BeginContextMenu(plotID))
         {
-            if (!view.menuOpen)
+            if (view.menuOpening != ContextMenuOpenings())
             {
-                // Just opened: what's under the right click.
+                // Just opened, or opened again by another right click: what's under it.
+                view.menuOpening = ContextMenuOpenings();
                 view.menuKey = ID::Invalid();
                 const CurvePlot plot{ view.plotRect, ShownOf(view) };
                 const int2 at = contextMenuScreenPos.value_or(int2{ view.plotRect.x + view.plotRect.w / 2, view.plotRect.y + view.plotRect.h / 2 });
@@ -1296,7 +1275,6 @@ namespace tachyon
                     view.menuAt.y = EvaluateCurve(view.channels[size_t(curveHit)].curve, view.menuAt.x);
                 }
             }
-            view.menuOpen = true;
             if (view.menuKey != ID::Invalid())
             {
                 MenuItem("Delete key", [v]() { CommitCurveEdit(*v, DeleteSelectedCurveKeysEdit(*v)); });
@@ -1307,19 +1285,22 @@ namespace tachyon
                 for (const CurveChannel& channel : view.channels)
                     for (const CurveKey& k : channel.curve.keys)
                         if (k.stableID == view.menuKey) { mode = k.tangents; interpolation = k.interpolation; }
-                static constexpr std::pair<CurveInterpolation, const char*> kInterpolations[] = {
-                    { CurveInterpolation::Constant, "Constant" }, { CurveInterpolation::Linear, "Linear" },
-                    { CurveInterpolation::Bezier, "Bezier" } };
-                for (const auto& [i, name] : kInterpolations)
+                const std::tuple<CurveInterpolation, IconID, const char*> interpolations[] = {
+                    { CurveInterpolation::Constant, theme.curveConstantIcon, "Constant" },
+                    { CurveInterpolation::Linear,   theme.curveLinearIcon,   "Linear" },
+                    { CurveInterpolation::Bezier,   theme.curveBezierIcon,   "Bezier" } };
+                MenuHeader("Interpolation");
+                for (const auto& [i, icon, name] : interpolations)
                 {
                     if (i == interpolation) BeginSelected();
-                    MenuItem(name, [v, i]() { CommitCurveEdit(*v, SetCurveInterpolationEdit(*v, i)); });
+                    MenuItem({ icon, name }, [v, i = i]() { CommitCurveEdit(*v, SetCurveInterpolationEdit(*v, i)); });
                     if (i == interpolation) EndSelected();
                 }
                 MenuSeparator();
                 static constexpr std::pair<CurveTangentMode, const char*> kModes[] = {
                     { CurveTangentMode::Auto, "Auto" }, { CurveTangentMode::Aligned, "Aligned" },
                     { CurveTangentMode::Free, "Free" }, { CurveTangentMode::Flat, "Flat" } };
+                MenuHeader("Tangents");
                 for (const auto& [m, name] : kModes)
                 {
                     if (m == mode) BeginSelected();
@@ -1341,8 +1322,6 @@ namespace tachyon
                 MenuItem("Frame all", [v]() { FrameAll(*v); });
             }
         }
-        else
-            view.menuOpen = false;
         if (!disabled)
             EndContextMenu();
 

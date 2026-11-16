@@ -138,8 +138,8 @@ namespace tachyon
             view.playhead = 1.0f;
             Frames();
             EXPECT_EQ(app.CountByText("@ f 24"), 1);
-            EXPECT_EQ(app.CountByText("2.000"), 1) << "X at frame 24";
-            EXPECT_EQ(app.CountByText("0.500"), 2) << "both flat channels";
+            EXPECT_EQ(app.CountByText("2.00"), 1) << "X at frame 24, in two decimals";
+            EXPECT_EQ(app.CountByText("0.50"), 2) << "both flat channels";
         }
 
         // ---------------------------------------------------------------------
@@ -182,16 +182,47 @@ namespace tachyon
         // The toolbar and the keys
         // ---------------------------------------------------------------------
 
-        TEST_F(CurveEditorTest, TheToolbarSetsTheSelectedKeys)
+        // A key's interpolation and tangents are in its menu, not on the toolbar: there they
+        // mean nothing until a key is selected.
+        TEST_F(CurveEditorTest, InterpolationAndTangentsAreInTheKeysMenu)
         {
-            view.selectedKeys = { KeyID(1) };
             Frames();
-            app.ClickAt(app.CenterOf(app.FindByText("Constant")));
-            Frames();
+            for (const std::string_view text : { "Interpolation", "Constant", "Tangents", "Flat" })
+                EXPECT_EQ(app.FindByText(text), ID::Invalid()) << text << " on the toolbar";
+
+            auto rightClick = [&](int2 at) {
+                app.InjectMouseMove(at);
+                Frame();
+                app.ClickAt(at, MouseButtons::Right);
+                Frames();
+            };
+            auto clickItem = [&](std::string_view text) {
+                const ID item = app.FindByText(text);
+                ASSERT_NE(item, ID::Invalid()) << text;
+                app.mouseWindow = app.menuManager.levels[0].windowID;
+                app.InjectMouseMove(app.CenterOf(item));
+                Frame();
+                app.ClickAt(app.CenterOf(item));
+                Frame();
+                app.mouseWindow = ID::Invalid();
+                Frames();
+            };
+
+            rightClick(KeyAt(1));
+            EXPECT_NE(app.FindByText("Interpolation"), ID::Invalid()) << "the menu's header";
+            EXPECT_NE(app.FindByText("Tangents"), ID::Invalid());
+            // The interpolations have the curve glyphs; the key's own (Bezier) has its check.
+            std::vector<IconID> icons;
+            for (const ID id : AllWithStyle(app.theme.menuItemIconStyleRef))
+                icons.push_back(app.ownedTextSystem.IconOf(app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(id)).textID));
+            EXPECT_NE(std::find(icons.begin(), icons.end(), app.theme.curveConstantIcon), icons.end());
+            EXPECT_NE(std::find(icons.begin(), icons.end(), app.theme.curveLinearIcon), icons.end());
+
+            clickItem("Constant");
             EXPECT_EQ(view.channels[0].curve.keys[1].interpolation, CurveInterpolation::Constant);
             EXPECT_EQ(EvaluateCurve(view.channels[0].curve, 1.5f), 2.0f) << "held";
-            app.ClickAt(app.CenterOf(app.FindByText("Flat")));
-            Frames();
+            rightClick(KeyAt(1));
+            clickItem("Flat");
             EXPECT_EQ(view.channels[0].curve.keys[1].tangents, CurveTangentMode::Flat);
             EXPECT_EQ(view.channels[0].curve.keys[0].tangents, CurveTangentMode::Auto) << "only the selected";
             EXPECT_EQ(edits.size(), 2u);
@@ -252,6 +283,44 @@ namespace tachyon
             width = 1600;
             Frames();
             EXPECT_EQ(app.GetElementRect(frameAll).w, narrow);
+        }
+
+        // Frame all is a flat button, its icon a little apart from its name; its shortcut is in
+        // its tooltip only.
+        TEST_F(CurveEditorTest, FrameAllIsAFlatButton)
+        {
+            Frames();
+            const std::vector<ID> buttons = AllWithStyle(app.theme.curveFrameAllStyleRef);
+            ASSERT_EQ(buttons.size(), 1u);
+            EXPECT_EQ(buttons[0], app.FindByText("Frame all"));
+            EXPECT_EQ(app.FindByText("A"), ID::Invalid()) << "no shortcut on the toolbar";
+            const Element& e = app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(buttons[0]));
+            const VisualTextStyle* visual = app.styleManager.GetVisualTextStyle(e.styleRef.visualTextStyleIndex, e.state);
+            ASSERT_NE(visual, nullptr);
+            EXPECT_EQ(visual->iconTextGap, app.styleManager.Px(6));
+
+            view.shown = CurveRange{ 0.5f, 1.0f, 0.5f, 1.0f };
+            view.shownSet = true;
+            app.ClickAt(app.CenterOf(buttons[0]));
+            Frames();
+            EXPECT_LE(Shown().timeMin, 0.0f) << "framed all";
+            EXPECT_GE(Shown().timeMax, 2.0f);
+        }
+
+        // The bar over the plot keeps its height when a key's Frame and Value fields show in it.
+        TEST_F(CurveEditorTest, TheBarKeepsItsHeightWithAKeySelected)
+        {
+            Frames();
+            const std::vector<ID> bars = AllWithStyle(app.theme.curveToolbarStyleRef);
+            ASSERT_FALSE(bars.empty());
+            const int32_t empty = app.GetElementRect(bars[0]).h;
+            view.selectedKeys = { KeyID(1) };
+            Frames();
+            ASSERT_NE(app.FindByText("Value"), ID::Invalid()) << "test setup: the key's fields show";
+            EXPECT_EQ(app.GetElementRect(bars[0]).h, empty);
+            view.selectedKeys.clear();
+            Frames();
+            EXPECT_EQ(app.GetElementRect(bars[0]).h, empty);
         }
 
         // Paths without fps: the tree in place of the chips, and no ruler.

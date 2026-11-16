@@ -520,6 +520,7 @@ namespace tachyon
             if (mouseHit || keyHit)
             {
                 m_contextMenuClaimed = true;
+                ++m_contextMenuOpenings;
                 contextMenuTargetID = targetID;
                 // At the pointer when right-clicked; below the target from the keyboard.
                 if (mouseHit)
@@ -575,6 +576,7 @@ namespace tachyon
 
     void GUIApplication::OpenContextMenu(ID targetID, int2 screenPos)
     {
+        ++m_contextMenuOpenings;
         contextMenuTargetID  = targetID;
         contextMenuScreenPos = screenPos;
         if (menuManager.IsOpen())

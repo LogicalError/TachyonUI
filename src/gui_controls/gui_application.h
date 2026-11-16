@@ -1097,6 +1097,10 @@ namespace tachyon
         /// Opens `targetID`'s context menu at a screen point, e.g. for something that isn't an
         /// element; BeginContextMenu(targetID) then builds it.
         void OpenContextMenu(ID targetID, int2 screenPos);
+        /// Counts the context menus opened, a right click on a target whose menu is already
+        /// open included. A control that builds its menu from what was under the pointer keeps
+        /// the count it built it for, and works it out again when the count moves on.
+        uint32_t    ContextMenuOpenings() const { return m_contextMenuOpenings; }
 
         ///@}
 
@@ -2930,6 +2934,7 @@ namespace tachyon
         ID contextMenuTargetID { ID::Invalid() }; ///< element the context menu is attached to
         std::optional<int2> contextMenuScreenPos; ///< the right-click or OpenContextMenu point; else below the target
         bool m_contextMenuClaimed = false;   ///< a context menu opened this frame; the first one wins
+        uint32_t m_contextMenuOpenings = 0;  ///< see ContextMenuOpenings
         ID tabDragGhostWindowID{ ID::Invalid() }; ///< ghost window for dragged dock tab / drop overlay
 
         FrameTimingSample frameTimingHistory[kFrameHistoryCount] = {};

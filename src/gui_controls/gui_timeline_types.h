@@ -226,6 +226,13 @@ namespace tachyon
         int               zoom = 0;                     ///< the zoom slider, 0 (all of it) to 100
         int               zoomShown = 0;                ///< the slider as last drawn, to tell its moves
         int               lanesWidth = 0;               ///< the lanes' width last frame, in pixels
+        /// The lanes' menu: what was right-clicked, or from the keyboard the selection and
+        /// the playhead.
+        std::vector<ID>   menuKeys;                     ///< the keys and events it acts on; none: the lane's menu
+        int               menuTrack = -1;               ///< the row's track
+        float             menuTime = 0.0f;              ///< the time under the right click
+        bool              menuByPointer = false;        ///< a right press set the above since the menu last opened
+        uint32_t          menuOpening = 0;              ///< the context menu opening it was worked out for
         ///@}
     };
 
