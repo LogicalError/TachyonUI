@@ -7388,11 +7388,35 @@
     align-items: center;
     gap: 4px;
     padding: 6px 8px;
+    /* Room for a selected key's number fields, so the row doesn't grow when they show. */
+    min-height: 40px;
     margin: 0px;
     border-width: 0px;
     background-color: var(--dialog-header);
     flex-shrink: 0;
 }
+/* Frame all: a flat button, its icon and name. */
+.curve-frame-all {
+    -tachyon-state-layer: content;
+    height: 24px;
+    margin: 0px;
+    padding: 0px 8px;
+    border-width: 0px;
+    border-radius: var(--radius-md);
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    -tachyon-icon-side: left;
+    -tachyon-icon-size: 14px;
+    -tachyon-icon-text-gap: 6px;
+    flex-grow: 0;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.curve-frame-all:hover { color: var(--text-1); }
 
 .curve-channel, .plot-channel {
     -tachyon-state-layer: content;
@@ -7439,17 +7463,6 @@
     background-color: var(--curve-plot);
     overflow: hidden;
     cursor: crosshair;
-}
-.curve-toolbar-label {
-    color: var(--text-3);
-    font-size: 11px;
-    padding: 0px 2px 0px 6px;
-    margin: 0px;
-    border-width: 0px;
-    text-wrap: nowrap;
-    vertical-align: middle;
-    -tachyon-vertical-text-align: middle;
-    flex-shrink: 0;
 }
 
 /* The channel tree down the left of an animation curve editor. */
@@ -7722,6 +7735,18 @@
     -tachyon-icon-size: 13px;
     flex-grow: 1;
     flex-shrink: 1;
+}
+.timeline-zoom-icon {
+    width: 13px;
+    height: 13px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    -tachyon-icon-size: 13px;
+    -tachyon-icon-color: var(--text-3);
+    flex-grow: 0;
+    flex-shrink: 0;
 }
 .timeline-header {
     display: flex;

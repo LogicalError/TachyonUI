@@ -308,6 +308,15 @@ TimelineEditor(animation);
   - a drag on a clip moves it; a drag on either of its ends trims it, no further than the
     sound goes (an unlocked track only)
   - Escape during a drag puts them back
+- A right click on the lanes opens their menu (so do the Menu key and Shift+F10, for the
+  selection at the playhead):
+  - on a key or event, it's selected as a click selects it, and the menu deletes it ("Delete
+    key", "Delete event"); on one of several selected, all of them ("Delete 3 keys")
+  - on an empty part of a lane:
+    - Add key, there, on a property's lane (greyed out on a locked one)
+    - Move playhead here
+    - Select all
+  - A right click while the menu is open opens it again, for what's under the pointer now.
 - Whatever a press would take shows it's hovered first: a key, an event and its label, a
   clip or its end, a loop range's end, the playhead's time while over the ruler, the scroll
   bar's thumb.
@@ -363,7 +372,7 @@ void OnGUI()
     `timeline-loop`, `timeline-time` and the rest)
   - the frame rate: `timeline-fps`
   - Snap: `timeline-snap`, selected while snapping
-  - zoom: `timeline-zoom`
+  - zoom: `timeline-zoom`; the magnifiers either side of its slider: `timeline-zoom-icon`
 - over the track list and the lanes: `timeline-header`
   - the track list's: `timeline-list-header`, with `timeline-list-title`, `timeline-filter`
     and `timeline-add-track`

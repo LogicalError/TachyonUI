@@ -209,6 +209,21 @@ namespace tachyon
             EXPECT_NEAR(list.y + list.h, s.y, 2);
         }
 
+        // The magnifiers either side of the zoom slider are small and quiet, the size of an icon
+        // in a row's text.
+        TEST_F(TimelineEditorTest, TheZoomMagnifiersAreSmall)
+        {
+            Settle();
+            const std::vector<ID> icons = AllWithStyle(app.theme.timelineZoomIconStyleRef);
+            ASSERT_EQ(icons.size(), 2u) << "zoom out and zoom in";
+            for (const ID id : icons)
+            {
+                const IntRect r = app.GetElementRect(id);
+                EXPECT_EQ(r.w, app.styleManager.Px(13));
+                EXPECT_EQ(r.h, app.styleManager.Px(13));
+            }
+        }
+
         // The wheel over the lanes zooms round the time under the pointer; with Shift it pans.
         // Over the ruler too.
         TEST_F(TimelineEditorTest, TheWheelZoomsAndShiftPans)
@@ -569,6 +584,104 @@ namespace tachyon
             Settle();
             EXPECT_EQ(menuFor, 2);
             EXPECT_EQ(view.selectedTrack, scale);
+        }
+
+        // ---------------------------------------------------------------------
+        // The lanes' menu
+        // ---------------------------------------------------------------------
+
+        class TimelineLanesMenuTest : public TimelineEditorTest
+        {
+        protected:
+            void RightClick(int2 at)
+            {
+                app.InjectMouseMove(at);
+                Frame();
+                app.ClickAt(at, MouseButtons::Right);
+                Settle();
+            }
+            // A menu item: the menu is a window of its own.
+            void ClickMenuItem(std::string_view text)
+            {
+                const ID item = app.FindByText(text);
+                ASSERT_NE(item, ID::Invalid()) << text;
+                app.mouseWindow = app.menuManager.levels[0].windowID;
+                app.InjectMouseMove(app.CenterOf(item));
+                Frame();
+                app.ClickAt(app.CenterOf(item));
+                Frame();
+                app.mouseWindow = ID::Invalid();
+                Settle();
+            }
+        };
+
+        // A right click on a key selects it, as a click does, and its menu deletes it.
+        TEST_F(TimelineLanesMenuTest, AKeysMenuDeletesIt)
+        {
+            Settle();
+            RightClick(LanesPoint(2.0f, 1));
+            EXPECT_EQ(view.selectedKeys, std::unordered_set<ID>{ positionKeys[1] });
+            EXPECT_EQ(app.FindByText("Add key"), ID::Invalid()) << "the key's menu, not the lane's";
+            ClickMenuItem("Delete key");
+            ASSERT_EQ(view.tracks[1].keys.size(), 2u);
+            EXPECT_EQ(view.tracks[1].keys[1].stableID, positionKeys[2]);
+            EXPECT_EQ(edits.size(), 1u);
+        }
+
+        // On a key of a selection, the menu deletes all of them.
+        TEST_F(TimelineLanesMenuTest, OnASelectedKeyItDeletesTheSelection)
+        {
+            view.selectedKeys = { positionKeys[0], positionKeys[1], scaleKeys[0] };
+            Settle();
+            RightClick(LanesPoint(2.0f, 1));
+            EXPECT_EQ(view.selectedKeys.size(), 3u) << "kept";
+            ClickMenuItem("Delete 3 keys");
+            EXPECT_EQ(view.tracks[1].keys.size(), 1u);
+            EXPECT_EQ(view.tracks[2].keys.size(), 1u);
+        }
+
+        // On an empty part of a property's lane: a key there, the playhead there, all selected.
+        TEST_F(TimelineLanesMenuTest, AnEmptyLanesMenu)
+        {
+            Settle();
+            RightClick(LanesPoint(3.0f, 1));
+            EXPECT_EQ(view.selectedTrack, position);
+            EXPECT_EQ(app.FindByText("Delete key"), ID::Invalid());
+            ClickMenuItem("Add key");
+            ASSERT_EQ(view.tracks[1].keys.size(), 4u);
+            EXPECT_NEAR(view.tracks[1].keys[2].time, 3.0f, 1.0f / 30.0f) << "on a frame near the click";
+
+            RightClick(LanesPoint(5.0f, 1));
+            ClickMenuItem("Move playhead here");
+            EXPECT_NEAR(view.playback.time, 5.0f, 1.0f / 30.0f);
+
+            RightClick(LanesPoint(6.0f, 1));
+            ClickMenuItem("Select all");
+            EXPECT_TRUE(view.selectedKeys.contains(scaleKeys[1]));
+            EXPECT_TRUE(view.selectedKeys.contains(explode));
+        }
+
+        // Only a property's lane takes keys: the audio row's menu has no Add key.
+        TEST_F(TimelineLanesMenuTest, OnlyAPropertysLaneOffersAddKey)
+        {
+            Settle();
+            RightClick(LanesPoint(3.0f, 4));
+            EXPECT_NE(app.FindByText("Move playhead here"), ID::Invalid());
+            EXPECT_EQ(app.FindByText("Add key"), ID::Invalid());
+        }
+
+        // A right click with the menu open opens it again for where it is now.
+        TEST_F(TimelineLanesMenuTest, ARightClickWithTheMenuOpenShowsTheMenuForWhereItIs)
+        {
+            Settle();
+            RightClick(LanesPoint(2.0f, 1));
+            ASSERT_NE(app.FindByText("Delete key"), ID::Invalid());
+            RightClick(LanesPoint(3.0f, 1));
+            EXPECT_NE(app.FindByText("Add key"), ID::Invalid());
+            EXPECT_EQ(app.FindByText("Delete key"), ID::Invalid());
+            RightClick(LanesPoint(2.0f, 1));
+            EXPECT_NE(app.FindByText("Delete key"), ID::Invalid());
+            EXPECT_EQ(app.FindByText("Add key"), ID::Invalid());
         }
 
         // ---------------------------------------------------------------------

@@ -639,6 +639,26 @@ namespace tachyon
             EXPECT_NEAR(view.channels[0].curve.keys[1].value, 0.9f, 0.01f);
         }
 
+        // A right click while the menu is open opens it again for what's under the pointer now:
+        // a key's menu, then the plot's, then the key's again.
+        TEST_F(CurveFieldTest, ARightClickWithTheMenuOpenShowsTheMenuForWhereItIs)
+        {
+            Open();
+            RightClick(KeyAt(1));
+            ASSERT_EQ(view.menuKey, KeyID(1));
+            ASSERT_NE(app.FindByText("Delete key"), ID::Invalid());
+
+            RightClick(At(0.25f, 0.9f));
+            EXPECT_EQ(view.menuKey, ID::Invalid());
+            EXPECT_NE(app.FindByText("Add key"), ID::Invalid()) << "the plot's menu";
+            EXPECT_EQ(app.FindByText("Delete key"), ID::Invalid());
+
+            RightClick(KeyAt(1));
+            EXPECT_EQ(view.menuKey, KeyID(1));
+            EXPECT_NE(app.FindByText("Delete key"), ID::Invalid()) << "the key's menu";
+            EXPECT_EQ(app.FindByText("Add key"), ID::Invalid());
+        }
+
         // The selected key's time and value, typed.
         TEST_F(CurveFieldTest, TheSelectedKeysFields)
         {

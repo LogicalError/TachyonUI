@@ -161,11 +161,10 @@ For example, keys at 1 and 2 going from 0 to 1, with `postWrap = Loop`: at 2.25 
 Set `fps` and the editor lays out for animation, as a graph editor beside a timeline:
 
 - Over the plot:
-  - Interpolation: Constant, Linear and Bezier, for the selected keys
-  - Tangents: Auto, Aligned, Free and Flat, for the selected keys
-  - the first selected key's interpolation and tangents are lit
-  - Frame all
+  - Frame all (its tooltip gives its shortcut, A)
   - with one key selected, its Frame and Value
+- A key's interpolation and tangents are in its menu (see The key's menu).
+- Values show two decimals: in the tree, and beside the selected key ("X · f 24 · 2.00").
 - A ruler over the plot with the frame numbers and the playhead.
   - A press or drag on it moves the playhead to the frame under the pointer.
   - The playhead also runs as a line through the plot.
@@ -221,9 +220,12 @@ CurveEditor(idManager.AllocateDynamicID("curves"), curves, LayoutOverride{}.Flex
 
 The key's menu:
 
-- Constant, Linear, Bezier: the key's interpolation checked
-- Auto, Aligned, Free, Flat: the key's tangents checked
 - Delete key
+- Interpolation: Constant, Linear, Bezier, each with its curve glyph; the key's own checked
+- Tangents: Auto, Aligned, Free, Flat; the key's own checked
+- They change all the selected keys. A right click on a key that isn't selected selects it
+  alone first.
+- A right click while the menu is open opens it again, for what's under the pointer now.
 
 ### Keys
 
@@ -285,8 +287,8 @@ falloff.presets = { CurvePreset{ .name = "Sharp", .curve = MakeCurve(sharpPoints
   value), `curve-box-select`
 - a preset: `curve-preset`
 - with `fps`:
-  - the plot: `curve-plot-frames` (no numbers under it); "Interpolation" and "Tangents":
-    `curve-toolbar-label`
+  - the plot: `curve-plot-frames` (no numbers under it)
+  - Frame all: `curve-frame-all`, a flat button
   - the ruler: `curve-ruler`; drawn on it, `curve-ruler-label` (a frame number) and
     `curve-playhead` (the playhead's pill)
 - the tree: `curve-tree`, its header `curve-tree-header`

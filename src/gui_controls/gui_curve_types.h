@@ -198,7 +198,7 @@ namespace tachyon
         Gesture<CurveRange> pan;                ///< the middle button (or Alt + left) held over the plot; the view as it was
         ID                menuKey = ID::Invalid();   ///< the key a right click opened the menu for
         float2            menuAt {};             ///< where the right click was, in time and value
-        bool              menuOpen = false;      ///< the plot's menu was open last frame
+        uint32_t          menuOpening = 0;       ///< the context menu opening the menu was built for
         IntRect           plotRect {};           ///< the plot's grid last frame, in screen pixels
         DoubleClickTracker plotClicks;          ///< a double click on the plot adds a key
         float2            lastClick {};          ///< where the last click on the plot was, in pixels

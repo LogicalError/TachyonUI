@@ -567,6 +567,7 @@ namespace tachyon
         StyleRef timelineEditorStyleRef {};         ///< TimelineEditor: the whole
         StyleRef timelineToolbarStyleRef {};        ///< its toolbar: transport, time, fps, snap, zoom
         StyleRef timelineDividerStyleRef {};        ///< a line between the toolbar's groups
+        StyleRef curveFrameAllStyleRef {};          ///< CurveEditor: Frame all, a flat button
         StyleRef timelineFpsStyleRef {};            ///< the fps dropdown
         StyleRef timelineSnapStyleRef {};           ///< the Snap toggle; selected while snapping
         StyleRef boxSidesLinkStyleRef {};           ///< EdgesField / CornersField: the link toggle; selected while linked
@@ -580,7 +581,6 @@ namespace tachyon
         StyleRef curveBoxSelectStyleRef {};         ///< drawn: the box a drag on the plot selects with
         StyleRef curvePresetStyleRef {};            ///< a preset's thumbnail button
         StyleRef curvePlotFramesStyleRef {};        ///< the plot with fps set: no time labels under it
-        StyleRef curveToolbarLabelStyleRef {};      ///< "Interpolation", "Tangents" in the toolbar
         StyleRef curveTreeStyleRef {};              ///< the channel list down the left
         StyleRef curveTreeHeaderStyleRef {};        ///< its header: Channel, and the playhead's frame
         StyleRef curveTreeGroupStyleRef {};         ///< a group's row, its chevron before its name
@@ -602,6 +602,7 @@ namespace tachyon
         StyleRef viewportToolStyleRef {};           ///< a tool's button; selected for the one in use
         StyleRef viewportAxisLabelStyleRef {};      ///< drawn: an axis's letter at the top right
         StyleRef timelineZoomStyleRef {};           ///< the zoom slider and its icons
+        StyleRef timelineZoomIconStyleRef {};       ///< a magnifier beside the zoom slider
         StyleRef timelineHeaderStyleRef {};         ///< the row over the track list and the ruler
         StyleRef timelineListHeaderStyleRef {};     ///< "Tracks", the filter and the add button
         StyleRef timelineListTitleStyleRef {};      ///< "Tracks"

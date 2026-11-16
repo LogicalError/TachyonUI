@@ -119,8 +119,8 @@ namespace tachyon
             channel("Sphere/Position", "X", CurveChannelColor::Red,   { { 0.0f, 0.0f }, { 1.0f, 1.5f }, { 2.5f, -1.0f }, { 4.0f, 0.5f }, { 6.0f, 0.0f } }),
             channel("Sphere/Position", "Y", CurveChannelColor::Green, { { 0.0f, 0.0f }, { 1.0f, 2.0f }, { 2.5f, 0.0f }, { 4.0f, 1.2f }, { 6.0f, 0.0f } }),
             channel("Sphere/Position", "Z", CurveChannelColor::Blue,  { { 0.0f, -1.0f }, { 2.5f, 0.5f }, { 6.0f, -1.0f } }),
-            channel("Sphere/Rotation", "Y", CurveChannelColor::Value, { { 0.0f, 0.0f }, { 3.0f, 1.8f }, { 6.0f, 3.6f } }),
-            channel("Sphere/Scale", "Uniform", CurveChannelColor::Alpha, { { 2.0f, 1.0f }, { 5.0f, 1.6f } }) };
+            channel("Sphere/Rotation", "Y", CurveChannelColor::Green, { { 0.0f, 0.0f }, { 3.0f, 1.8f }, { 6.0f, 3.6f } }),
+            channel("Sphere/Scale", "Uniform", CurveChannelColor::Value, { { 2.0f, 1.0f }, { 5.0f, 1.6f } }) };
         // The rotation turns at an even rate; the scale pops.
         for (CurveKey& k : view.channels[3].curve.keys)
             k.interpolation = CurveInterpolation::Linear;
