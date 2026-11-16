@@ -44,6 +44,7 @@ namespace tachyon
             Settle,       // nothing done; waits for the state transitions to end
             Float,        // a panel torn off into a window of its own, docked again after
             Dialog,       // the question named by the shot's text: Tasks, Delete, Error or Reload
+            Drag,         // the target pressed and dragged by dragBy, held there while it's read
         };
         // What's acted on: the element with this text, or with one of these looks.
         enum class CaptureTarget : uint8_t { Text, ColorSwatch, GradientSwatch, TasksPill, DockButton, Invalid };
@@ -55,6 +56,7 @@ namespace tachyon
             CaptureAct    act    = CaptureAct::None;
             CaptureTarget target = CaptureTarget::Text;
             const char*   text   = nullptr;
+            int2          dragBy {};   // Drag: how far, in CSS pixels
         };
 
         // What's captured, in order. A panel's first frames lay it out, measure its text and
@@ -75,6 +77,9 @@ namespace tachyon
             { "TreeTable",    CaptureScene::Panel, "TreeTable" },
             { "FrozenTable",  CaptureScene::Panel, "FrozenTable" },
             { "Reorderable",  CaptureScene::Panel, "Reorderable" },
+            { "ReorderableDragList", CaptureScene::Panel, "Reorderable", CaptureAct::Drag, CaptureTarget::Text, "Third", { 0, -34 } },
+            { "ReorderableDragTab",  CaptureScene::Panel, "Reorderable", CaptureAct::Drag, CaptureTarget::Text, "Profile", { -50, 0 } },
+            { "ReorderableDragWrap", CaptureScene::Panel, "Reorderable", CaptureAct::Drag, CaptureTarget::Text, "Seven", { 40, -34 } },
             { "Misc",         CaptureScene::Panel, "Misc" },
             { "Build",        CaptureScene::Panel, "Build" },
             { "BoxTest",      CaptureScene::Panel, "BoxTest" },
@@ -126,7 +131,7 @@ namespace tachyon
         };
         constexpr const char* kStateColumns[] = { "Rest", "Hover", "Pressed", "Focus", "Selected / on", "Disabled", "Invalid" };
 
-        bool Points(CaptureAct act) { return act == CaptureAct::Hover || act == CaptureAct::Click || act == CaptureAct::RightClick; }
+        bool Points(CaptureAct act) { return act == CaptureAct::Hover || act == CaptureAct::Click || act == CaptureAct::RightClick || act == CaptureAct::Drag; }
 
         // A PNG of `bgra` pixels (top row first), uncompressed: the zlib stream holds stored
         // blocks, so it needs no compressor.
@@ -636,6 +641,9 @@ namespace tachyon
         {
             if (--c.closing == 0)
             {
+                // A drag held for the shot lets go where it began (Escape cancelled it).
+                if (shot.act == CaptureAct::Drag && c.targetFound)
+                    InjectMouseButton(c.targetWindowID, int2{ c.target.x + c.target.w / 2, c.target.y + c.target.h / 2 }, MouseButtons::Left, false);
                 InjectMouseLeave(c.targetFound && c.targetWindowID != ID::Invalid() ? c.targetWindowID : c.windowID);
                 InjectMouseLeave(c.windowID);
                 nextShot();
@@ -674,6 +682,10 @@ namespace tachyon
                 }
                 else if (shot.act == CaptureAct::Click)
                     InjectMouseButton(c.targetWindowID, at, MouseButtons::Left, step == 1);
+                else if (shot.act == CaptureAct::Drag && step == 1)
+                    InjectMouseButton(c.targetWindowID, at, MouseButtons::Left, true);
+                else if (shot.act == CaptureAct::Drag && step == 2)
+                    InjectMouseMove(c.targetWindowID, at + int2{ styleManager.Px(shot.dragBy.x), styleManager.Px(shot.dragBy.y) });
                 else if (shot.act == CaptureAct::RightClick && step == 1)
                     OpenContextMenu(c.targetID, windowManager->GetWindowRect(c.windowID).position + at);
             }
