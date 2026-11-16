@@ -514,7 +514,7 @@ namespace tachyon
 
             // Command handles shared by the main menu and toolbar.
             // cmdDocumentation / cmdAbout have no shortcut key.
-            CommandID cmdNew = {}, cmdOpen = {}, cmdSave = {}, cmdSaveAs = {}, cmdExit = {};
+            CommandID cmdNew = {}, cmdOpen = {}, cmdSave = {}, cmdSaveAs = {}, cmdSaveAll = {}, cmdExit = {};
             CommandID cmdUndo = {}, cmdRedo = {}, cmdCut = {}, cmdCopy = {}, cmdPaste = {};
             CommandID cmdDocumentation = {}, cmdAbout = {};
             // F11 toggles the focused window's fullscreen and back to the mode it had before.

@@ -2,6 +2,7 @@
 #include <gui_controls/gui_timeline_internal.h>
 
 #include <gui_core/graphics/gui_custom_draw_context.h>
+#include <gui_core/input/gui_command_manager.h>
 #include <gui_core/input/gui_pointer_drag.h>
 
 #include <algorithm>
@@ -1151,7 +1152,7 @@ namespace tachyon
                     for (const TimelineEvent& e : tr.events)
                         isEvent |= e.stableID == view.menuKeys[0];
                 const std::string label = count > 1 ? std::format("Delete {} keys", count) : isEvent ? "Delete event" : "Delete key";
-                MenuItem(label, "Del", [v] { CommitTimelineEdit(*v, DeleteSelectedKeysEdit(*v)); });
+                MenuItem(label, CommandManager::FormatShortcut(KeyCode::Delete, KeyModifier::None), [v] { CommitTimelineEdit(*v, DeleteSelectedKeysEdit(*v)); });
             }
             else
             {
@@ -1176,7 +1177,7 @@ namespace tachyon
                     playbackChanged();
                 });
                 MenuSeparator();
-                MenuItem("Select all", "Ctrl+A", [v] {
+                MenuItem("Select all", CommandManager::FormatShortcut(KeyCode::KeyA, KeyModifier::Control), [v] {
                     for (const TimelineTrack& tr : v->tracks)
                     {
                         for (const TimelineKey& key : tr.keys) v->selectedKeys.insert(key.stableID);

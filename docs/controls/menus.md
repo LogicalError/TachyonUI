@@ -66,6 +66,9 @@ if (BeginMenu("View"))
 EndMenu();
 ```
 
+- The item that opens a submenu stays lit while the submenu is open, the pointer in the
+  submenu too, and its arrow turns brighter.
+
 The menu animates:
 
 - It opens with a 120 ms fade and a 4px slide.
@@ -171,14 +174,15 @@ if (BeginMenu("Edit"))
     MenuHeader("Clipboard");
     MenuItem("Copy", "Ctrl C", [this] { Copy(); });
     MenuSeparator();
-    DestructiveMenuItem({ theme.deleteIcon, "Delete" }, "Del", [this] { DeleteSelection(); });
+    DestructiveMenuItem({ theme.deleteIcon, "Delete" }, CommandManager::FormatShortcut(KeyCode::Delete, KeyModifier::None),
+                        [this] { DeleteSelection(); });
 }
 EndMenu();
 ```
 
 | Call | Effect |
 | --- | --- |
-| `DestructiveMenuItem` | Item in the error color, for Delete/Discard (`menu-item-label-destructive`, `menu-item-icon-destructive`) |
+| `DestructiveMenuItem` | Item in the error color, for Delete/Discard (`menu-item-label-destructive`, `menu-item-icon-destructive`); hovered, its row is tinted with the error color too (`menu-item-row-destructive`) |
 | `MenuSeparator` | Divider (`menu-separator`) |
 | `MenuHeader` | Section name aligned with the labels (`menu-header`) |
 | `MenuFilter` | Filter field; put it first. Takes the keyboard on open and hides items not containing its text |
@@ -267,7 +271,11 @@ void OpenContextMenu(ID targetID, int2 screenPos);
 
 - `BeginContextMenu` returns whether the menu is open. Add the items only then, and call
   `EndContextMenu` either way.
+- While the menu is open, its target looks hovered, so it's clear what the menu is for.
 - The popup's CSS class is `menu`.
+- `ContextMenuOpenings()` counts the menus opened. A menu built from what's under the
+  pointer works that out again when the count moves on: a right click while it's open
+  opens it anew there.
 
 ```cpp
 Button("Click me", [this] { ++clicks; });

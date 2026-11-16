@@ -422,6 +422,7 @@ namespace tachyon
         StyleRef reorderLiftedStyleRef {};     ///< the dragged row itself, under its parts
         StyleRef reorderLiftedRingStyleRef {}; ///< the dragged row's ring, over its parts
         StyleRef menuItemDestructiveLabelStyleRef {};   ///< a destructive item's label (.menu-item-label-destructive)
+        StyleRef menuItemDestructiveRowStyleRef {};     ///< a destructive item's row, tinted with the error color when hovered
         StyleRef menuItemDestructiveIconStyleRef {};    ///< a destructive item's icon (.menu-item-icon-destructive)
         StyleRef menuItemRowStyleRef {};      ///< interactive row: icon slot + label + trailing shortcut/arrow
         StyleRef menuItemIconStyleRef {};     ///< fixed icon slot inside a menu item row

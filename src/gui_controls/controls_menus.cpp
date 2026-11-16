@@ -288,9 +288,10 @@ namespace tachyon
     tachyon::ElementRef GUIApplication::MenuItemRow(ID id, tachyon::EventHandler handler, StyleRef rowStyle,
                                                 bool reserveIcon, IconID icon, std::string_view text,
                                                 std::string_view trailing, StyleRef trailingStyle,
-                                                LayoutOverride&& constraints, bool destructive)
+                                                LayoutOverride&& constraints, bool destructive, bool lit)
     {
-        const tachyon::ElementState rowState = guiStateManager.GetCurrentState(id);
+        const tachyon::ElementState litState = lit ? tachyon::ElementState::Hover : tachyon::ElementState::None;
+        const tachyon::ElementState rowState = guiStateManager.GetCurrentState(id) | litState;
         const bool selected = (rowState & tachyon::ElementState::Selected) != tachyon::ElementState::None;
 
         tachyon::Element row{};
@@ -304,13 +305,13 @@ namespace tachyon
         VERIFY(elementStorage.BeginChildren());
 
         // A part of the row: drawn, not a control or a Tab stop.
-        auto addPart = [this](StyleRef style, IconID partIcon, std::string_view partText)
+        auto addPart = [this, litState](StyleRef style, IconID partIcon, std::string_view partText)
         {
             tachyon::Element part{};
             part.id       = idManager.AllocateDynamicID();
             part.flags    = tachyon::ElementFlags::NoInput;
             part.styleRef = style;
-            part.state    = guiStateManager.GetCurrentState(part.id);
+            part.state    = guiStateManager.GetCurrentState(part.id) | litState;
             part.textID   = textSystem->RegisterText(part.id, partIcon, partText, part.styleRef, part.state);
             RegisterElementInternal(std::move(part), tachyon::LayoutOverride{}, false);
         };
@@ -370,15 +371,6 @@ namespace tachyon
             // Inside another menu: create submenu trigger item
             auto& parentLevel = menuManager.levels[menuManager.currentDepth];
 
-            // Register submenu trigger item (has its own handler for Right arrow).
-            // Same row layout as a MenuItem, but the trailing slot shows a submenu
-            // arrow instead of a shortcut so triggers align with sibling items.
-            MenuItemRow(menuID,
-                MakeSubmenuTriggerHandler(idManager, guiStateManager, elementStorage, menuManager, menuManager.currentDepth),
-                itemStyle, parentLevel.reserveIconColumn, content.icon, content.text,
-                "\xE2\x80\xBA" /* U+203A single right angle quote */, theme.menuItemArrowStyleRef,
-                LayoutOverride{});
-
             // Auto-select only when focus moves into the menu (see MenuItem) - keeps
             // a menu-bar dropdown from cascading this submenu open before navigation.
             if (parentLevel.isOpen && parentLevel.activeItemID == ID::Invalid() && menuManager.focusSubmenuOnOpen)
@@ -433,6 +425,18 @@ namespace tachyon
                     menuManager.CloseFromDepth(level.depth);
                 }
             }
+
+            // Register submenu trigger item (has its own handler for Right arrow).
+            // Same row layout as a MenuItem, but the trailing slot shows a submenu
+            // arrow instead of a shortcut so triggers align with sibling items.
+            // After the above, so it's lit while its submenu is open (the pointer in the
+            // submenu too), from the frame it opens to the frame it closes.
+            const bool submenuOpen = level.isOpen && level.triggerID == menuID;
+            MenuItemRow(menuID,
+                MakeSubmenuTriggerHandler(idManager, guiStateManager, elementStorage, menuManager, menuManager.currentDepth),
+                itemStyle, parentLevel.reserveIconColumn, content.icon, content.text,
+                "\xE2\x80\xBA" /* U+203A single right angle quote */, theme.menuItemArrowStyleRef,
+                LayoutOverride{}, false, submenuOpen);
         }
 
         // Check if this submenu should be shown
@@ -662,6 +666,9 @@ namespace tachyon
         if (icon != IconID::Invalid || selected)
             level.itemsHaveIcons = true;
 
+        // A destructive item in the default row style takes the destructive row's hover.
+        if (destructive && style == theme.menuItemRowStyleRef)
+            style = theme.menuItemDestructiveRowStyleRef;
         MenuItemRow(id,
             MakeMenuItemHandler(idManager, guiStateManager, elementStorage, menuManager, menuManager.currentDepth, onClick),
             style, level.reserveIconColumn, icon, text, shortcut, theme.menuItemShortcutStyleRef,

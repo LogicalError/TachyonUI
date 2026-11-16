@@ -24,6 +24,7 @@ namespace tachyon
         const ID hoveredID      = m_interaction.GetHoveredID();
         const bool hoverHidden  = m_interaction.IsHoverSuppressed();
         if (id == hoveredID && !hoverHidden)        s |= ElementState::Hover;
+        if (id == m_interaction.GetMenuOwnerID())   s |= ElementState::Hover;   // its context menu open
         if (id == m_interaction.GetActiveID())      s |= ElementState::Active;
         if (m_interaction.IsActiveFlashing(id))     s |= ElementState::Active;
         if (id == m_interaction.GetFocusedID())     s |= ElementState::Focused;
