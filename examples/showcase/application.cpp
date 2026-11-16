@@ -165,6 +165,9 @@ namespace tachyon
         idManager.ReleaseStaticID(showcase.windowLayoutID1);
         idManager.ReleaseStaticID(showcase.windowLayoutID2);
         idManager.ReleaseStaticID(showcase.exitDialogID);
+        idManager.ReleaseStaticID(showcase.deleteDialogID);
+        idManager.ReleaseStaticID(showcase.openErrorDialogID);
+        idManager.ReleaseStaticID(showcase.reloadDialogID);
         idManager.ReleaseStaticID(showcase.dragGhostWindowID);
         idManager.ReleaseStaticID(showcase.documentsID);
         idManager.ReleaseStaticID(showcase.closeDocumentDialogID);
@@ -220,6 +223,9 @@ namespace tachyon
         showcase.windowLayoutID1 = idManager.CreateStaticID();
         showcase.windowLayoutID2 = idManager.CreateStaticID();
         showcase.exitDialogID    = idManager.CreateStaticID();
+        showcase.deleteDialogID    = idManager.CreateStaticID();
+        showcase.openErrorDialogID = idManager.CreateStaticID();
+        showcase.reloadDialogID    = idManager.CreateStaticID();
         showcase.dragGhostWindowID = idManager.CreateStaticID();
 
         // Documents: made with their panels on the first frame (MakeShowcaseDocuments).
@@ -1354,6 +1360,17 @@ namespace tachyon
                     MenuItem(file, [file] { TACHYON_LOG_INFO(kLogShowcase, "Command: Open recent {}", file); });
             }
             EndMenu();
+            // The open version again, from disk: asked first, as its changes would go.
+            {
+                Document* active = documents.Active();
+                const bool modified = active != nullptr && active->dirty;
+                if (!modified) BeginDisabled();
+                MenuItem({ showcase.syncIcon, "Reload from disk" }, [this, active, window] {
+                    showcase.reloadDocument = active;
+                    showcase.reloadWindow   = window;
+                });
+                if (!modified) EndDisabled();
+            }
             MenuSeparator();
             MenuItem(showcase.cmdSave);
             MenuItem(showcase.cmdSaveAs);
@@ -1486,7 +1503,9 @@ namespace tachyon
 
     void Application::RequestExit(ID from)
     {
-        if (UnsavedDocuments().empty())
+        // Nothing unsaved, and no work running that it would stop (or that's not asked about):
+        // it quits.
+        if (UnsavedDocuments().empty() && (showcase.quitDontAsk || RunningWork().empty()))
         {
             applicationQuit = true;
             return;
@@ -1507,31 +1526,71 @@ namespace tachyon
         if (!askingIsOpen)
             showcase.exitWindow = window;
         if (window != showcase.exitWindow) return;
-        static constexpr MessageButton kButtons[] = {
-            { .label = "Discard", .kind = MessageButtonKind::Danger, .alignLeft = true },
-            { .label = "Cancel" },
-            { .label = "Save All", .kind = MessageButtonKind::Primary },
-        };
-        const std::vector<Document*> unsaved = UnsavedDocuments();
-        std::vector<std::string> names;
-        names.reserve(unsaved.size());
-        for (const Document* document : unsaved)
-            names.push_back(document->name + document->extension);
-        std::vector<MessageDialogItem> items;
-        for (const std::string& name : names)
-            items.push_back({ .name = name });
-        const std::string message = unsaved.size() == 1 ? "This document has unsaved changes. Quitting without saving discards them."
-                                                        : "These documents have unsaved changes. Quitting without saving discards them.";
-        const int choice = MessageDialog(showcase.exitDialogID, MessageDialogDesc{
-            .icon = MessageIcon::Quit, .title = "Quit Test?", .message = message, .buttons = kButtons,
-            .defaultButton = 2, .cancelButton = 1, .items = items });
-        if (choice == 2)
-            for (Document* document : unsaved)
-                SaveShowcaseDocument(*document);
-        if (choice == 0 || choice == 2) applicationQuit = true;
-        if (choice >= 0) showcase.exitRequested = false;
-    }
 
+        const std::vector<Document*> unsaved = showcase.exitForTasks ? std::vector<Document*>{} : UnsavedDocuments();
+        int choice = -1;
+        if (!unsaved.empty())
+        {
+            // The unsaved documents, each checked to be saved, in its type's color.
+            static constexpr MessageButton kButtons[] = {
+                { .label = "Don't save", .alignLeft = true },
+                { .label = "Cancel" },
+                { .label = "Save all", .kind = MessageButtonKind::Primary },
+            };
+            std::vector<std::string> names;
+            names.reserve(unsaved.size());
+            std::vector<MessageDialogItem> items;
+            for (const Document* document : unsaved)
+            {
+                names.push_back(document->name + document->extension);
+                const auto checked = showcase.exitSave.try_emplace(document, true).first;
+                items.push_back({ .name = names.back(), .color = theme.GetColor("--doc-" + document->kind + "-solid"),
+                                  .checked = &checked->second });
+            }
+            const std::string message = unsaved.size() == 1
+                ? std::format("{} has unsaved changes. Changes you don't save are lost.", names[0])
+                : std::format("{} documents have unsaved changes. Changes you don't save are lost.", unsaved.size());
+            choice = MessageDialog(showcase.exitDialogID, MessageDialogDesc{
+                .icon = MessageIcon::Warning, .title = "Save changes before closing?", .message = message, .buttons = kButtons,
+                .defaultButton = 2, .cancelButton = 1, .items = items });
+            if (choice == 2)
+                for (Document* document : unsaved)
+                    if (showcase.exitSave[document])
+                        SaveShowcaseDocument(*document);
+            if (choice == 0 || choice == 2) applicationQuit = true;
+        }
+        else
+        {
+            // Nothing unsaved: the work still running, which quitting stops.
+            static constexpr MessageButton kButtons[] = {
+                { .label = "Cancel" },
+                { .label = "Quit", .kind = MessageButtonKind::Danger },
+            };
+            const std::vector<RunningTask> running = RunningWork();
+            if (running.empty())
+            {
+                applicationQuit = true;
+                showcase.exitRequested = false;
+                return;
+            }
+            std::vector<MessageDialogItem> items;
+            for (const RunningTask& task : running)
+                items.push_back({ .name = task.name, .meta = task.state });
+            const std::string message = running.size() == 1 ? "A background task is still running. Quitting stops it."
+                                                            : std::format("{} background tasks are still running. Quitting stops them.", running.size());
+            choice = MessageDialog(showcase.exitDialogID, MessageDialogDesc{
+                .icon = MessageIcon::Quit, .title = "Quit Test?", .message = message, .buttons = kButtons,
+                .defaultButton = 0, .cancelButton = 0, .items = items, .dontAskAgain = &showcase.quitDontAsk });
+            if (choice == 1) applicationQuit = true;
+            else if (choice == 0) showcase.quitDontAsk = false;   // asked to stay: it asks again next time
+        }
+        if (choice >= 0)
+        {
+            showcase.exitRequested = false;
+            showcase.exitForTasks  = false;
+            showcase.exitSave.clear();
+        }
+    }
     std::vector<Document*> Application::UnsavedDocuments()
     {
         std::vector<Document*> unsaved;
@@ -1903,6 +1962,11 @@ namespace tachyon
         for (const ToastID toast : showcase.demoToasts)
             DismissToast(toast);
         showcase.demoToasts.clear();
+        // Two older ones, folded into "+2 earlier" under the four shown.
+        showcase.demoToasts.push_back(ShowToast(ToastDesc{ .severity = Severity::Success, .title = "Lightmaps baked", .body = "Forest.level · 6 atlases",
+                             .age = 12.0f * 60.0f }));
+        showcase.demoToasts.push_back(ShowToast(ToastDesc{ .severity = Severity::Info, .title = "Autosaved", .body = "Forest.level, Terrain.mat",
+                             .age = 10.0f * 60.0f }));
         showcase.demoToasts.push_back(ShowToast(ToastDesc{ .severity = Severity::Success, .title = "Build succeeded", .body = "Windows x64 \u00B7 1 m 42 s",
                              .actions = { { "Open folder", {} }, { "Run", {} } },
                              .age = 4.0f * 60.0f }));
@@ -1916,7 +1980,7 @@ namespace tachyon
         showcase.uploadStart = guiStateManager.Interaction().GetFrameTime();
         showcase.uploadToast = ShowToast(ToastDesc{ .severity = Severity::Info, .title = "Uploading build",
                                                     .body = "build-0.8.3-win64.zip \u00B7 0%", .progress = 0.0f,
-                                                    .actions = { { "Cancel", {} } } });
+                                                    .actions = { { "Cancel", {} } }, .icon = showcase.uploadIcon });
         showcase.demoToasts.push_back(showcase.uploadToast);
     }
 
@@ -2011,6 +2075,9 @@ namespace tachyon
                     AskBeforeExit(window.windowID);
                     RenderMainMenu(window.windowID, window.documentsID, window.documents, /*withSearch*/ false);
                     AskBeforeClosingDocument(window.documents);
+                    AskBeforeReloading(window.windowID);
+                    TellOpenFailed(window.windowID);
+                    AskBeforeDeleting(window.windowID);
                     AskLayoutName(window.documents);
                     DocumentPanels(window.documents);
                     RenderStatusBar();
@@ -2042,6 +2109,55 @@ namespace tachyon
             idManager.ReleaseStaticID(window.documentsID);
             showcase.documentWindows.erase(showcase.documentWindows.begin() + ptrdiff_t(i));
         }
+    }
+
+    void Application::AskBeforeReloading(ID window)
+    {
+        Document* const document = showcase.reloadDocument;
+        if (document == nullptr || window != showcase.reloadWindow)
+            return;
+        const std::vector<Document*> unsaved = UnsavedDocuments();
+        if (std::find(unsaved.begin(), unsaved.end(), document) == unsaved.end())
+        {
+            showcase.reloadDocument = nullptr;   // closed or saved meanwhile
+            return;
+        }
+        static constexpr MessageButton kButtons[] = {
+            { .label = "Keep mine" },
+            { .label = "Reload", .kind = MessageButtonKind::Primary },
+        };
+        const std::string title = std::format("Reload {}{}?", document->name, document->extension);
+        const int choice = MessageDialog(showcase.reloadDialogID, MessageDialogDesc{
+            .icon = MessageIcon::Question, .title = title,
+            .message = "Reloading replaces the open version with the one on disk; its unsaved changes will be lost.",
+            .buttons = kButtons, .defaultButton = 1, .cancelButton = 0 });
+        if (choice == 1)
+        {
+            document->dirty = false;
+            TACHYON_LOG_INFO(kLogShowcase, "Reloaded {}{}", document->name, document->extension);
+        }
+        if (choice >= 0)
+            showcase.reloadDocument = nullptr;
+    }
+
+    void Application::TellOpenFailed(ID window)
+    {
+        if (showcase.openErrorFile.empty() || window != showcase.openErrorWindow)
+            return;
+        // Copy details copies them and leaves the error up; OK closes it.
+        static constexpr MessageButton kButtons[] = {
+            { .label = "Copy details" },
+            { .label = "OK", .kind = MessageButtonKind::Primary },
+        };
+        const std::string title = std::format("Couldn't open {}", showcase.openErrorFile);
+        const int choice = MessageDialog(showcase.openErrorDialogID, MessageDialogDesc{
+            .icon = MessageIcon::Error, .title = title,
+            .message = "It's a compiled shader, which the showcase has no reader for.",
+            .buttons = kButtons, .defaultButton = 1, .cancelButton = 1, .details = showcase.openErrorDetails });
+        if (choice == 0 && clipboard)
+            clipboard->Set(showcase.openErrorDetails);
+        if (choice == 1)
+            showcase.openErrorFile.clear();
     }
 
     void Application::AskBeforeClosingDocument(DocumentSet& set)
@@ -2161,6 +2277,9 @@ namespace tachyon
                     }
                     RenderMainMenu(showcase.windowLayoutID2, showcase.documentsID, showcase.documents);
                     AskBeforeClosingDocument(showcase.documents);
+                    AskBeforeReloading(showcase.windowLayoutID2);
+                    TellOpenFailed(showcase.windowLayoutID2);
+                    AskBeforeDeleting(showcase.windowLayoutID2);
                     AskLayoutName(showcase.documents);
                     DocumentPanels(showcase.documents);
 

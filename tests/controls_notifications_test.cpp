@@ -84,6 +84,49 @@ namespace tachyon
             EXPECT_TRUE(Shown("now"));
         }
 
+        // With a status bar along the window's bottom, the toasts sit above it, not over it;
+        // built before or after the toasts.
+        TEST_F(NotificationsTest, AToastSitsAboveTheStatusBar)
+        {
+            const ID bar = app.idManager.CreateStaticID();
+            content = [&] {
+                app.BeginVertical(app.idManager.AllocateDynamicID("above"), app.theme.emptyVertStyleRef, LayoutOverride{}.FlexGrow(1));
+                app.EndVertical();
+                app.BeginStatusBar(bar);
+                app.StatusText("Ready");
+                app.EndStatusBar();
+            };
+            Show("Build succeeded");
+            Wait(300);
+            const IntRect status = app.GetElementRect(bar);
+            ASSERT_GT(status.h, 0);
+            ASSERT_EQ(status.y + status.h, windowSize.y) << "test setup: the bar along the bottom";
+            std::vector<IntRect> toasts = Toasts();
+            ASSERT_EQ(toasts.size(), 1u);
+            EXPECT_EQ(toasts[0].y + toasts[0].h, status.y - app.styleManager.Px(16));
+            EXPECT_EQ(toasts[0].x + toasts[0].w, windowSize.x - app.styleManager.Px(16));
+
+            // A window without one: the corner again.
+            content = {};
+            Wait(100);
+            toasts = Toasts();
+            ASSERT_EQ(toasts.size(), 1u);
+            EXPECT_EQ(toasts[0].y + toasts[0].h, windowSize.y - app.styleManager.Px(16));
+        }
+
+        // Its own icon in place of its severity's; the circle keeps the severity's color.
+        TEST_F(NotificationsTest, AToastCanHaveItsOwnIcon)
+        {
+            app.ShowToast(ToastDesc{ .severity = Severity::Info, .title = "Uploading build", .icon = app.theme.addIcon });
+            Show("Plain");
+            Wait(300);
+            const std::vector<ID> circles = FindAllByStyle(app.theme.toastCircleStyleRefs[int(Severity::Info)]);
+            ASSERT_EQ(circles.size(), 2u);
+            const auto iconOf = [&](ID id) { return app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(id)).iconID; };
+            EXPECT_EQ(iconOf(circles[0]), app.theme.addIcon);
+            EXPECT_EQ(iconOf(circles[1]), app.theme.infoIcon);
+        }
+
         TEST_F(NotificationsTest, TheNewestIsNearestTheCorner)
         {
             Show("First");

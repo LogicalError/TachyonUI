@@ -581,6 +581,8 @@ namespace tachyon
 
     bool GUIApplication::BeginStatusBar(ID id, StyleRef style, LayoutOverride&& constraints)
     {
+        // Its window's toasts sit above it.
+        m_statusBars[windowRegistry.GetCurrentWindowID()] = { id, guiStateManager.Interaction().GetFrameTime() };
         return BeginHorizontal(id, style, std::move(constraints));
     }
 

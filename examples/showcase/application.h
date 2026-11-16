@@ -198,6 +198,9 @@ namespace tachyon
         bool             ShadersCompiling();
         float            BuildElapsed();   // how far into the build, in seconds; -1 before the first
         bool             BuildRunning();
+        /// The work running now, as the status bar's tasks list it: what quitting would stop.
+        struct RunningTask { std::string name; std::string state; };   // state: "42%", "paused"
+        std::vector<RunningTask> RunningWork();
         float            ImportElapsed();  // how far into the import, in seconds; -1 while there's none
         /// What the progress shown in a cached panel looks like now, for its cache signature.
         uint64_t         ProgressLook();
@@ -358,9 +361,27 @@ namespace tachyon
             };
             std::unordered_map<tachyon::ID, GraphNodeValues> graphNodeValues;
             // The node view's edits, for Undo / Redo (the showcase's only undoable changes).
-            bool exitRequested = false;   // Exit with unsaved documents: asking
+            bool exitRequested = false;   // Exit with unsaved documents, or with work running: asking
             ID   exitWindow    = ID::Invalid();   // the window asking
             ID   exitDialogID  = ID::Invalid();
+            std::unordered_map<const Document*, bool> exitSave;   // the unsaved documents: saved on Save all, checked
+            bool quitDontAsk   = false;   // quitting with work running doesn't ask again
+            bool exitForTasks  = false;   // captures: the question about the work running, though documents are unsaved
+            // Deleting several hierarchy objects: asking, about these, in that panel.
+            ID   deleteDialogID = ID::Invalid();
+            std::vector<ID> deleteNodes;
+            std::weak_ptr<HierarchyPanel> deletePanel;
+            ID   deleteWindow = ID::Invalid();   // the window asking
+            std::vector<std::string> deleteNames;
+            bool deleteDontAsk = false;   // this session
+            // A file the Files panel couldn't open, and the document File > Reload asks about.
+            ID   openErrorDialogID = ID::Invalid();
+            std::string openErrorFile;
+            std::string openErrorDetails;
+            ID   openErrorWindow = ID::Invalid();
+            ID   reloadDialogID = ID::Invalid();
+            Document* reloadDocument = nullptr;
+            ID   reloadWindow = ID::Invalid();
 
             // Values bound by the node properties' renderBody lambdas.
             float       nodeStrength = 0.5f;
@@ -728,6 +749,9 @@ namespace tachyon
         void HierarchyAddMenuItems(HierarchyPanel& panel, ID parent = ID::Invalid());
         /// Deletes what's selected in the focused Hierarchy's tree: the Delete key.
         void HierarchyDeleteSelected();
+        /// Deletes `nodes` from `panel`'s tree; several, it asks first (unless told not to this session).
+        void RequestHierarchyDelete(HierarchyPanel& panel, std::vector<ID> nodes);
+        void AskBeforeDeleting(ID window);
         void RenderNodeViewPanel();
         /// The StateMachine panel: the enemy's machine, or Combat's once opened; Step and Restart.
         void RenderStateMachinePanel();
@@ -818,6 +842,10 @@ namespace tachyon
         /// While an exit waits, in the window asking: lists the unsaved documents and offers
         /// Save All, Discard or Cancel.
         void AskBeforeExit(ID window);
+        void CaptureOpenDialog(std::string_view which, ID window);
+        /// File > Reload, and a file the Files panel couldn't open: their questions.
+        void AskBeforeReloading(ID window);
+        void TellOpenFailed(ID window);
         /// The documents with unsaved changes, in every window.
         std::vector<Document*> UnsavedDocuments();
         /// Saves a document (the showcase only marks it saved).

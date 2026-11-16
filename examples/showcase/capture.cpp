@@ -43,6 +43,7 @@ namespace tachyon
             ExitDialog,   // the question asked on exit with unsaved documents
             Settle,       // nothing done; waits for the state transitions to end
             Float,        // a panel torn off into a window of its own, docked again after
+            Dialog,       // the question named by the shot's text: Tasks, Delete, Error or Reload
         };
         // What's acted on: the element with this text, or with one of these looks.
         enum class CaptureTarget : uint8_t { Text, ColorSwatch, GradientSwatch, TasksPill, DockButton, Invalid };
@@ -91,6 +92,10 @@ namespace tachyon
             { "MenuEdit",   CaptureScene::Main, nullptr, CaptureAct::Click, CaptureTarget::Text, "Edit" },
             { "TasksPopover", CaptureScene::Main, nullptr, CaptureAct::Click, CaptureTarget::TasksPill },
             { "MessageBox", CaptureScene::Main, nullptr, CaptureAct::ExitDialog },
+            { "MessageBoxTasks",  CaptureScene::Main, nullptr, CaptureAct::Dialog, CaptureTarget::Text, "Tasks" },
+            { "MessageBoxDelete", CaptureScene::Main, nullptr, CaptureAct::Dialog, CaptureTarget::Text, "Delete" },
+            { "MessageBoxError",  CaptureScene::Main, nullptr, CaptureAct::Dialog, CaptureTarget::Text, "Error" },
+            { "MessageBoxReload", CaptureScene::Main, nullptr, CaptureAct::Dialog, CaptureTarget::Text, "Reload" },
             { "Toasts",     CaptureScene::Main, nullptr, CaptureAct::Toasts },
             { "States",         CaptureScene::States,   nullptr, CaptureAct::Settle },
             { "DocumentWindow", CaptureScene::Document },
@@ -423,6 +428,39 @@ namespace tachyon
         return true;
     }
 
+    // A question the showcase asks, opened for a shot: quitting with work running, deleting
+    // several objects, a file it couldn't open, reloading a modified document.
+    void Application::CaptureOpenDialog(std::string_view which, ID window)
+    {
+        if (which == "Tasks")
+        {
+            showcase.exitRequested = true;
+            showcase.exitForTasks  = true;
+            showcase.exitWindow    = window;
+        }
+        else if (which == "Delete")
+        {
+            showcase.deleteNames  = { "Cube", "Sphere", "Plane" };
+            showcase.deleteNodes  = { ID::Invalid(), ID::Invalid(), ID::Invalid() };
+            showcase.deleteWindow = window;
+        }
+        else if (which == "Error")
+        {
+            showcase.openErrorFile    = "box_shader.frag.spv";
+            showcase.openErrorDetails = "No reader for .spv files (compiled SPIR-V shaders)\n  at shaders_compiled/box_shader.frag.spv";
+            showcase.openErrorWindow  = window;
+        }
+        else if (which == "Reload")
+        {
+            for (const std::unique_ptr<Document>& document : showcase.documents.documents)
+                if (document->dirty)
+                {
+                    showcase.reloadDocument = document.get();
+                    showcase.reloadWindow   = window;
+                    break;
+                }
+        }
+    }
     void Application::RenderCapture()
     {
         CaptureState& c = m_capture;
@@ -472,6 +510,8 @@ namespace tachyon
                 showcase.exitRequested = true;
                 showcase.exitWindow    = c.windowID;
             }
+            if (shot.act == CaptureAct::Dialog)
+                CaptureOpenDialog(shot.text, c.windowID);
             if (shot.act == CaptureAct::Float)
                 if (Document* document = c.documents.Active())
                     for (const auto& [panelID, panel] : document->layout.panels)
@@ -528,6 +568,9 @@ namespace tachyon
                 // As the showcase's main window has it.
                 RenderMainMenu(c.windowID, showcase.documentsID, showcase.documents);
                 AskBeforeExit(c.windowID);
+                AskBeforeDeleting(c.windowID);
+                TellOpenFailed(c.windowID);
+                AskBeforeReloading(c.windowID);
                 DocumentPanels(showcase.documents);
                 RenderStatusBar();
                 if (shot.act == CaptureAct::Toasts)
@@ -552,6 +595,8 @@ namespace tachyon
         // The next shot: what this one made goes.
         auto nextShot = [&] {
             // A panel docked again is the tab shown where it lands: the first tabs, as before.
+            if (shot.act == CaptureAct::Dialog)
+                CaptureOpenDialog(shot.text, c.windowID);
             if (shot.act == CaptureAct::Float)
                 if (Document* document = c.documents.Active())
                 {
@@ -567,6 +612,10 @@ namespace tachyon
             c.pageScroll = 0;
             c.targetFound = false;
             showcase.exitRequested = false;
+            showcase.exitForTasks  = false;
+            showcase.deleteNodes.clear();
+            showcase.openErrorFile.clear();
+            showcase.reloadDocument = nullptr;
             if (c.panelID != ID::Invalid())
             {
                 if (Panel& panel = c.layout.panels[c.panelID]; panel.onDisable)

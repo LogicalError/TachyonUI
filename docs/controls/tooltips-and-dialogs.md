@@ -302,6 +302,7 @@ void       Toasts();
 - `ShowToast` adds a toast.
 - Call `Toasts()` last in a window. It draws the toasts:
   - in the bottom-right corner, 16 px from the edges
+  - or, in a window with a status bar (`BeginStatusBar`), 16 px above it, so it stays readable
   - over the content
   - with the newest nearest the corner
 - Past four toasts, the older ones fold into a "+N earlier" pill.
@@ -323,6 +324,7 @@ void       Toasts();
 | `monospaceBody` | For code or file locations |
 | `progress` | Optional bar, 0 to 1 |
 | `actions` | `ToastAction` list (`label`, `onClick`); the first uses the link color |
+| `icon` | In place of the severity's icon, such as an up arrow for an upload; the circle keeps the severity's color |
 
 The CSS classes:
 
