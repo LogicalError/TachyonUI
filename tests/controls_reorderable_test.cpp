@@ -338,5 +338,57 @@ namespace tachyon
             EXPECT_EQ(*lastReorder, std::make_pair(0, 1)) << "left half of item 2 = before item 2";
         }
 
+        // In a group that wraps, the gap the item will drop into is on the row it'll land in:
+        // dragged up from the second row into the first, the slot is in the first.
+        TEST_F(ReorderableTest, AWrappedGroupsDropSlotIsWhereTheItemLands)
+        {
+            tachyon::ID ids[8]{};
+            for (auto& id : ids) id = app.idManager.CreateStaticID();
+            auto emit = [&] {
+                app.BeginRootWindow();
+                if (app.BeginReorderableGroup(groupID, ReorderDirection::Horizontal, /*isWrapped*/ true,
+                                              [](int, int) {}, tachyon::LayoutOverride{}.Size(600, 200)))
+                {
+                    for (auto& id : ids)   // six a row: 0-5, then 6 and 7
+                    {
+                        app.BeginReorderableItem(id, tachyon::LayoutOverride{}.Size(100, 40));
+                        app.EmitDragHandle();
+                        app.EndReorderableItem();
+                    }
+                    app.EndReorderableGroup();
+                }
+                app.EndRootWindow();
+            };
+            app.Frame(emit);
+            const tachyon::IntRect first = app.GetElementRect(ids[0]), seventh = app.GetElementRect(ids[7]), third = app.GetElementRect(ids[2]);
+            const tachyon::IntRect fourth = app.GetElementRect(ids[3]);   // where index 3 is
+            ASSERT_GT(seventh.y, first.y) << "test setup: two rows";
+
+            const auto thumb = ThumbCenter(ids[7]);
+            const tachyon::int2 to{ third.x + third.w * 3 / 4, third.y + third.h / 2 };   // after item 2, on the first row
+            app.InjectMouseMove(thumb);
+            app.InjectMouseDown(thumb);
+            app.Frame(emit);
+            app.InjectMouseMove(to, tachyon::MouseButtons::Left);
+            app.Frame(emit);
+            app.Frame(emit);
+
+            const tachyon::ElementRef group = app.elementStorage.FindElementRefByID(groupID);
+            const tachyon::ElementCustomDraw* draw = app.elementStorage.GetCustomDraw(group);
+            ASSERT_TRUE(draw != nullptr && draw->callback) << "the slot is drawn";
+            const tachyon::IntRect groupRect = app.GetElementRect(groupID);
+            GUITest::StubGUIRenderer r;
+            tachyon::CustomDrawContext ctx{ r, app.elementStorage, group, groupRect, groupRect, tachyon::IntRect{ 0, 0, 4000, 4000 },
+                                            tachyon::float3x2{}, tachyon::int2{ 0, 0 } };
+            draw->callback(ctx);
+            ASSERT_FALSE(r.boxes.empty());
+            // Drawn in the group's own space: from its top left.
+            EXPECT_EQ(r.boxes[0].y, first.y - groupRect.y) << "on the first row, where it lands";
+            EXPECT_EQ(r.boxes[0].x, fourth.x - groupRect.x) << "after item 2: index 3";
+
+            app.InjectMouseUp(to);
+            app.Frame(emit);
+        }
+
     } // namespace
 }

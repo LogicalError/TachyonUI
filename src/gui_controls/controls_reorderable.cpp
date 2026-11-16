@@ -534,9 +534,14 @@ namespace tachyon
                 {
                     IntRect slot = drag.originalRects[from];
                     if (m_reorderable->Construction().reorderApplied)
+                    {
                         slot.position[mainAxis] = (from > to)
                             ? drag.originalRects[to].position[mainAxis]
                             : drag.originalRects[to].position[mainAxis] + drag.originalRects[to].size[mainAxis] - slot.size[mainAxis];
+                        // Wrapped, the place it lands may be on another row (or column): that one's.
+                        if (m_reorderable->Construction().isWrapped)
+                            slot.position[crossAxis] = drag.originalRects[to].position[crossAxis];
+                    }
                     const int2 inGroup = slot.position - drag.groupRect.position;
                     const VisualBoxStyleIndex slotStyle   = theme.reorderDropSlotStyleRef.visualBoxStyleIndex;
                     const VisualBoxStyleIndex liftedStyle = theme.reorderLiftedStyleRef.visualBoxStyleIndex;
