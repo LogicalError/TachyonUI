@@ -255,9 +255,16 @@ namespace tachyon
             float sliderValue = 0.5f;
             float sliderFieldValue = 50.0f; // SliderField demo (range [0, 100])
             tachyon::color4f demoColor { 0.2f, 0.5f, 0.8f, 0.5f }; // ColorField demo, half transparent to show its alpha
-            tachyon::Gradient demoGradient = tachyon::Gradient::Linear(
-                tachyon::color4f{1.0f, 0.0f, 0.0f, 1.0f},
-                tachyon::color4f{0.0f, 0.0f, 1.0f, 0.2f}); // GradientField demo: fading out, over the checkerboard
+            // GradientField demo: the editor's Sky preset, so the editor rings it.
+            tachyon::Gradient demoGradient = []
+            {
+                tachyon::Gradient g;
+                g.type = tachyon::GradientType::Linear;
+                g.AddStop(tachyon::color4f{ 0x0B / 255.0f, 0x1D / 255.0f, 0x51 / 255.0f, 1.0f }, 0.0f);
+                g.AddStop(tachyon::color4f{ 0x3B / 255.0f, 0x82 / 255.0f, 0xF6 / 255.0f, 1.0f }, 0.5f);
+                g.AddStop(tachyon::color4f{ 0xA5 / 255.0f, 0xF3 / 255.0f, 0xFC / 255.0f, 1.0f }, 1.0f);
+                return g;
+            }();
             // GradientField on a GradientF: an HDR heat ramp from see-through, with a step and a
             // smooth stretch.
             tachyon::GradientF demoGradientF = []

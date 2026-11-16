@@ -263,8 +263,9 @@ namespace tachyon
 
         // ---- Color & vectors ------------------------------------------------
         section = InspectorPanel::ColorAndVectors;
-        add("Color",    [this]() { DragLabel("Color");    ColorField(showcase.demoColor);       });
-        add("Gradient", [this]() { DragLabel("Gradient"); GradientField(showcase.demoGradient); });
+        // Named as a material's are: the picker and the editor name what they edit after their title.
+        add("Tint",     [this]() { DragLabel("Tint");     ColorField(showcase.demoColor);       });
+        add("Sky ramp", [this]() { DragLabel("Sky ramp"); GradientField(showcase.demoGradient); });
         add("HDR gradient", [this]() { DragLabel("HDR gradient"); GradientField(showcase.demoGradientF); });
         SeedCurves();
         add("Curve", [this]() { DragLabel("Curve"); CurveField(showcase.demoCurve); });

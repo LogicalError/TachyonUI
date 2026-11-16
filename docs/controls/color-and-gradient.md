@@ -14,6 +14,28 @@ A swatch, the hex value and the alpha in percent. It edits a `color4f` (four flo
   - Escape in the middle of a drag restores the color from before the press and keeps
     the picker open
 - `allowHDR` allows values above 1.
+- The picker's title names what it edits: the label drawn just before the field.
+  - A field after `DragLabel("Tint")` opens "Color  Tint".
+  - A label that only repeats the title ("Color") is left out.
+- New sits over Original in the preview, each at its alpha, named beside its half.
+- The footer says the format and the range the values show in, "sRGB · 8-bit · 0–255".
+  - A click on the range switches it to 0–1 and back.
+
+The swatches and the recent colors:
+
+- The swatches start as a palette of twelve. The user adds the current color with "+",
+  and removes one with a right-click.
+  - `SetColorSwatches(colors)` sets them, for the app's own palette.
+  - `ColorSwatches()` reads them, to keep them for the next run.
+- Recent holds the last 8 colors kept with OK, newest first.
+  - `AddRecentColor(color)` adds one, for colors the app brings back from its last run.
+
+```cpp
+const color4f brand[] = { { 0.93f, 0.26f, 0.21f, 1 }, { 0.13f, 0.59f, 0.95f, 1 } };
+SetColorSwatches(brand);
+for (const color4f& c : savedRecent)   // oldest first, so the newest ends up first
+    AddRecentColor(c);
+```
 
 ```cpp
 bool ColorField(ID id, color4f& value, bool allowHDR, StyleRef style, LayoutOverride&& constraints = {});
@@ -68,6 +90,11 @@ if (GradientField(gradient))   // true when the gradient changed
   - For example, a gradient that fades out has its faded end solid on top and see-through
     below.
 - The stops show in the editor, where they can be moved.
+- The editor's title names what it edits, as the color picker's does: "Gradient  Sky ramp".
+- Its table lists each stop's color (a swatch and the hex), its alpha and its location.
+  - A `GradientF`'s table adds each stop's blend to the next.
+- The preset the gradient is, if any, has an accent ring.
+  - An 8-bit `Gradient` matches its preset though its stops are kept a little off.
 - Class: `gradient-swatch`.
 - The editor's classes: `gradient-editor` and `gradient-editor-*`.
 

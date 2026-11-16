@@ -3,6 +3,9 @@
 #include <gui_core/input/gui_input_enums.h>
 #include <gui_core/windows/gui_window_flags.h>
 
+#include <chrono>
+#include <cmath>
+
 namespace tachyon
 {
     NullWindowBackend::NullWindowBackend(IntRect monitor, float refreshHz)
@@ -68,7 +71,8 @@ namespace tachyon
     {
         std::unique_lock lock(m_wakeMutex);
         if (timeoutSecs > 0.0f)
-            m_wakeSignal.wait_for(lock, std::chrono::duration<float>(timeoutSecs), [this] { return m_woken; });
+            // In whole nanoseconds: a float duration added to the clock's time loses it, days after boot.
+            m_wakeSignal.wait_for(lock, std::chrono::nanoseconds(std::llround(double(timeoutSecs) * 1e9)), [this] { return m_woken; });
         m_woken = false;
     }
 

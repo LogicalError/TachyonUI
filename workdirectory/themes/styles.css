@@ -5953,18 +5953,18 @@
 }
 .color-picker-preview-group {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: stretch;
-    gap: 4px;
+    gap: 8px;
     margin: 0px;
     padding: 0px;
     border-width: 0px;
     background-color: transparent;
     border-color: transparent;
 }
-/* New | Original, drawn on the checkerboard. */
+/* New over Original, drawn on the checkerboard. */
 .color-picker-preview {
-    height: 40px;
+    height: 44px;
     border-width: 1px;
     border-radius: var(--radius-lg);
     border-color: var(--line-node);
@@ -5974,7 +5974,7 @@
 }
 .color-picker-captions {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     margin: 0px;
     padding: 0px;
     border-width: 0px;
@@ -6004,18 +6004,18 @@
     background-color: transparent;
     border-color: transparent;
 }
+/* The footer's value range, after the format: a click switches it. */
 .color-picker-range {
     -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
-    height: 26px;
+    height: 22px;
     margin: 0px;
-    padding: 0px 8px;
+    padding: 0px 4px;
     border-width: 0px;
     border-radius: var(--radius-md);
     background-color: transparent;
     border-color: transparent;
     color: var(--text-3);
-    font-family: monospace;
-    font-size: 11px;
+    font-size: var(--font-size);
     vertical-align: middle;
     -tachyon-vertical-text-align: middle;
     text-wrap: nowrap;

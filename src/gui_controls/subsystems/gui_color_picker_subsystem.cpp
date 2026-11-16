@@ -49,7 +49,7 @@ namespace tachyon
         m_prevSwatchStyles.clear();
         ColorPickerState& s = m_state;
         for (auto* idx : { &s.svQuadColor, &s.hueStrip, &s.alphaStrip, &s.hueColor, &s.whiteColor,
-                           &s.outlineColor, &s.newColor, &s.originalStyle, &s.newOpaque, &s.originalOpaque })
+                           &s.outlineColor, &s.newColor, &s.originalStyle })
             *idx = VisualColorStyleIndex::Invalid;
         for (auto& idx : s.gradientStyles)
             idx = VisualColorStyleIndex::Invalid;

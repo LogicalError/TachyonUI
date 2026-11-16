@@ -377,9 +377,6 @@ namespace tachyon
         SetColorStyle(styleManager, cp.whiteColor, { 1.0f, 1.0f, 1.0f, 1.0f });
         SetColorStyle(styleManager, cp.outlineColor, { 0.0f, 0.0f, 0.0f, 0.5f });
         SetColorStyle(styleManager, cp.newColor, { curR, curG, curB, cp.a });
-        SetColorStyle(styleManager, cp.newOpaque, { curR, curG, curB, 1.0f });
-        SetColorStyle(styleManager, cp.originalOpaque, { std::clamp(cp.originalColor.r, 0.f, 1.f), std::clamp(cp.originalColor.g, 0.f, 1.f),
-                                                         std::clamp(cp.originalColor.b, 0.f, 1.f), 1.0f });
         SetColorStyle(styleManager, cp.originalStyle, { std::clamp(cp.originalColor.r, 0.f, 1.f), std::clamp(cp.originalColor.g, 0.f, 1.f),
                                                         std::clamp(cp.originalColor.b, 0.f, 1.f), cp.originalColor.a });
 
@@ -531,35 +528,29 @@ namespace tachyon
         // ---- Right: preview, space, channels, hex, HDR ----
         BeginVertical(idManager.AllocateDynamicID("cp_controls"), theme.colorPickerControlsStyleRef, LayoutOverride{}.FlexGrow(1));
         {
-            // New | Original, each opaque on top and at its alpha (on the checkerboard) below.
-            BeginVertical(idManager.AllocateDynamicID("cp_preview_group"), theme.colorPickerPreviewGroupStyleRef, LayoutOverride{}.NoShrink());
+            // New over Original, each at its alpha on the checkerboard, named beside its half.
+            BeginHorizontal(idManager.AllocateDynamicID("cp_preview_group"), theme.colorPickerPreviewGroupStyleRef, LayoutOverride{}.NoShrink());
             {
                 const ID previewID = idManager.AllocateDynamicID("cp_preview");
                 Element preview{ .id = previewID, .styleRef = theme.colorPickerPreviewStyleRef, .flags = ElementFlags::NoInput };
-                const ElementRef previewRef = RegisterElement(std::move(preview), LayoutOverride{});
+                const ElementRef previewRef = RegisterElement(std::move(preview), LayoutOverride{}.FlexGrow(1));
                 VERIFY(elementStorage.AddCustomDraw(previewRef,
-                    [look, newColor = cp.newColor, original = cp.originalStyle, newOpaque = cp.newOpaque,
-                     originalOpaque = cp.originalOpaque, radius = float(styleManager.Px(5))](CustomDrawContext& ctx)
+                    [look, newColor = cp.newColor, original = cp.originalStyle, radius = float(styleManager.Px(5))](CustomDrawContext& ctx)
                     {
                         const IntRect r = ctx.ElementInnerRect();
                         ColorSwatchLook preview = look;
                         preview.radius = radius;
                         DrawCheckerboard(ctx, r, r, preview);
-                        const int half = r.w / 2, top = r.h / 2;
-                        auto part = [&](int x, int w, VisualColorStyleIndex opaque, VisualColorStyleIndex withAlpha)
-                        {
-                            ctx.RenderQuad(r, IntRect{ .position = { x, r.y },       .size = { w, top } },       opaque,    radius);
-                            ctx.RenderQuad(r, IntRect{ .position = { x, r.y + top }, .size = { w, r.h - top } }, withAlpha, radius);
-                        };
-                        part(r.x, half, newOpaque, newColor);
-                        part(r.x + half, r.w - half, originalOpaque, original);
+                        const int top = r.h / 2;
+                        ctx.RenderQuad(r, IntRect{ .position = { r.x, r.y },       .size = { r.w, top } },       newColor, radius);
+                        ctx.RenderQuad(r, IntRect{ .position = { r.x, r.y + top }, .size = { r.w, r.h - top } }, original, radius);
                     }));
-                BeginHorizontal(idManager.AllocateDynamicID("cp_preview_captions"), theme.colorPickerCaptionsStyleRef, LayoutOverride{});
+                BeginVertical(idManager.AllocateDynamicID("cp_preview_captions"), theme.colorPickerCaptionsStyleRef, LayoutOverride{});
                 Text(idManager.AllocateDynamicID("cp_new"), "New", theme.colorPickerCaptionStyleRef, LayoutOverride{}.FlexGrow(1));
-                Text(idManager.AllocateDynamicID("cp_original"), "Original", theme.colorPickerCaptionStyleRef);
-                EndHorizontal();
+                Text(idManager.AllocateDynamicID("cp_original"), "Original", theme.colorPickerCaptionStyleRef, LayoutOverride{}.FlexGrow(1));
+                EndVertical();
             }
-            EndVertical();
+            EndHorizontal();
 
             // Color space, Linear (for RGB) and the value range.
             BeginHorizontal(idManager.AllocateDynamicID("cp_mode_row"), theme.colorPickerModeRowStyleRef, LayoutOverride{}.NoShrink());
@@ -584,14 +575,6 @@ namespace tachyon
                     if (active) guiStateManager.Construction().PopSelected();
                 }
                 EndButtonGroup();
-
-                Element spacer{ .id = idManager.AllocateDynamicID("cp_mode_spacer"), .styleRef = theme.emptyHorzStyleRef, .flags = ElementFlags::NoInput };
-                RegisterElement(std::move(spacer), LayoutOverride{}.FlexGrow(1));
-
-                Button(idManager.AllocateDynamicID("cp_range"), cp.byteRange ? "0\xE2\x80\x93" "255" : "0\xE2\x80\x93" "1",
-                       [this]() { auto& cp = m_colorPickerSub->State(); cp.byteRange = !cp.byteRange; },
-                       theme.colorPickerRangeStyleRef);
-                SetTooltip("Show the values 0-255 or 0-1");
             }
             EndHorizontal();
 
@@ -912,8 +895,18 @@ namespace tachyon
         {
             Element dot{ .id = idManager.AllocateDynamicID("cp_status_dot"), .styleRef = theme.dialogStatusDotStyleRef, .flags = ElementFlags::NoInput };
             RegisterElement(std::move(dot), LayoutOverride{});
-            Text(idManager.AllocateDynamicID("cp_status"), allowHDR ? "HDR \xC2\xB7 float" : "sRGB \xC2\xB7 8-bit", theme.dialogStatusStyleRef,
-                 LayoutOverride{}.FlexGrow(1));
+            // The format, then the range the values show in, as one line: a click on the range
+            // switches it.
+            BeginHorizontal(idManager.AllocateDynamicID("cp_status_line"), theme.emptyHorzStyleRef, LayoutOverride{}.NoShrink());
+            Text(idManager.AllocateDynamicID("cp_status"), allowHDR ? "HDR \xC2\xB7 float \xC2\xB7" : "sRGB \xC2\xB7 8-bit \xC2\xB7",
+                 theme.dialogStatusStyleRef);
+            Button(idManager.AllocateDynamicID("cp_range"), cp.byteRange ? "0\xE2\x80\x93" "255" : "0\xE2\x80\x93" "1",
+                   [this]() { auto& cp = m_colorPickerSub->State(); cp.byteRange = !cp.byteRange; },
+                   theme.colorPickerRangeStyleRef);
+            SetTooltip("Show the values 0-255 or 0-1");
+            EndHorizontal();
+            Element footerSpacer{ .id = idManager.AllocateDynamicID("cp_footer_spacer"), .styleRef = theme.emptyHorzStyleRef, .flags = ElementFlags::NoInput };
+            RegisterElement(std::move(footerSpacer), LayoutOverride{}.FlexGrow(1));
             Button(idManager.AllocateDynamicID("cp_cancel"), "Cancel", requestClose(ColorPickerState::CloseRequest::Cancel),
                    theme.dialogButtonStyleRef);
             Button(idManager.AllocateDynamicID("cp_ok"), "OK", requestClose(ColorPickerState::CloseRequest::Ok),
@@ -924,6 +917,36 @@ namespace tachyon
         // Write the working color back every frame while the picker is open.
         const float mult = (allowHDR && cp.hdrBrightness > 1.0f) ? cp.hdrBrightness : 1.0f;
         outColor = { curR * mult, curG * mult, curB * mult, cp.a };
+    }
+
+    // ---------------------------------------------------------------------------
+    // The picker's swatches and recent colors
+    // ---------------------------------------------------------------------------
+
+    void GUIApplication::SetColorSwatches(std::span<const color4f> colors)
+    {
+        auto& palette = m_colorPickerSub->State().palette;
+        palette.clear();
+        for (const color4f& color : colors)
+            palette.push_back({ color });
+    }
+
+    std::vector<color4f> GUIApplication::ColorSwatches() const
+    {
+        std::vector<color4f> colors;
+        for (const auto& swatch : m_colorPickerSub->State().palette)
+            colors.push_back(swatch.color);
+        return colors;
+    }
+
+    void GUIApplication::AddRecentColor(color4f color)
+    {
+        constexpr size_t kRecentColors = 8;
+        auto& recent = m_colorPickerSub->State().recent;
+        recent.erase(std::remove(recent.begin(), recent.end(), color), recent.end());
+        recent.insert(recent.begin(), color);
+        if (recent.size() > kRecentColors)
+            recent.resize(kRecentColors);
     }
 
     // ---------------------------------------------------------------------------
@@ -1000,12 +1023,7 @@ namespace tachyon
             if (cp.closeRequest == ColorPickerState::CloseRequest::Cancel)
                 value = cp.originalColor;
             else
-            {
-                auto& recent = cp.recent;
-                recent.erase(std::remove(recent.begin(), recent.end(), value), recent.end());
-                recent.insert(recent.begin(), value);
-                if (recent.size() > 8) recent.resize(8);
-            }
+                AddRecentColor(value);
             cp.closeRequest = ColorPickerState::CloseRequest::None;
             cp.triggerID = ID::Invalid();
         }
@@ -1045,10 +1063,7 @@ namespace tachyon
                         cp.allowHDR = allowHDR;
                         cp.context = context;
                         // The color it had counts as a recent one.
-                        auto& recent = cp.recent;
-                        recent.erase(std::remove(recent.begin(), recent.end(), value), recent.end());
-                        recent.insert(recent.begin(), value);
-                        if (recent.size() > 8) recent.resize(8);
+                        AddRecentColor(value);
                     }
                 }),
                 .styleRef        = theme.colorSwatchStyleRef

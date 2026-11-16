@@ -233,6 +233,12 @@ namespace tachyon
         showcase.closeDocumentDialogID = idManager.CreateStaticID();
         showcase.layoutNameDialogID    = idManager.CreateStaticID();
         SetUpDocuments(showcase.documents);
+        // Colors picked before, as an app would bring them back from its last run: the
+        // picker's Recent row has some to show.
+        for (const color4f recent : { color4f{ 0.290f, 0.761f, 0.549f, 1.0f }, color4f{ 0.180f, 0.290f, 1.000f, 1.0f },
+                                      color4f{ 0.545f, 0.176f, 0.839f, 0.5f }, color4f{ 1.000f, 0.180f, 0.180f, 1.0f },
+                                      color4f{ 0.231f, 0.510f, 0.965f, 1.0f } })
+            AddRecentColor(recent);
 
         showcase.smallMenuID = idManager.CreateStaticID();
         showcase.bigMenuID = idManager.CreateStaticID();
