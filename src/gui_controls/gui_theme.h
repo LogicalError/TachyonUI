@@ -529,6 +529,7 @@ namespace tachyon
         StyleRef taskProgressNoteStyleRef {};    ///< a note such as the time taken, monospace
         StyleRef taskProgressCancelStyleRef {};  ///< the cancel button
         StyleRef taskProgressRetryStyleRef {};   ///< the Retry button
+        StyleRef taskProgressPauseStyleRef {};   ///< a background task's pause / resume button
         StyleRef taskProgressDetailStyleRef {};  ///< the line under the bar
         StyleRef taskProgressErrorStyleRef {};   ///< the line under the bar once failed: why
         StyleRef progressStepsStyleRef {};       ///< ProgressSteps: the rows
@@ -540,6 +541,8 @@ namespace tachyon
         StyleRef progressStepBodyStyleRef {};    ///< its name and bar
         StyleRef progressStepNameStyleRef {};    ///< the name of a step started or done
         StyleRef progressStepPendingStyleRef {}; ///< the name of a step to come
+        StyleRef progressStepHeaderStyleRef {};  ///< a step's line: glyph, name and note
+        StyleRef progressStepErrorStyleRef {};   ///< "failed", at the end of a failed step's line
         StyleRef statusProgressStyleRef {};      ///< StatusProgress: spinner, name, bar, count
         StyleRef statusTextMonoStyleRef {};      ///< a status bar's count, monospace
         StyleRef tasksPillStyleRef {};           ///< BackgroundTasks' "3 tasks" pill
@@ -741,6 +744,7 @@ namespace tachyon
         IconID errorIcon      = IconID::Invalid;  ///< message severity: error
         IconID invalidIcon    = IconID::Invalid;  ///< in a field whose value isn't accepted
         IconID chevronRightIcon = IconID::Invalid; ///< next; a collapsed section
+        IconID retryIcon        = IconID::Invalid; ///< a turning arrow: try again
         IconID searchIcon     = IconID::Invalid;  ///< SearchField
         IconID windowMinimizeIcon = IconID::Invalid; ///< title bar: minimize
         IconID windowMaximizeIcon = IconID::Invalid; ///< title bar: maximize

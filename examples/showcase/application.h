@@ -141,6 +141,15 @@ namespace tachyon
         StyleRef stateMachineDividerStyleRef;   // between the buttons and the breadcrumb
         StyleRef stateMachineStatusStyleRef;    // "Running"
         StyleRef statusDotOkStyleRef;           // the dot before it
+        // The Build panel: the panel, the target's name and configuration, and Cancel and Build.
+        StyleRef buildPanelStyleRef, buildHeaderStyleRef, buildTitleStyleRef, buildSubtitleStyleRef, buildFooterStyleRef;
+        // The viewport's shaders compiling: the bar along its top, and the pill with a spinner.
+        StyleRef viewportBusyBarStyleRef, viewportBusyPillStyleRef, viewportBusyTextStyleRef;
+        // The Files panel's import: its block in the toolbar, and the tile of the file coming in.
+        StyleRef filesImportTileStyleRef, filesImportWellStyleRef, filesImportNameStyleRef;
+        // The hierarchy: "streaming" at the end of a row, and a row still loading.
+        StyleRef hierarchyStreamingStyleRef, hierarchySkeletonRowStyleRef;
+        int32_t  viewportBusyWidth = 0;         // the viewport's width last frame: its busy bar's
         StyleRef dataTableCellStyleRef, dataTableNumberStyleRef, dataTableCodeStyleRef;
         StyleRef textShadowSampleStyleRef, textGlowSampleStyleRef;
         StyleRef iconVAlignDemoStyleRefs[4][3];   // [IconSide L/R/T/B][top/mid/bot]
@@ -160,15 +169,38 @@ namespace tachyon
         tachyon::Image*  pastedImage = nullptr;
         ImageIndex       pastedImageIndex { ImageIndex::Invalid };
         uint2            pastedImageSize {};
-        // "Save" in the progress demos: busy until this time (seconds on the frame clock).
-        float            saveBusyUntil = -1.0f;
-        // The import demo: when it started, and whether it was cancelled.
-        float            importStart = 0.0f;
-        bool             importCancelled = false;
-        // The failed bake demo: running again until this time after Retry.
-        float            bakeRetryUntil = -1.0f;
-        // The background tasks demo: which were cancelled.
-        bool             backgroundCancelled[3] = {};
+        // Work under way, shown where it happens: the build in the Build panel, an import in
+        // the Files panel, the shaders compiling in the viewport, the hierarchy loading, and
+        // the indexing and the background tasks in the status bar. Times are seconds on the
+        // frame clock.
+        struct ProgressDemos
+        {
+            float startedAt       = -1.0f;   // the first frame: what loads at startup runs from here
+            bool  held            = false;   // captures: each held at one moment, as the design has it
+            float buildStart      = -1.0f;   // -1: not built yet
+            float buildCancelledAt = -1.0f;  // seconds into the build it was cancelled; -1: it wasn't
+            float importStart     = -1.0f;   // -1: none
+            float importCancelledAt = -1.0f; // seconds into the import it was cancelled; -1: it wasn't
+            bool  backgroundCancelled[3] = {};
+            float uploadDone      = 0.15f;   // the upload: how far, as of when it was last paused
+            float uploadResumedAt = -1.0f;   // running since; -1: paused
+            static constexpr float kUploadSecs = 12.0f;   // all of it, start to end
+
+            static constexpr float kShadersSecs       = 5.0f;    // the viewport's shaders compile at startup
+            static constexpr float kPropsLoadSecs     = 6.0f;    // the hierarchy's Props load at startup
+            static constexpr float kTerrainStreamSecs = 10.0f;   // and its Terrain streams in
+            static constexpr float kImportSecs        = 6.0f;    // an import in the Files panel
+            static constexpr float kImportDoneSecs    = 3.0f;    // "Import complete" shown this long after
+        };
+        ProgressDemos    progress;
+        // How long since `since`, or the moment `held` while captures hold it.
+        float            ProgressElapsed(float since, float held);
+        bool             ShadersCompiling();
+        float            BuildElapsed();   // how far into the build, in seconds; -1 before the first
+        bool             BuildRunning();
+        float            ImportElapsed();  // how far into the import, in seconds; -1 while there's none
+        /// What the progress shown in a cached panel looks like now, for its cache signature.
+        uint64_t         ProgressLook();
         // The timeline editor demo: its tracks, set up the first time it's drawn.
         TimelineView     animation;
         bool             animationSeeded = false;
@@ -427,6 +459,7 @@ namespace tachyon
 			IconID panelSettingsIcon   = IconID::Invalid;
 			IconID panelViewportIcon   = IconID::Invalid;
             IconID panelMiscIcon       = IconID::Invalid;
+            IconID panelBuildIcon      = IconID::Invalid;
 
             IconID documentLevelIcon     = IconID::Invalid;
             IconID documentMaterialIcon  = IconID::Invalid;
@@ -719,6 +752,11 @@ namespace tachyon
         void RenderBoxTestPanel();
         void RenderInspectorPanel(InspectorPanel& panel);
         void RenderMiscPanel();
+        void RenderBuildPanel();
+        /// The status bar's progress: the task running now, and the background tasks' pill.
+        void RenderStatusProgress();
+        /// Over the viewport while its shaders compile: a sliding bar along its top and a pill.
+        void RenderViewportBusy(ID viewportID);
         /// Puts the sample image on the clipboard.
         void CopyDemoImage();
         /// Shows the clipboard's image in the Misc panel, in place of the one pasted before.

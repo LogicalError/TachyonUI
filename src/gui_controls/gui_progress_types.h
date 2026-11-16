@@ -14,7 +14,7 @@ namespace tachyon
     {
         Small,    ///< 12px, in a status bar or beside a line of small text
         Medium,   ///< 16px, beside a line of text
-        Large,    ///< 24px, alone in an empty panel
+        Large,    ///< 18px, a step's glyph, or alone in an empty panel
     };
 
     /// Where a piece of work is.
@@ -38,6 +38,7 @@ namespace tachyon
         std::string_view detail;            ///< under the bar: "12.4 MB of 19.3 MB"; once failed, why
         std::function<void()> onCancel;     ///< set: a cancel button while running or paused
         std::function<void()> onRetry;      ///< set: a Retry button once failed
+        std::function<void()> onPause;      ///< set, in BackgroundTasks: pause while running, resume while paused
     };
     /// @}
 }

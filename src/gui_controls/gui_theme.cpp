@@ -151,6 +151,7 @@ namespace tachyon
             errorIcon       = registerIcon("error", R"(<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM15 9l-6 6M9 9l6 6"/>)");
             invalidIcon     = registerIcon("invalid", R"(<path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 8v5M12 16h.01"/>)");
             chevronRightIcon = registerIcon("chevron-right", R"(<path d="m9 18 6-6-6-6"/>)");
+            retryIcon       = registerIcon("retry", R"(<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>)");
             eyedropperIcon  = registerIcon("eyedropper", R"(<path d="m2 22 1-1h3l9-9M3 21v-3l9-9M15 6l3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3Z"/>)");
             dockIcon        = registerIcon("dock", R"(<path d="M3 5h18v14H3ZM15 5v14M8 12h4M10 10l2 2-2 2"/>)");
             dragHandleIcon  = registerIcon("drag-handle",
@@ -923,6 +924,7 @@ namespace tachyon
         taskProgressNoteStyleRef          = registerCSS("task-progress-note");
         taskProgressCancelStyleRef        = registerCSS("task-progress-cancel");
         taskProgressRetryStyleRef         = registerCSS("task-progress-retry");
+        taskProgressPauseStyleRef         = registerCSS("task-progress-pause");
         taskProgressDetailStyleRef        = registerCSS("task-progress-detail");
         taskProgressErrorStyleRef         = registerCSS("task-progress-error");
         progressStepsStyleRef             = registerCSS("progress-steps");
@@ -934,6 +936,8 @@ namespace tachyon
         progressStepBodyStyleRef          = registerCSS("progress-step-body");
         progressStepNameStyleRef          = registerCSS("progress-step-name");
         progressStepPendingStyleRef       = registerCSS("progress-step-pending");
+        progressStepHeaderStyleRef        = registerCSS("progress-step-header");
+        progressStepErrorStyleRef         = registerCSS("progress-step-error");
         statusProgressStyleRef            = registerCSS("status-progress");
         statusTextMonoStyleRef            = registerCSS("status-text-mono");
         tasksPillStyleRef                 = registerCSS("tasks-pill");

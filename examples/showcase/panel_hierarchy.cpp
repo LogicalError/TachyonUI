@@ -57,6 +57,11 @@ namespace tachyon
         tachyon::ID pendingSelect = tachyon::ID::Invalid();
         bool        treeHasFocus  = false;
 
+        // Loaded after the panel opens: rows still loading show as placeholders, and the row
+        // streaming in says so at its end.
+        std::unordered_set<tachyon::ID> loadingRows;
+        tachyon::ID                     streamingRow = tachyon::ID::Invalid();
+
         // ---- Per-node visibility ("eye") state -----------------------------------
         // Only leaves store state (in hiddenLeaves == invisible); a branch's state
         // derives from its leaves. Keyed by static row ID so it survives reorders.
@@ -224,13 +229,16 @@ namespace tachyon
     ID Application::CreateHierarchyPanel(std::unordered_map<ID, Panel>& panels, std::string title)
     {
         auto panel = std::make_shared<HierarchyPanel>();
-        return CreatePanel(panels, std::move(title), showcase.panelHierarchyIcon,
-                           [this, panel] {
-                               RenderHierarchyPanel(*panel);
-                               if (panel->treeHasFocus) focusedHierarchy = panel;
-                               else if (focusedHierarchy.lock() == panel) focusedHierarchy.reset();
-                           }, {},
-                           [this, panel] { EnableHierarchyPanel(*panel); });
+        const ID id = CreatePanel(panels, std::move(title), showcase.panelHierarchyIcon,
+                                  [this, panel] {
+                                      RenderHierarchyPanel(*panel);
+                                      if (panel->treeHasFocus) focusedHierarchy = panel;
+                                      else if (focusedHierarchy.lock() == panel) focusedHierarchy.reset();
+                                  }, {},
+                                  [this, panel] { EnableHierarchyPanel(*panel); });
+        // Rebuilt as its rows finish loading.
+        panels[id].cacheSignature = [this]() -> std::optional<uint64_t> { return ProgressLook(); };
+        return id;
     }
 
     // The objects that can be added: the search row's "+" and the tree's context menu list
@@ -301,6 +309,14 @@ namespace tachyon
         add("Plane",     2, showcase.objectIcon,     false);
         add("Camera",    1, showcase.cameraIcon,     false);
         add("Light",     1, showcase.lightIcon,      false);
+        add("Terrain",   1, showcase.groupIcon,      false);
+        p.streamingRow = p.treeRows.back().id;
+        add("Props",     1, showcase.groupIcon,      true);
+        for (const char* prop : { "Rock", "Crate", "Barrel", "Fence" })
+        {
+            add(prop, 2, showcase.objectIcon, false);
+            p.loadingRows.insert(p.treeRows.back().id);
+        }
         add("Materials", 0, showcase.treeFolderIcon, false);
         add("Default",   1, showcase.objectIcon,     false);
         add("Metal",     1, showcase.objectIcon,     false);
@@ -430,7 +446,12 @@ namespace tachyon
                     r.icon = (r.HasChildren() && r.isOpen) ? showcase.treeFolderOpenIcon : showcase.treeFolderIcon;
             }
 
-            VirtualTableColumn cols[2];
+            // Still loading at startup: the props' rows, and the terrain streaming in.
+            const float sinceStart = ProgressElapsed(progress.startedAt, 1.0f);
+            const bool  propsLoading = sinceStart < ProgressDemos::kPropsLoadSecs;
+            const bool  streaming    = sinceStart < ProgressDemos::kTerrainStreamSecs;
+
+            VirtualTableColumn cols[3];
 
             // Col 0 - visibility toggle. Shows the "on" eye only on hover (so
             // a fully-visible tree shows no icons); "off"/"mixed" show always.
@@ -515,10 +536,27 @@ namespace tachyon
 
             // Col 1 - the tree (mirrors VirtualTreeView's single column).
             cols[1].column = TableColumn{ .header = {} };
-            cols[1].generateCell = [this, &rows, &visibleIdx, anyExpandable](int rowIdx)
+            cols[1].generateCell = [this, &p, &rows, &visibleIdx, anyExpandable, propsLoading](int rowIdx)
             {
                 if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                 TreeViewRow& r = rows[visibleIdx[rowIdx]];
+                // A row still loading: a placeholder where its icon and name will be, indented as
+                // its row will be.
+                if (propsLoading && p.loadingRows.contains(r.id))
+                {
+                    const int32_t indent = r.depth * theme.treeTableIndent + (anyExpandable ? theme.treeTableExpanderWidth : 0);
+                    const int32_t width  = styleManager.Px(70 + int((r.id.Value() * 37u) % 60u));
+                    Cell([this, indent, width] {
+                        BeginHorizontal(idManager.AllocateDynamicID("loadingRow"), hierarchySkeletonRowStyleRef,
+                                        LayoutOverride{}.FlexGrow(1));
+                        RegisterElement(Element{ .id = idManager.AllocateDynamicID("indent"), .styleRef = theme.emptyHorzStyleRef },
+                                        LayoutOverride::Auto().Width(Pixels{ indent }).NoShrink());
+                        Skeleton(idManager.AllocateDynamicID("icon"), LayoutOverride::Auto().Size(Pixels{ styleManager.Px(13) }, Pixels{ styleManager.Px(13) }));
+                        Skeleton(idManager.AllocateDynamicID("name"), LayoutOverride::Auto().Width(Pixels{ width }).Height(Pixels{ styleManager.Px(8) }));
+                        EndHorizontal();
+                    });
+                    return;
+                }
                 TreeCell(r.name, r.depth,
                          r.HasChildren() ? &r.isOpen : nullptr,
                          r.icon, r.ancestorLineMask, r.isLastSibling,
@@ -546,7 +584,26 @@ namespace tachyon
                                     del && del->HasShortcut() ? std::string_view(del->displayString) : std::string_view{},
                                     [&p, nodes = std::move(nodes)] { p.DeleteNodes(nodes); });
             };
-            VirtualTable(id, state, std::span<VirtualTableColumn>(cols, 2),
+            // While something streams in, a column at the end says so on its row.
+            // As wide as "streaming", its spinner and the room around them.
+            const int32_t streamingWidth = textSystem->GetTextMeasurement(textSystem->RegisterText(
+                tachyon::ID::Invalid(), "streaming", theme.taskProgressDetailStyleRef, tachyon::ElementState::None)).maxWidth
+                + styleManager.Px(12 + 6 + 8 + 4);
+            cols[2].column = TableColumn{ .header = {},
+                .initialWidth = streamingWidth, .minWidth = streamingWidth,
+                .maxWidth = streamingWidth, .sizing = ColumnSizing::Fixed };
+            cols[2].generateCell = [this, &p, &rows, &visibleIdx](int rowIdx)
+            {
+                const bool here = rowIdx >= 0 && rowIdx < int(visibleIdx.size()) && rows[visibleIdx[rowIdx]].id == p.streamingRow;
+                Cell([this, here] {
+                    if (!here) return;
+                    BeginHorizontal(idManager.AllocateDynamicID("streaming"), hierarchyStreamingStyleRef, LayoutOverride{}.FlexGrow(1));
+                    Text(idManager.AllocateDynamicID("streamingText"), "streaming", theme.taskProgressDetailStyleRef);
+                    Spinner(idManager.AllocateDynamicID("streamingSpinner"), SpinnerSize::Small);
+                    EndHorizontal();
+                });
+            };
+            VirtualTable(id, state, std::span<VirtualTableColumn>(cols, streaming ? 3 : 2),
                          int(visibleIdx.size()), 0, hierarchyTableStyleRef,
                          tachyon::LayoutOverride::Auto().FlexGrow(1).MinHeight(0));
             p.treeHasFocus = guiStateManager.Interaction().IsFocusWithin(id);

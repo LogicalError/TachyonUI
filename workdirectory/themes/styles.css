@@ -6332,6 +6332,8 @@
     flex-shrink: 0;
 }
 .dialog-button {
+    -tachyon-icon-size: 14px;
+    -tachyon-icon-text-gap: 6px;
     -tachyon-state-layer: content; /* hover and pressed: the text color over the background, 8% / 14% */
     height: 28px;
     margin: 0px;
@@ -6353,6 +6355,8 @@
     text-underline-offset: 2px;
 }
 .dialog-button-primary {
+    -tachyon-icon-size: 14px;
+    -tachyon-icon-text-gap: 6px;
     -tachyon-state-layer: content 18% 30%; /* hover and pressed: the text color over the fill, stronger over a saturated one */
     height: 28px;
     margin: 0px;
@@ -6362,6 +6366,7 @@
     border-color: transparent;
     background-color: var(--accent);
     color: var(--on-accent);
+    -tachyon-icon-color: var(--on-accent);
     font-size: var(--font-size);
     font-weight: 600;
     text-align: center;
@@ -6377,6 +6382,8 @@
 /* The default button (focused): a ring. */
 /* A destructive button (Quit, Delete). */
 .dialog-button-danger {
+    -tachyon-icon-size: 14px;
+    -tachyon-icon-text-gap: 6px;
     -tachyon-state-layer: light 18% 30%; /* hover and pressed: white over the red, brighter */
     height: 28px;
     margin: 0px;
@@ -6754,10 +6761,10 @@
 .progress-segment {
     background-color: linear-gradient(90deg, transparent 0%, var(--accent) 30%, var(--accent) 70%, transparent 100%);
 }
-/* CircularProgress: 40px round, the percentage in its middle. */
+/* CircularProgress: 36px round, the percentage in its middle. */
 .circular-progress {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     margin: 0px;
     padding: 0px;
     border-width: 0px;
@@ -6871,6 +6878,26 @@
     flex-shrink: 0;
 }
 .task-progress-cancel:hover { color: var(--text-1); }
+/* A background task's pause / resume button, beside its cancel button. */
+.task-progress-pause {
+    -tachyon-state-layer: content;
+    width: 20px;
+    height: 20px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 4px;
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--text-3);
+    -tachyon-icon-size: 11px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    cursor: pointer;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.task-progress-pause:hover { color: var(--text-1); }
 .task-progress-retry {
     -tachyon-state-layer: content;
     height: 22px;
@@ -6882,6 +6909,8 @@
     border-color: var(--line-strong);
     color: var(--text-1);
     font-size: var(--font-size);
+    -tachyon-icon-size: 12px;
+    -tachyon-icon-text-gap: 6px;
     text-align: center;
     -tachyon-vertical-text-align: middle;
     text-wrap: nowrap;
@@ -6916,10 +6945,23 @@
 }
 .progress-step {
     display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 6px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    border-color: transparent;
+}
+/* A step's line: its glyph, its name, and its note or percent at the end. */
+.progress-step-header {
+    display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     min-height: 22px;
     margin: 0px;
     padding: 0px;
@@ -6927,15 +6969,15 @@
     background-color: transparent;
     border-color: transparent;
 }
-/* A step's glyph, 16px: a check on a disc once done, a cross once failed, a dashed ring
+/* A step's glyph, 18px: a check on a disc once done, a cross once failed, a dashed ring
    while still to come (in the warning color while paused). A running step has a spinner. */
 .progress-step-done, .progress-step-failed, .progress-step-waiting, .progress-step-paused {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     margin: 0px;
-    padding: 3px;
+    padding: 4px;
     border-width: 0px;
-    border-radius: 8px;
+    border-radius: 9px;
     background-color: transparent;
     border-color: transparent;
     -tachyon-icon-size: 10px;
@@ -6952,14 +6994,16 @@
     border-color: var(--line-strong);
 }
 .progress-step-paused { border-color: var(--warn); }
+/* Under the running step, in line with the names (past the 18px glyph and its gap): its bar
+   and what it's doing. */
 .progress-step-body {
     display: flex;
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
-    gap: 5px;
+    gap: 6px;
     margin: 0px;
-    padding: 0px;
+    padding: 0px 0px 0px 28px;
     border-width: 0px;
     background-color: transparent;
     border-color: transparent;
@@ -6975,8 +7019,23 @@
     font-size: var(--font-size);
     text-wrap: nowrap;
     text-overflow: ellipsis;
+    vertical-align: middle;
+    flex-grow: 1;
+    flex-shrink: 1;
 }
 .progress-step-pending { color: var(--text-3); }
+.progress-step-error {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--error-text);
+    font-size: 11px;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
 /* StatusProgress: in a status bar, a small spinner, a name, a 120px bar and a count. */
 .status-progress {
     display: flex;
@@ -7016,6 +7075,10 @@
     border-color: transparent;
     color: var(--text-link);
     font-size: var(--font-size-sm);
+    -tachyon-icon-side: right;
+    -tachyon-icon-size: 10px;
+    -tachyon-icon-text-gap: 3px;
+    -tachyon-icon-color: var(--text-link);
     text-align: center;
     -tachyon-vertical-text-align: middle;
     text-wrap: nowrap;

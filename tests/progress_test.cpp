@@ -268,7 +268,7 @@ namespace tachyon
         }
 
         // A ring in the track color with a quarter arc in the accent, a turn every 0.8 s from
-        // the top; 12, 16 or 24px.
+        // the top; 12, 16 or 18px.
         TEST_F(ProgressTest, ASpinnerTurns)
         {
             const ID small = app.idManager.CreateStaticID(), medium = app.idManager.CreateStaticID();
@@ -286,7 +286,7 @@ namespace tachyon
             frame();
             EXPECT_EQ(app.GetElementRect(small).size, (int2{ app.styleManager.Px(12), app.styleManager.Px(12) }));
             EXPECT_EQ(app.GetElementRect(medium).size, (int2{ app.styleManager.Px(16), app.styleManager.Px(16) }));
-            EXPECT_EQ(app.GetElementRect(large).size, (int2{ app.styleManager.Px(24), app.styleManager.Px(24) }));
+            EXPECT_EQ(app.GetElementRect(large).size, (int2{ app.styleManager.Px(18), app.styleManager.Px(18) }));
             EXPECT_EQ(app.GetElementRect(sized).size, (int2{ 32, 32 }));
             EXPECT_NE(FlagsOf(medium) & ElementFlags::Animated, ElementFlags::None);
 
@@ -313,7 +313,8 @@ namespace tachyon
             EXPECT_FALSE(HasPointNear(renderer, { center.x, center.y - outer })) << "the top is behind it now";
 
             EXPECT_FLOAT_EQ(Draw(small).circles.at(0).radius, 4.5f * float(app.styleManager.Px(12)) / 12.0f);
-            EXPECT_FLOAT_EQ(Draw(large).circles.at(0).style.lineWidth, 2.5f * float(app.styleManager.Px(24)) / 24.0f);
+            EXPECT_FLOAT_EQ(Draw(large).circles.at(0).radius, 7.5f * float(app.styleManager.Px(18)) / 18.0f);
+            EXPECT_FLOAT_EQ(Draw(large).circles.at(0).style.lineWidth, 2.0f * float(app.styleManager.Px(18)) / 18.0f);
             EXPECT_FLOAT_EQ(Draw(sized).circles.at(0).radius, 13.0f) << "scaled to the room it's given";
         }
 
@@ -331,15 +332,15 @@ namespace tachyon
             };
             frame();
             EXPECT_EQ(app.TextOf(ring), "68");
-            EXPECT_EQ(app.GetElementRect(ring).size, (int2{ app.styleManager.Px(40), app.styleManager.Px(40) }));
+            EXPECT_EQ(app.GetElementRect(ring).size, (int2{ app.styleManager.Px(36), app.styleManager.Px(36) }));
             StubGUIRenderer renderer = Draw(ring);
             ASSERT_EQ(renderer.circles.size(), 1u);
-            const float scale = float(app.styleManager.Px(40)) / 40.0f;
-            EXPECT_FLOAT_EQ(renderer.circles[0].radius, 17.0f * scale);
+            const float scale = float(app.styleManager.Px(36)) / 36.0f;
+            EXPECT_FLOAT_EQ(renderer.circles[0].radius, 15.5f * scale);
             EXPECT_FLOAT_EQ(renderer.circles[0].style.lineWidth, 3.0f * scale);
             EXPECT_EQ(renderer.triangles.size(), 2u * 66u + 2u * 8u) << "68.4% of the way round";
             const float2 center = renderer.circles[0].center;
-            EXPECT_TRUE(HasPointNear(renderer, { center.x, center.y - 18.5f * scale })) << "from the top";
+            EXPECT_TRUE(HasPointNear(renderer, { center.x, center.y - 17.0f * scale })) << "from the top";
 
             value = 0.0f;
             frame();

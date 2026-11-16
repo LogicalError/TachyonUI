@@ -193,6 +193,7 @@ namespace tachyon
             const ID retry = app.FindByText("Retry");
             ASSERT_TRUE(retry != ID::Invalid());
             EXPECT_EQ(ElementOf(retry).styleRef, app.theme.taskProgressRetryStyleRef);
+            EXPECT_EQ(IconOf(retry), app.theme.retryIcon) << "the refresh arrow before Retry";
             Click(retry);
             frame();
             frame();
@@ -249,6 +250,9 @@ namespace tachyon
             EXPECT_TRUE(app.FindByText("42%") != ID::Invalid());
             EXPECT_TRUE(app.FindByText("paused") != ID::Invalid());
             EXPECT_FALSE(app.FindByText("50%") != ID::Invalid()) << "a percent only while running";
+            const ID failedText = app.FindByText("failed");
+            ASSERT_TRUE(failedText != ID::Invalid()) << "a failed step says so";
+            EXPECT_EQ(ElementOf(failedText).styleRef, app.theme.progressStepErrorStyleRef);
 
             // The running step's spinner, left of its name, and its bar under the name.
             const ID name = app.FindByText("Bake lighting");
@@ -258,8 +262,8 @@ namespace tachyon
             EXPECT_EQ(app.GetElementRect(bars[0]).x, app.GetElementRect(name).x);
             EXPECT_EQ(FillOf(bars[0]).w, int32_t(float(app.GetElementRect(bars[0]).w) * 0.42f + 0.5f));
             const IntRect glyph = app.GetElementRect(done[0]);
-            EXPECT_EQ(glyph.w, app.styleManager.Px(16));
-            EXPECT_EQ(glyph.h, app.styleManager.Px(16));
+            EXPECT_EQ(glyph.w, app.styleManager.Px(18));
+            EXPECT_EQ(glyph.h, app.styleManager.Px(18));
             EXPECT_LT(glyph.x + glyph.w, app.GetElementRect(app.FindByText("Compile scripts")).x);
 
             // In order, top to bottom.
@@ -269,6 +273,47 @@ namespace tachyon
                 EXPECT_GT(app.GetElementRect(app.FindByText(step)).y, y) << step;
                 y = app.GetElementRect(app.FindByText(step)).y;
             }
+        }
+
+        // Lined up as columns: the glyph level with its name, the note or percent at the end of
+        // the name's line; the running step's bar from under its name to the end, and its
+        // detail under that.
+        TEST_F(ProgressCompositesTest, StepsLineUpInColumns)
+        {
+            const ProgressTask steps[] = {
+                { .name = "Compile scripts", .state = TaskState::Done, .note = "4.2 s" },
+                { .name = "Bake lighting",   .value = 0.42f, .state = TaskState::Running, .detail = "Lightmap atlas, about 1 min left" },
+                { .name = "Package",         .state = TaskState::Pending },
+            };
+            const ID list = app.idManager.CreateStaticID();
+            Frame([&] { app.ProgressSteps(list, steps, LayoutOverride{}.Width(Pixels{ 300 })); });
+            Frame([&] { app.ProgressSteps(list, steps, LayoutOverride{}.Width(Pixels{ 300 })); });
+            const IntRect all = app.GetElementRect(list);
+            auto middle = [](IntRect r) { return r.y * 2 + r.h; };   // twice the middle, kept whole
+
+            const IntRect doneGlyph = app.GetElementRect(WithStyle(app.theme.progressStepDoneStyleRef).at(0));
+            const IntRect doneName  = app.GetElementRect(app.FindByText("Compile scripts"));
+            const IntRect doneNote  = app.GetElementRect(app.FindByText("4.2 s"));
+            EXPECT_NEAR(middle(doneGlyph), middle(doneName), 2) << "the glyph level with its name";
+            EXPECT_NEAR(middle(doneNote), middle(doneName), 2) << "the note on the name's line";
+            EXPECT_EQ(doneNote.x + doneNote.w, all.x + all.w) << "the note at the end";
+
+            const IntRect name    = app.GetElementRect(app.FindByText("Bake lighting"));
+            const IntRect percent = app.GetElementRect(app.FindByText("42%"));
+            EXPECT_NEAR(middle(percent), middle(name), 2);
+            EXPECT_EQ(percent.x + percent.w, all.x + all.w) << "the percent at the end";
+            const IntRect bar = app.GetElementRect(WithStyle(app.theme.progressBarSmallStyleRef).at(0));
+            EXPECT_EQ(bar.x, name.x) << "the bar from under the name";
+            EXPECT_EQ(bar.x + bar.w, all.x + all.w) << "to the end";
+            EXPECT_GE(bar.y, name.y + name.h);
+            const ID detail = app.FindByText("Lightmap atlas, about 1 min left");
+            ASSERT_TRUE(detail != ID::Invalid());
+            EXPECT_EQ(ElementOf(detail).styleRef, app.theme.taskProgressDetailStyleRef);
+            EXPECT_EQ(app.GetElementRect(detail).x, name.x);
+            EXPECT_GE(app.GetElementRect(detail).y, bar.y + bar.h);
+
+            const IntRect pendingName = app.GetElementRect(app.FindByText("Package"));
+            EXPECT_EQ(pendingName.x, name.x) << "the names in one column";
         }
 
         // ---------------------------------------------------------------------
@@ -394,6 +439,7 @@ namespace tachyon
             frame();
             EXPECT_EQ(app.TextOf(pill), "3 tasks");
             EXPECT_EQ(ElementOf(pill).styleRef, app.theme.tasksPillStyleRef);
+            EXPECT_EQ(IconOf(pill), app.theme.dropdownArrowUpIcon) << "a chevron pointing where it opens";
             EXPECT_FALSE(open);
             EXPECT_FALSE(app.FindByText("Background tasks") != ID::Invalid());
 
@@ -402,6 +448,7 @@ namespace tachyon
             frame();
             ASSERT_TRUE(open);
             ASSERT_TRUE(app.FindByText("Background tasks") != ID::Invalid());
+            EXPECT_EQ(IconOf(pill), app.theme.dropdownArrowIcon) << "and back while open";
             EXPECT_TRUE(app.FindByText("2 running") != ID::Invalid());
             for (const char* text : { "Bake lighting", "Generate thumbnails", "Upload build", "42%", "78%", "paused" })
                 EXPECT_TRUE(app.FindByText(text) != ID::Invalid()) << text;
@@ -457,6 +504,31 @@ namespace tachyon
             frame();
             EXPECT_FALSE(open);
 
+            // With onPause: a pause button while it runs, a resume button while paused, each
+            // before the cancel button.
+            int paused = -1;
+            tasks[0].onPause = [&] { paused = 0; };
+            tasks[2].onPause = [&] { paused = 2; };
+            Click(pill);
+            frame();
+            frame();
+            ASSERT_TRUE(open);
+            const std::vector<ID> pauses = WithStyle(app.theme.taskProgressPauseStyleRef);
+            ASSERT_EQ(pauses.size(), 2u);
+            EXPECT_EQ(IconOf(pauses[0]), app.theme.timelinePauseIcon) << "running: pause";
+            EXPECT_EQ(IconOf(pauses[1]), app.theme.timelinePlayIcon) << "paused: resume";
+            EXPECT_LT(app.GetElementRect(pauses[0]).x, app.GetElementRect(WithStyle(app.theme.taskProgressCancelStyleRef).at(0)).x);
+            app.mouseWindow = WithStyle(app.theme.tasksPopoverStyleRef).at(0);
+            Click(pauses[1]);
+            frame();
+            frame();
+            app.mouseWindow = ID::Invalid();
+            EXPECT_EQ(paused, 2);
+            EXPECT_TRUE(open) << "the list stays open";
+            Click(pill);
+            frame();
+            frame();
+
             // Closed by the OS (its window gone): closed here too.
             Click(pill);
             frame();
@@ -465,6 +537,15 @@ namespace tachyon
             closeWindow = WithStyle(app.theme.tasksPopoverStyleRef).at(0);
             frame();
             EXPECT_FALSE(open);
+
+            // The pill opens it again.
+            Click(pill);
+            frame();
+            frame();
+            EXPECT_TRUE(open);
+            Click(pill);
+            frame();
+            frame();
 
             // One task, and none.
             tasks.resize(1);

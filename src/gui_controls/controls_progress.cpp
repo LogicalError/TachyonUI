@@ -73,7 +73,7 @@ namespace tachyon
             switch (size)
             {
                 case SpinnerSize::Small: return { 12, 4.5f, 1.5f };
-                case SpinnerSize::Large: return { 24, 10.0f, 2.5f };
+                case SpinnerSize::Large: return { 18, 7.5f, 2.0f };
                 default:                 return { 16, 6.5f, 2.0f };
             }
         }
@@ -164,13 +164,13 @@ namespace tachyon
         const VisualColorStyleIndex track = theme.progressTrackColor, arc = theme.progressArcColor;
         VERIFY(elementStorage.AddCustomDraw(ref, [done, track, arc](CustomDrawContext& ctx)
         {
-            // A 3px ring of radius 17 in 40px, scaled to the room it has.
+            // A 3px ring of radius 15.5 in 36px, scaled to the room it has.
             const IntRect inner = ctx.ElementInnerRect();
-            const float   scale = float(std::min(inner.w, inner.h)) / 40.0f;
+            const float   scale = float(std::min(inner.w, inner.h)) / 36.0f;
             if (!(scale > 0.0f))
                 return;
             const float2 center{ float(inner.x) + float(inner.w) * 0.5f, float(inner.y) + float(inner.h) * 0.5f };
-            const float  radius = 17.0f * scale, width = 3.0f * scale;
+            const float  radius = 15.5f * scale, width = 3.0f * scale;
             ctx.RenderCircle(center, radius, LineStyle{ .colorStyleIndex = track, .lineWidth = width });
             if (done > 0.0f)
                 ctx.RenderArc(center, radius, width, -0.25f, done, arc);
@@ -257,7 +257,7 @@ namespace tachyon
         if (failed)
         {
             if (task.onRetry)
-                Button(idManager.AllocateDynamicID("retry"), "Retry", task.onRetry, theme.taskProgressRetryStyleRef);
+                Button(idManager.AllocateDynamicID("retry"), GUIContent{ theme.retryIcon, "Retry" }, task.onRetry, theme.taskProgressRetryStyleRef);
         }
         else if (const std::string state = StateText(task); !state.empty())
             Text(idManager.AllocateDynamicID("state"), state,
@@ -287,7 +287,7 @@ namespace tachyon
     {
         if (state == TaskState::Running)
         {
-            Spinner(id, SpinnerSize::Medium);
+            Spinner(id, SpinnerSize::Large);
             return;
         }
         const StyleRef style = state == TaskState::Done   ? theme.progressStepDoneStyleRef
@@ -309,19 +309,29 @@ namespace tachyon
         {
             const ProgressTask& step = steps[i];
             const ID rowID = idManager.GetSubID(rowsID, uint32_t(i));
-            BeginHorizontal(rowID, theme.progressStepStyleRef);
+            BeginVertical(rowID, theme.progressStepStyleRef);
             [[maybe_unused]] const bool inRow = idManager.PushParent(rowID);
 
+            // One line: the glyph, the name, and its note or percent at the end.
+            BeginHorizontal(idManager.AllocateDynamicID("header"), theme.progressStepHeaderStyleRef);
             StepGlyph(idManager.AllocateDynamicID("glyph"), step.state);
-            BeginVertical(idManager.AllocateDynamicID("body"), theme.progressStepBodyStyleRef);
             Text(idManager.AllocateDynamicID("name"), step.name,
                  step.state == TaskState::Pending ? theme.progressStepPendingStyleRef : theme.progressStepNameStyleRef);
-            // A small bar under the step under way.
-            if (step.state == TaskState::Running)
-                TaskBar(idManager.AllocateDynamicID("bar"), step, theme.progressBarSmallStyleRef, LayoutOverride{});
-            EndVertical();
-            if (const std::string state = StateText(step); !state.empty())
+            if (step.state == TaskState::Failed && step.note.empty())
+                Text(idManager.AllocateDynamicID("state"), "failed", theme.progressStepErrorStyleRef);
+            else if (const std::string state = StateText(step); !state.empty())
                 Text(idManager.AllocateDynamicID("state"), state, theme.taskProgressNoteStyleRef);
+            EndHorizontal();
+
+            // Under the step under way, in line with the names: a small bar and what it's doing.
+            if (step.state == TaskState::Running)
+            {
+                BeginVertical(idManager.AllocateDynamicID("body"), theme.progressStepBodyStyleRef);
+                TaskBar(idManager.AllocateDynamicID("bar"), step, theme.progressBarSmallStyleRef, LayoutOverride{});
+                if (!step.detail.empty())
+                    Text(idManager.AllocateDynamicID("detail"), step.detail, theme.taskProgressDetailStyleRef);
+                EndVertical();
+            }
 
             if (inRow)
                 (void)idManager.PopParent();
@@ -365,7 +375,9 @@ namespace tachyon
             popover.open = false;
 
         const std::string label = tasks.size() == 1 ? "1 task" : std::to_string(tasks.size()) + " tasks";
-        Button(id, label, [this, id] { m_tasksPopovers[id].open = !m_tasksPopovers[id].open; }, theme.tasksPillStyleRef,
+        // Its chevron points where the list opens, and back while it's open.
+        Button(id, GUIContent{ popover.open ? theme.dropdownArrowIcon : theme.dropdownArrowUpIcon, label },
+               [this, id] { m_tasksPopovers[id].open = !m_tasksPopovers[id].open; }, theme.tasksPillStyleRef,
                std::move(constraints));
         if (!popover.open)
             return false;
@@ -404,6 +416,13 @@ namespace tachyon
                 if (state.empty())
                     state = task.state == TaskState::Failed ? "failed" : task.state == TaskState::Done ? "done" : "";
                 Text(idManager.AllocateDynamicID("state"), state, theme.tasksRowStateStyleRef);
+                if (task.onPause && (task.state == TaskState::Running || task.state == TaskState::Paused))
+                {
+                    const bool isPaused = task.state == TaskState::Paused;
+                    Button(idManager.AllocateDynamicID("pause"), isPaused ? theme.timelinePlayIcon : theme.timelinePauseIcon,
+                           task.onPause, theme.taskProgressPauseStyleRef);
+                    SetTooltip((isPaused ? "Resume " : "Pause ") + std::string(task.name));
+                }
                 if (task.onCancel && (task.state == TaskState::Running || task.state == TaskState::Paused || task.state == TaskState::Pending))
                 {
                     Button(idManager.AllocateDynamicID("cancel"), theme.tabCloseIcon, task.onCancel, theme.taskProgressCancelStyleRef);
@@ -417,7 +436,11 @@ namespace tachyon
                 (void)idManager.PopParent();
         }
         else
+        {
+            // Closed by the OS: that window is gone for good, so the next open makes another.
             popover.open = false;
+            idManager.ReleaseStaticID(std::exchange(popover.windowID, ID::Invalid()));
+        }
         EndWindow();
         return popover.open;
     }
