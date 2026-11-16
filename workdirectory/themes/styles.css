@@ -1289,12 +1289,13 @@
 .label:focus, .label-help:focus  { color: var(--text-1); }
 .label::highlight(selected), .label-help::highlight(selected) { color: var(--text-1); }
 
-/* A label with property help (SetTooltip with a PropertyHelp): a dotted underline. */
+/* A label with property help (SetTooltip with a PropertyHelp): a dotted underline, a few
+   pixels under the baseline and inside the line, so a label only as tall as its text shows it. */
 .label-help, .group-label-help, .drag-label-help, .group-drag-label-help {
     text-underline-thickness: 1px;
     text-underline-style: dotted;
     text-underline-color: var(--text-3);
-    text-underline-offset: 3px;
+    text-underline-offset: 1px;
 }
 
 /* ---- iconLabelStyle ------------------------------------------------------- */

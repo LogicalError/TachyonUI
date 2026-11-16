@@ -570,7 +570,8 @@ namespace tachyon
         /// Moves the stand-ins, and ends the fades that are done.
         void    AnimateFades();
     public:
-        /// True while a popup fades in or out, or waits to: frames are needed until it's done.
+        /// True while a popup fades in or out, or waits to (a new one is drawn a few frames
+        /// before it shows): frames are needed until it's done.
         bool    IsFading() const;
     private:
         bool    m_reducedMotion = false;

@@ -653,7 +653,8 @@ namespace tachyon
         /// As above, with the call site as the ID, in the theme's button style.
         inline bool Button(       const GUIContent& content, std::function<void()> onClick,                 LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Button(idManager.AllocateDynamicID(site), content, std::move(onClick), theme.controls->button, std::move(constraints)); }
 
-        /// Icon button for a command; the tooltip shows its name and shortcut, e.g. "Undo (Ctrl+Z)".
+        /// Icon button for a command; the tooltip shows its name, and its shortcut in a chip
+        /// after it ("Undo" then "Ctrl Z").
         bool        CommandButton(CommandID command, StyleRef style, LayoutOverride&& constraints = {});
         /// As above, in the theme's button style.
         inline bool CommandButton(CommandID command, LayoutOverride&& constraints = {}) { return CommandButton(command, theme.controls->button, std::move(constraints)); }

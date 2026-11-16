@@ -1962,6 +1962,11 @@ namespace tachyon
         else
             tooltipManager.SetTargetAncestors(target == interaction.GetFocusedID() && target != interaction.GetHoveredID()
                                               ? interaction.GetPropagatedFocusedIDs() : interaction.GetPropagatedHoverIDs());
+        // A tooltip shows when its target asks for it, in its build: a cached scope around the
+        // target is built this frame, though nothing but the time changed (the frame its wait
+        // ends in may have no input to wake it).
+        if (tooltipManager.IsReady() && target != ID::Invalid())
+            InvalidateCachedScopesAbove(target);
         m_contextMenuClaimed = false;
         m_cutShort = FindCutShortText(mousePos);
     }

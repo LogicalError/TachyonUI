@@ -388,8 +388,10 @@ namespace tachyon
 
     bool OSWindowManager::IsFading() const
     {
+        // A new popup still drawn before it shows waits too: without frames it would stay hidden.
         for (const auto& window : windows)
-            if (window.fade != 0 || window.fadeWait >= 0)
+            if (window.fade != 0 || window.fadeWait >= 0
+                || (window.framesHidden > 0 && window.state == WindowState::Alive))
                 return true;
         return false;
     }

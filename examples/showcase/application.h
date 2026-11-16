@@ -254,6 +254,8 @@ namespace tachyon
 
             int buttonClickCount = 0;
             bool toggleValue = false;
+            bool castShadows = true;      // the Inspector's property-help example
+            float opacity = 1.8f;         // the Inspector's out-of-range example: 0 to 1
 
             // ButtonGroup demo: segmented alignment picker (one selected at a time).
             int alignment = 1; // 0 = left, 1 = center, 2 = right

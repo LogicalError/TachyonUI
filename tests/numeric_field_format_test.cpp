@@ -10,8 +10,8 @@ namespace tachyon
     // =========================================================================
     // A numeric field shows the same string for a value with or without focus:
     // the unfocused display and the editor text both go through FormatNumber,
-    // which must be deterministic and keep full float precision
-    // (%.9g, not %g).
+    // which must be deterministic and read back as the same value (a float's
+    // shortest such text, not %g's six digits).
     // =========================================================================
 
     namespace
@@ -41,8 +41,7 @@ namespace tachyon
 
     INSTANTIATE_TEST_SUITE_P(FloatValues, FloatFormatReflectsRealityTest, ::testing::Values(
         0.0f, 1.0f, -1.0f, 0.5f,
-        // Values where %g and %.9g differ: 0.123456789f is "0.123456791" at %.9g
-        // but "0.123457" at %g.
+        // Values %g would round: 0.123456789f is "0.12345679", not %g's "0.123457".
         0.123456789f, 1.23456789f, 1234567.89f,
         // Float epsilon territory.
         1.0f + 1e-7f, 1.0f - 1e-7f
@@ -60,8 +59,8 @@ namespace tachyon
         }
     }
 
-    // The float nearest 0.123456789 is 0.123456790298...; the display keeps at
-    // least 9 significant digits to show that, not a rounded "0.123457".
+    // The float nearest 0.123456789 is 0.123456790298...; the display keeps the
+    // digits that tell it from its neighbours, not a rounded "0.123457".
     TEST(NumericFormatTest, FloatFormatReflectsBitExactReality)
     {
         NumericValue v = MakeFloat(0.123456789f);
@@ -71,6 +70,25 @@ namespace tachyon
             << "' — too few digits to reflect the real float value";
         EXPECT_NE(s, std::string("0.123457"))
             << "display dropped to %g precision — re-selecting will flash";
+    }
+
+    // A float shows as the fewest digits that read back as the same float: 1.8f, which is
+    // 1.79999995... in binary, shows as "1.8".
+    TEST(NumericFormatTest, FloatsShowTheShortestTextThatReadsBack)
+    {
+        const std::pair<float, const char*> shown[] = { { 1.8f, "1.8" }, { 3.14f, "3.14" }, { 0.1f, "0.1" }, { -2.5f, "-2.5" } };
+        for (const auto& [value, text] : shown)
+        {
+            NumericValue v = MakeFloat(value);
+            EXPECT_EQ(FormatNumber(NumericType::TypeFloat, v), text);
+        }
+        for (const float value : { 1.8f, 0.123456789f, 1234567.89f, 1.0f + 1e-7f, 3.0e-12f, 6.5e20f })
+        {
+            NumericValue v = MakeFloat(value), back{};
+            const std::string s = FormatNumber(NumericType::TypeFloat, v);
+            ASSERT_TRUE(ParseNumber(s, NumericType::TypeFloat, back)) << s;
+            EXPECT_EQ(back.value_float, value) << s;
+        }
     }
 
     // Parsing a double must keep double precision, not round through float.

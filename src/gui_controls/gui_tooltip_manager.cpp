@@ -93,7 +93,9 @@ namespace tachyon
         }
         else if (m_activeTargetID != ID::Invalid() && !m_isReady)
         {
-            if (elapsedTimeSecs - m_targetStartTime >= delaySeconds)
+            // Within a little of it: the frame woken for it reads a clock snapped to the
+            // display's refresh, which can fall a fraction of a period short.
+            if (elapsedTimeSecs - m_targetStartTime >= delaySeconds - kTimerSlackSeconds)
                 m_isReady = true;
         }
     }

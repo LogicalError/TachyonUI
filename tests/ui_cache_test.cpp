@@ -114,6 +114,69 @@ namespace tachyon
             EXPECT_FALSE(app.HasElement(btnA)); // content absent
         }
 
+        // A disabled control in a cached panel: the pointer on it keeps the panel live, as on
+        // an enabled one, so its tooltip (saying why it's disabled) shows after the usual wait.
+        TEST_F(UICacheTest, ADisabledControlInACachedPanelShowsItsTooltip)
+        {
+            app.SetDrawCacheEnabled(true);
+            const ID disabledID = app.idManager.CreateStaticID();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    if (app.BeginCached(scopeID, app.theme.emptyVertStyleRef, 0, tachyon::LayoutOverride{}.Width(400).Height(300)))
+                    {
+                        app.BeginDisabled();
+                        app.Button(disabledID, "Publish", [] {});
+                        app.SetDisabledTooltip("Publish to asset store", "Sign in to enable publishing");
+                        app.EndDisabled();
+                    }
+                    app.EndCached();
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            const int2 at = app.CenterOf(disabledID);
+            frame();
+            ASSERT_FALSE(app.HasElement(disabledID)) << "test setup: the panel is clean";
+
+            app.InjectMouseMove(at);
+            bool shown = false;
+            for (int i = 0; i < 12 && !shown; ++i)
+            {
+                app.AdvanceTime(100);
+                frame();
+                shown = app.FindByText("Publish to asset store") != ID::Invalid();
+            }
+            EXPECT_TRUE(shown) << "the tooltip, without passing over another first";
+        }
+
+        // The pointer resting on a control in a cached panel: the frame its tooltip's wait ends
+        // in has no input, only the time, and still builds the control, which asks for it.
+        TEST_F(UICacheTest, ATooltipShowsWhenItsWaitEndsWithThePointerStill)
+        {
+            app.SetDrawCacheEnabled(true);
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    if (app.BeginCached(scopeID, app.theme.emptyVertStyleRef, 0, tachyon::LayoutOverride{}.Width(400).Height(300)))
+                    {
+                        app.Button(btnA, "A", [] {});
+                        app.SetTooltip(btnA, "A's tooltip");
+                    }
+                    app.EndCached();
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            app.InjectMouseMove(app.CenterOf(btnA));
+            for (int i = 0; i < 4; ++i) frame();   // the pointer comes to rest
+            ASSERT_EQ(app.FindByText("A's tooltip"), ID::Invalid()) << "test setup: still waiting";
+            // Then only the time passes, a frame when the wait is over.
+            app.AdvanceTime(int(app.tooltipManager.delaySeconds * 1000.0f) + 20);
+            frame();
+            EXPECT_NE(app.FindByText("A's tooltip"), ID::Invalid()) << "shown in the frame its wait ends";
+        }
+
         // A node view centers its nodes with last frame's canvas size. When the canvas
         // changes size on a frame its cached panel rebuilds anyway (here: a taller header
         // and a new signature), the panel must rebuild once more, or it keeps showing the

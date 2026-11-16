@@ -638,6 +638,15 @@ namespace tachyon
     static constexpr const wchar_t* kPrevWndProcProp = L"TachyonPrevWndProc";
     static constexpr const wchar_t* kSDLWindowProp   = L"TachyonSDLWindow";
 
+    // A layered window keeps showing its last picture, wherever it goes, until it gets a new
+    // one. This shows nothing until then: the next picture's UpdateLayeredWindow, fully opaque,
+    // brings it back.
+    static void ClearLayeredWindow(HWND hwnd)
+    {
+        BLENDFUNCTION clear{ .BlendOp = AC_SRC_OVER, .SourceConstantAlpha = 0, .AlphaFormat = AC_SRC_ALPHA };
+        UpdateLayeredWindow(hwnd, nullptr, nullptr, nullptr, nullptr, nullptr, 0, &clear, ULW_ALPHA);
+    }
+
     // The sizing frame's thickness; it stays outside the client area on the sides
     // and bottom, as under a native caption.
     static int SizingFrame(HWND hwnd, int metric)
@@ -1689,6 +1698,16 @@ namespace tachyon
         SDL_Window* sdl_window = ToSDL(h);
         if (!sdl_window) return false;
         const float k = OsPerPixel(sdl_window);
+#ifdef _WIN32
+        // A layered window resized has a new picture coming: until it comes it would show its
+        // last one, moved and stretched. Cleared now; its next picture brings it back. Moved at
+        // the same size (a drag ghost, whose picture stays), it's left showing.
+        if (const HWND layered = static_cast<HWND>(SDL_GetPointerProperty(SDL_GetWindowProperties(sdl_window),
+                                                                         SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
+            layered != nullptr && (GetWindowLongW(layered, GWL_EXSTYLE) & WS_EX_LAYERED) != 0
+            && GetWindowRect(h).size != clientRect.size)
+            ClearLayeredWindow(layered);
+#endif
         m_suppressLiveResize = true;
         SDL_SetWindowPosition(sdl_window, clientRect.x, clientRect.y);
         SDL_SetWindowSize(sdl_window, std::max(0, RoundToInt(clientRect.w * k)), std::max(0, RoundToInt(clientRect.h * k)));
@@ -1722,7 +1741,17 @@ namespace tachyon
         if (visible)
             ShowSDLWindowWithShadow(sdl_window);
         else
+        {
+#ifdef _WIN32
+            // A layered window keeps its last picture: shown again, it would show it until its
+            // next one comes. Clear while hidden; its next picture brings it back.
+            if (const HWND layered = static_cast<HWND>(SDL_GetPointerProperty(SDL_GetWindowProperties(sdl_window),
+                                                                             SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
+                layered != nullptr && (GetWindowLongW(layered, GWL_EXSTYLE) & WS_EX_LAYERED) != 0)
+                ClearLayeredWindow(layered);
+#endif
             SDL_HideWindow(sdl_window);
+        }
         m_suppressLiveResize = false;
     }
 

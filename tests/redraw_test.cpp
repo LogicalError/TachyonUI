@@ -177,9 +177,12 @@ namespace tachyon
         public:
             ID          windowID = ID::Invalid();
             ID          buttonID = ID::Invalid();
+            ID          textID   = ID::Invalid();   // has a tooltip, and no hover look of its own
+            int2        textCenter{ 0, 0 };
             std::string text     = "Hello";
             bool        spinner  = false;
             bool        still    = false;   // an element marked Animated that looks the same each frame
+            bool        cached   = false;   // the button in a cached scope, as a docked panel's
             int         builds   = 0;
             int         quitAfter = 0;            // quit at this many builds; 0: never
             std::atomic<bool> quitSoon = false;   // set from another thread: quit at the next build
@@ -192,9 +195,15 @@ namespace tachyon
                                 ElementFlags::WindowRenderToImage))
                 {
                     BeginVertical(LayoutOverride{}.FlexGrow(1));
-                    Text(idManager.AllocateDynamicID("text"), text);
-                    Button(buttonID, "Button", [] {});
-                    SetTooltip(buttonID, "A tooltip");
+                    Text(textID, text);
+                    SetTooltip(textID, "The text's tooltip");
+                    if (!cached || BeginCached(idManager.AllocateDynamicID("panel"), theme.emptyVertStyleRef, 0, LayoutOverride{}.Size(200, 60)))
+                    {
+                        Button(buttonID, "Button", [] {});
+                        SetTooltip(buttonID, "A tooltip");
+                    }
+                    if (cached)
+                        EndCached();
                     if (spinner)
                         Spinner(idManager.AllocateDynamicID("spinner"));
                     if (still)
@@ -217,8 +226,14 @@ namespace tachyon
                     return false;
                 windowID = idManager.CreateStaticID();
                 buttonID = idManager.CreateStaticID();
+                textID   = idManager.CreateStaticID();
                 m_frame.OnPostLayout([this](FrameContext&)
                 {
+                    if (const ElementRef text = elementStorage.FindElementRefByID(textID); text.IsValid())
+                    {
+                        const IntRect t = elementStorage.GetElementRectPtr(text)->rect;
+                        textCenter = { t.x + t.w / 2, t.y + t.h / 2 };
+                    }
                     const ElementRef ref = elementStorage.FindElementRefByID(buttonID);
                     if (!ref.IsValid()) return;
                     const IntRect r = elementStorage.GetElementRectPtr(ref)->rect;
@@ -431,6 +446,85 @@ namespace tachyon
             // ... and once it's up, a frame is needed.
             std::this_thread::sleep_for(std::chrono::duration<float>(until + 0.02f));
             EXPECT_TRUE(app.NeedsFrame());
+        }
+
+        // Left to itself, as Run is (asleep until a frame is needed), the app shows a first
+        // tooltip after its delay, not much later: in a window, and in a cached panel.
+        class RedrawTooltipTest : public RedrawTest, public ::testing::WithParamInterface<bool> {};
+        INSTANTIATE_TEST_SUITE_P(InACachedPanel, RedrawTooltipTest, ::testing::Bool());
+        TEST_P(RedrawTooltipTest, AFirstTooltipShowsAfterItsDelay)
+        {
+            app.cached = GetParam();
+            app.SetDrawCacheEnabled(GetParam());
+            auto shown = [&] {
+                for (auto it = app.elementStorage.TopDownDepthScanBegin(); it != app.elementStorage.TopDownDepthScanEnd(); ++it)
+                    for (const Element& e : it->GetChildren(app.elementStorage))
+                        if (e.textID != TextID::Invalid && app.textSystem->GetText(e.textID) == "A tooltip")
+                            return true;
+                return false;
+            };
+            app.Settle();
+            app.InjectMouseMove(app.windowID, app.buttonCenter);
+            const auto start = std::chrono::steady_clock::now();
+            const float delay = app.tooltipManager.delaySeconds;
+            double took = -1.0;
+            while (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < double(delay) * 4.0)
+            {
+                while (!app.NeedsFrame())
+                {
+                    const float until = app.SecondsUntilFrame();
+                    if (!std::isfinite(until)) break;
+                    std::this_thread::sleep_for(std::chrono::duration<float>(until));
+                }
+                if (!app.NeedsFrame()) break;   // nothing will ever come
+                app.Frame();
+                if (shown())
+                {
+                    took = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+                    break;
+                }
+            }
+            ASSERT_GE(took, 0.0) << "the tooltip never showed";
+            EXPECT_GE(took, double(delay) * 0.9);
+            EXPECT_LE(took, double(delay) + 0.25) << "it waited much longer than its delay";
+        }
+
+        // The pointer coming to rest on something with a tooltip but no hover look of its own:
+        // the frame that finds it there asks for the next, which starts the tooltip's wait, and
+        // that schedules the frame it shows in. Without that the app sleeps until some other
+        // event, and the tooltip comes seconds late.
+        TEST_F(RedrawTest, ATooltipsWaitStartsWithoutAHoverLook)
+        {
+            app.Settle();
+            app.InjectMouseMove(app.windowID, app.textCenter);
+            app.Settle();
+            ASSERT_EQ(app.guiStateManager.Interaction().GetHoveredID(), app.textID) << "test setup: the text is pointed at";
+            EXPECT_EQ(app.tooltipManager.GetActiveTargetID(), app.textID) << "its wait has started";
+            const float until = app.SecondsUntilFrame();
+            EXPECT_TRUE(std::isfinite(until)) << "a frame is scheduled for when it shows";
+            EXPECT_LE(until, app.tooltipManager.delaySeconds);
+        }
+
+        // A new popup (a first tooltip) is drawn a few frames before it shows: those frames are
+        // needed, or the app sleeps with it hidden until the pointer moves again.
+        TEST_F(RedrawTest, ANewPopupGetsTheFramesItWaitsToShow)
+        {
+            app.tooltipManager.delaySeconds = 0.0f;
+            auto shown = [&] {
+                for (auto it = app.elementStorage.TopDownDepthScanBegin(); it != app.elementStorage.TopDownDepthScanEnd(); ++it)
+                    for (const Element& e : it->GetChildren(app.elementStorage))
+                        if (e.textID != TextID::Invalid && app.textSystem->GetText(e.textID) == "The text's tooltip")
+                            return true;
+                return false;
+            };
+            app.Settle();
+            app.InjectMouseMove(app.windowID, app.textCenter);
+            for (int i = 0; i < 10 && !shown(); ++i)
+                app.Frame();
+            ASSERT_TRUE(shown()) << "test setup: the tooltip is built";
+            EXPECT_TRUE(app.NeedsFrame()) << "its new window waits a few frames to show";
+            app.Settle();
+            EXPECT_FALSE(app.windowManager->IsFading()) << "shown by the time the frames stop";
         }
 
         // An OS event (here a wake) asks for a frame; the frame takes it, so none after.
