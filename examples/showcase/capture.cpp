@@ -75,6 +75,7 @@ namespace tachyon
             { "FrozenTable",  CaptureScene::Panel, "FrozenTable" },
             { "Reorderable",  CaptureScene::Panel, "Reorderable" },
             { "Misc",         CaptureScene::Panel, "Misc" },
+            { "Build",        CaptureScene::Panel, "Build" },
             { "BoxTest",      CaptureScene::Panel, "BoxTest" },
             { "Sketch",       CaptureScene::Panel, "Sketch" },
             { "Tooltip",        CaptureScene::Panel, "Inspector", CaptureAct::Hover,      CaptureTarget::Text, "Click me" },
@@ -85,10 +86,10 @@ namespace tachyon
             { "ContextMenu",    CaptureScene::Panel, "Inspector", CaptureAct::RightClick, CaptureTarget::Text, "Click me" },
             { "ColorPicker",    CaptureScene::Panel, "Inspector", CaptureAct::Click,      CaptureTarget::ColorSwatch },
             { "GradientEditor", CaptureScene::Panel, "Inspector", CaptureAct::Click,      CaptureTarget::GradientSwatch },
-            { "TasksPopover",   CaptureScene::Panel, "Misc",      CaptureAct::Click,      CaptureTarget::TasksPill },
             { "Main",       CaptureScene::Main },
             { "MenuFile",   CaptureScene::Main, nullptr, CaptureAct::Click, CaptureTarget::Text, "File" },
             { "MenuEdit",   CaptureScene::Main, nullptr, CaptureAct::Click, CaptureTarget::Text, "Edit" },
+            { "TasksPopover", CaptureScene::Main, nullptr, CaptureAct::Click, CaptureTarget::TasksPill },
             { "MessageBox", CaptureScene::Main, nullptr, CaptureAct::ExitDialog },
             { "Toasts",     CaptureScene::Main, nullptr, CaptureAct::Toasts },
             { "States",         CaptureScene::States,   nullptr, CaptureAct::Settle },
@@ -602,10 +603,11 @@ namespace tachyon
                 TACHYON_LOG_ERROR(kLogCapture, "{}: nothing to act on", shot.name);
                 c.frames = kFramesPerPanel + kFramesActing;
             }
-            else if (c.frames == kFramesPerPanel && c.target.y + c.target.h > size.y - styleManager.Px(320) && c.scrollID != ID::Invalid())
+            else if (c.frames == kFramesPerPanel && shot.scene == CaptureScene::Panel
+                     && c.target.y + c.target.h > size.y - styleManager.Px(320) && c.scrollID != ID::Invalid())
             {
                 // Out of view, or with no room under it for what it opens: scrolled up to
-                // near the top, and found again.
+                // near the top, and found again. A window's own (the status bar's pill) stays.
                 auto& scrolling = guiStateManager.GetScrollManagement();
                 const auto handle = scrolling.GetOrCreateScrollOffsetHandle(c.scrollID);
                 const int2 offset = scrolling.GetScrollOffset(handle);

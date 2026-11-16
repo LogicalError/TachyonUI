@@ -1116,3 +1116,154 @@
 }
 .text-shadow-sample { text-shadow: 1px 2px 3px #00000099; }
 .text-glow-sample   { text-shadow: 0 0 5px var(--accent); }
+
+/* ---- Progress, where the work happens ---------------------------------------- */
+/* The Build panel: the target, its steps, and Cancel and Build under a line. */
+.build-panel {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 16px;
+    margin: 0px;
+    padding: 14px 16px;
+    border-width: 0px;
+    background-color: transparent;
+}
+.build-header {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+}
+.build-title, .build-subtitle {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    font-weight: 600;
+    text-wrap: nowrap;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+.build-subtitle { color: var(--text-3); font-size: 11px; font-weight: 400; }
+.build-footer {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin: 0px;
+    padding: 14px 0px 0px 0px;
+    border-width: 1px 0px 0px 0px;
+    border-color: var(--line-subtle);
+    background-color: transparent;
+}
+/* The viewport while its shaders compile: a segment sliding along its top edge, and a pill
+   at the top with a spinner and the work's name. */
+.viewport-busy-bar {
+    height: 2px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: 1px;
+    background-color: transparent;
+    border-color: transparent;
+}
+.viewport-busy-pill {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    height: 28px;
+    margin: 0px;
+    padding: 0px 14px 0px 10px;
+    border-width: 1px;
+    border-radius: 14px;
+    border-color: var(--line-subtle);
+    background-color: var(--bg-panel);
+    box-shadow: var(--shadow-popup);
+}
+.viewport-busy-text {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-1);
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+    vertical-align: middle;
+}
+/* The Files panel's import: the tile of the file coming in, its ring on a dimmed well. */
+.files-import-tile {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 0px;
+    padding: 8px 4px;
+    border-width: 0px;
+    border-radius: var(--radius-lg);
+    background-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.files-import-well {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    border-radius: var(--radius-lg);
+    background-color: var(--bg-active);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.files-import-name {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: var(--font-size);
+    text-wrap: nowrap;
+}
+/* The hierarchy: "streaming" and its spinner at the end of a row, and a row still loading. */
+.hierarchy-streaming {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    margin: 0px;
+    padding: 0px 8px 0px 0px;
+    border-width: 0px;
+    background-color: transparent;
+}
+.hierarchy-skeleton-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0px;
+    padding: 0px 4px;
+    border-width: 0px;
+    background-color: transparent;
+}

@@ -71,7 +71,12 @@ namespace tachyon
         RenderToolbarDock(*this, toolbars.dockState, toolbars.sides, toolbarCallbacks,
             [this]()
             {
-                Viewport(idManager.AllocateDynamicID("scene"), scene, LayoutOverride{}.FlexGrow(1));
+                const ID viewportID = idManager.AllocateDynamicID("scene");
+                Viewport(viewportID, scene, LayoutOverride{}.FlexGrow(1));
+                // Its width, for the busy bar along its top next frame.
+                if (const ElementRef ref = elementStorage.FindElementRefByID(viewportID); ref.IsValid())
+                    VERIFY(elementStorage.AddPostLayout(ref, [this](PostLayoutContext& ctx) { viewportBusyWidth = ctx.ElementRect().w; }));
+                RenderViewportBusy(viewportID);
                 // The gizmo moves the selection; the shape follows it, during the drag too.
                 if (sceneSelected >= 0 && sceneSelected < (int)sceneObjects.size())
                     sceneObjects[size_t(sceneSelected)].transform = scene.selection;

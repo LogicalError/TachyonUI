@@ -299,8 +299,11 @@ namespace tachyon
     {
         auto panel = std::make_shared<FilesPanel>();
         m_filesPanels.push_back(panel);
-        return CreatePanel(panels, std::move(title), showcase.panelFilesIcon, [this, panel] { RenderFilesPanel(*panel); }, {},
-                           [this, panel] { EnableFilesPanel(*panel); }, [this, panel] { DisableFilesPanel(*panel); });
+        const ID id = CreatePanel(panels, std::move(title), showcase.panelFilesIcon, [this, panel] { RenderFilesPanel(*panel); }, {},
+                                  [this, panel] { EnableFilesPanel(*panel); }, [this, panel] { DisableFilesPanel(*panel); });
+        // Rebuilt as an import goes on: its bar and its tile's ring show how far.
+        panels[id].cacheSignature = [this]() -> std::optional<uint64_t> { return ProgressLook(); };
+        return id;
     }
 
     void Application::MoveFileInto(FilesPanel& p, uintptr_t payload, const std::string& folder)
@@ -683,6 +686,41 @@ namespace tachyon
                        },
                        tachyon::LayoutOverride{}.FlexGrow(1));
 
+            // An import: its progress here, its tile in the grid; otherwise the button to start one.
+            const float imported = ImportElapsed();
+            if (imported < 0.0f)
+            {
+                Button(idManager.AllocateDynamicID("filesImport"), GUIContent(showcase.downloadIcon, {}, "Import character.fbx"),
+                       [this] {
+                           progress.importStart       = guiStateManager.Interaction().GetFrameTime();
+                           progress.importCancelledAt = -1.0f;
+                       }, theme.iconButtonStyleRef);
+            }
+            else
+            {
+                const LayoutOverride block = LayoutOverride{}.Width(Pixels{ styleManager.Px(200) }).NoGrow().NoShrink();
+                const ID importID = idManager.AllocateDynamicID("filesImportProgress");
+                if (progress.importCancelledAt >= 0.0f)
+                    TaskProgress(importID, ProgressTask{ .name = "Import cancelled", .value = imported / ProgressDemos::kImportSecs,
+                                                         .state = TaskState::Failed,
+                                                         .onRetry = [this] {
+                                                             progress.importStart       = guiStateManager.Interaction().GetFrameTime();
+                                                             progress.importCancelledAt = -1.0f;
+                                                         } },
+                                 LayoutOverride(block));
+                else if (imported < ProgressDemos::kImportSecs)
+                {
+                    TaskProgress(importID, ProgressTask{ .name = "Importing character.fbx", .value = imported / ProgressDemos::kImportSecs,
+                                                         .onCancel = [this] { progress.importCancelledAt = ImportElapsed(); } },
+                                 LayoutOverride(block));
+                }
+                else
+                {
+                    TaskProgress(importID, ProgressTask{ .name = "Import complete", .state = TaskState::Done, .note = "6.0 s" },
+                                 LayoutOverride(block));
+                }
+            }
+
             if (SearchField(idManager.AllocateDynamicID("filesSearch"), p.filesSearch, { showcase.findIcon, "Search" },
                             TextEditBehavior::ContinuousUpdate,
                             tachyon::LayoutOverride{}.Width(150).NoGrow()))
@@ -719,10 +757,25 @@ namespace tachyon
         const tachyon::int2 cellSize = listMode ? tachyon::int2{ 1 << 20, rowH }
                                             : tachyon::int2{ cellW, cellH };
         p.gridItemIDs.clear();
+        // The file being imported comes last, its ring showing how far, until it's in.
+        const float imported = ImportElapsed();
+        const bool  importing = !listMode && imported >= 0.0f && progress.importCancelledAt < 0.0f
+                             && imported < ProgressDemos::kImportSecs;
         VirtualGridView(idManager.AllocateDynamicID("filesGrid"), p.gridScrollState,
-                        static_cast<int>(p.gridEntries.size()), cellSize,
-                        [this, &p, listMode, itemStyleFor, cellW, cellH, rowH](int i, tachyon::ID itemID)
+                        static_cast<int>(p.gridEntries.size()) + (importing ? 1 : 0), cellSize,
+                        [this, &p, listMode, itemStyleFor, cellW, cellH, rowH, imported](int i, tachyon::ID itemID)
                         {
+                            if (i == int(p.gridEntries.size()))
+                            {
+                                BeginVertical(itemID, filesImportTileStyleRef,
+                                              LayoutOverride{}.Size(Pixels{ std::max(cellW, int(p.gridScrollState.cellStretchedW)) }, Pixels{ cellH }));
+                                BeginVertical(idManager.AllocateDynamicID("filesImportWell"), filesImportWellStyleRef);
+                                CircularProgress(idManager.AllocateDynamicID("filesImportRing"), imported / ProgressDemos::kImportSecs);
+                                EndVertical();
+                                Text(idManager.AllocateDynamicID("filesImportName"), "character.fbx", filesImportNameStyleRef);
+                                EndVertical();
+                                return;
+                            }
                             if (i < 0 || i >= int(p.gridEntries.size())) return;
                             FilesPanel::GridEntry& entry = p.gridEntries[size_t(i)];
                             p.gridItemIDs.emplace_back(itemID, i);

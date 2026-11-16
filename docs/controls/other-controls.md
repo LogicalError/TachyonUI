@@ -115,7 +115,7 @@ A faint ring with an arc going round it, a turn every 0.8 s.
 void Spinner(ID id, SpinnerSize size = SpinnerSize::Medium, LayoutOverride&& constraints = {});
 ```
 
-- `SpinnerSize::Small`, `Medium` and `Large` are 12, 16 and 24px across.
+- `SpinnerSize::Small`, `Medium` and `Large` are 12, 16 and 18px across.
 - A width or height in `constraints` overrides the size.
   - The ring scales to fit the space it gets.
 - The colors are `theme.progressTrackColor` (the ring) and `theme.progressArcColor` (the
@@ -139,7 +139,7 @@ void CircularProgress(ID id, float value, StyleRef style, LayoutOverride&& const
 ```
 
 - The percentage is rounded down, so it only shows 100 once the work is done.
-- The theme's is 40px across.
+- The theme's is 36px across.
 
 ```cpp
 CircularProgress(uploadDone);
@@ -190,6 +190,7 @@ every frame from your own state.
 | `detail` | A line under the bar: "12.4 MB of 19.3 MB". Once failed, why it failed |
 | `onCancel` | Set it to get a cancel button while the work runs or is paused |
 | `onRetry` | Set it to get a Retry button once the work failed |
+| `onPause` | In `BackgroundTasks`: set it to get a pause button while the work runs, and a resume button while it's paused. Flip the task's `state` in it |
 
 - The texts are only read during the call, so they can point at temporary strings.
 - `Paused` draws the bar in the warning color and says "paused".
@@ -215,7 +216,7 @@ void TaskProgress(ID id, const ProgressTask& task, LayoutOverride&& constraints 
   - an error icon before the name
   - the bar in the error color
   - the reason in error text
-  - a Retry button in place of the percent
+  - a Retry button, with a turning arrow, in place of the percent
 - Done: one line with a check, the name and the note, such as how long it took. No bar.
 
 ```cpp
@@ -249,26 +250,30 @@ The steps of a longer job, one per row.
 void ProgressSteps(ID id, std::span<const ProgressTask> steps, LayoutOverride&& constraints = {});
 ```
 
-- Each row starts with a 16px glyph for the step's state:
+- Each step's line starts with an 18px glyph for its state:
   - done: a check on a green disc
   - running: a spinner
   - pending: a dashed ring (in the warning color when paused)
-  - failed: a cross on a red disc
+  - failed: a cross on a red disc, and "failed" at the end of the line
 - A pending step's name is dimmed.
-- The running step has a 4px bar under its name.
-- The note (or the running step's percent) is at the end of the row.
+- The note (or the running step's percent) is at the end of the line.
+- Under the running step, in line with the names:
+  - a 4px bar, as wide as the list
+  - its `detail`, such as "Lightmap atlas, about 1 min left"
 
 ```cpp
 const ProgressTask steps[] = {
     { .name = "Compile scripts", .state = TaskState::Done, .note = "4.2 s" },
-    { .name = "Bake lighting",   .value = 0.42f, .state = TaskState::Running },
+    { .name = "Bake lighting",   .value = 0.42f, .state = TaskState::Running,
+      .detail = "Lightmap atlas, about 1 min left" },
     { .name = "Package assets",  .state = TaskState::Pending },
 };
 ProgressSteps(steps);
 ```
 
-Classes: `progress-steps`, `progress-step`, `progress-step-body`, `progress-step-name`,
-`progress-step-pending`, and the glyphs `progress-step-done`, `progress-step-failed`,
+Classes: `progress-steps`, `progress-step`, `progress-step-header` (a step's line),
+`progress-step-body` (the bar and detail under it), `progress-step-name`, `progress-step-pending`,
+`progress-step-error` ("failed"), and the glyphs `progress-step-done`, `progress-step-failed`,
 `progress-step-waiting`, `progress-step-paused`.
 
 ### StatusProgress
@@ -293,14 +298,17 @@ Classes: `status-progress`, `status-text` (the name), `status-text-mono` (the no
 A pill such as "3 tasks", for a status bar, that opens a popover listing the work running
 in the background.
 
+- Its chevron points up, where the popover opens, and down while it's open.
+
 ```cpp
 bool BackgroundTasks(ID id, std::span<const ProgressTask> tasks, LayoutOverride&& constraints = {});
 ```
 
 - A click on the pill opens the popover above it, and another click closes it.
   - So does a click anywhere else, or Escape.
-- Each row shows the task's name, a 4px bar, its percent or state, and a cancel button
-  when `onCancel` is set.
+- Each row shows the task's name, a 4px bar, its percent or state, and then:
+  - a pause button while it runs, or a resume button while it's paused, when `onPause` is set
+  - a cancel button when `onCancel` is set
 - It shows nothing while `tasks` is empty.
 - It returns whether the popover is open.
 
@@ -311,7 +319,7 @@ BackgroundTasks(backgroundTasksID, backgroundTasks);   // member: std::vector<Pr
 EndStatusBar();
 ```
 
-Classes: `tasks-pill`, `tasks-popover`, `tasks-popover-header`, `tasks-popover-title`,
+Classes: `tasks-pill`, `task-progress-pause`, `tasks-popover`, `tasks-popover-header`, `tasks-popover-title`,
 `tasks-popover-count`, `tasks-row`, `tasks-row-body`, `tasks-row-state`.
 
 ### Moving parts in your own controls

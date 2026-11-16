@@ -830,6 +830,19 @@ namespace tachyon
         stateMachineStatusStyleRef  = theme.GetStyle("state-machine-status");
         statusDotOkStyleRef         = theme.GetStyle("status-dot-ok");
         sketchPadStyleRef           = theme.GetStyle("sketch-pad");
+        buildPanelStyleRef          = theme.GetStyle("build-panel");
+        buildHeaderStyleRef         = theme.GetStyle("build-header");
+        buildTitleStyleRef          = theme.GetStyle("build-title");
+        buildSubtitleStyleRef       = theme.GetStyle("build-subtitle");
+        buildFooterStyleRef         = theme.GetStyle("build-footer");
+        viewportBusyBarStyleRef     = theme.GetStyle("viewport-busy-bar");
+        viewportBusyPillStyleRef    = theme.GetStyle("viewport-busy-pill");
+        viewportBusyTextStyleRef    = theme.GetStyle("viewport-busy-text");
+        filesImportTileStyleRef     = theme.GetStyle("files-import-tile");
+        filesImportWellStyleRef     = theme.GetStyle("files-import-well");
+        filesImportNameStyleRef     = theme.GetStyle("files-import-name");
+        hierarchyStreamingStyleRef  = theme.GetStyle("hierarchy-streaming");
+        hierarchySkeletonRowStyleRef = theme.GetStyle("hierarchy-skeleton-row");
         {
             const char* kSideTag[4]   = { "left", "right", "top", "bottom" };
             const char* kVAlignTag[3] = { "top",  "mid",   "bot" };
@@ -1223,6 +1236,7 @@ namespace tachyon
 				showcase.panelSettingsIcon   = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/sliders-horizontal.svg").c_str());
 				showcase.panelViewportIcon   = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/monitor.svg").c_str());
                 showcase.panelMiscIcon       = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/layout-grid.svg").c_str());
+                showcase.panelBuildIcon      = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/hammer.svg").c_str());
                 
 				showcase.objectIcon          = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/box.svg").c_str());
 				showcase.object2Icon         = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/shapes.svg").c_str());
@@ -1553,6 +1567,7 @@ namespace tachyon
         if (title == "Table")       return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderTablePanel(); });
         if (title == "FrozenTable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderSplitScrollPanel(); });
         if (title == "Reorderable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderReorderablePanel(); });
+        if (title == "Build")       return CreatePanel(panels, name, showcase.panelBuildIcon, [this] { RenderBuildPanel(); });
         if (title == "Sketch")
         {
             // The pen's readout changes with every move: never cached.
@@ -1627,7 +1642,7 @@ namespace tachyon
                     Tabs({ "Hierarchy" }),
                     Split("RightPinned", 540,
                         Tabs({ "NodeView", "StateMachine", "Viewport", "Settings" }),
-                        Tabs({ "Profiler", "Inspector", "Reorderable", "Misc", "BoxTest", "TreeTable", "Table", "FrozenTable", "Sketch" }))),
+                        Tabs({ "Profiler", "Inspector", "Build", "Reorderable", "Misc", "BoxTest", "TreeTable", "Table", "FrozenTable", "Sketch" }))),
                 Split("LeftPinned", 500, Tabs({ "Files" }), Tabs({ "Log", "Timeline", "Curves" })),
                 120, 160));
         presets.AddBuiltIn("Scene",
@@ -1927,7 +1942,7 @@ namespace tachyon
         documents.newTabMenu = [this](DockingLayout& layout, ID leafNodeID) {
             static constexpr std::string_view kPanels[] = {
                 "Hierarchy", "Inspector", "Viewport", "NodeView", "StateMachine", "Files", "Log", "Timeline", "Curves",
-                "Profiler", "Settings", "Table", "TreeTable", "FrozenTable", "Reorderable", "Sketch", "BoxTest", "Misc" };
+                "Profiler", "Settings", "Build", "Table", "TreeTable", "FrozenTable", "Reorderable", "Sketch", "BoxTest", "Misc" };
             for (const std::string_view title : kPanels)
                 MenuItem(title, [this, &layout, leafNodeID, title] {
                     (void)AddPanelToLeaf(layout.root.get(), leafNodeID, CreateShowcasePanel(layout, title));
@@ -2058,8 +2073,8 @@ namespace tachyon
             showcase.closingDocument = nullptr;
     }
 
-    // Status bar: the state and the renderer on the left, the frame time and the theme on the
-    // right. The title bar's tabs name the active document.
+    // Status bar: the state, the renderer and the frame time on the left, the work under way
+    // on the right. The title bar's tabs name the active document.
     void Application::RenderStatusBar()
     {
         const std::array<FrameTimingSample, kFrameHistoryCount>& history = frameTimings;
@@ -2076,9 +2091,11 @@ namespace tachyon
         EndHorizontal();
         const std::string_view gpu = graphicsContext->GetDeviceName();
         const std::string_view api = graphicsContext->GetAPI() == GraphicsAPI::Vulkan ? "Vulkan" : "No GPU";
-        StatusText(gpu.empty() ? std::string(api) : std::format("{} \u00B7 {}", api, gpu), LayoutOverride::Auto().FlexGrow(1));
-        StatusText(std::format("{:.2f} ms \u00B7 {:.0f} fps", frameMs, frameMs > 0.0f ? 1000.0f / frameMs : 0.0f));
-        StatusText(GetThemePath());
+        StatusText(gpu.empty() ? std::string(api) : std::format("{} \u00B7 {}", api, gpu));
+        StatusText(std::format("{:.2f} ms \u00B7 {:.0f} fps", frameMs, frameMs > 0.0f ? 1000.0f / frameMs : 0.0f),
+                   LayoutOverride::Auto().FlexGrow(1));
+        // At the far right, where the frame time changing doesn't move them: the work under way.
+        RenderStatusProgress();
         EndStatusBar();
     }
 
@@ -2101,6 +2118,13 @@ namespace tachyon
         AdvanceTimeline(animation.playback,
                         TimelineOptions{ .duration = animation.duration, .fps = animation.fps, .loopRange = animation.loopRange },
                         frameTime);
+        // What runs at startup runs from the first frame; captures hold each at one moment.
+        if (progress.startedAt < 0.0f)
+            progress.startedAt = guiStateManager.Interaction().GetFrameTime();
+        progress.held = !m_captureDir.empty();
+        // An import shows no spinner: its next percent needs a frame.
+        if (ImportElapsed() >= 0.0f)
+            RequestRedrawIn(0.1f);
         if (!m_captureDir.empty())
         {
             RenderCapture();

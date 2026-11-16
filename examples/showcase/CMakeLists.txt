@@ -40,6 +40,7 @@ tachyon_add_example(showcase
   panel_hierarchy.cpp
   panel_inspector.cpp
   panel_misc.cpp
+  progress_demos.cpp
   panel_node_view.cpp
   panel_state_machine.cpp
   capture.cpp

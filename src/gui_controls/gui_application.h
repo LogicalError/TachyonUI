@@ -744,13 +744,13 @@ namespace tachyon
         inline void IndeterminateProgressBar(LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { IndeterminateProgressBar(idManager.AllocateDynamicID(site), theme.progressBarStyleRef, std::move(constraints)); }
 
         /// A ring with an arc going round it, a turn every 0.8 s, in the theme's track and
-        /// accent colors: work under way. 12, 16 or 24px across unless `constraints` say.
+        /// accent colors: work under way. 12, 16 or 18px across unless `constraints` say.
         void        Spinner(ID id, SpinnerSize size = SpinnerSize::Medium, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
         inline void Spinner(SpinnerSize size = SpinnerSize::Medium, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { Spinner(idManager.AllocateDynamicID(site), size, std::move(constraints)); }
 
         /// A ring filled `value` (0 to 1, clamped) of the way round, clockwise from the top,
-        /// the percentage in its middle. The theme's is 40px across.
+        /// the percentage in its middle. The theme's is 36px across.
         void        CircularProgress(ID id, float value, StyleRef style, LayoutOverride&& constraints = {});
         /// As above, in the theme's style.
         inline void CircularProgress(ID id, float value, LayoutOverride&& constraints = {}) { CircularProgress(id, value, theme.circularProgressStyleRef, std::move(constraints)); }
@@ -769,14 +769,15 @@ namespace tachyon
         /// A piece of work in full: its name and percent (or `note`) over its bar, a cancel
         /// button when `onCancel` is set, and `detail` under it. Failed: the error icon, the bar
         /// in the error color, the reason in error text and a Retry button when `onRetry` is
-        /// set. Done: a check, the name and `note` (how long it took) on one line.
+        /// set, with a turning arrow. Done: a check, the name and `note` (how long it took) on one line.
         void        TaskProgress(ID id, const ProgressTask& task, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
         inline void TaskProgress(       const ProgressTask& task, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { TaskProgress(idManager.AllocateDynamicID(site), task, std::move(constraints)); }
 
         /// The steps of a longer job, one a row: a glyph for its state (a check once done, a
-        /// spinner while running, a dashed ring while pending), its name, a small bar under the
-        /// running one, and its `note` (or percent) at the end.
+        /// spinner while running, a dashed ring while pending, a cross and "failed" once failed),
+        /// its name, and its `note` (or percent) at the end of the line; under the running one, a
+        /// small bar and its `detail`, in line with the names.
         void        ProgressSteps(ID id, std::span<const ProgressTask> steps, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
         inline void ProgressSteps(       std::span<const ProgressTask> steps, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { ProgressSteps(idManager.AllocateDynamicID(site), steps, std::move(constraints)); }
@@ -787,7 +788,7 @@ namespace tachyon
         /// As above, with the call site as the ID.
         inline void StatusProgress(       const ProgressTask& task, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { StatusProgress(idManager.AllocateDynamicID(site), task, std::move(constraints)); }
 
-        /// A "3 tasks" pill, for a status bar, that opens a popover listing `tasks`: each with its
+        /// A "3 tasks" pill with a chevron, for a status bar, that opens a popover listing `tasks`: each with its
         /// name, a small bar, its percent or state and a cancel button when `onCancel` is set.
         /// Shows nothing while `tasks` is empty. Returns whether the popover is open.
         bool        BackgroundTasks(ID id, std::span<const ProgressTask> tasks, LayoutOverride&& constraints = {});
