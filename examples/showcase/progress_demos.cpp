@@ -151,6 +151,24 @@ namespace tachyon
         EndVertical();
     }
 
+    std::vector<Application::RunningTask> Application::RunningWork()
+    {
+        std::vector<RunningTask> running;
+        const auto percent = [](float value) { return std::format("{}%", int(std::clamp(value, 0.0f, 1.0f) * 100.0f)); };
+        if (BuildRunning())
+            running.push_back({ "Build Windows player", percent(BuildElapsed() / kBuildSecs) });
+        const float indexed = ProgressElapsed(progress.startedAt, kIndexingHeld) / kIndexingSecs;
+        const float thumbs  = ProgressElapsed(progress.startedAt, kThumbnailsHeld) / kThumbnailsSecs;
+        if (!progress.backgroundCancelled[0] && indexed < 1.0f) running.push_back({ "Indexing assets", percent(indexed) });
+        if (!progress.backgroundCancelled[1] && thumbs < 1.0f)  running.push_back({ "Generate thumbnails", percent(thumbs) });
+        const bool  uploading = progress.uploadResumedAt >= 0.0f && !progress.held;
+        const float uploaded  = uploading ? progress.uploadDone + ProgressElapsed(progress.uploadResumedAt, 0.0f) / ProgressDemos::kUploadSecs
+                                          : progress.uploadDone;
+        if (!progress.backgroundCancelled[2] && uploaded < 1.0f)
+            running.push_back({ "Upload build", uploading ? percent(uploaded) : std::string("paused") });
+        return running;
+    }
+
     void Application::RenderStatusProgress()
     {
         const float indexed = ProgressElapsed(progress.startedAt, kIndexingHeld) / kIndexingSecs;

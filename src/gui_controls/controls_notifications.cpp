@@ -92,6 +92,7 @@ namespace tachyon
     {
         const float now = guiStateManager.Interaction().GetFrameTime();
         const float dt  = m_toastsTime < 0.0f ? 0.0f : std::max(0.0f, now - m_toastsTime);
+        const float lastToasts = m_toastsTime;
         m_toastsTime = now;
         const bool reduced = IsReducedMotion();
 
@@ -134,13 +135,18 @@ namespace tachyon
         if (folded == 0 && count <= kToastsShown)
             m_toastsExpanded = false;
 
+        // In the window's bottom-right corner, or just above its status bar: one built this
+        // frame, or the last one if this window builds it after the toasts.
         const ID windowID = windowRegistry.GetCurrentWindowID();
         const int32_t inset = styleManager.Px(kToastInset);
+        LayoutOverride corner = LayoutOverride{}.Anchored(windowID, AnchorPlacement::InsideRight | AnchorPlacement::InsideBottom, -inset, -inset);
+        if (const auto bar = m_statusBars.find(windowID); bar != m_statusBars.end() && bar->second.builtAt >= lastToasts)
+            corner = LayoutOverride{}.Anchored(bar->second.id, AnchorPlacement::InsideRight | AnchorPlacement::OutsideTop, -inset, -inset);
         const ElementRef stackRef = RegisterElement(
             tachyon::Element{ .id = m_toastStackID, .styleRef = theme.toastStackStyleRef,
                               .flags = ElementFlags::PropagatesDescendantState,
                               .state = guiStateManager.GetCurrentState(m_toastStackID) },
-            LayoutOverride{}.Anchored(windowID, AnchorPlacement::InsideRight | AnchorPlacement::InsideBottom, -inset, -inset));
+            std::move(corner));
         VERIFY(elementStorage.BeginChildren());
         [[maybe_unused]] const bool pushed = idManager.PushParent(m_toastStackID);
 
@@ -173,7 +179,8 @@ namespace tachyon
             [[maybe_unused]] const bool inToast = idManager.PushParent(toast.id);
 
             const int severity = std::clamp(int(desc.severity), 0, 3);
-            RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("circle"), .iconID = SeverityIcon(theme, desc.severity),
+            const IconID icon = desc.icon != IconID::Invalid ? desc.icon : SeverityIcon(theme, desc.severity);
+            RegisterElement(tachyon::Element{ .id = idManager.AllocateDynamicID("circle"), .iconID = icon,
                                               .styleRef = theme.toastCircleStyleRefs[severity], .flags = ElementFlags::NoInput },
                             LayoutOverride{});
 

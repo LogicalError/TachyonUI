@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <format>
 #include <memory>
 #include <optional>
 #include <unordered_set>
@@ -405,6 +406,14 @@ namespace tachyon
                 p.folderTreeState.selectedRowID = tachyon::ID::Invalid();   // re-selected from currentFolder
                 p.treeDirty       = true;
                 p.gridFilterDirty = true;
+                return;
+            }
+            // A compiled shader isn't a document: the showcase says it couldn't open it.
+            if (entry->file.name.ends_with(".spv"))
+            {
+                showcase.openErrorFile    = entry->file.name;
+                showcase.openErrorDetails = std::format("No reader for .spv files (compiled SPIR-V shaders)\n  at {}", JoinPath(p.currentFolder, entry->file.name));
+                showcase.openErrorWindow  = p.windowID;
                 return;
             }
             OpenFileAsDocument(DocumentsOfWindow(p.windowID), entry->file.name, FileIcon(p, entry->file));

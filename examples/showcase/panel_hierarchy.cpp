@@ -1,6 +1,8 @@
 #include "application.h"
 #include <gui_controls/gui_tree_utils.h>
 
+#include <algorithm>
+#include <format>
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
@@ -27,6 +29,8 @@ namespace tachyon
     struct HierarchyPanel
     {
         IDManager* ids = nullptr;   // the rows' static IDs come from it, and go back to it
+        std::weak_ptr<HierarchyPanel> self;   // what a question about it holds on to
+        tachyon::ID windowID = tachyon::ID::Invalid();   // the window it was last built in, which asks about it
 
         ~HierarchyPanel()
         {
@@ -229,6 +233,7 @@ namespace tachyon
     ID Application::CreateHierarchyPanel(std::unordered_map<ID, Panel>& panels, std::string title)
     {
         auto panel = std::make_shared<HierarchyPanel>();
+        panel->self = panel;
         const ID id = CreatePanel(panels, std::move(title), showcase.panelHierarchyIcon,
                                   [this, panel] {
                                       RenderHierarchyPanel(*panel);
@@ -277,7 +282,61 @@ namespace tachyon
     void Application::HierarchyDeleteSelected()
     {
         if (const std::shared_ptr<HierarchyPanel> p = focusedHierarchy.lock())
-            p->DeleteNodes(p->SelectedNodes());
+            RequestHierarchyDelete(*p, p->SelectedNodes());
+    }
+
+    void Application::RequestHierarchyDelete(HierarchyPanel& p, std::vector<ID> nodes)
+    {
+        if (nodes.size() < 2 || showcase.deleteDontAsk)
+        {
+            p.DeleteNodes(nodes);
+            return;
+        }
+        showcase.deleteNames.clear();
+        for (const ID node : nodes)
+            if (const auto it = p.idToFlat.find(node); it != p.idToFlat.end())
+                showcase.deleteNames.push_back(p.treeRows[size_t(it->second)].name);
+        showcase.deleteNodes = std::move(nodes);
+        showcase.deletePanel = p.self;
+        showcase.deleteWindow = p.windowID;
+    }
+
+    void Application::AskBeforeDeleting(ID window)
+    {
+        // Asked in the window the panel is in; from a panel torn off into a window of its own,
+        // in the main window.
+        const bool documentWindow = showcase.deleteWindow == showcase.windowLayoutID2
+            || std::any_of(showcase.documentWindows.begin(), showcase.documentWindows.end(),
+                           [this](const auto& w) { return w->windowID == showcase.deleteWindow; });
+        if (window != (documentWindow || progress.held ? showcase.deleteWindow : showcase.windowLayoutID2))
+            return;
+        // Captures ask about no panel's objects.
+        const std::shared_ptr<HierarchyPanel> p = showcase.deletePanel.lock();
+        if ((!p && !progress.held) || showcase.deleteNodes.empty())
+        {
+            showcase.deleteNodes.clear();
+            return;
+        }
+        const size_t count = showcase.deleteNodes.size();
+        const std::string title = std::format("Delete {} objects?", count);
+        const std::string label = std::format("Delete {} objects", count);
+        const MessageButton buttons[] = {
+            { .label = "Cancel" },
+            { .label = label, .kind = MessageButtonKind::Danger },
+        };
+        std::vector<MessageDialogItem> items;
+        for (const std::string& name : showcase.deleteNames)
+            items.push_back({ .name = name });
+        const int choice = MessageDialog(showcase.deleteDialogID, MessageDialogDesc{
+            .icon = MessageIcon::Warning, .title = title,
+            .message = "They're removed from the scene, with everything under them. This can't be undone.",
+            .buttons = buttons, .defaultButton = 0, .cancelButton = 0, .items = items, .dontAskAgain = &showcase.deleteDontAsk });
+        if (choice == 1 && p)
+            p->DeleteNodes(showcase.deleteNodes);
+        else if (choice == 0)
+            showcase.deleteDontAsk = false;   // kept: it asks again next time
+        if (choice >= 0)
+            showcase.deleteNodes.clear();
     }
 
     void Application::EnableHierarchyPanel(HierarchyPanel& p)
@@ -376,6 +435,7 @@ namespace tachyon
 
     void Application::RenderHierarchyPanel(HierarchyPanel& p)
     {
+        p.windowID = windowRegistry.GetCurrentWindowID();
         // ---- Search box (top of panel) -----------------------------------
         BeginHorizontal(idManager.AllocateDynamicID("hierarchySearchRow"),
                         theme.searchRowStyleRef, tachyon::LayoutOverride::Auto().NoShrink());
@@ -582,7 +642,7 @@ namespace tachyon
                 std::vector<tachyon::ID> nodes = p.RowIsSelected(row) ? p.SelectedNodes() : std::vector<tachyon::ID>{ node };
                 DestructiveMenuItem({ showcase.deleteIcon, "Delete" },
                                     del && del->HasShortcut() ? std::string_view(del->displayString) : std::string_view{},
-                                    [&p, nodes = std::move(nodes)] { p.DeleteNodes(nodes); });
+                                    [this, &p, nodes = std::move(nodes)] { RequestHierarchyDelete(p, nodes); });
             };
             // While something streams in, a column at the end says so on its row.
             // As wide as "streaming", its spinner and the room around them.

@@ -35,6 +35,7 @@ namespace tachyon
         std::optional<float> progress;         ///< 0..1: a progress bar under the body
         std::vector<ToastAction> actions;
         float       age = 0.0f;                ///< seconds since it happened, when it's shown: its time says so
+        IconID      icon = IconID::Invalid;    ///< in place of its severity's ("Uploading": an up arrow); Invalid: the severity's
     };
 
     /// A toast shown by ShowToast; 0 is none.

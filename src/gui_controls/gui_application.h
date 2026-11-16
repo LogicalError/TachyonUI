@@ -3036,6 +3036,9 @@ namespace tachyon
         ToastID     m_nextToast = 0;
         float       m_toastsTime = -1.0f;   ///< the frame time Toasts last ran at
         bool        m_toastsExpanded = false;   ///< "+N earlier" clicked: every toast shown
+        /// Each window's status bar, and the frame time it was last built: the toasts sit above it.
+        struct StatusBarSeen { ID id = ID::Invalid(); float builtAt = -1.0f; };
+        std::unordered_map<ID, StatusBarSeen> m_statusBars;
         ID          m_toastStackID = ID::Invalid();
         bool        m_toastsBuilt  = false;   ///< built this frame: moved over its window after OnGUI
 
