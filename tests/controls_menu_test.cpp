@@ -289,11 +289,121 @@ namespace tachyon
                         && e.styleRef.layoutStyleIndex == app.theme.menuItemDestructiveLabelStyleRef.layoutStyleIndex)
                         destructiveLabel = true;
             EXPECT_TRUE(destructiveLabel);
+            // Its row too: hovered, it's tinted with the error color, not the accent.
+            const StyleRef row = app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(deleteID)).styleRef;
+            EXPECT_EQ(row.visualBoxStyleIndex, app.theme.menuItemDestructiveRowStyleRef.visualBoxStyleIndex);
+            auto background = [&](StyleRef style, ElementState s) {
+                const VisualBoxStyle* box = app.styleManager.GetVisualBoxStyle(style.visualBoxStyleIndex, s);
+                return box ? box->backgroundColorIndex : VisualColorStyleIndex::Invalid;
+            };
+            EXPECT_NE(background(row, ElementState::Hover), background(row, ElementState::None)) << "it shows it's hovered";
+            EXPECT_NE(background(row, ElementState::Hover), background(app.theme.menuItemRowStyleRef, ElementState::Hover))
+                << "in its own color";
 
             app.ClickAt(app.CenterOf(deleteID));
             app.Frame(draw);
             app.Frame(draw);
             EXPECT_EQ(deleteRuns, 1) << "test setup: an enabled item runs on a click";
+        }
+
+        // A submenu's row stays lit while the submenu is open, the pointer in it too, and goes
+        // back once it closes.
+        TEST_F(ControlsMenuTest, AnOpenSubmenusRowStaysLit)
+        {
+            const ID menuID = app.idManager.CreateStaticID();
+            const ID themeID = app.idManager.CreateStaticID();
+            const ID otherID = app.idManager.CreateStaticID();
+            const ID darkID = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow();
+                if (app.BeginMenu(menuID, "View"))
+                {
+                    if (app.BeginMenu(themeID, "Theme"))
+                        app.MenuItem(darkID, "Dark");
+                    app.EndMenu();
+                    app.MenuItem(otherID, "Reset layout");
+                }
+                app.EndMenu();
+                app.EndRootWindow();
+            };
+            auto lit = [&](ID id) {
+                const ElementRef ref = app.elementStorage.FindElementRefByID(id);
+                return ref.IsValid() && (app.elementStorage.GetElementUnsafe(ref).state & ElementState::Hover) != ElementState::None;
+            };
+            app.Frame(draw);
+            app.ClickAt(app.CenterOf(menuID));
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.IsOpen());
+
+            app.mouseWindow = app.menuManager.levels[0].windowID;
+            app.InjectMouseMove(app.CenterOf(themeID));
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.levels[1].isOpen) << "test setup: the submenu opened";
+            ASSERT_TRUE(app.HasElement(darkID));
+
+            app.mouseWindow = app.menuManager.levels[1].windowID;
+            app.InjectMouseMove(app.CenterOf(darkID));
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.levels[1].isOpen);
+            EXPECT_TRUE(lit(themeID)) << "the pointer in its submenu";
+
+            // On another row: lit as long as its submenu is drawn, and not after.
+            app.mouseWindow = app.menuManager.levels[0].windowID;
+            app.InjectMouseMove(app.CenterOf(otherID));
+            for (int frame = 0; frame < 4; ++frame)
+            {
+                app.Frame(draw);
+                EXPECT_EQ(lit(themeID), app.HasElement(darkID)) << "frame " << frame;
+            }
+            EXPECT_FALSE(app.menuManager.levels[1].isOpen) << "test setup: the submenu closed";
+            EXPECT_FALSE(lit(themeID));
+            app.mouseWindow = ID::Invalid();
+        }
+
+        // The control a context menu was opened on looks hovered while the menu is open, the
+        // pointer in the menu too; once it closes, it's itself again.
+        TEST_F(ControlsMenuTest, AContextMenusControlStaysLitWhileItsOpen)
+        {
+            const ID buttonID = app.idManager.CreateStaticID();
+            const ID itemID = app.idManager.CreateStaticID();
+            int runs = 0;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.Button(buttonID, "Click me", [] {});
+                if (app.BeginContextMenu(buttonID))
+                    app.MenuItem(itemID, "Reset counter", [&] { ++runs; });
+                app.EndContextMenu();
+                app.EndRootWindow();
+            };
+            auto lit = [&] {
+                const ElementRef ref = app.elementStorage.FindElementRefByID(buttonID);
+                return ref.IsValid() && (app.elementStorage.GetElementUnsafe(ref).state & ElementState::Hover) != ElementState::None;
+            };
+            app.Frame(draw);
+            app.InjectMouseMove(app.CenterOf(buttonID));
+            app.Frame(draw);
+            app.ClickAt(app.CenterOf(buttonID), MouseButtons::Right);
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.IsOpen());
+
+            app.mouseWindow = app.menuManager.levels[0].windowID;
+            app.InjectMouseMove(app.CenterOf(itemID));
+            app.Frame(draw);
+            app.Frame(draw);
+            EXPECT_TRUE(lit()) << "the pointer in its menu";
+
+            app.ClickAt(app.CenterOf(itemID));
+            app.Frame(draw);
+            app.mouseWindow = ID::Invalid();
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_EQ(runs, 1);
+            ASSERT_FALSE(app.menuManager.IsOpen());
+            EXPECT_FALSE(lit()) << "the menu closed";
         }
 
         // A shortcut stays at least 24px from its label, however long both are: a menu as wide

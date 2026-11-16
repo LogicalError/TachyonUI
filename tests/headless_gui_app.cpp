@@ -178,6 +178,7 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
                                hasMouseMove, hasMousePress, hasKeyboard, hasScroll,
                                menuManager.IsOpen(), m_buttonsHeld != tachyon::MouseButtons::None);
     NoteTargetAncestors(m_mousePos);
+    NoteContextMenuOwner();
     textSystem->BeginFrame(m_mousePos, m_buttonsHeld, m_timeMs);
 
     VERIFY(elementStorage.BeginConstruction());

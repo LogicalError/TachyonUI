@@ -3513,8 +3513,9 @@
    optional fixed icon slot, a grow:1 label, and an optional trailing shortcut
    or submenu arrow. The row owns the hover/focus/selected highlight; its
    children are non-interactive so the whole row highlights as one unit. */
-/* An item: icon or check | label | shortcut | submenu arrow, 26 high. */
-.menu-item-row {
+/* An item: icon or check | label | shortcut | submenu arrow, 26 high. A destructive item's
+   row is the same, tinted with the error color when hovered. */
+.menu-item-row, .menu-item-row-destructive {
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
@@ -3540,6 +3541,10 @@
 .menu-item-row:active { background-color: var(--bg-pressed); }
 /* Disabled: the whole item at 45%, no hover. */
 .menu-item-row:disabled { background-color: transparent; opacity: 0.45; }
+.menu-item-row-destructive:hover  { background-color: var(--error-soft); }
+.menu-item-row-destructive:focus  { background-color: var(--error-soft); }
+.menu-item-row-destructive:active { background-color: var(--error-soft); }
+.menu-item-row-destructive:disabled { background-color: transparent; opacity: 0.45; }
 
 /* Fixed icon column; reserved for every item in a menu that uses icons so the
    labels line up whether or not a given item supplies an icon. Width is the
@@ -3652,6 +3657,7 @@
     font-size: var(--font-size);
     background-color: transparent;
 }
+.menu-item-arrow:hover { color: var(--text-2); }   /* its submenu open */
 
 /* ---- main menu bar -------------------------------------------------------- */
 /* Horizontal strip docked at the top of the main window. Sits above the dock
@@ -9012,7 +9018,7 @@
 .document-tab-layout:focus-visible, .document-tab-prefab:focus-visible, .document-tab-animation:focus-visible,
 .document-close:focus-visible, .document-new:focus-visible, .document-list:focus-visible,
 .list-item:focus-visible, .list-item-row:focus-visible,
-.menu-item:focus-visible, .menu-item-row:focus-visible, .menu-bar-trigger:focus-visible,
+.menu-item:focus-visible, .menu-item-row:focus-visible, .menu-item-row-destructive:focus-visible, .menu-bar-trigger:focus-visible,
 .title-bar-button:focus-visible, .title-bar-close-button:focus-visible,
 .color-picker-square:focus-visible, .gradient-editor-bar:focus-visible, .timeline-lanes:focus-visible,
 .box-sides-link:focus-visible, .curve-channel:focus-visible, .curve-plot:focus-visible,

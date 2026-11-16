@@ -424,8 +424,8 @@ namespace tachyon
         // Example edit mode registration
         [[maybe_unused]] tachyon::CommandMode sculptMode = commandManager.RegisterMode("Sculpt");
 
-        // Example: Ctrl+D fires in every edit mode (Default fallback)
-        commandManager.RegisterCommand(
+        // Example: Ctrl+D fires in every edit mode (Default fallback). The Edit menu lists it.
+        showcase.cmdDuplicate = commandManager.RegisterCommand(
             showcase.duplicateIcon,
             tachyon::KeyCode::KeyD,
             tachyon::KeyModifier::Control,
@@ -442,6 +442,8 @@ namespace tachyon
         showcase.cmdOpen   = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.openFileIcon, tachyon::KeyCode::KeyO, tachyon::KeyModifier::Control,                           []() { TACHYON_LOG_INFO(kLogShowcase, "Command: Open"); },    "Open...");
         showcase.cmdSave   = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.saveIcon,     tachyon::KeyCode::KeyS, tachyon::KeyModifier::Control,                           []() { TACHYON_LOG_INFO(kLogShowcase, "Command: Save"); },    "Save");
         showcase.cmdSaveAs = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.saveAsIcon,   tachyon::KeyCode::KeyS, tachyon::KeyModifier::Control | tachyon::KeyModifier::Shift, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: Save As"); }, "Save As...");
+        showcase.cmdSaveAll = cmds.RegisterCommand(tachyon::CommandMode::Default, tachyon::KeyCode::KeyS, tachyon::KeyModifier::Control | tachyon::KeyModifier::Alt,
+                                                   []() { TACHYON_LOG_INFO(kLogShowcase, "Command: Save all"); }, "Save all");
         showcase.cmdExit   = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.closeIcon,    tachyon::KeyCode::F4,   tachyon::KeyModifier::Alt,                               [this]() { RequestExit(); },   "Exit");
 
         showcase.cmdUndo   = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.undoIcon,  tachyon::KeyCode::KeyZ, tachyon::KeyModifier::Control, [this]() { commandManager.History().Undo(); }, "Undo");
@@ -449,7 +451,6 @@ namespace tachyon
         showcase.cmdCut    = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.cutIcon,   tachyon::KeyCode::KeyX, tachyon::KeyModifier::Control, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: Cut"); },   "Cut");
         showcase.cmdCopy   = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.copyIcon,  tachyon::KeyCode::KeyC, tachyon::KeyModifier::Control, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: Copy"); },  "Copy");
         showcase.cmdPaste  = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.pasteIcon, tachyon::KeyCode::KeyV, tachyon::KeyModifier::Control, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: Paste"); }, "Paste");
-
         // Commands shown on a menu but with NO shortcut key (the user can assign
         // one in the Shortcuts panel).
         showcase.cmdFullscreen = cmds.RegisterCommand(tachyon::CommandMode::Default, showcase.fullscreenIcon, tachyon::KeyCode::F11, tachyon::KeyModifier::None,
@@ -1333,8 +1334,16 @@ namespace tachyon
             // Icon, label, shortcut and callback come from the command.
             MenuItem(showcase.cmdNew);
             MenuItem(showcase.cmdOpen);
+            if (BeginMenu(idManager.AllocateDynamicID("menuFileRecent"), "Open recent"))
+            {
+                for (const char* file : { "Forest.level", "Desert.level", "Hero.prefab" })
+                    MenuItem(file, [file] { TACHYON_LOG_INFO(kLogShowcase, "Command: Open recent {}", file); });
+            }
+            EndMenu();
+            MenuSeparator();
             MenuItem(showcase.cmdSave);
             MenuItem(showcase.cmdSaveAs);
+            MenuItem(showcase.cmdSaveAll);
             MenuSeparator();
             MenuItem(showcase.cmdExit);
         }
@@ -1356,8 +1365,9 @@ namespace tachyon
             MenuItem(showcase.cmdCut);
             MenuItem(showcase.cmdCopy);
             MenuItem(showcase.cmdPaste);
+            MenuItem(showcase.cmdDuplicate);
             MenuSeparator();
-            DestructiveMenuItem({ theme.deleteIcon, "Delete" }, [] {});
+            DestructiveMenuItem({ theme.deleteIcon, "Delete" }, CommandManager::FormatShortcut(KeyCode::Delete, KeyModifier::None), [] {});
         }
         EndMenu();
 

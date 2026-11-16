@@ -50,6 +50,7 @@ namespace tachyon
         using GUIApplication::InvalidateCachedScopesForInput;
         using GUIApplication::CollectPropagatedAncestors;
         using GUIApplication::NoteTargetAncestors;
+        using GUIApplication::NoteContextMenuOwner;
         using GUIApplication::TooltipHoverID;
         using GUIApplication::ShowCutShortText;
         using GUIApplication::RunPressOutsideWatches;

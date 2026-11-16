@@ -1752,6 +1752,7 @@ namespace tachyon
                     elapsedTimeSecs, hasMouseMove, hasMousePress, hasKeyboard, hasScroll,
                     menuManager.IsOpen(), windowManager->GetMouseButtons() != MouseButtons::None);
                 NoteTargetAncestors(windowManager->GetScreenMousePos());
+                NoteContextMenuOwner();
 
                 // Any mouse activity ends keyboard-nav hover suppression.
                 if (hasMouseMove || hasMousePress || hasScroll)
@@ -1963,6 +1964,14 @@ namespace tachyon
                                               ? interaction.GetPropagatedFocusedIDs() : interaction.GetPropagatedHoverIDs());
         m_contextMenuClaimed = false;
         m_cutShort = FindCutShortText(mousePos);
+    }
+
+    void GUIApplication::NoteContextMenuOwner()
+    {
+        // While a context menu is open, the element it was opened on looks hovered.
+        const bool open = contextMenuTargetID != ID::Invalid() && menuManager.IsOpen()
+                       && menuManager.levels[0].triggerID == contextMenuWindowID;
+        guiStateManager.Interaction().SetMenuOwnerID(open ? contextMenuTargetID : ID::Invalid());
     }
 
     bool GUIApplication::TakeEscapeFor(ID popupWindowID, ID triggerID)

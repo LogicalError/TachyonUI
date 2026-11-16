@@ -24,6 +24,8 @@ namespace tachyon
         ID m_focusedID      = ID::Invalid();
         ID m_activeWindowID = ID::Invalid();
         ID m_clickID        = ID::Invalid();
+        /// The element an open context menu belongs to: it looks hovered while the menu is open.
+        ID m_menuOwnerID    = ID::Invalid();
 
         /// Pressed look for keyboard/programmatic activation, which has no held button.
         /// Timed on the wall clock: one frame is imperceptible at high refresh rates.
@@ -68,6 +70,10 @@ namespace tachyon
         ID GetActiveWindowID() const { return m_activeWindowID; }
 
         void SetActiveWindowID(ID id) { m_activeWindowID = id; }
+
+        /// The element a context menu is open on, shown hovered until it closes; Invalid for none.
+        ID   GetMenuOwnerID() const   { return m_menuOwnerID; }
+        void SetMenuOwnerID(ID id)    { m_menuOwnerID = id; }
 
         void SetCaptureID(ID id) { m_captureID = id; m_pendingCaptureClear = false; }
         void ReleaseCaptureID()  { m_captureID = ID::Invalid(); m_pendingCaptureClear = false; }

@@ -612,11 +612,12 @@ namespace tachyon
 
         /// A menu row: an icon slot, the label and a trailing text (a shortcut or a submenu
         /// arrow). The row takes the input and the highlight. `reserveIcon` keeps the icon
-        /// slot without an icon, so labels line up in a menu that mixes both.
+        /// slot without an icon, so labels line up in a menu that mixes both. `lit` shows it
+        /// hovered whatever the pointer does: a submenu's row while its submenu is open.
         tachyon::ElementRef MenuItemRow(ID id, tachyon::EventHandler handler, StyleRef rowStyle,
                                     bool reserveIcon, IconID icon, std::string_view text,
                                     std::string_view trailing, StyleRef trailingStyle,
-                                    LayoutOverride&& constraints, bool destructive = false);
+                                    LayoutOverride&& constraints, bool destructive = false, bool lit = false);
         /// SearchField, also giving the ID of its text field (to focus it).
         /// Internal: the body of MenuItem and DestructiveMenuItem.
         bool MenuItemImpl(ID id, const GUIContent& content, std::string_view shortcut,
@@ -3273,6 +3274,9 @@ namespace tachyon
         /// states (PropagatesDescendantState) is for those parts too. Also notes the target's
         /// text cut short (FindCutShortText), with the pointer at `mousePos`.
         void NoteTargetAncestors(int2 mousePos);
+        /// Before construction: the element an open context menu was opened on, which looks
+        /// hovered until the menu closes (InteractionState::SetMenuOwnerID).
+        void NoteContextMenuOwner();
         /// What the tooltip follows the pointer to: the hovered element, else a disabled one.
         ID TooltipHoverID() const
         {
