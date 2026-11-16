@@ -15,7 +15,7 @@ easing over time, a color's channels in a Curves node.
 bool CurveField(ID id, CurveView& view, LayoutOverride&& constraints = {});
 ```
 
-- It draws the curves over `view.range`, in a 44px plot, the active channel's on top.
+- It draws the curves over `view.range`, in a 32px plot, the active channel's on top.
   - A single value (`CurveChannelColor::Value`) in the accent color.
   - A color's red, green and blue channels in the axis colors, over a dashed line where the
     output equals the input, to compare against.

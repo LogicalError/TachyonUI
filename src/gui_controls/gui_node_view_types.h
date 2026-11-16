@@ -330,8 +330,11 @@ namespace tachyon
         /// state (or back onto itself) adds one; each can be selected, relabelled and deleted.
         std::vector<StateTransition>    transitions;
         tachyon::ID                     initialState = tachyon::ID::Invalid();   ///< where the machine starts: marked with an arrow in
-        /// The state the machine is in, as the app runs it: highlighted. Invalid: none.
+        /// The state the machine is in, as the app runs it: ringed. Invalid: none.
         tachyon::ID                     activeState  = tachyon::ID::Invalid();
+        /// How long the machine has been in activeState, in seconds, shown under it ("1.24 s");
+        /// negative shows nothing. The app keeps it, and redraws while it counts.
+        float                           activeStateTime = -1.0f;
         std::unordered_set<tachyon::ID> selectedTransitionIDs;   ///< selected transition stableIDs
         /// A double-click on a state that holds a machine of its own (NodeModel::subMachine):
         /// open it, typically by showing that machine's view and extending `breadcrumb`.

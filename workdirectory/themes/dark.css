@@ -133,6 +133,20 @@
     --node-generator: #E0716B;
     --node-input: #4FC48A;
     --node-output: #A98BFF;
+    --node-bg: #1F232A;
+    --node-border: #363C48;
+    --node-header-tint: 0.24;
+    --node-header-line-tint: 0.38;
+    --state-tint: 0.26;
+    --state-border-tint: 0.5;
+    --frame-fill-tint: 0.07;
+    --frame-band-tint: 0.2;
+    --frame-border-tint: 0.45;
+    --state-indigo: #7B8CFF;
+    --state-teal: #34D1BF;
+    --state-red: #EF6A6A;
+    --state-amber: #E5B454;
+    --state-violet: #A98BFF;
 
     --axis-x: #EF6A6A;
     --axis-y: #4FC48A;

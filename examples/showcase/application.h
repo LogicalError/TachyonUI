@@ -136,6 +136,11 @@ namespace tachyon
         StyleRef shortcutCategoryStyleRef, shortcutTableStyleRef, shortcutCellStyleRef, settingsTitleStyleRef, settingsScrollStyleRef, sketchPadStyleRef;
         StyleRef settingsBodyStyleRef, settingsHeadStyleRef, settingsTitleRowStyleRef, settingsSplitStyleRef;
         StyleRef tableToolbarStyleRef;
+        StyleRef stateMachineToolbarStyleRef;   // Step, Restart, the breadcrumb, and the status at the end
+        StyleRef stateMachineButtonStyleRef;    // Step and Restart
+        StyleRef stateMachineDividerStyleRef;   // between the buttons and the breadcrumb
+        StyleRef stateMachineStatusStyleRef;    // "Running"
+        StyleRef statusDotOkStyleRef;           // the dot before it
         StyleRef dataTableCellStyleRef, dataTableNumberStyleRef, dataTableCodeStyleRef;
         StyleRef textShadowSampleStyleRef, textGlowSampleStyleRef;
         StyleRef iconVAlignDemoStyleRefs[4][3];   // [IconSide L/R/T/B][top/mid/bot]
@@ -306,6 +311,9 @@ namespace tachyon
             bool     combatOpen = false;            // Combat's machine is the one shown
             bool     stateMachinesSeeded = false;
             uint32_t stateMachineSteps = 0;         // Step takes the transitions out of a state in turn
+            // When each machine (Enemy, Combat) entered the state it's in, in seconds on the
+            // showcase's clock: the time in it shows under that state.
+            double   stateEnteredAt[2] = {};
             // The values of the nodes added from the canvas menu, by their stableID.
             struct GraphNodeValues
             {
@@ -455,6 +463,8 @@ namespace tachyon
 			IconID addIcon             = IconID::Invalid;
 			IconID removeIcon          = IconID::Invalid;
 			IconID undoIcon            = IconID::Invalid;
+			IconID stepIcon            = IconID::Invalid;   // the state machine's Step
+			IconID restartIcon         = IconID::Invalid;   // ... and Restart
 			IconID redoIcon            = IconID::Invalid;
 			IconID cutIcon             = IconID::Invalid;
 			IconID copyIcon            = IconID::Invalid;
@@ -613,6 +623,8 @@ namespace tachyon
         // Re-registers showcase-owned styles after a theme reload.
         void OnStylesReloaded() override;
         void ApplyNodeCategories();
+        /// Each state its own color from the palette, so they follow the theme.
+        void ApplyStateColors();
 
         void Cleanup() override;
 

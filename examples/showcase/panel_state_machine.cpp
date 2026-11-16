@@ -3,6 +3,7 @@
 #include <gui_controls/gui_node_view_helpers.h>   // AddTransitionEdit, SetInitialStateEdit, ...
 
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,26 @@ namespace tachyon
                                          .to = view.nodes[size_t(to)].stableID, .label = std::move(label) });
             return id;
         }
+        // The showcase's clock, in seconds.
+        double Now()
+        {
+            return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+        }
+    }
+
+    void Application::ApplyStateColors()
+    {
+        // Each seeded state's color from the palette; a state added later keeps the accent.
+        struct StateColor { const char* title; const char* color; };
+        static const StateColor colors[] = {
+            { "Sleep", "--state-indigo" }, { "Patrol", "--state-teal" }, { "Chase", "--state-amber" },
+            { "Hurt", "--state-red" },     { "Combat", "--state-violet" },
+            { "Attack", "--state-red" },   { "Block", "--state-indigo" }, { "Dodge", "--state-teal" } };
+        for (NodeView* view : { &showcase.enemyMachine, &showcase.combatMachine })
+            for (NodeModel& state : view->nodes)
+                for (const StateColor& c : colors)
+                    if (state.title == c.title)
+                        state.categoryColor = theme.GetColor(c.color);
     }
 
     void Application::SeedStateMachines()
@@ -55,7 +76,6 @@ namespace tachyon
         Join(idManager, enemy, 1, 1, "next waypoint");
         enemy.initialState = enemy.nodes[0].stableID;
         enemy.activeState  = enemy.initialState;
-        enemy.breadcrumb   = { "Enemy" };
 
         // Combat, inside: attack, block, dodge, round and round.
         NodeView& combat = showcase.combatMachine;
@@ -73,7 +93,8 @@ namespace tachyon
         Join(idManager, combat, 0, 2, "low health");
         combat.initialState = combat.nodes[0].stableID;
         combat.activeState  = combat.initialState;
-        combat.breadcrumb   = { "Enemy", "Combat" };
+        ApplyStateColors();
+        showcase.stateEnteredAt[0] = showcase.stateEnteredAt[1] = Now();
 
         for (NodeView* view : { &enemy, &combat })
         {
@@ -103,16 +124,11 @@ namespace tachyon
                 MenuItem({ showcase.deleteIcon, "Delete state" }, "Delete", [this] { DeleteSelectedStates(); });
             };
         }
-        // Into Combat, and back out by the breadcrumb.
+        // Into Combat, and back out by the toolbar's breadcrumb.
         enemy.onOpenState = [this](int node)
         {
             if (showcase.enemyMachine.nodes[size_t(node)].title == "Combat")
                 showcase.combatOpen = true;
-        };
-        combat.onBreadcrumb = [this](int segment)
-        {
-            if (segment == 0)
-                showcase.combatOpen = false;
         };
     }
 
@@ -124,18 +140,46 @@ namespace tachyon
             showcase.stateMachinesSeeded = true;
         }
         NodeView& view = showcase.combatOpen ? showcase.combatMachine : showcase.enemyMachine;
+        double& enteredAt = showcase.stateEnteredAt[showcase.combatOpen ? 1 : 0];
         BeginVertical(theme.emptyVertStyleRef, LayoutOverride{}.FlexGrow(1));
-        BeginHorizontalWrap();
+
+        // The toolbar: Step and Restart, where the machine is, and whether it's running.
+        BeginHorizontal(idManager.AllocateDynamicID("state-machine-toolbar"), stateMachineToolbarStyleRef, LayoutOverride::Auto().NoShrink());
         // Step: the machine takes the next transition out of the state it's in, in turn.
-        Button(idManager.AllocateDynamicID("state-machine-step"), "Step", [this, &view] {
+        Button(idManager.AllocateDynamicID("state-machine-step"), { showcase.stepIcon, "Step" }, [this, &view, &enteredAt] {
             std::vector<const StateTransition*> out;
             for (const StateTransition& t : view.transitions)
                 if (t.from == view.activeState) out.push_back(&t);
             if (out.empty()) return;
             view.activeState = out[showcase.stateMachineSteps++ % out.size()]->to;
-        });
-        Button(idManager.AllocateDynamicID("state-machine-restart"), "Restart", [&view] { view.activeState = view.initialState; });
+            enteredAt = Now();
+        }, stateMachineButtonStyleRef);
+        SetTooltip("Take the next transition out of the current state");
+        Button(idManager.AllocateDynamicID("state-machine-restart"), { showcase.restartIcon, "Restart" }, [&view, &enteredAt] {
+            view.activeState = view.initialState;
+            enteredAt = Now();
+        }, stateMachineButtonStyleRef);
+        SetTooltip("Back to the initial state");
+        RegisterElement(Element{ .id = idManager.AllocateDynamicID("state-machine-divider"), .styleRef = stateMachineDividerStyleRef,
+                                 .flags = ElementFlags::NoInput }, LayoutOverride{});
+        static const std::string enemyPath[]  = { "Enemy" };
+        static const std::string combatPath[] = { "Enemy", "Combat" };
+        Breadcrumb(idManager.AllocateDynamicID("state-machine-breadcrumb"),
+                   showcase.combatOpen ? std::span<const std::string>(combatPath) : std::span<const std::string>(enemyPath),
+                   [this](int segment) { if (segment == 0) showcase.combatOpen = false; });
+        RegisterElement(Element{ .id = idManager.AllocateDynamicID("state-machine-spacer"), .styleRef = theme.emptyHorzStyleRef,
+                                 .flags = ElementFlags::NoInput }, LayoutOverride{}.FlexGrow(1));
+        const bool running = view.activeState != ID::Invalid();
+        if (running)
+            RegisterElement(Element{ .id = idManager.AllocateDynamicID("state-machine-dot"), .styleRef = statusDotOkStyleRef,
+                                     .flags = ElementFlags::NoInput }, LayoutOverride{});
+        Text(idManager.AllocateDynamicID("state-machine-status"), running ? "Running" : "Stopped", stateMachineStatusStyleRef);
         EndHorizontal();
+
+        // The time in the current state, counting while it's shown.
+        view.activeStateTime = running ? float(Now() - enteredAt) : -1.0f;
+        if (running)
+            RequestRedrawIn(0.1f);
         RenderNodeView(view);
         EndVertical();
     }

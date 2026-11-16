@@ -227,6 +227,7 @@ if(TACHYON_SDL)
     gpu/gpu_tree_drop_line_test.cpp
     gpu/gpu_table_header_test.cpp
     gpu/gpu_inspector_fields_test.cpp
+    gpu/gpu_node_look_test.cpp
     gpu/gpu_invalid_field_test.cpp
     gpu/gpu_theme_crossfade_test.cpp
     gpu/gpu_sdl_host_event_loop_test.cpp

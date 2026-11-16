@@ -711,6 +711,97 @@
     label: "Output node";
     description: "Output nodes; operators use --accent";
 }
+@property --node-bg {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Node";
+    description: "A node's and a state's body, lighter than the canvas";
+}
+@property --node-border {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Node edge";
+    description: "A node's edge";
+}
+@property --node-header-tint {
+    syntax: "<number>";
+    category: "Node view";
+    label: "Header tint";
+    description: "How strongly a node's color tints its header, over --node-bg";
+    range: 0 1;
+}
+@property --node-header-line-tint {
+    syntax: "<number>";
+    category: "Node view";
+    label: "Header line tint";
+    description: "How strongly a node's color tints the line under its header";
+    range: 0 1;
+}
+@property --state-tint {
+    syntax: "<number>";
+    category: "Node view";
+    label: "State tint";
+    description: "How strongly a state's color fills it, over --node-bg";
+    range: 0 1;
+}
+@property --state-border-tint {
+    syntax: "<number>";
+    category: "Node view";
+    label: "State edge tint";
+    description: "How strongly a state's color edges it";
+    range: 0 1;
+}
+@property --frame-fill-tint {
+    syntax: "<number>";
+    category: "Node view";
+    label: "Frame tint";
+    description: "How strongly a frame's color fills its box, over the canvas";
+    range: 0 1;
+}
+@property --frame-band-tint {
+    syntax: "<number>";
+    category: "Node view";
+    label: "Frame title tint";
+    description: "How strongly a frame's color fills its title bar";
+    range: 0 1;
+}
+@property --frame-border-tint {
+    syntax: "<number>";
+    category: "Node view";
+    label: "Frame edge tint";
+    description: "How strongly a frame's color edges it";
+    range: 0 1;
+}
+@property --state-indigo {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Indigo state";
+    description: "A state color";
+}
+@property --state-teal {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Teal state";
+    description: "A state color";
+}
+@property --state-red {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Red state";
+    description: "A state color";
+}
+@property --state-amber {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Amber state";
+    description: "A state color";
+}
+@property --state-violet {
+    syntax: "<color>";
+    category: "Node view";
+    label: "Violet state";
+    description: "A state color";
+}
 @property --axis-x {
     syntax: "<color>";
     category: "Axes";
@@ -1417,7 +1508,7 @@
 .group-drag-label::highlight(selected), .group-drag-label-help::highlight(selected) { color: var(--text-1); }
 
 /* ---- textboxStyle --------------------------------------------------------- */
-.textbox, .number-field {
+.textbox, .number-field, .node-number-field {
     border-width: var(--border);
     border-radius: var(--radius-md);
     border-color: var(--line-node);
@@ -1437,14 +1528,16 @@
     flex-grow: 1;
     flex-shrink: 1;
 }
-.textbox:hover, .number-field:hover  { border-color: var(--line-strong); background-color: var(--bg-input); }
-.textbox:active, .number-field:active { background-color: var(--bg-input); }
-.textbox:focus, .number-field:focus  { border-color: var(--accent); background-color: var(--bg-input); }
-.textbox::selection, .number-field::selection { color: var(--text-1); background-color: var(--selection); }
-.textbox:not(:focus)::selection, .number-field:not(:focus)::selection { background-color: var(--selection-inactive); }   /* the app in the background */
+.textbox:hover, .number-field:hover, .node-number-field:hover  { border-color: var(--line-strong); background-color: var(--bg-input); }
+.textbox:active, .number-field:active, .node-number-field:active { background-color: var(--bg-input); }
+.textbox:focus, .number-field:focus, .node-number-field:focus  { border-color: var(--accent); background-color: var(--bg-input); }
+.textbox::selection, .number-field::selection, .node-number-field::selection { color: var(--text-1); background-color: var(--selection); }
+.textbox:not(:focus)::selection, .number-field:not(:focus)::selection, .node-number-field:not(:focus)::selection { background-color: var(--selection-inactive); }   /* the app in the background */
 
 /* Numbers: the textbox in the monospace font. Its line height keeps the textbox's. */
 .number-field { font-family: monospace; font-size: 11.5px; line-height: 16px; }
+/* A number in a node's row: smaller, at the end of its box, as a node's numbers line up. */
+.node-number-field { font-family: monospace; font-size: 11px; line-height: 16px; text-align: end; }
 
 /* ---- searchTextbox -------------------------------------------------------- */
 /* Search field: a textbox-looking container with a leading icon inside the
@@ -2548,8 +2641,8 @@
 .node, .node-state {
     border-width: var(--border);
     border-radius: var(--radius-lg);
-    border-color: var(--line-node);
-    background-color: var(--bg-raised);
+    border-color: var(--node-border);
+    background-color: var(--node-bg);
     padding: 0px 0px 6px 0px;
     margin: 0px;
     /* No inter-row gap: rows are two grid cells tall and must stack at exactly
@@ -2566,8 +2659,8 @@
 }
 /* Hover = neutral light-grey border; active/focus/selected = accent blue.
    The background never changes in any state - only the border. */
-.node-state { padding: 0px; background-color: var(--bg-control); cursor: move; }
-.node:hover, .node-state:hover   { border-color: var(--text-3); }
+.node-state { padding: 0px; cursor: move; }
+.node:hover, .node-state:hover   { border-color: var(--line-strong); }
 .node:active, .node-state:active { border-color: var(--accent); }
 .node:focus, .node-state:focus   { border-color: var(--accent); }
 .node::highlight(selected), .node-state::highlight(selected) { border-color: var(--accent); }
@@ -2575,12 +2668,15 @@
 /* ---- node-header (title bar at the top of a node) ------------------------ */
 /* A static title bar: category square, title, and the category name on the   */
 /* right. It never reacts to state; the node's border carries all feedback.   */
+/* Its background and the line under it are the node's color over --node-bg,  */
+/* from C++ (--node-header-tint, --node-header-line-tint); a state's, filling  */
+/* it, by --state-tint.                                                         */
 /* .node-header-state: a state machine's state is its header alone, without the line under it. */
 .node-header, .node-header-state {
     border-width: 0px 0px 1px 0px;
     border-color: var(--line-node);
     border-radius: var(--radius-node-top);
-    background-color: var(--bg-control);
+    background-color: var(--node-bg);
     padding: 0px 10px;
     margin: 0px;
     gap: 8px;
@@ -2668,6 +2764,16 @@
 }
 .node-view-overlay-button:hover  { color: var(--text-1); }
 .node-view-overlay-button:active { color: var(--text-1); }
+.node-view-overlay-divider {
+    width: 1px;
+    height: 14px;
+    margin: 0px 2px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: var(--line-subtle);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
 .node-view-minimap {
     border-width: var(--border);
     border-radius: var(--radius-lg);
@@ -2903,18 +3009,38 @@
 /* ---- node-frame: a titled box behind a group of nodes ----------------------- */
 /* The box and its title band are drawn behind the wires; a frame's own color,   */
 /* from C++, replaces their backgrounds. The title over the band takes the mouse. */
+/* At rest the edge is drawn from C++ in the frame's color (--frame-border-tint), or     */
+/* --frame-border for a frame without one; a colored frame's box and title bar are its   */
+/* color by --frame-fill-tint and --frame-band-tint.                                     */
 .node-frame {
     border-width: var(--border);
-    border-radius: var(--radius-lg);
-    border-color: var(--frame-border);
+    border-radius: 8px;
+    border-color: transparent;
     background-color: var(--frame-fill);
 }
 .node-frame:hover  { border-color: var(--text-3); }
 .node-frame:active { border-color: var(--accent); }
 .node-frame::highlight(selected) { border-color: var(--accent); }
+/* The "..." at a frame's title bar's end, opening its menu. */
+.node-frame-menu {
+    border-width: 0px;
+    border-radius: var(--radius-sm);
+    margin: 0px;
+    padding: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: var(--font-size);
+    text-align: center;
+    vertical-align: middle;
+    -tachyon-vertical-text-align: middle;
+    text-wrap: nowrap;
+    cursor: pointer;
+}
+.node-frame-menu:hover  { color: var(--text-1); background-color: var(--bg-hover); }
+.node-frame-menu:active { color: var(--text-1); background-color: var(--bg-pressed); }
 .node-frame-band {
     border-width: 0px;
-    border-radius: var(--radius-lg) var(--radius-lg) 0px 0px;
+    border-radius: 8px 8px 0px 0px;
     background-color: var(--frame-band);
 }
 /* State machines: a transition's label on its arrow, the field that edits it, the ring round
@@ -2948,11 +3074,33 @@
     text-wrap: nowrap;
     vertical-align: middle;
 }
+/* The state the machine is in: an --ok ring round it in a soft halo (--ok at 18%, from C++), */
+/* and its time in it under it. */
 .node-state-active {
     border-width: 2px;
-    border-color: var(--accent);
-    border-radius: var(--radius-lg);
+    border-color: var(--ok);
+    border-radius: 9px;
     background-color: transparent;
+}
+.node-state-time {
+    border-width: 0px;
+    border-radius: var(--radius-sm);
+    background-color: var(--ok-soft);
+    color: var(--ok);
+    font-family: monospace;
+    font-size: 11px;
+    text-wrap: nowrap;
+}
+/* A state holding a machine of its own: two stacked boxes (.node-state-nested) at its end. */
+.node-state-nested-mark {
+    width: 12px;
+    height: 12px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    flex-grow: 0;
+    flex-shrink: 0;
 }
 .node-state-edge {
     border-width: 2px;
@@ -7210,7 +7358,7 @@
     margin: 1px;
     padding: 3px;
     min-width: 60px;
-    height: 44px;
+    height: 32px;
     flex-grow: 1;
     flex-shrink: 1;
     cursor: pointer;
@@ -8803,7 +8951,7 @@
 }
 
 .button:focus-visible, .toggle:focus-visible, .menu-trigger:focus-visible, .knob:focus-visible,
-.text-style:focus-visible, .textbox:focus-visible, .number-field:focus-visible, .search-textbox:focus-visible,
+.text-style:focus-visible, .textbox:focus-visible, .number-field:focus-visible, .node-number-field:focus-visible, .search-textbox:focus-visible,
 .vector-component:focus-visible, .collection-value:focus-visible, .command-search:focus-visible,
 .dashed:focus-visible, .first-icon:focus-visible, .icon-left:focus-visible, .icon-right:focus-visible,
 .icon-top:focus-visible, .icon-bottom:focus-visible,
@@ -8824,7 +8972,8 @@
 .color-picker-recent:focus-visible, .color-picker-range:focus-visible, .color-picker-new:focus-visible,
 .toast-action:focus-visible, .toast-action-secondary:focus-visible, .toast-dismiss:focus-visible, .toast-earlier:focus-visible,
 .banner-primary:focus-visible, .banner-secondary:focus-visible, .banner-link:focus-visible,
-.curve-field:focus-visible, .curve-preset:focus-visible, .icon-button:focus-visible, .icon-button-end:focus-visible {
+.curve-field:focus-visible, .curve-preset:focus-visible, .icon-button:focus-visible, .icon-button-end:focus-visible,
+.node-frame-menu:focus-visible {
     box-shadow: var(--focus-ring);
 }
 /* Filled with the accent: its edge, and a line of the panel's color inside it. */

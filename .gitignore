@@ -40,11 +40,12 @@ Testing/
 *.app
 
 # Editors and tools
+.**/
+!.github/
 .vs/
 *.user
 .cache/
 vcpkg_installed/
-/.claude
 /*.ini
 
 # Temporary files

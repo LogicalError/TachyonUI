@@ -493,6 +493,34 @@ namespace tachyon
             EXPECT_GT(canvasMenus, 0);
         }
 
+        // With a menu for frames, a title bar has a "..." button at its end that opens it, the
+        // frame selected as a right click does; without one, there's no button.
+        TEST_F(NodeViewFrameTest, TheTitleBarsMoreButtonOpensItsMenu)
+        {
+            Settle();
+            EXPECT_TRUE(WithStyle(app.theme.nodeFrameMenuStyleRef).empty()) << "no menu, no button";
+
+            int framesMenu = -1;
+            view.onFrameContextMenu = [&](int frame) { framesMenu = frame; };
+            Settle();
+            const std::vector<ID> buttons = WithStyle(app.theme.nodeFrameMenuStyleRef);
+            ASSERT_EQ(buttons.size(), 2u) << "one per frame";
+            const IntRect title = app.GetElementRect(TitleOf("Notes"));
+            ID notesButton = ID::Invalid();
+            for (const ID b : buttons)
+            {
+                const IntRect r = app.GetElementRect(b);
+                if (r.y >= title.y && r.y + r.h <= title.y + title.h && r.x + r.w <= title.x + title.w && r.x > title.x + title.w / 2)
+                    notesButton = b;
+            }
+            ASSERT_NE(notesButton, ID::Invalid()) << "at the end of the title bar, inside it";
+
+            app.ClickAt(Middle(notesButton));
+            Settle();
+            EXPECT_EQ(framesMenu, 1);
+            EXPECT_EQ(view.selectedFrameIDs, std::unordered_set<ID>{ frameInner });
+        }
+
         // The marquee selects the frames wholly inside it, as it does the nodes.
         TEST_F(NodeViewFrameTest, TheMarqueeSelectsTheFramesInsideIt)
         {

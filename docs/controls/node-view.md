@@ -23,6 +23,11 @@ void NodeText(std::string_view text);
 - `stableID`: the node's ID, set once, for example with `idManager.CreateStaticID()`
 - `title`
 - `category` and `categoryColor`, both optional
+  - `categoryColor` is the node's own color: its square in the header, at full strength,
+    and the header itself, tinted with it over the node's body (`--node-header-tint`), the
+    line under it stronger (`--node-header-line-tint`).
+  - Without one, the node takes the accent.
+  - For example, generators in `--node-generator` and inputs in `--node-input`.
 - `pos`: the position, in pixels
 - `properties`: the rows
 - `reroute`: a dot that a wire passes through, a waypoint, instead of a box.
@@ -65,9 +70,16 @@ classes: `tooltip-lines`, `tooltip-pin-row`, `tooltip-pin-type`, `tooltip-pin-va
 
 `NodeText` draws text aligned to the row's sockets:
 
-- left for an input
-- right for an output
-- centered for both
+- right for an output alone, by its dot
+- left otherwise: for an input, or for both
+
+Number fields in a row are the node's own (`node-number-field`): mono, at the end of their
+box. Give a float its decimals with `NumericFieldConfig::decimals`:
+
+```cpp
+Label("Gain");
+Field(gain, TextEditBehavior::ContinuousUpdate, NumericFieldConfig<float>{ .decimals = 2 });   // "1.00"
+```
 
 **`NodeView`** members:
 
@@ -256,6 +268,8 @@ What it does:
 - **Its menu:** `onFrameContextMenu(frame)` builds it, as `onNodeContextMenu` does a node's.
   A right click on the title opens it and selects the frame. So does the Menu key with only
   frames selected.
+  - With it set, the title bar has a "..." button at its end that opens it too
+    (`node-frame-menu`).
 - **Undo:** each change is an edit, so it undoes.
 
 ```cpp
@@ -317,10 +331,14 @@ CommitNodeViewEdit(view, GroupSelectionEdit(view, NodeFrame{
     .stableID = idManager.CreateStaticID(), .title = "Group" }));
 ```
 
+A frame with a `color` is that color, faint over its box (`--frame-fill-tint`), stronger
+over its title bar (`--frame-band-tint`), and edged in it (`--frame-border-tint`). Hovered or
+selected, its edge shows that instead.
+
 Frame classes: `node-frame` and `node-frame-band` (the box and its title bar, drawn behind
-the wires), `node-frame-title`, `node-frame-rename`, and, collapsed, `node-frame-ports`,
-`node-frame-port` and `node-frame-port-out`. Palette colors: `--frame-fill`,
-`--frame-band`, `--frame-border`.
+the wires), `node-frame-title`, `node-frame-menu`, `node-frame-rename`, and, collapsed,
+`node-frame-ports`, `node-frame-port` and `node-frame-port-out`. Palette colors for a frame
+without a color: `--frame-fill`, `--frame-band`, `--frame-border`.
 
 **Focus.**
 
@@ -397,7 +415,8 @@ Wires are made and removed with the mouse only.
   - dragging in the minimap
 
 Classes: `node-view`, `node`, `node-reroute`, `node-header`, `node-title`, `node-category`, `node-row`,
-`node-socket`, `node-view-overlay`, `node-view-minimap`.
+`node-socket`, `node-number-field`, `node-view-overlay`, `node-view-overlay-divider` (before Fit),
+`node-view-minimap`. Palette: `--node-bg` and `--node-border` for a node's body and edge.
 
 ```cpp
 NodeModel mix;
@@ -431,10 +450,23 @@ wires, transitions may run both ways and back into the same state: cycles are th
   - each label beside its arrow, clear of the line, on the arrow's right as it runs, so a
     pair's labels sit on opposite sides; a loop's over it
   - an arrow and its label light up together, under the pointer or selected
+- Each state is its `categoryColor` (the accent without one): filled with it over the node's
+  body (`--state-tint`), edged in it (`--state-border-tint`), its square at full strength.
+  - For example, the palette's `--state-indigo`, `--state-teal`, `--state-red`,
+    `--state-amber` and `--state-violet`.
 - `view.initialState` is marked with a dot and an arrow into it; `view.activeState`, the
-  state your app's machine is in, gets a ring.
+  state your app's machine is in, gets a ring in the ok color in a soft halo.
   - For example, a game sets `activeState` each frame from its AI.
-- A state with `NodeModel::subMachine` holds a machine of its own: it's drawn with a mark.
+  - `view.activeStateTime`, the seconds it's been in it, shows in a pill under it
+    ("1.24 s"). Keep it yourself, and redraw while it counts; negative shows none.
+
+  ```cpp
+  view.activeStateTime = float(now - enteredAt);   // member: double enteredAt, set on each change
+  RequestRedrawIn(0.1f);
+  ```
+
+- A state with `NodeModel::subMachine` holds a machine of its own: a second box stacked
+  behind it, and a mark at the end of its title bar.
   - A double-click on it calls `view.onOpenState(node)`.
   - Show that machine's view, and use `breadcrumb` and `onBreadcrumb` to go back up.
 
@@ -464,7 +496,8 @@ Every change is a `NodeViewEdit`, as the graph's are, so undo works the same way
 - `StateTransitionPath` and `TransitionAt` give an arrow's geometry and find one under a point.
 
 Classes: `node-state`, `node-header-state`, `node-transition-label`, `node-transition-rename`,
-`node-state-active`, `node-state-edge` (the band), `node-state-nested`.
+`node-state-active`, `node-state-time` (the active state's time), `node-state-edge` (the band),
+`node-state-nested-mark` and `node-state-nested` (its two boxes).
 
 ```cpp
 view.kind  = NodeViewKind::StateMachine;

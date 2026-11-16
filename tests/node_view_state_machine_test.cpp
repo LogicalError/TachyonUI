@@ -556,5 +556,29 @@ namespace tachyon
                 << "under its top, inside the loop";
             EXPECT_FALSE(TransitionAt(view, float2{ 900.0f, 900.0f }, 5.0f, gap, loop));
         }
+
+        // A state holding a machine of its own has its mark in its title bar, at the end, after
+        // its name; the others have none.
+        TEST_F(NodeViewStateMachineTest, ANestedStatesMarkIsInItsTitleBarAfterItsName)
+        {
+            view.nodes[1].subMachine = true;
+            Settle();
+            std::vector<IntRect> marks;
+            for (uint32_t d = 0; d < app.elementStorage.NumberOfDepthLevels(); d++)
+                for (uint32_t i = 0; i < app.elementStorage.DepthSizeOf(d); i++)
+                {
+                    const ElementRef ref{ d, i };
+                    if (app.elementStorage.IsValidRef(ref) && app.elementStorage.GetElementUnsafe(ref).styleRef == app.theme.nodeStateNestedMarkStyleRef)
+                        marks.push_back(app.elementStorage.GetElementRectUnsafe(ref).rect);
+                }
+            ASSERT_EQ(marks.size(), 1u) << "Patrol's only";
+            const IntRect state = app.GetElementRect(patrol);
+            const IntRect name = app.GetElementRect(app.FindByText("Patrol"));
+            EXPECT_GT(marks[0].w, 0);
+            EXPECT_GE(marks[0].x, name.x + name.w) << "after its name";
+            EXPECT_LE(marks[0].x + marks[0].w, state.x + state.w) << "inside the state";
+            EXPECT_GE(marks[0].y, state.y);
+            EXPECT_LE(marks[0].y + marks[0].h, state.y + state.h);
+        }
     }
 }
