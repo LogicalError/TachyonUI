@@ -1,6 +1,6 @@
 // The Inspector's gradient and curve fields on a real device: a gradient's see-through parts
 // over a checkerboard, a band over where an HDR gradient passes 1.0, and a curve field
-// as a 44px plot with its curve in the accent color, an identity line behind color curves and
+// as a 32px plot with its curve in the accent color, an identity line behind color curves and
 // an open button while hovered.
 
 #include <gtest/gtest.h>
@@ -189,10 +189,10 @@ namespace
         EXPECT_LT(Distance(background, app.At(app.width - 10, y)), 10) << "none over the part up to 1.0";
     }
 
-    TEST_F(GpuInspectorFields, ACurveFieldIsA44PxPlotWithItsCurveInTheAccentColor)
+    TEST_F(GpuInspectorFields, ACurveFieldIsA32PxPlotWithItsCurveInTheAccentColor)
     {
         const IntRect field = app.RectOf(app.curveID);
-        EXPECT_EQ(field.h, Px(44));
+        EXPECT_EQ(field.h, Px(32));
         const IntRect inner = app.InnerOf(app.curveID);
         const Rgb line = app.BrightestAround(inner.x + inner.w / 4, inner.y + inner.h / 2);
         EXPECT_LT(Distance(line, FromColor(app.theme.GetColor("--accent", color4f{}))), 60)
