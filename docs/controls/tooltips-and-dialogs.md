@@ -119,9 +119,8 @@ It shows in a 268 px wide tooltip, on the popup surface.
 A `Label` or `DragLabel` with help gets a dotted underline, unless you gave it your own
 style.
 
-- The underline sits just below the text.
-- A label alone on its line is only as tall as its text, so the underline is cut off.
-- In a row with a control, it shows.
+- The underline sits a couple of pixels below the text, inside its line, so it shows however
+  tall the label is: alone on its line, in a row, or in a label group.
 
 The CSS classes:
 

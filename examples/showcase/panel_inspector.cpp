@@ -144,6 +144,31 @@ namespace tachyon
             SetTooltip("Switch on or off");
         });
 
+        // The kinds of tooltip: a property's help on its label, why a control is disabled,
+        // why a value isn't accepted.
+        add("Cast shadows", [this]() {
+            Label("Cast shadows");
+            SetTooltip(PropertyHelp{ "Cast shadows",
+                                     "Whether this mesh casts shadows from directional, spot and point lights.",
+                                     "MeshRenderer.castShadows \xC2\xB7 bool" });
+            Checkbox(showcase.castShadows, showcase.castShadows ? "On" : "Off");
+        });
+        add("Disabled", [this]() {
+            Label("Disabled");
+            BeginDisabled();
+            Button("Publish", [] {}, LayoutOverride{}.NoGrow().NoShrink());
+            SetDisabledTooltip("Publish to asset store", "Sign in to enable publishing");
+            EndDisabled();
+        });
+        add("Opacity", [this]() {
+            DragLabel("Opacity");
+            const bool outOfRange = showcase.opacity < 0.0f || showcase.opacity > 1.0f;
+            if (outOfRange) BeginInvalid();
+            Field(showcase.opacity);
+            if (outOfRange) SetErrorTooltip("Value must be between 0 and 1");
+            if (outOfRange) EndInvalid();
+        });
+
         // Segmented alignment picker: the current choice is selected.
         add("Alignment", [this]() {
             Label("Alignment");

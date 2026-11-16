@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cerrno>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -174,7 +175,18 @@ namespace tachyon
 		}
 	}
 
-	std::string format_to_text(float value, bool clamp) { return format_to_text(static_cast<double>(value), clamp); }
+	// The fewest digits that read back as the same float: 1.8f is "1.8", not the
+	// "1.79999995" its nine significant digits as a double would show.
+	std::string format_to_text(float value, bool clamp)
+	{
+		if (!clamp || !std::isfinite(value))
+			return format_to_text(static_cast<double>(value), clamp);
+		char buffer[64];
+		const std::to_chars_result result = std::to_chars(buffer, buffer + sizeof(buffer), value);
+		if (result.ec != std::errc{})
+			return format_to_text(static_cast<double>(value), clamp);
+		return std::string(buffer, result.ptr);
+	}
 
 	std::string format_to_text(int64_t value)
 	{

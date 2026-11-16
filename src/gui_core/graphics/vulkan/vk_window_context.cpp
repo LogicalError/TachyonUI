@@ -807,11 +807,12 @@ void VulkanWindowContext::UpdateLayeredWindowFromCache()
     blend.SourceConstantAlpha = 255;
     blend.AlphaFormat = AC_SRC_ALPHA;
     
-    // Only the content and size. No position: the window stays where the window manager put
-    // it. The last recorded position is stale once the window moves without its picture
-    // changing (a drag ghost following the cursor), and setting it would move the window back
-    // each frame. The window backend shows and hides the window: shown here, SDL takes it for
-    // a window the OS showed and restores it, which activates it.
+    // Only the content and size, fully opaque (the window backend clears a hidden or resized
+    // window until this). No position: the window stays where the window manager put it. The
+    // last recorded position is stale once the window moves without its picture changing (a
+    // drag ghost following the cursor), and setting it would move the window back each frame.
+    // The window backend shows and hides the window: shown here, SDL takes it for a window the
+    // OS showed and restores it, which activates it.
     UpdateLayeredWindow(hwnd, hdcScreen, nullptr, &szWnd, hdcMem, &ptSrc, 0, &blend, ULW_ALPHA);
     
     SelectObject(hdcMem, hOldBmp);

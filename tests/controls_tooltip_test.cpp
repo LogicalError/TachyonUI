@@ -290,6 +290,43 @@ namespace tachyon
             EXPECT_LT(app.GetElementRect(title).y, app.GetElementRect(description).y);
         }
 
+        // In a label group, as an inspector lays its rows out (a label and its control in a
+        // column), the label takes the group's underlined style, frame after frame.
+        TEST_F(ControlsTooltipTest, PropertyHelpUnderlinesALabelInALabelGroup)
+        {
+            const ID columnID = app.idManager.CreateStaticID();
+            const ID groupID = app.idManager.CreateStaticID();
+            ID label = ID::Invalid();
+            bool on = true;
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.BeginVertical(columnID, app.theme.emptyVertStyleRef);
+                    app.BeginLabelGroup(groupID, 116, 40, 300);
+                    app.Label("Cast shadows");
+                    label = app.elementStorage.GetLastItemID();
+                    app.SetTooltip(PropertyHelp{ "Cast shadows", "Whether this mesh casts shadows.", "MeshRenderer.castShadows" });
+                    app.Checkbox(on, "On");
+                    app.EndLabelGroup();
+                    app.EndVertical();
+                    app.EndRootWindow();
+                });
+            };
+            for (int i = 0; i < 3; ++i)
+            {
+                frame();
+                const ElementRef ref = app.elementStorage.FindElementRefByID(label);
+                ASSERT_TRUE(ref.IsValid());
+                const Element& e = app.elementStorage.GetElementUnsafe(ref);
+                EXPECT_EQ(e.styleRef, app.theme.groupLabelHelpStyleRef) << "frame " << i;
+                EXPECT_EQ(app.ownedTextSystem.StyleOf(e.textID), app.theme.groupLabelHelpStyleRef) << "frame " << i;
+            }
+            const VisualTextStyleStates* text = app.styleManager.GetVisualTextStyles(app.theme.groupLabelHelpStyleRef.visualTextStyleIndex);
+            ASSERT_NE(text, nullptr);
+            EXPECT_EQ((*text)[0].textStyle.underLine.style, DecorationStyle::Dotted);
+            EXPECT_GT((*text)[0].textStyle.underLine.thickness, 0);
+        }
+
         // At the left edge of the screen, the box centered on a button's text is kept on the
         // screen, right at its edge: the room for its shadow may reach past it.
         TEST_F(ControlsTooltipTest, AtTheLeftEdgeTheBoxIsRightAtTheScreensEdge)

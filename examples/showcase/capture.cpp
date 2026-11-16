@@ -45,7 +45,7 @@ namespace tachyon
             Float,        // a panel torn off into a window of its own, docked again after
         };
         // What's acted on: the element with this text, or with one of these looks.
-        enum class CaptureTarget : uint8_t { Text, ColorSwatch, GradientSwatch, TasksPill, DockButton };
+        enum class CaptureTarget : uint8_t { Text, ColorSwatch, GradientSwatch, TasksPill, DockButton, Invalid };
         struct CaptureShot
         {
             const char*   name;
@@ -78,6 +78,10 @@ namespace tachyon
             { "BoxTest",      CaptureScene::Panel, "BoxTest" },
             { "Sketch",       CaptureScene::Panel, "Sketch" },
             { "Tooltip",        CaptureScene::Panel, "Inspector", CaptureAct::Hover,      CaptureTarget::Text, "Click me" },
+            { "TooltipShortcut", CaptureScene::Panel, "Curves",   CaptureAct::Hover,      CaptureTarget::Text, "Frame all" },
+            { "TooltipHelp",     CaptureScene::Panel, "Inspector", CaptureAct::Hover,     CaptureTarget::Text, "Cast shadows" },
+            { "TooltipDisabled", CaptureScene::Panel, "Inspector", CaptureAct::Hover,     CaptureTarget::Text, "Publish" },
+            { "TooltipError",    CaptureScene::Panel, "Inspector", CaptureAct::Hover,     CaptureTarget::Invalid },
             { "ContextMenu",    CaptureScene::Panel, "Inspector", CaptureAct::RightClick, CaptureTarget::Text, "Click me" },
             { "ColorPicker",    CaptureScene::Panel, "Inspector", CaptureAct::Click,      CaptureTarget::ColorSwatch },
             { "GradientEditor", CaptureScene::Panel, "Inspector", CaptureAct::Click,      CaptureTarget::GradientSwatch },
@@ -245,6 +249,7 @@ namespace tachyon
                     case CaptureTarget::ColorSwatch:    match = element.styleRef == theme.colorSwatchStyleRef; break;
                     case CaptureTarget::GradientSwatch: match = element.styleRef == theme.gradientSwatchStyleRef; break;
                     case CaptureTarget::TasksPill:      match = element.styleRef == theme.tasksPillStyleRef; break;
+                    case CaptureTarget::Invalid:        match = element.eventHandler && (element.state & ElementState::Invalid) != ElementState::None; break;
                     case CaptureTarget::DockButton:
                     case CaptureTarget::Text:
                     {

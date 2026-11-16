@@ -19,6 +19,9 @@ namespace tachyon
         float delaySeconds = 0.5f;   ///< hover time before a tooltip shows
         float warmSeconds  = 0.5f;   ///< after a tooltip was shown, the next shows at once for this long
         float hideSeconds  = 0.1f;   ///< a tooltip stays this long after its target is left
+        /// The wait counts as over this close to its end: about half a refresh period, what a
+        /// frame clock snapped to the refresh can trail the wall clock it was woken by.
+        static constexpr float kTimerSlackSeconds = 0.01f;
 
         /// Updates the target from this frame's hover, focus and input; call before OnGUI.
         void BeginFrame(ID currentHoveredID, ID currentFocusedID, float elapsedTimeSecs,
@@ -42,6 +45,8 @@ namespace tachyon
 
         /// True while a tooltip is shown.
         bool IsVisible() const { return m_isVisible; }
+        /// True once the active target's wait is over: its tooltip shows when its target asks.
+        bool IsReady() const { return m_isReady; }
 
         /// The frame time the tooltip next changes at by itself: the hovered element's delay
         /// running out, or the one left no longer lingering. INFINITY when nothing waits.

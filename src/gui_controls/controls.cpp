@@ -1274,6 +1274,11 @@ namespace tachyon
 
         auto invalidateScopesAbove = [this](ID id) { InvalidateCachedScopesAbove(id); };
 
+        // A disabled control takes no input but shows a tooltip: the pointer on it keeps its
+        // scope live as on an enabled one, or the scope goes clean, the control drops out of
+        // the hit test, and its tooltip's wait starts over each frame.
+        if (overID == ID::Invalid())
+            overID = guiStateManager.Interaction().GetHoveredDisabledID();
         if (overID != ID::Invalid())
         {
             bool underCursor = m_uiCache->IsDrawCacheEnabled();

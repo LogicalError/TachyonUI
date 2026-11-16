@@ -97,17 +97,16 @@ namespace tachyon
         if (input.hitTest && hover.hoverWindowID != ID::Invalid())
             hover.overID = input.hitTest(hover.hoverWindowID, input.mousePos, hover.disabledID);
 
-        // No hover while the application doesn't have OS focus.
-        if (input.activeWindowID == ID::Invalid())
-            hover.hoverID = ID::Invalid();
-        else if (m_interaction.GetCaptureID() != ID::Invalid())
+        // What's under the pointer is hovered with the application in the background too, as in
+        // other applications: a window shows hover without the focus.
+        if (m_interaction.GetCaptureID() != ID::Invalid())
             hover.hoverID = m_interaction.GetCaptureID();
         else if (m_interaction.GetActiveID() == ID::Invalid() || m_drag.IsDragging())
             hover.hoverID = hover.overID;
         else
             hover.hoverID = m_interaction.GetActiveID();
         // A disabled element counts only while nothing else holds the pointer.
-        if (input.activeWindowID == ID::Invalid() || m_interaction.GetCaptureID() != ID::Invalid() ||
+        if (m_interaction.GetCaptureID() != ID::Invalid() ||
             m_interaction.GetActiveID() != ID::Invalid() || m_drag.IsDragging())
             hover.disabledID = ID::Invalid();
 

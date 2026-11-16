@@ -1127,6 +1127,35 @@ namespace tachyon
         manager->EndFrame();
     }
 
+    // While a new popup waits its frames to show, frames are needed: an app that draws only
+    // when needed would otherwise sleep with it hidden (a first tooltip shown only once the
+    // pointer moved again).
+    TEST_F(OSWindowManagerTest, ANewPopupWaitingToShowNeedsFrames)
+    {
+        const ID mainId  = CreateTestID(1);
+        const ID popupId = CreateTestID(2);
+        manager->BeginFrame();
+        manager->GetOrCreateWindow(mainId, "Main", IntRect{ 0, 0, 800, 600 }, nullptr);
+        manager->EndFrame();
+        EXPECT_FALSE(manager->IsFading()) << "test setup: nothing waits";
+
+        const OSWindowHandle popupHandle = reinterpret_cast<OSWindowHandle>(handleCounter + 1);
+        bool shown = false;
+        ON_CALL(*mockBackend, SetWindowVisible(popupHandle, true)).WillByDefault([&] { shown = true; });
+        for (int frame = 0; frame < 10 && !shown; ++frame)
+        {
+            manager->BeginFrame();
+            manager->GetOrCreateWindow(mainId, "Main", IntRect{ 0, 0, 800, 600 }, nullptr);
+            manager->GetOrCreateWindow(popupId, "Popup", IntRect{ 10, 10, 100, 100 }, nullptr,
+                                       WindowFlags::DefaultFlags | WindowFlags::PopupMenu, mainId);
+            manager->EndFrame();
+            if (!shown)
+                EXPECT_TRUE(manager->IsFading()) << "frame " << frame << ": hidden, waiting to show";
+        }
+        EXPECT_TRUE(shown);
+        EXPECT_FALSE(manager->IsFading()) << "shown: nothing waits";
+    }
+
     // A new popup is created hidden and shows once it has been drawn a few frames, so it
     // never appears empty; reopening it shows it at once. (The mock can't cloak, so this is
     // the hidden path.)

@@ -527,6 +527,32 @@ namespace tachyon
         }
     }
 
+    // With the application in the background (no active window), what's under the pointer is
+    // still hovered, as in other applications: a window shows hover without the focus. A
+    // disabled control under it is too, for its tooltip.
+    TEST_F(StateManagerTest, HoverShowsWithTheAppInTheBackground)
+    {
+        const ID window = MakeID(1), button = MakeID(2), disabled = MakeID(3);
+        auto endFrame = [&](ID under) {
+            FrameInput input{
+                .activeWindowID   = ID::Invalid(),
+                .windowUnderMouse = window,
+                .mousePos         = { 10, 10 },
+                .hitTest = [&](ID, int2, ID& disabledHit) { disabledHit = under == disabled ? disabled : ID::Invalid();
+                                                            return under == disabled ? ID::Invalid() : under; },
+            };
+            stateManager.EndFrame(input, idManager);
+            EXPECT_TRUE(stateManager.BeginFrame());
+            idManager.EndFrame();
+            EXPECT_TRUE(idManager.BeginFrame());
+        };
+        endFrame(button);
+        EXPECT_EQ(stateManager.Interaction().GetHoveredID(), button);
+        EXPECT_NE(stateManager.GetCurrentState(button) & ElementState::Hover, ElementState::None);
+        endFrame(disabled);
+        EXPECT_EQ(stateManager.Interaction().GetHoveredDisabledID(), disabled);
+    }
+
     TEST(GUIStateManagerFocusExtra, FocusIsAppliedImmediately)
     {
         GUIStateManager stateManager;
