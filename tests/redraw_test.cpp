@@ -91,6 +91,22 @@ namespace tachyon
             EXPECT_GE(SecondsSince(start), 0.015f);
         }
 
+        // Short sleeps and waits take their time however long the machine has been up: a
+        // steady-clock time in nanoseconds, days in, is too big for a float to add 5 ms to.
+        TEST(RedrawBackend, ShortSleepsAndWaitsTakeTheirTime)
+        {
+            NullWindowBackend backend;
+            const Clock::time_point start = Clock::now();
+            for (int i = 0; i < 10; ++i)
+                backend.SleepFor(0.005f);
+            EXPECT_GE(SecondsSince(start), 0.04f) << "ten sleeps of 5 ms";
+
+            const Clock::time_point waits = Clock::now();
+            for (int i = 0; i < 10; ++i)
+                backend.WaitForEvents(0.005f);
+            EXPECT_GE(SecondsSince(waits), 0.04f) << "ten waits of 5 ms";
+        }
+
         // ---------------------------------------------------------------------
         // The renderer: whether a window's draws changed
         // ---------------------------------------------------------------------

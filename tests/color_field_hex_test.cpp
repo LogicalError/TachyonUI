@@ -104,6 +104,75 @@ namespace
         EXPECT_NE(FindByStyle(app.theme.dialogPrimaryButtonStyleRef), ID::Invalid()) << "with an OK button";
     }
 
+    // New over Original, each named beside its half, to the right of the swatch.
+    TEST_F(ColorPickerDialog, NewIsOverOriginalNamedBeside)
+    {
+        Open();
+        const ID preview = FindByStyle(app.theme.colorPickerPreviewStyleRef);
+        const ID newText = app.FindByText("New"), originalText = app.FindByText("Original");
+        ASSERT_NE(preview, ID::Invalid());
+        ASSERT_NE(newText, ID::Invalid());
+        ASSERT_NE(originalText, ID::Invalid());
+        const IntRect p = app.GetElementRect(preview), n = app.GetElementRect(newText), o = app.GetElementRect(originalText);
+        EXPECT_GE(n.x, p.x + p.w) << "beside the swatch";
+        EXPECT_GE(o.x, p.x + p.w);
+        const int mid = p.y + p.h / 2;
+        EXPECT_LE(n.y + n.h / 2, mid) << "New by the top half";
+        EXPECT_GE(o.y + o.h / 2, mid) << "Original by the bottom half";
+    }
+
+    // The value range is in the footer, after the format: "sRGB . 8-bit . 0-255"; a click
+    // switches it to 0-1.
+    TEST_F(ColorPickerDialog, TheRangeIsInTheFooter)
+    {
+        Open();
+        const ID footer = FindByStyle(app.theme.dialogFooterStyleRef);
+        const ID range  = app.FindByText("0\xE2\x80\x93" "255");
+        const ID status = app.FindByText("sRGB \xC2\xB7 8-bit \xC2\xB7");
+        ASSERT_NE(footer, ID::Invalid());
+        ASSERT_NE(range, ID::Invalid());
+        ASSERT_NE(status, ID::Invalid());
+        const IntRect f = app.GetElementRect(footer), r = app.GetElementRect(range), s = app.GetElementRect(status);
+        EXPECT_GE(r.y, f.y);
+        EXPECT_LE(r.y + r.h, f.y + f.h) << "in the footer";
+        EXPECT_GE(r.x, s.x + s.w) << "after the format";
+        app.ClickAt(app.CenterOf(range));
+        Emit();
+        Emit();
+        EXPECT_NE(app.FindByText("0\xE2\x80\x93" "1"), ID::Invalid());
+    }
+
+    // The app gives the swatches, and adds recent colors as OK does: newest first, each
+    // once, at most 8.
+    TEST_F(ColorPickerDialog, TheAppSetsTheSwatchesAndAddsRecentColors)
+    {
+        const color4f palette[] = { { 1, 0, 0, 1 }, { 0, 1, 0, 1 }, { 0, 0, 1, 0.5f } };
+        app.SetColorSwatches(palette);
+        for (int i = 0; i < 10; ++i)
+            app.AddRecentColor(color4f{ float(i) / 10.0f, 0, 0, 1 });
+        app.AddRecentColor(color4f{ 0.5f, 0, 0, 1 });   // already there: moved to the front
+        ASSERT_EQ(app.ColorSwatches().size(), 3u);
+        EXPECT_EQ(app.ColorSwatches()[2], palette[2]);
+
+        Open();
+        auto count = [&](StyleRef style) {
+            int n = 0;
+            const auto& storage = app.elementStorage;
+            for (auto it = storage.TopDownDepthScanBegin(); it != storage.TopDownDepthScanEnd(); ++it)
+                for (const Element& e : it->GetChildren(storage))
+                    if (e.styleRef == style) ++n;
+            return n;
+        };
+        EXPECT_EQ(count(app.theme.colorPickerSwatchStyleRef), 3);
+        EXPECT_EQ(count(app.theme.colorPickerRecentStyleRef), 8) << "at most 8, the field's own color first";
+    }
+
+    // With nothing set, the swatches are the theme's palette of twelve.
+    TEST_F(ColorPickerDialog, TheDefaultSwatchesAreTwelve)
+    {
+        EXPECT_EQ(app.ColorSwatches().size(), 12u);
+    }
+
     TEST_F(ColorPickerDialog, CancelRestoresTheColor)
     {
         const color4f original = color;

@@ -64,10 +64,6 @@ namespace tachyon
         /// The new color, with its alpha.
         tachyon::VisualColorStyleIndex newColor      = tachyon::VisualColorStyleIndex::Invalid;
         tachyon::VisualColorStyleIndex originalStyle = tachyon::VisualColorStyleIndex::Invalid;
-        /// The new color without its alpha, for the preview's top half.
-        tachyon::VisualColorStyleIndex newOpaque      = tachyon::VisualColorStyleIndex::Invalid;
-        /// The original color without its alpha, for the preview's top half.
-        tachyon::VisualColorStyleIndex originalOpaque = tachyon::VisualColorStyleIndex::Invalid;
 
         /// What a press on the square or a strip changes.
         enum class DragTarget { None, Square, Hue, Alpha };
@@ -81,11 +77,13 @@ namespace tachyon
         tachyon::VisualColorStyleIndex gradientStyles[kNumGradientSliders] = {};
 
         struct PaletteSwatch { tachyon::color4f color {}; };
+        /// The design's palette: red, orange, amber, green, teal (half clear), blue, sky,
+        /// violet (half clear), pink, white, black, black (half clear).
         std::vector<PaletteSwatch> palette = {
-            {{ 0.8f, 0.8f, 0.8f, 1.0f }},
-            {{ 0.0f, 0.8f, 0.8f, 1.0f }},
-            {{ 0.8f, 0.0f, 0.8f, 1.0f }},
-            {{ 0.8f, 0.8f, 0.0f, 1.0f }},
+            {{ 0.937f, 0.408f, 0.408f, 1.0f }}, {{ 0.965f, 0.620f, 0.294f, 1.0f }}, {{ 0.910f, 0.718f, 0.322f, 1.0f }},
+            {{ 0.290f, 0.761f, 0.549f, 1.0f }}, {{ 0.165f, 0.776f, 0.729f, 0.5f }}, {{ 0.231f, 0.510f, 0.965f, 1.0f }},
+            {{ 0.420f, 0.608f, 1.000f, 1.0f }}, {{ 0.659f, 0.545f, 0.980f, 0.5f }}, {{ 0.957f, 0.447f, 0.714f, 1.0f }},
+            {{ 1.000f, 1.000f, 1.000f, 1.0f }}, {{ 0.000f, 0.000f, 0.000f, 1.0f }}, {{ 0.000f, 0.000f, 0.000f, 0.5f }},
         };
     };
 

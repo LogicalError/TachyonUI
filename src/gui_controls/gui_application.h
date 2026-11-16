@@ -2155,6 +2155,13 @@ namespace tachyon
         inline bool ColorField(       tachyon::color4b& value, StyleRef style, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return ColorField(idManager.AllocateDynamicID(site), value, style, std::move(constraints)); }
         /// As above, with the call site as the ID, in the theme's color field style.
         inline bool ColorField(       tachyon::color4b& value, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current())                        { return ColorField(idManager.AllocateDynamicID(site), value, theme.colorFieldStyleRef, std::move(constraints)); }
+        /// The color picker's swatches, which the user adds to and removes from; set them to
+        /// start from the app's palette, read them to keep it. A palette of twelve to begin with.
+        void        SetColorSwatches(std::span<const tachyon::color4f> colors);
+        std::vector<tachyon::color4f> ColorSwatches() const;
+        /// Adds a color to the picker's recent ones, as OK does: newest first, each once, at
+        /// most 8. For colors the app restores from a previous run.
+        void        AddRecentColor(tachyon::color4f color);
 
         // ---- GradientField: gradient swatch + editor popup ----
         /// A gradient swatch that opens a gradient editor; true when the gradient changed.

@@ -4,6 +4,9 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "skribidi_test_fixture.h"
+
+#include <gui_core/graphics/gui_custom_draw_context.h>
 
 #include <gui_controls/gui_application_internal.h>
 #include <gui_controls/subsystems/gui_gradient_editor_subsystem.h>
@@ -77,6 +80,57 @@ namespace
         Open();
         EXPECT_NE(FindByStyle(app.theme.gradientEditorBarStyleRef), ID::Invalid());
         EXPECT_NE(FindByStyle(app.theme.dialogPrimaryButtonStyleRef), ID::Invalid()) << "with an OK button";
+    }
+
+    // The table: each stop's color (swatch and hex), its alpha and its location; the footer
+    // holds only Cancel and OK.
+    TEST_F(GradientEditorDialog, TheTableListsColorAlphaAndLocation)
+    {
+        gradient.stops[1].SetColor(color4f{ 0, 0, 1, 0.2f });
+        Open();
+        EXPECT_NE(app.FindByText("Alpha"), ID::Invalid());
+        EXPECT_NE(app.FindByText("Location"), ID::Invalid());
+        EXPECT_EQ(app.FindByText("Type"), ID::Invalid());
+        EXPECT_EQ(app.FindByText("Value"), ID::Invalid());
+        EXPECT_NE(app.FindByText("#0000FF"), ID::Invalid()) << "the hex alone";
+        EXPECT_NE(app.FindByText("20%"), ID::Invalid()) << "the alpha in its own column";
+        EXPECT_NE(app.FindByText("100%"), ID::Invalid());
+        const IntRect hex = app.GetElementRect(app.FindByText("#0000FF")), alpha = app.GetElementRect(app.FindByText("20%"));
+        EXPECT_LT(hex.x, alpha.x);
+        EXPECT_EQ(app.FindByText("2 stops \xC2\xB7 click the bar to add, drag a stop off to remove"), ID::Invalid()) << "no hint in the footer";
+    }
+
+    // The preset the gradient is is ringed, though an 8-bit gradient keeps its stops a little
+    // off the preset's (a stop at 0.5 is kept as 32768 / 65535).
+    TEST_F(GradientEditorDialog, ThePresetInUseIsRinged)
+    {
+        gradient = Gradient{};
+        gradient.type = GradientType::Linear;
+        const auto rgb = [](uint32_t hex) { return color4f{ float((hex >> 16) & 0xFF) / 255.0f, float((hex >> 8) & 0xFF) / 255.0f, float(hex & 0xFF) / 255.0f, 1.0f }; };
+        gradient.AddStop(rgb(0x0B1D51), 0.0f);
+        gradient.AddStop(rgb(0x3B82F6), 0.5f);
+        gradient.AddStop(rgb(0xA5F3FC), 1.0f);   // the "Sky" preset
+        Open();
+
+        // Each chip's drawing: a ringed one draws its ring and the gap inside it first.
+        std::vector<size_t> quads;
+        const auto& storage = app.elementStorage;
+        for (auto it = storage.TopDownDepthScanBegin(); it != storage.TopDownDepthScanEnd(); ++it)
+            for (const Element& e : it->GetChildren(storage))
+                if (e.styleRef == app.theme.gradientEditorPresetStyleRef)
+                {
+                    GUITest::StubGUIRenderer renderer;
+                    const ElementRef ref = storage.FindElementRefByID(e.id);
+                    const ElementCustomDraw* draw = storage.GetCustomDraw(ref);
+                    ASSERT_TRUE(draw != nullptr && draw->callback);
+                    const ElementRect* rects = storage.GetElementRectPtr(ref);
+                    CustomDrawContext ctx{ renderer, app.elementStorage, ref, rects->rect, rects->innerRect,
+                                           IntRect{ -4000, -4000, 8000, 8000 }, float3x2{}, int2{ 0, 0 } };
+                    draw->callback(ctx);
+                    quads.push_back(renderer.quads.size());
+                }
+        ASSERT_GE(quads.size(), 2u);
+        EXPECT_EQ(quads[1], quads[0] + 2) << "Sky ringed, Grayscale not";
     }
 
     TEST_F(GradientEditorDialog, CancelRestoresTheGradient)
@@ -198,6 +252,8 @@ namespace
         const GradientF before = floatGradient;
         OpenF();
         EXPECT_NE(app.FindByText("To next"), ID::Invalid()) << "the selected stop's blend";
+        EXPECT_NE(app.FindByText("Blend"), ID::Invalid()) << "and each stop's in the table";
+        EXPECT_NE(app.FindByText("Constant"), ID::Invalid());
         ClickF(app.CenterOf(FindByStyle(app.theme.dialogPrimaryButtonStyleRef)));
         EXPECT_EQ(floatGradient, before) << "OK untouched keeps HDR and the blend";
 

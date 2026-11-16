@@ -282,6 +282,26 @@ namespace tachyon
             { "Fade",      { Rgb(0x2D3BFF), Rgb(0x2D3BFF) }, true },
         };
 
+        // Whether `g` is `preset`, whatever space it blends in. An 8-bit gradient keeps its
+        // colors in bytes and its stops in 1/65535ths, so each may be that much off.
+        bool SameAsPreset(const GradientF& g, const GradientF& preset)
+        {
+            if (g.stops.size() != preset.stops.size())
+                return false;
+            constexpr float kColorSlack  = 0.6f / 255.0f;
+            constexpr float kOffsetSlack = 1.0f / 65535.0f;
+            for (size_t i = 0; i < g.stops.size(); ++i)
+            {
+                const GradientStop& a = g.stops[i];
+                const GradientStop& b = preset.stops[i];
+                if (std::abs(a.offset - b.offset) > kOffsetSlack || a.interpolation != b.interpolation
+                    || std::abs(a.color.r - b.color.r) > kColorSlack || std::abs(a.color.g - b.color.g) > kColorSlack
+                    || std::abs(a.color.b - b.color.b) > kColorSlack || std::abs(a.color.a - b.color.a) > kColorSlack)
+                    return false;
+            }
+            return true;
+        }
+
         GradientF MakePreset(const GradientPreset& preset, ColorSpace space)
         {
             GradientF g;
@@ -319,10 +339,10 @@ namespace tachyon
 
         // A stop's color as hex, or its numbers when it's brighter than 1; with its alpha
         // when it isn't opaque.
-        std::string StopText(const GradientStop& stop)
+        // A stop's color as the table shows it: hex, or its channels when brighter than 1.
+        std::string StopColorText(const GradientStop& stop)
         {
             const color4f c = stop.color;
-            const int alpha = int(std::lround(std::clamp(c.a, 0.0f, 1.0f) * 100.0f));
             char buf[64];
             if (c.r > 1.0f || c.g > 1.0f || c.b > 1.0f)
                 std::snprintf(buf, sizeof(buf), "%.2f %.2f %.2f", double(c.r), double(c.g), double(c.b));
@@ -331,10 +351,13 @@ namespace tachyon
                 const color4f k = Clamp01(c);
                 std::snprintf(buf, sizeof(buf), "#%02X%02X%02X", int(std::lround(k.r * 255.0f)), int(std::lround(k.g * 255.0f)), int(std::lround(k.b * 255.0f)));
             }
-            std::string text = buf;
-            if (alpha != 100)
-                text += " " + std::to_string(alpha) + "%";
-            return text;
+            return buf;
+        }
+
+        // Its alpha in whole percent.
+        std::string StopAlphaText(const GradientStop& stop)
+        {
+            return std::to_string(int(std::lround(std::clamp(stop.color.a, 0.0f, 1.0f) * 100.0f))) + "%";
         }
 
         std::string Percent(float t)
@@ -390,9 +413,7 @@ namespace tachyon
                 NoteSwatchClaim(id);
                 auto& style = m_gradientEditorSub->ClaimSwatchStyle(id);
                 SetGradientPreviewStyle(styleManager, style, preset);
-                GradientF asIs = preset;
-                asIs.colorSpace = g.colorSpace;
-                const bool current = (asIs == g);
+                const bool current = SameAsPreset(g, preset);
                 const ElementRef ref = RegisterControl(Element{ .id = id,
                     .eventHandler = MakeButtonHandler([this, preset]() {
                         auto& ge = m_gradientEditorSub->State();
@@ -759,14 +780,18 @@ namespace tachyon
         EndHorizontal();
         EndVertical();   // left
 
-        // The stops table: type, swatch, value, location; a click selects.
+        // The stops table: swatch and color, alpha, (each stop's blend to the next,) location;
+        // a click selects.
+        const bool blendColumn = ge.limits.perStopInterpolation;
         BeginVertical(idManager.AllocateDynamicID("ge_table"), theme.gradientEditorTableStyleRef, LayoutOverride{}.FlexGrow(2));
         {
             BeginHorizontal(idManager.AllocateDynamicID("ge_table_head"), theme.gradientEditorTableHeadStyleRef, LayoutOverride{}.NoShrink());
-            Text(idManager.AllocateDynamicID("ge_th_type"), "Type", theme.gradientEditorTypeCellStyleRef);
             Element blank{ .id = idManager.AllocateDynamicID("ge_th_swatch"), .styleRef = theme.gradientEditorSwatchCellStyleRef, .flags = ElementFlags::NoInput };
             RegisterElement(std::move(blank), LayoutOverride{});
-            Text(idManager.AllocateDynamicID("ge_th_value"), "Value", theme.gradientEditorHeadCellStyleRef, LayoutOverride{}.FlexGrow(1));
+            Text(idManager.AllocateDynamicID("ge_th_color"), "Color", theme.gradientEditorHeadCellStyleRef, LayoutOverride{}.FlexGrow(1));
+            Text(idManager.AllocateDynamicID("ge_th_alpha"), "Alpha", theme.gradientEditorHeadLocationStyleRef);
+            if (blendColumn)
+                Text(idManager.AllocateDynamicID("ge_th_blend"), "Blend", theme.gradientEditorTypeCellStyleRef);
             Text(idManager.AllocateDynamicID("ge_th_location"), "Location", theme.gradientEditorHeadLocationStyleRef);
             EndHorizontal();
 
@@ -782,11 +807,6 @@ namespace tachyon
                     .styleRef = theme.gradientEditorTableRowStyleRef, .state = guiStateManager.GetCurrentState(rowID) },
                     LayoutOverride{}.NoShrink());
                 VERIFY(elementStorage.BeginChildren());
-                // The type: a color stop, and with per-stop blends how it goes on to the next.
-                const std::string_view type = ge.limits.perStopInterpolation && i + 1 < rows
-                    ? kInterpolationNames[std::min<size_t>(size_t(g.stops[size_t(i)].interpolation), std::size(kInterpolationNames) - 1)]
-                    : std::string_view("Color");
-                Text(idManager.AllocateDynamicID("ge_td_type"), type, theme.gradientEditorTypeCellStyleRef);
                 const ID swID = idManager.AllocateDynamicID("ge_td_swatch");
                 NoteSwatchClaim(swID);
                 auto& swStyle = m_gradientEditorSub->ClaimSwatchStyle(swID);
@@ -801,7 +821,13 @@ namespace tachyon
                     DrawCheckerboard(ctx, r, r, l);
                     ctx.RenderQuad(r, swStyle, radius);
                 }));
-                Text(idManager.AllocateDynamicID("ge_td_value"), StopText(g.stops[size_t(i)]), theme.gradientEditorValueCellStyleRef, LayoutOverride{}.FlexGrow(1));
+                Text(idManager.AllocateDynamicID("ge_td_color"), StopColorText(g.stops[size_t(i)]), theme.gradientEditorValueCellStyleRef, LayoutOverride{}.FlexGrow(1));
+                Text(idManager.AllocateDynamicID("ge_td_alpha"), StopAlphaText(g.stops[size_t(i)]), theme.gradientEditorLocationCellStyleRef);
+                // How it goes on to the next stop; the last goes on to none.
+                if (blendColumn)
+                    Text(idManager.AllocateDynamicID("ge_td_blend"), i + 1 < rows
+                         ? kInterpolationNames[std::min<size_t>(size_t(g.stops[size_t(i)].interpolation), std::size(kInterpolationNames) - 1)]
+                         : std::string_view{}, theme.gradientEditorTypeCellStyleRef);
                 Text(idManager.AllocateDynamicID("ge_td_location"), Percent(g.stops[size_t(i)].offset), theme.gradientEditorLocationCellStyleRef);
                 VERIFY(elementStorage.EndChildren());
                 if (sel) guiStateManager.Construction().PopSelected();
@@ -813,9 +839,8 @@ namespace tachyon
         // ---- Footer ----
         BeginHorizontal(idManager.AllocateDynamicID("ge_footer"), theme.dialogFooterStyleRef, LayoutOverride{}.NoShrink());
         {
-            char status[96];
-            std::snprintf(status, sizeof(status), "%d stops \xC2\xB7 click the bar to add, drag a stop off to remove", int(g.stops.size()));
-            Text(idManager.AllocateDynamicID("ge_status"), status, theme.dialogStatusStyleRef, LayoutOverride{}.FlexGrow(1));
+            Element footerSpacer{ .id = idManager.AllocateDynamicID("ge_footer_spacer"), .styleRef = theme.emptyHorzStyleRef, .flags = ElementFlags::NoInput };
+            RegisterElement(std::move(footerSpacer), LayoutOverride{}.FlexGrow(1));
             Button(idManager.AllocateDynamicID("ge_cancel"), "Cancel", requestClose(GradientEditorState::CloseRequest::Cancel),
                    theme.dialogButtonStyleRef);
             Button(idManager.AllocateDynamicID("ge_ok"), "OK", requestClose(GradientEditorState::CloseRequest::Ok),
