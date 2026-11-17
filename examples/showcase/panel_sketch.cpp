@@ -18,6 +18,8 @@ namespace tachyon
         constexpr float kMinWidth = 1.0f;
         // The eraser end takes out what's this close, in CSS pixels.
         constexpr float kEraserRadius = 12.0f;
+        // Where the pen would draw: a ring this wide across (10px), in CSS pixels.
+        constexpr float kHoverRingRadius = 5.0f;
         // A new point at least this far from the last, in pixels.
         constexpr float kPointSpacing = 1.5f;
 
@@ -58,16 +60,36 @@ namespace tachyon
         const PenState& pen = sketchPen;
         BeginVertical(theme.emptyVertStyleRef, LayoutOverride{}.FlexGrow(1));
 
-        BeginHorizontalWrap();
-        Button(idManager.AllocateDynamicID("sketch-clear"), "Clear", [this] { sketchStrokes.clear(); });
-        Label(idManager.AllocateDynamicID("sketch-pointer"),
-              std::format("{}   Pressure {:.2f}   Tilt {:.0f}, {:.0f}   Rotation {:.0f}", PointerName(pen), pen.pressure,
-                          pen.tilt.x, pen.tilt.y, pen.rotation));
-        Label(idManager.AllocateDynamicID("sketch-axes"),
-              std::format("Distance {:.2f}   Slider {:.2f}   Barrel pressure {:.2f}   Buttons {}{}{}", pen.distance,
-                          pen.slider, pen.tangentialPressure, pen.buttons & 1 ? "1" : "-", pen.buttons & 2 ? "2" : "-",
-                          pen.touching ? "   Touching" : ""));
-        EndHorizontal();
+        // The tools (Pen and Eraser, one of them on) and Clear, then the pen's values as chips.
+        BeginHorizontalWrap(idManager.AllocateDynamicID("sketch-toolbar"), sketchToolbarStyleRef);
+        const StyleRef toolStyle = misc.iconButton[1];
+        Toggle(idManager.AllocateDynamicID("sketch-pen"), !sketchEraserTool, GUIContent{ showcase.editIcon, {}, "Pen" },
+               [this](bool) { sketchEraserTool = false; }, toolStyle);
+        Toggle(idManager.AllocateDynamicID("sketch-eraser"), sketchEraserTool, GUIContent{ showcase.eraserIcon, {}, "Eraser" },
+               [this](bool) { sketchEraserTool = true; }, toolStyle);
+        Button(idManager.AllocateDynamicID("sketch-clear"), GUIContent{ theme.deleteIcon, {}, "Clear" },
+               [this] { sketchStrokes.clear(); }, toolStyle);
+        Text(idManager.AllocateDynamicID("sketch-divider"), "", stateMachineDividerStyleRef);
+
+        // A chip: its name, then its value (if any) in monospace.
+        auto chip = [this](std::string_view key, std::string_view label, std::string_view value)
+        {
+            BeginHorizontal(idManager.AllocateDynamicID(key), sketchChipStyleRef);
+            Text(label, sketchChipLabelStyleRef);
+            if (!value.empty())
+                Text(value, sketchChipValueStyleRef);
+            EndHorizontal();
+        };
+        chip("sketch-pointer",  PointerName(pen), {});
+        chip("sketch-pressure", "Pressure",  std::format("{:.2f}", pen.pressure));
+        chip("sketch-tilt",     "Tilt",      std::format("{:.0f}°, {:.0f}°", pen.tilt.x, pen.tilt.y));
+        chip("sketch-rotation", "Rotation",  std::format("{:.0f}°", pen.rotation));
+        chip("sketch-distance", "Distance",  std::format("{:.2f}", pen.distance));
+        chip("sketch-slider",   "Slider",    std::format("{:.2f}", pen.slider));
+        chip("sketch-barrel",   "Barrel",    std::format("{:.2f}", pen.tangentialPressure));
+        chip("sketch-buttons",  "Buttons",   std::format("{} {}{}", pen.buttons & 1 ? "1" : "-", pen.buttons & 2 ? "2" : "-",
+                                                         pen.touching ? ", touching" : ""));
+        EndHorizontalWrap();
 
         const ID padID = idManager.AllocateDynamicID("sketch-pad");
         Element pad{ .id = padID, .styleRef = sketchPadStyleRef };
@@ -82,9 +104,10 @@ namespace tachyon
             const int2 local = e.LocalCursor(elementStorage) - e.rect->innerRect.position;
             sketchCursor = float2{ float(local.x), float(local.y) };
             const float scale = styleManager.Px(1.0f);
+            const bool erasing = sketchPen.eraser || sketchEraserTool;
             if (sketchDrag.Press(e, elementStorage, MouseButtons::Left, /*atOnce*/ true))
             {
-                if (!sketchPen.eraser)
+                if (!erasing)
                     sketchStrokes.push_back({});
             }
             else if (e.type == EventType::MouseUp)
@@ -95,7 +118,7 @@ namespace tachyon
             else if (!sketchDrag.Move(e, 0))
                 return e.type == EventType::MouseMove;
 
-            if (sketchPen.eraser)
+            if (erasing)
             {
                 EraseSketchAt(sketchCursor, kEraserRadius * scale);
                 return true;
@@ -139,10 +162,14 @@ namespace tachyon
                         ctx.RenderDisc(Pixel(b.pos), b.width * 0.5f, ink);
                     }
                 }
-                // Where the eraser end would take strokes out.
-                if (hovered && sketchPen.eraser)
-                    ctx.RenderCircle(sketchCursor, kEraserRadius * styleManager.Px(1.0f),
-                                     LineStyle{ .colorStyleIndex = theme.accentColor, .lineWidth = styleManager.Px(1.0f) });
+                // Where the pointer is: the eraser's reach, or a small ring where the pen would draw.
+                if (hovered)
+                {
+                    const bool erasing = sketchPen.eraser || sketchEraserTool;
+                    const float radius = erasing ? kEraserRadius : kHoverRingRadius;
+                    ctx.RenderCircle(sketchCursor, radius * styleManager.Px(1.0f),
+                                     LineStyle{ .colorStyleIndex = theme.accentColor, .lineWidth = styleManager.Px(erasing ? 1.0f : 1.5f) });
+                }
             }));
         }
         EndVertical();

@@ -841,6 +841,10 @@ namespace tachyon
         stateMachineStatusStyleRef  = theme.GetStyle("state-machine-status");
         statusDotOkStyleRef         = theme.GetStyle("status-dot-ok");
         sketchPadStyleRef           = theme.GetStyle("sketch-pad");
+        sketchToolbarStyleRef       = theme.GetStyle("sketch-toolbar");
+        sketchChipStyleRef          = theme.GetStyle("sketch-chip");
+        sketchChipLabelStyleRef     = theme.GetStyle("sketch-chip-label");
+        sketchChipValueStyleRef     = theme.GetStyle("sketch-chip-value");
         buildPanelStyleRef          = theme.GetStyle("build-panel");
         buildHeaderStyleRef         = theme.GetStyle("build-header");
         buildTitleStyleRef          = theme.GetStyle("build-title");
