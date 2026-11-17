@@ -134,6 +134,7 @@ namespace tachyon
         StyleRef profilerPctCellStyleRef, profilerPctTrackStyleRef, profilerPctFillStyleRef, profilerPctTextStyleRef;
         StyleRef logDetailPaneStyleRef, logDetailTextStyleRef;
         StyleRef shortcutCategoryStyleRef, shortcutTableStyleRef, shortcutCellStyleRef, settingsTitleStyleRef, settingsScrollStyleRef, sketchPadStyleRef;
+        StyleRef sketchToolbarStyleRef, sketchChipStyleRef, sketchChipLabelStyleRef, sketchChipValueStyleRef;
         StyleRef settingsBodyStyleRef, settingsHeadStyleRef, settingsTitleRowStyleRef, settingsSplitStyleRef;
         StyleRef tableToolbarStyleRef;
         StyleRef stateMachineToolbarStyleRef;   // Step, Restart, the breadcrumb, and the status at the end
@@ -244,6 +245,7 @@ namespace tachyon
         PointerDrag      sketchDrag;
         PenState         sketchPen;          // as of the latest pointer event over the pad
         float2           sketchCursor {};    // where the pointer is on the pad
+        bool             sketchEraserTool = false;   // the Eraser tool picked; a pen's eraser end erases either way
         bool             sketchHovered = false;
 
         // ---- Showcase state ----

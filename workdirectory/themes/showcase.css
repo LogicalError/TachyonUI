@@ -1103,6 +1103,45 @@
     cursor: crosshair;
 }
 
+/* The sketch pad's toolbar: the tools, then the pen's values as chips on a well. */
+.sketch-toolbar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0px;
+    padding: 4px;
+    border-width: 0px;
+    background-color: transparent;
+}
+.sketch-chip {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    margin: 0px;
+    padding: 0px 8px;
+    border-width: 0px;
+    border-radius: var(--radius-md);
+    background-color: var(--bg-well);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.sketch-chip-label, .sketch-chip-value {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 11px;
+    text-wrap: nowrap;
+    vertical-align: middle;
+}
+.sketch-chip-value { color: var(--text-1); font-family: monospace; }
+
 /* Text shadow and glow samples in the misc panel; the padding leaves the glow room. */
 .text-shadow-sample, .text-glow-sample {
     padding: 4px 0px;
