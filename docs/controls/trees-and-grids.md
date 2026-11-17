@@ -153,6 +153,8 @@ void VirtualGridView(ID id, GridViewVirtualState& vstate, int itemCount, int2 ce
 
 - The number of columns comes from the viewport's width in the previous frame.
 - `vstate.cellStretchedW` is the cell width at which the columns fill the viewport exactly.
+  - With fewer items than a row holds, it's the cell width you passed: a few items keep their
+    size rather than spreading over the empty room beside them.
 - The CSS classes: `grid-view-scroll` and `grid-view-row`.
 
 ```cpp

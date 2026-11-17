@@ -100,6 +100,18 @@ namespace tachyon
         /// lazily created resources.
         std::function<void()> onDisable;
 
+        /// The panel's own view state, kept with its layout in the saved UI state (a pan and
+        /// zoom, a camera, the page open), as text in a form of the panel's choosing. saveState
+        /// runs as the state is saved; an empty string keeps nothing. restoreState gets that
+        /// text back when the layout it was saved with comes back (RestoreUIState for a
+        /// PersistDocking layout, RestoreDocumentLayout for a document's), for the panel of
+        /// the same key.
+        ///
+        ///     panel.saveState    = [this] { return SaveViewState(graph); };   // gui_view_state.h
+        ///     panel.restoreState = [this](std::string_view s) { RestoreViewState(graph, s); };
+        std::function<std::string()>          saveState;
+        std::function<void(std::string_view)> restoreState;
+
         /// Kept by the docking; not part of the API.
         struct Internal
         {
@@ -247,6 +259,8 @@ namespace tachyon
         std::string extension;
         std::string kind;
         std::string layout;   ///< its dock tree (SerializeDockTree), panels by type, else title
+        /// Its panels' own view states (Panel::saveState), by panel key.
+        std::vector<std::pair<std::string, std::string>> panelStates;
     };
 
     /// A main window of documents as SaveUIState kept it (TakeSavedDocuments).

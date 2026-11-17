@@ -245,6 +245,45 @@ namespace
         EXPECT_EQ(fresh.root->second->panelIds, (std::vector<ID>{ b[1], b[0] })) << "Details, Log";
     }
 
+    // A panel's own view state (a pan and zoom, say) is kept with its layout and handed back
+    // to the panel of the same key; a panel without one keeps nothing.
+    TEST_F(UIStateTest, APanelsOwnStateComesBackWithItsDock)
+    {
+        auto layoutOf = [](std::initializer_list<const char*> titles) {
+            auto layout = std::make_unique<DockingLayout>();
+            std::vector<ID> ids;
+            uint32_t n = 1;
+            for (const char* title : titles)
+            {
+                ID id = ID::Invalid();
+                id.value.integer = 2000 + n++;
+                layout->panels[id] = Panel{ .id = id, .title = title };
+                ids.push_back(id);
+            }
+            layout->root = MakeLeaf({});
+            layout->root->panelIds = std::move(ids);
+            return layout;
+        };
+        auto first = layoutOf({ "Graph", "Log" });
+        for (auto& [id, panel] : first->panels)
+            if (panel.title == "Graph")
+                panel.saveState = [] { return std::string("pan 10 20 zoom 2"); };
+        app.PersistDocking("dock", *first);
+        const std::string saved = app.SaveUIState();
+
+        auto fresh = layoutOf({ "Log", "Graph" });
+        std::string graphState, logState = "untouched";
+        for (auto& [id, panel] : fresh->panels)
+        {
+            std::string& into = panel.title == "Graph" ? graphState : logState;
+            panel.restoreState = [&into](std::string_view state) { into = state; };
+        }
+        app.PersistDocking("dock", *fresh);
+        ASSERT_TRUE(app.RestoreUIState(saved));
+        EXPECT_EQ(graphState, "pan 10 20 zoom 2");
+        EXPECT_EQ(logState, "untouched") << "it saved nothing";
+    }
+
     TEST_F(UIStateTest, ToolbarsComeBackOnTheirSides)
     {
         auto item = [](const char* name) { ToolbarItem i; i.debugName = name; return i; };
@@ -473,6 +512,31 @@ namespace
         EXPECT_EQ(again.layout.root->splitSize, CssPx(250));
         EXPECT_EQ(TitlesOf(again, again.layout.root->first.get()), (std::vector<std::string>{ "Scene", "Help" })) << "Scene, then the new Help";
         EXPECT_EQ(TitlesOf(again, again.layout.root->second.get()), (std::vector<std::string>{ "Details", "Log" }));
+    }
+
+    // Each document's panels keep their own view state with the document's layout.
+    TEST_F(UIStateTest, ADocumentsPanelsGetTheirOwnStateBack)
+    {
+        DocumentSet set;
+        Document& forest = AddDocument(app, set, "Forest", ".level", "level", { "Viewport", "Log" });
+        for (auto& [id, panel] : forest.layout.panels)
+            if (panel.title == "Viewport")
+                panel.saveState = [] { return std::string("camera 1 2 3"); };
+        const ID window = app.idManager.CreateStaticID();
+        app.PersistDocuments("documents", [&] { return std::vector<DocumentWindowRef>{ { window, &set } }; });
+        const std::string saved = app.SaveUIState();
+
+        ASSERT_TRUE(app.RestoreUIState(saved));
+        std::vector<SavedDocumentWindow> windows = app.TakeSavedDocuments("documents");
+        ASSERT_EQ(windows.size(), 1u);
+        DocumentSet fresh;
+        Document& again = AddDocument(app, fresh, "Forest", ".level", "level", { "Log", "Viewport" });
+        std::string camera;
+        for (auto& [id, panel] : again.layout.panels)
+            if (panel.title == "Viewport")
+                panel.restoreState = [&camera](std::string_view state) { camera = state; };
+        ASSERT_TRUE(app.RestoreDocumentLayout(again, windows[0].documents[0]));
+        EXPECT_EQ(camera, "camera 1 2 3");
     }
 
     TEST_F(UIStateTest, WhatCantBeReadOfSavedDocumentsIsSkipped)

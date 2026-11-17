@@ -71,6 +71,33 @@ There is also:
   PersistLayoutPresets("layouts", presets);
   ```
 
+### A panel's own view
+
+A panel can keep its own view with its layout: a pan and zoom, a camera, the page open.
+
+- Give the panel `saveState` and `restoreState`.
+  - `saveState` returns the view as text; an empty string keeps nothing.
+  - `restoreState` gets that text back when the layout comes back.
+- It's saved with the layout of a `PersistDocking` layout or a `PersistDocuments` document.
+- It comes back to the panel of the same key (its type, else its title):
+  - in `RestoreUIState`, for a `PersistDocking` layout;
+  - in `RestoreDocumentLayout`, for a document.
+- `gui_view_state.h` has `SaveViewState` and `RestoreViewState` for the library's views:
+  - a node view's pan and zoom (`NodeView`);
+  - the part of a timeline in view (`TimelineView`);
+  - the part of a curve plot in view (`CurveView`);
+  - a viewport's camera (`ViewportCamera`);
+  - the settings page open (`SettingsPanelState`), by its name.
+
+```cpp
+const ID graphPanel = CreatePanel(layout.panels, "Graph", IconID::Invalid, [this] { GraphPanel(); });
+layout.panels[graphPanel].saveState    = [this] { return SaveViewState(graph); };
+layout.panels[graphPanel].restoreState = [this](std::string_view state) { RestoreViewState(graph, state); };
+```
+
+Set up a view's defaults before its state is restored, not the first time it's drawn, or
+they replace what came back.
+
 Save and restore:
 
 ```cpp

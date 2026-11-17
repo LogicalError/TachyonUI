@@ -4,6 +4,8 @@
 #include <gui_core/input/gui_command_manager.h> // CommandMode enum (why is this defined here?)
 #include <gui_core/diagnostics/gui_profiler.h>  // Diagnostics::IsProfilingEnabled (profiler panel cache opt-out)
 #include <gui_controls/gui_node_view_helpers.h> // ApplyNodeViewEdit (node-view undo)
+#include <gui_controls/gui_view_state.h>
+#include <gui_core/gui_json.h>
 
 #include <algorithm>
 #include <array>
@@ -46,6 +48,9 @@ namespace tachyon
         // Appearance settings, the shortcuts the user changed, and the layouts saved and the file
         // types' layouts.
         showcase.settingsThemePath = GetThemePath();
+        // The Viewport's camera before any saved one replaces it (Panel::restoreState).
+        scene.camera.target   = { 0.0f, 0.6f, 0.0f };
+        scene.camera.distance = 7.0f;
         PersistValue("theme", showcase.settingsThemePath);
         PersistValue("fontSize", showcase.settingsFontScalePct);
         PersistValue("motion", showcase.settingsMotionIndex);
@@ -1737,9 +1742,40 @@ namespace tachyon
     {
         auto& panels = layout.panels;
         const std::string name(title);
-        if (title == "Viewport")  return CreatePanel(panels, name, showcase.panelViewportIcon, [this] { RenderViewportPanel(); });
-        if (title == "NodeView")  return CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderNodeViewPanel(); });
-        if (title == "StateMachine") return CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderStateMachinePanel(); });
+        // A view that pans, zooms or turns keeps where it is with the layout (Panel::saveState).
+        auto keepView = [&panels](ID id, auto& view) {
+            panels[id].saveState    = [&view] { return SaveViewState(view); };
+            panels[id].restoreState = [&view](std::string_view state) { (void)RestoreViewState(view, state); };
+            return id;
+        };
+        if (title == "Viewport")
+            return keepView(CreatePanel(panels, name, showcase.panelViewportIcon, [this] { RenderViewportPanel(); }), scene.camera);
+        if (title == "NodeView")
+            return keepView(CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderNodeViewPanel(); }), showcase.nodeView);
+        if (title == "StateMachine")
+        {
+            // Both machines' views, and which one is open.
+            const ID id = CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderStateMachinePanel(); });
+            panels[id].saveState = [this] {
+                JsonValue state = JsonValue::MakeObject();
+                state.Set("enemy", SaveViewState(showcase.enemyMachine));
+                state.Set("combat", SaveViewState(showcase.combatMachine));
+                state.Set("combatOpen", showcase.combatOpen);
+                return state.Write();
+            };
+            panels[id].restoreState = [this](std::string_view text) {
+                const Result<JsonValue> state = JsonValue::Parse(text);
+                if (!state || !state->IsObject())
+                    return;
+                if (const JsonValue* enemy = state->Find("enemy"); enemy && enemy->IsString())
+                    (void)RestoreViewState(showcase.enemyMachine, enemy->AsString());
+                if (const JsonValue* combat = state->Find("combat"); combat && combat->IsString())
+                    (void)RestoreViewState(showcase.combatMachine, combat->AsString());
+                if (const JsonValue* open = state->Find("combatOpen"); open && open->IsBool())
+                    showcase.combatOpen = open->AsBool();
+            };
+            return id;
+        }
         if (title == "BoxTest")   return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderBoxTestPanel(); });
         if (title == "Inspector") return CreateInspectorPanel(panels, name);
         if (title == "Hierarchy") return CreateHierarchyPanel(panels, name);
@@ -1762,17 +1798,18 @@ namespace tachyon
             // Its playhead moves while the timeline plays: never cached.
             const ID id = CreatePanel(panels, name, theme.curveBezierIcon, [this] { RenderCurvesPanel(); });
             panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
-            return id;
+            return keepView(id, animationCurves);
         }
         if (title == "Timeline")
         {
             // The simulation's fill grows every frame, playing or not: never cached.
             const ID id = CreatePanel(panels, name, theme.timelinePlayIcon, [this] { RenderTimelinePanel(); });
             panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
-            return id;
+            return keepView(id, animation);
         }
         // Pages are registered once in InitSettingsPages.
-        if (title == "Settings")    return CreatePanel(panels, name, showcase.panelSettingsIcon, [this] { RenderSettingsPanel(showcase.settings); });
+        if (title == "Settings")
+            return keepView(CreatePanel(panels, name, showcase.panelSettingsIcon, [this] { RenderSettingsPanel(showcase.settings); }), showcase.settings);
         if (title == "Profiler")
         {
             const ID id = CreatePanel(panels, name, showcase.panelProfilerIcon, [this] { RenderProfilerTreePanel(); }, {},
