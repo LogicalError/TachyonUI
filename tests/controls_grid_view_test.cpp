@@ -444,6 +444,7 @@ namespace tachyon
             HeadlessGUIApp app;
             tachyon::GridViewVirtualState vstate{};
             int paneW = 600;
+            std::vector<int> cellWidths;   // the width each item was given, last frame
 
             void SetUp() override { ASSERT_TRUE(app.Initialize()); }
             void TearDown() override { app.Cleanup(); }
@@ -464,6 +465,7 @@ namespace tachyon
 
             void Frame()
             {
+                cellWidths.clear();
                 app.Frame([&] {
                     app.BeginRootWindow();
                     app.BeginArea(app.idManager.AllocateDynamicID("outerPane"),
@@ -483,6 +485,7 @@ namespace tachyon
                                         /*itemCount*/5, tachyon::int2{ 80, 80 },
                                         [&](int, tachyon::ID itemID) {
                                             const int w = std::max(80, int(vstate.cellStretchedW));
+                                            cellWidths.push_back(w);
                                             app.GridViewItem(itemID, "file_with_a_long_name.txt", ElementState::None,
                                                              nullptr,
                                                              StyleRef{}, LayoutOverride{}.Size(CssPx(w), 80));
@@ -511,6 +514,20 @@ namespace tachyon
             EXPECT_LE(vstate.lastViewportW, 300 - 180 + 40)
                 << "grid viewport must shrink with the pane; stretched cells must "
                    "not wedge the width at the old size";
+        }
+
+        // A row the items don't fill isn't spread over the room left: each item keeps its
+        // own width, however wide the pane.
+        TEST_F(GridViewShrinkTest, ItemsOfARowTheyDontFillKeepTheirWidth)
+        {
+            for (const int width : { 1000, 1330 })   // room for more than the five
+            {
+                paneW = width;
+                for (int i = 0; i < 4; ++i) Frame();
+                ASSERT_EQ(cellWidths.size(), 5u) << width;
+                for (const int w : cellWidths)
+                    EXPECT_EQ(w, 80) << "pane " << width;
+            }
         }
 
         // BeginGridView: Down moves one laid-out row, even when the row's gaps

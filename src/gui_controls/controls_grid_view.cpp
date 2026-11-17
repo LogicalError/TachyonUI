@@ -457,8 +457,10 @@ namespace tachyon
 
         // Cell widths that exactly fill the row: leftover pixels are spread by floor-boundary
         // rounding, so resizing grows one cell at a time. colBound(k) is column k's left edge;
-        // the per-column width is published right before each generateItem call.
-        const int contentW = std::max(0, availW - (cols - 1) * kGap);
+        // the per-column width is published right before each generateItem call. Fewer items
+        // than a row holds: they keep their own width, not a share of the room beside them.
+        const bool fillsRow = itemCount >= cols;
+        const int  contentW = fillsRow ? std::max(0, availW - (cols - 1) * kGap) : cols * cellW;
         auto colBound = [contentW, cols](int k)
         { return static_cast<int>((int64_t)k * contentW / cols); };
         vstate.cellStretchedW = std::max(cellW, contentW / cols);

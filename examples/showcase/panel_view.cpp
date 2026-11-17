@@ -24,8 +24,7 @@ namespace tachyon
             { "Cone",   SceneMesh::Cone,   place({  1.9f, 0.6f, 0.4f }, 1.2f),  { 0.90f, 0.70f, 0.33f, 1 } },
         };
         scene.showTools = false;   // the toolbar dock's Tools set scene.tool
-        scene.camera.target = { 0.0f, 0.6f, 0.0f };
-        scene.camera.distance = 7.0f;
+        // The camera is set up at startup (Initialize), so a saved one can take its place.
 
         // The app draws its scene: the viewport hands it a command buffer, ready to draw into.
         scene.onRender = [this](const ViewportRenderContext& ctx) {

@@ -9,6 +9,9 @@
 #include <cmath>
 #include <filesystem>
 #include <optional>
+#include <span>
+#include <utility>
+#include <vector>
 
 namespace tachyon
 {
@@ -98,6 +101,49 @@ namespace tachyon
             const JsonValue* v = object.Find(name);
             return v && v->IsString() ? v->AsString() : std::string();
         }
+
+        // A layout's panels' own view states, by panel key: { "NodeView": "..." }; null when
+        // none keeps one.
+        std::optional<JsonValue> PanelStatesJson(const DockingLayout& layout)
+        {
+            JsonValue states = JsonValue::MakeObject();
+            bool any = false;
+            for (const auto& [id, panel] : layout.panels)
+                if (panel.saveState)
+                    if (std::string state = panel.saveState(); !state.empty())
+                    {
+                        states.Set(PanelKey(panel), std::move(state));
+                        any = true;
+                    }
+            return any ? std::optional<JsonValue>(std::move(states)) : std::nullopt;
+        }
+
+        // Saved view states handed to the layout's panels of the same keys.
+        void ApplyPanelStates(DockingLayout& layout, std::span<const std::pair<std::string, std::string>> states)
+        {
+            for (auto& [id, panel] : layout.panels)
+            {
+                if (!panel.restoreState)
+                    continue;
+                const std::string key = PanelKey(panel);
+                for (const auto& [savedKey, state] : states)
+                    if (savedKey == key)
+                    {
+                        panel.restoreState(state);
+                        break;
+                    }
+            }
+        }
+
+        std::vector<std::pair<std::string, std::string>> PanelStatesOf(const JsonValue* states)
+        {
+            std::vector<std::pair<std::string, std::string>> out;
+            if (states && states->IsObject())
+                for (const auto& [key, state] : states->Members())
+                    if (state.IsString())
+                        out.emplace_back(key, state.AsString());
+            return out;
+        }
     }
 
     void GUIApplication::PersistWindow(std::string key, ID windowID)                     { Upsert(m_persistWindows, std::move(key), windowID); }
@@ -175,7 +221,10 @@ namespace tachyon
 
     bool GUIApplication::RestoreDocumentLayout(Document& document, const SavedDocument& saved)
     {
-        return !saved.layout.empty() && ApplyDockTree(document.layout, saved.layout);
+        if (saved.layout.empty() || !ApplyDockTree(document.layout, saved.layout))
+            return false;
+        ApplyPanelStates(document.layout, saved.panelStates);
+        return true;
     }
 
     void GUIApplication::RestoreWindowPlace(ID windowID, const SavedDocumentWindow& saved)
@@ -228,10 +277,16 @@ namespace tachyon
         doc.Set("windows", std::move(windows));
 
         JsonValue docking = JsonValue::MakeObject();
+        JsonValue dockingStates = JsonValue::MakeObject();
         for (const auto& [key, layout] : m_persistDocks)
+        {
             if (std::optional<JsonValue> tree = DockTreeJson(*layout))
                 docking.Set(key, std::move(*tree));
+            if (std::optional<JsonValue> states = PanelStatesJson(*layout))
+                dockingStates.Set(key, std::move(*states));
+        }
         doc.Set("docking", std::move(docking));
+        doc.Set("panelStates", std::move(dockingStates));
 
         // Each main window's documents: which, in what order, the active one and their dock
         // trees, with the window's place.
@@ -255,7 +310,10 @@ namespace tachyon
                     d.Set("extension", document->extension);
                     d.Set("kind", document->kind);
                     if (std::optional<JsonValue> tree = DockTreeJson(document->layout))
-                        d.Set("layout", std::move(*tree));                    items.Push(std::move(d));
+                        d.Set("layout", std::move(*tree));
+                    if (std::optional<JsonValue> states = PanelStatesJson(document->layout))
+                        d.Set("panelStates", std::move(*states));
+                    items.Push(std::move(d));
                 }
                 w.Set("documents", std::move(items));
                 list.Push(std::move(w));
@@ -404,8 +462,11 @@ namespace tachyon
         // Dock trees: panels by key; panels the saved tree doesn't have go to its first leaf.
         // Nothing usable: the app's own layout stays.
         for (const auto& [key, layout] : m_persistDocks)
+        {
             if (const JsonValue* tree = section("docking", key))
                 (void)ApplyDockTree(*layout, tree->Write());
+            ApplyPanelStates(*layout, PanelStatesOf(section("panelStates", key)));
+        }
 
         // Documents: kept for the app, which makes them again (TakeSavedDocuments).
         for (const auto& [key, listWindows] : m_persistDocuments)
@@ -426,7 +487,7 @@ namespace tachyon
                             continue;
                         const JsonValue* tree = d.Find("layout");
                         window.documents.push_back(SavedDocument{ StringOf(d, "name"), StringOf(d, "extension"), StringOf(d, "kind"),
-                                                                  tree ? tree->Write() : std::string() });
+                                                                  tree ? tree->Write() : std::string(), PanelStatesOf(d.Find("panelStates")) });
                     }
                 if (window.documents.empty())
                     continue;
