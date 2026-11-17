@@ -35,6 +35,7 @@ First public preview. The API is not stable yet.
 - Sliders, slider fields, a number field's label drag, color, gradient and dropdown fields report a change (return value and `IsModified`) like the other fields; a clicked tab takes the focus; menu items' parts are no longer Tab stops.
 - Color and gradient swatches show keyboard focus with an accent border, like the fields next to them.
 - Rendering: circles are drawn exactly round, as a primitive of their own (they were four Bezier curves); dots are one triangle each, clipped per pixel; box-shaped primitives are drawn from an index buffer, four vertices each. `SDFGradient` runs from a shape's edge to its deepest point for every primitive.
+- The shaders are written in Slang instead of GLSL, one `*_shader.slang` per primitive kind, so other graphics backends can share them. Building needs `slangc` 2026.1 or newer (Vulkan SDK 1.4.341 or newer) instead of glslang; `SLANGC` names it. The device must now support `shaderInt64` and `shaderDemoteToHelperInvocation`.
 - A cached scope's output (`BeginCached`, docked panels) stays on the GPU: drawing it again, moved or not, uploads nothing.
 - Opaque boxes hide what was drawn under them on the GPU: the depth buffer now holds the draw order, and fragments an opaque box covers are skipped.
 - Uploads (each frame's primitives, cached scopes, images) are copied on a thread of their own while the frame's commands are recorded.

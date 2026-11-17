@@ -24,7 +24,7 @@ namespace tachyon
     {
         constexpr float kPi = std::numbers::pi_v<float>;
 
-        // As scene.vert reads them.
+        // As scene.slang reads them.
         struct Vertex
         {
             float4 position;

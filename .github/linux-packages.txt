@@ -2,7 +2,6 @@ ninja-build
 g++-13
 clang-17
 libvulkan-dev
-glslang-tools
 mesa-vulkan-drivers
 xvfb
 libx11-dev

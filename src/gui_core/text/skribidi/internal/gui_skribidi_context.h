@@ -378,7 +378,7 @@ namespace tachyon
 
 		view_t view {};
 
-		// The glyph distance field: levels per atlas texel (glyph_common.glsl decodes with
+		// The glyph distance field: levels per atlas texel (glyph_shader.slang decodes with
 		// it) and the padding around every glyph, icon and pattern. Quads stop a texel short
 		// of the padding, so the field reaches 16 texels past the ink: room for a text
 		// shadow's blur.

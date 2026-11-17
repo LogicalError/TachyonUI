@@ -67,16 +67,16 @@ namespace tachyon
         // fades a shadow out where the field ends.
         TEST(TextShadowAtlasTest, TheShaderReadsTheDistanceFieldItIsGiven)
         {
-            std::ifstream file("shaders/glyph_common.glsl");
+            std::ifstream file("shaders/glyph_shader.slang");
             ASSERT_TRUE(file) << "run from workdirectory/";
             std::stringstream source;
             source << file.rdbuf();
-            const std::string glsl = source.str();
+            const std::string shader = source.str();
 
             std::smatch m;
-            ASSERT_TRUE(std::regex_search(glsl, m, std::regex(R"(kSdfPerTexel\s*=\s*([0-9.]+)\s*/\s*255\.0)")));
+            ASSERT_TRUE(std::regex_search(shader, m, std::regex(R"(kSdfPerTexel\s*=\s*([0-9.]+)\s*/\s*255\.0)")));
             EXPECT_FLOAT_EQ(std::stof(m[1].str()), SkribidiContext::kSdfDistanceScale);
-            ASSERT_TRUE(std::regex_search(glsl, m, std::regex(R"(kSdfReachTexels\s*=\s*([0-9.]+))")));
+            ASSERT_TRUE(std::regex_search(shader, m, std::regex(R"(kSdfReachTexels\s*=\s*([0-9.]+))")));
             // The quad stops a texel short of the padding; the fade ends half a texel before that.
             EXPECT_FLOAT_EQ(std::stof(m[1].str()), float(SkribidiContext::kSdfPadding - 1) - 0.5f);
             // The field's 8 bits each way cover the reach.

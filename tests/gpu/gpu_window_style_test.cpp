@@ -68,6 +68,42 @@ TEST_F(GpuTest, ATransparentWindowReadsBackWhatItRenders)
     windowBackend->DestroyWindow(window);
 }
 
+// A layered window's frame is read back when it's presented; reading the same frame again
+// (ReadPixels, as tests of tooltips do) copies from the image as it was left, and gets the
+// same pixels.
+TEST_F(GpuTest, ReadingALayeredWindowsFrameAgainIsValidationClean)
+{
+    using WF = tachyon::WindowFlags;
+    const WF flags = WF::Borderless | WF::PopupMenu | WF::NotFocusable | WF::AlwaysOnTop | WF::Transparent | WF::Hidden;
+    const tachyon::int2 size{ 64, 32 };
+    const tachyon::OSWindowHandle window =
+        windowBackend->CreateWindow("readback-test", tachyon::IntRect{ -3000, -3000, size.x, size.y }, flags, nullptr);
+    ASSERT_NE(window, nullptr);
+    tachyon::ID id{};
+    id.value.dynamicParts.mode      = tachyon::IDMode::Static;
+    id.value.dynamicParts.hashValue = 779;
+    auto* ctx = tachyon::vulkan::VulkanWindowContext::Create(id, windowBackend->GetNativeHandle(window), window, size,
+                                                                flags, &vk->deviceContext, [] {});
+    ASSERT_NE(ctx, nullptr);
+    ASSERT_TRUE(ctx->needsReadback);
+
+    sink.Clear();
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        RenderOneFrameWithDot(ctx, size);
+        const std::vector<uint8_t> presented = ctx->cachedBitmap;
+        std::vector<uint8_t> pixels(size_t(size.x) * size.y * 4);
+        ASSERT_TRUE(ctx->ReadPixels(pixels));
+        EXPECT_TRUE(std::equal(pixels.begin(), pixels.end(), presented.begin())) << "frame " << frame;
+    }
+    vk->deviceContext.WaitIdle();
+    EXPECT_FALSE(sink.HasErrors()) << "reading the frame again tripped validation errors:\n" << sink.Dump();
+
+    ctx->Destroy();
+    delete ctx;
+    windowBackend->DestroyWindow(window);
+}
+
 // A layered window, as a tooltip's is, shows only when the backend shows it: a frame
 // presented to it while hidden leaves it hidden. Shown from the present instead, SDL took it
 // for a window shown by the OS and restored it, which activated it.
