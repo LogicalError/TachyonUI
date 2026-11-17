@@ -460,8 +460,16 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
 
     if (swapchain.swapchain != VK_NULL_HANDLE)
     {
-        // Late acquire, after the offscreen frame is recorded: lower display latency.
-        VkResult acq = vkAcquireNextImageKHR(deviceContext->device, swapchain.swapchain, 1000000000, currentFrame.swapchainSemaphore, nullptr, &swapchain.swapchainImageIndex);
+        // Late acquire, after the offscreen frame is recorded: lower display latency. Under
+        // FIFO some drivers (AMD's on Windows) hold the vsync wait here rather than in
+        // present: timed as a wait, and counted with present's (PresentWindowFrame).
+        VkResult acq;
+        {
+            TACHYON_PROFILE_SCOPE_WAIT("Acquire (vsync wait)");
+            const auto acquireStart = std::chrono::steady_clock::now();
+            acq = vkAcquireNextImageKHR(deviceContext->device, swapchain.swapchain, 1000000000, currentFrame.swapchainSemaphore, nullptr, &swapchain.swapchainImageIndex);
+            acquireSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - acquireStart).count();
+        }
         if (acq == VK_ERROR_OUT_OF_DATE_KHR || acq == VK_TIMEOUT || acq == VK_NOT_READY)
         {
             // No image: still submit the offscreen work so renderFence (already
@@ -585,7 +593,9 @@ std::optional<double> VulkanWindowContext::PresentWindowFrame()
             auto queueLock = deviceContext->LockQueue();
             const auto presentStart = std::chrono::steady_clock::now();   // not the lock's wait
             presentResult  =vkQueuePresentKHR(deviceContext->graphicsQueue, &presentInfo);
-            presentSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - presentStart).count();
+            // The frame's whole swapchain wait: the driver holds the vsync in one of the two.
+            presentSeconds = acquireSeconds + std::chrono::duration<double>(std::chrono::steady_clock::now() - presentStart).count();
+            lastSwapchainWaitSeconds = *presentSeconds;
         }
         if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
             resize_requested = true;

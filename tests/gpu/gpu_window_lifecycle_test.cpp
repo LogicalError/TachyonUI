@@ -933,7 +933,9 @@ TEST_F(GpuTest, FrameBuildTimeIncludesRecordingTheFrame)
             ctx->RenderWindowFrame(graphicsContext, tachyon::IntRect{ 0, 0, size.x, size.y }, false);
             const auto renderEnd = std::chrono::steady_clock::now();
             addSeconds    = std::chrono::duration<double>(renderStart - addStart).count();
-            renderSeconds = std::chrono::duration<double>(renderEnd - renderStart).count();
+            // Recording alone: the swapchain's wait (acquire and present, where a driver may
+            // hold the vsync) isn't the frame's work.
+            renderSeconds = std::chrono::duration<double>(renderEnd - renderStart).count() - ctx->LastSwapchainWaitSeconds();
         }
         build = graphicsContext->GetLastFrameBuildSeconds();
         if (build - addSeconds >= renderSeconds * 0.5)
@@ -942,5 +944,5 @@ TEST_F(GpuTest, FrameBuildTimeIncludesRecordingTheFrame)
 
     EXPECT_GE(build - addSeconds, renderSeconds * 0.5)
         << "build " << build * 1000.0 << " ms, adding primitives " << addSeconds * 1000.0
-        << " ms, recording + presenting " << renderSeconds * 1000.0 << " ms";
+        << " ms, recording " << renderSeconds * 1000.0 << " ms";
 }

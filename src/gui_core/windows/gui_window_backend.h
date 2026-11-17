@@ -87,8 +87,9 @@ namespace tachyon
         /// The default does both, through RenderWindowFrame.
         virtual void RecordWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect) { RenderWindowFrame(graphicsContext, rect, false); }
         /// May wait for vsync; nothing to do for a render-to-image window. Returns the seconds
-        /// presenting to the OS took (a vsync wait shows here), or nothing when no frame was
-        /// presented to it (a render-to-image window, a window not recorded this frame).
+        /// the frame waited on the OS to show it: getting its image and presenting it, since a
+        /// driver may hold the vsync wait in either. Nothing when no frame was presented to it
+        /// (a render-to-image window, a window not recorded this frame).
         virtual std::optional<double> PresentWindowFrame() { return std::nullopt; }
         /// True when the window must be recorded this frame even though its draws didn't change
         /// (its swapchain is out of date). False by default.

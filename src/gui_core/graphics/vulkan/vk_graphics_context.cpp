@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@
 #include <gui_core/graphics/gui_image.h>
 #include <gui_core/graphics/gui_buffer.h>
 #include <gui_core/graphics/gui_graphics_context.h>
+#include <gui_core/graphics/gui_gpu_choice.h>
 
 #include <gui_core/graphics/vulkan/vk_types.h>
 #include <gui_core/graphics/vulkan/vk_defaults.h>
@@ -64,6 +66,19 @@ static std::string PhysicalDeviceName(VkPhysicalDevice gpu)
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(gpu, &properties);
     return std::string(properties.deviceName);
+}
+
+// The kind of GPU a Vulkan device type is.
+static tachyon::GpuKind GpuKindOf(VkPhysicalDeviceType type)
+{
+    switch (type)
+    {
+        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return tachyon::GpuKind::Integrated;
+        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:   return tachyon::GpuKind::Discrete;
+        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:    return tachyon::GpuKind::Virtual;
+        case VK_PHYSICAL_DEVICE_TYPE_CPU:            return tachyon::GpuKind::Cpu;
+        default:                                     return tachyon::GpuKind::Other;
+    }
 }
 
 static size_t BytesPerPixel(VkFormat format)
@@ -853,10 +868,10 @@ VkSurfaceKHR tachyon::vulkan::VulkanDeviceContext::CreateSurface(tachyon::OSWind
         physicalDevices.resize(deviceCount);
         vkEnumeratePhysicalDevices(instance, &deviceCount, physicalDevices.data());
         TACHYON_LOG_INFO(kLogVulkan, "Detected Vulkan GPUs:");
-        for (const auto& pd : physicalDevices) {
+        for (size_t i = 0; i < physicalDevices.size(); ++i) {
             VkPhysicalDeviceProperties props;
-            vkGetPhysicalDeviceProperties(pd, &props);
-            TACHYON_LOG_INFO(kLogVulkan, "  - {}", props.deviceName);
+            vkGetPhysicalDeviceProperties(physicalDevices[i], &props);
+            TACHYON_LOG_INFO(kLogVulkan, "  {}: {} ({})", i, props.deviceName, tachyon::GpuKindName(GpuKindOf(props.deviceType)));
         }
     } else {
         TACHYON_LOG_ERROR(kLogVulkan, "No Vulkan GPUs detected!");
@@ -878,22 +893,53 @@ VkSurfaceKHR tachyon::vulkan::VulkanDeviceContext::CreateSurface(tachyon::OSWind
         return fail(VK_NULL_HANDLE);
     }
 
-    // A Vulkan 1.3 GPU that can present to the surface.
+    // The Vulkan 1.3 GPUs that can present to the surface, vk-bootstrap's choice (a discrete
+    // one) first.
     vkb::PhysicalDeviceSelector selector { vkb_inst };
-    auto physicalDeviceOpt = selector
+    auto suitableRet = selector
         .set_minimum_version(1, 3)
         .set_required_features_13(features13)
         .set_required_features_12(features12)
         .set_required_features_11(features11)
         .set_required_features(features)
         .set_surface(surface)
-        .select();
-    if (!physicalDeviceOpt) {
-        TACHYON_LOG_ERROR(kLogVulkan, "No suitable Vulkan GPU found: {}", physicalDeviceOpt.error().message());
-        initError = tachyon::Error{ tachyon::ErrorCode::NotFound, std::format("No suitable Vulkan GPU found: {}", physicalDeviceOpt.error().message()) };
+        .select_devices();
+    if (!suitableRet || suitableRet.value().empty()) {
+        const std::string why = suitableRet ? std::string("none meets the requirements") : suitableRet.error().message();
+        TACHYON_LOG_ERROR(kLogVulkan, "No suitable Vulkan GPU found: {}", why);
+        initError = tachyon::Error{ tachyon::ErrorCode::NotFound, std::format("No suitable Vulkan GPU found: {}", why) };
         return fail(surface);
     }
-    vkb::PhysicalDevice physicalDevice = physicalDeviceOpt.value();
+    const std::vector<vkb::PhysicalDevice>& suitable = suitableRet.value();
+    vkb::PhysicalDevice physicalDevice = suitable.front();
+
+    // The one asked for (SetGpuPreference, or TACHYON_GPU), by the numbers in the list above.
+    if (const std::string preference = tachyon::GpuPreference(gpuPreference); !preference.empty())
+    {
+        std::vector<tachyon::GpuInfo> gpus;
+        for (const VkPhysicalDevice pd : physicalDevices)
+        {
+            VkPhysicalDeviceProperties props;
+            vkGetPhysicalDeviceProperties(pd, &props);
+            gpus.push_back({ props.deviceName, GpuKindOf(props.deviceType) });
+        }
+        const std::optional<size_t> wanted = tachyon::ChooseGpu(gpus, preference);
+        const auto match = wanted ? std::find_if(suitable.begin(), suitable.end(), [&](const vkb::PhysicalDevice& d) {
+                                        return d.physical_device == physicalDevices[*wanted]; })
+                                  : suitable.end();
+        if (!wanted)
+            TACHYON_LOG_WARNING(kLogVulkan, "No GPU matches \"{}\"; using the default", preference);
+        else if (match == suitable.end())
+            TACHYON_LOG_WARNING(kLogVulkan, "GPU {} ({}) can't render here; using the default", *wanted, gpus[*wanted].name);
+        else
+            physicalDevice = *match;
+    }
+    {
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(physicalDevice.physical_device, &props);
+        const auto number = std::find(physicalDevices.begin(), physicalDevices.end(), physicalDevice.physical_device) - physicalDevices.begin();
+        TACHYON_LOG_INFO(kLogVulkan, "Using GPU {}: {} ({})", number, props.deviceName, tachyon::GpuKindName(GpuKindOf(props.deviceType)));
+    }
 
     vkb::DeviceBuilder deviceBuilder { physicalDevice };
     deviceBuilder.set_allocation_callbacks(const_cast<VkAllocationCallbacks*>(AllocationCallbacks()));

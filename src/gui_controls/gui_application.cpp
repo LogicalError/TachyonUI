@@ -179,6 +179,8 @@ namespace tachyon
         graphicsContext->SetAllocationHooks(m_allocationHooks);
         if (options.imageSlots > 0)
             graphicsContext->SetImageSlotCount(options.imageSlots);
+        if (!options.gpu.empty())
+            graphicsContext->SetGpuPreference(options.gpu);
         m_imageWindows   = new tachyon::ImageWindowBackend(*m_osWindowBackend);
         windowBackend    = m_imageWindows;
         windowBackend->SetGraphicsContext(graphicsContext);

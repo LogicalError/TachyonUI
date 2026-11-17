@@ -6,6 +6,44 @@
 - A complete program: `examples/host_device/host_device.cpp`. The
   [Host device](../examples/host-device.md) example walks through it.
 
+## Choosing the GPU
+
+When the GUI creates its own device and the machine has more than one GPU, it takes a
+discrete one first. To take another:
+
+- Set `gpu` in the options you pass to `Initialize`. It takes:
+  - a kind: `"integrated"`, `"discrete"`, `"virtual"` or `"cpu"`
+  - a number: the GPU's place in the log's list of detected GPUs, from 0
+  - part of the GPU's name, in any case: `"radeon"`
+- With a graphics backend of your own (`SetGraphicsBackend`), call `SetGpuPreference` on it
+  before `Initialize` instead.
+- Or set the `TACHYON_GPU` environment variable, in the same forms, to run on another GPU
+  without changing code. It takes the place of the app's choice.
+- A preference no GPU matches, or a GPU that can't present to the window, is logged as a
+  warning, and the default GPU is used.
+
+```cpp
+InitializeOptions options;
+options.gpu = "integrated";
+GUIApplication::Initialize(options);
+```
+
+```text
+set TACHYON_GPU=integrated
+showcase.exe
+```
+
+The log lists the GPUs, then the one in use:
+
+```text
+[info] vulkan: Detected Vulkan GPUs:
+[info] vulkan:   0: NVIDIA GeForce RTX 4070 Ti SUPER (discrete)
+[info] vulkan:   1: AMD Radeon(TM) Graphics (integrated)
+[info] vulkan: Using GPU 1: AMD Radeon(TM) Graphics (integrated)
+```
+
+With your own device (below), you choose the GPU when you create it.
+
 ## Device requirements
 
 `tachyon::vulkan::VulkanDeviceContext::GetDeviceRequirements()` returns what the device

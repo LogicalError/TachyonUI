@@ -90,6 +90,12 @@ namespace tachyon
         virtual void SetImageSlotCount(uint32_t) {}
         /// How many images can be registered at once; 0 when the backend doesn't say.
         virtual uint32_t GetImageSlotCount() const { return 0; }
+        /// Which GPU to render with, when there's more than one: a kind ("integrated",
+        /// "discrete"), the GPU's number in the log's list of detected GPUs, or part of its
+        /// name ("radeon"); see ChooseGpu. Empty, the default, leaves it to the backend (a
+        /// discrete GPU first). The TACHYON_GPU environment variable takes its place when set.
+        /// Call before Initialize. The default does nothing.
+        virtual void SetGpuPreference(std::string_view) {}
         /// Brings the device up; GUIApplication::Initialize calls it once, before any window
         /// context. It may make windows with the backend (Vulkan: a hidden one, to pick a GPU that
         /// can present to it).
