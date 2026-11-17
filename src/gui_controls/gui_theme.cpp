@@ -431,7 +431,13 @@ namespace tachyon
 
         if (textSystem)
             RegisterFontFaces(*textSystem, sheet.fontFaces, themeDir);
-        TACHYON_LOG_INFO(kLogTheme, "loaded {}: {} styles, {} errors", themePath, sheet.styles.size(), sheet.errors.size());
+        // Named from the working directory, as an app usually names it ("themes/dark.css");
+        // a theme somewhere else keeps its full path.
+        std::error_code cwdError;
+        const std::filesystem::path cwd = std::filesystem::current_path(cwdError);
+        const std::string shortPath = cwdError ? themePath
+            : std::filesystem::path(themePath).lexically_proximate(cwd).generic_string();
+        TACHYON_LOG_INFO(kLogTheme, "loaded {}: {} styles, {} errors", shortPath, sheet.styles.size(), sheet.errors.size());
 
         m_variables      = sheet.propertyInfos;
         m_variableValues = sheet.customProperties;
