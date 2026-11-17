@@ -20,6 +20,12 @@
 #include <unordered_map>
 #include <vector>
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 namespace
 {
     using namespace tachyon;
@@ -96,6 +102,27 @@ namespace
         if (!FileSystemIgnoresCase()) GTEST_SKIP() << "the file system tells the names apart, so the wrong one is missing";
         EXPECT_EQ(fs::path(FindPathCaseMismatch(wrong)).generic_string(), exact);
     }
+
+#if defined(_WIN32)
+    // Windows can name a folder by its 8.3 short form ("RUNNER~1", as a temp path may be
+    // given), which no folder listing holds: it's kept as given, and the parts after it are
+    // still checked.
+    TEST_F(PathCaseTest, AShortFolderNameKeepsTheCheckGoing)
+    {
+        const fs::path longFolder = root / "A Long Folder Name";
+        fs::create_directories(longFolder);
+        std::ofstream(longFolder / "Sample.css", std::ios::binary) << ":root {}\n";
+        wchar_t shortName[MAX_PATH] = {};
+        const DWORD length = GetShortPathNameW(longFolder.c_str(), shortName, MAX_PATH);
+        const fs::path shortFolder(std::wstring(shortName, length));
+        if (length == 0 || length >= MAX_PATH || shortFolder.filename() == longFolder.filename())
+            GTEST_SKIP() << "this volume makes no 8.3 short names";
+
+        EXPECT_EQ(FindPathCaseMismatch((shortFolder / "Sample.css").generic_string()), "");
+        EXPECT_EQ(fs::path(FindPathCaseMismatch((shortFolder / "sample.css").generic_string())).generic_string(),
+                  (shortFolder / "Sample.css").generic_string());
+    }
+#endif
 
     TEST_F(PathCaseTest, ARelativePathIsComparedFromTheWorkingDirectory)
     {

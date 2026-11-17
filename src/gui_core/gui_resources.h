@@ -29,9 +29,10 @@ namespace tachyon
 
     /// The spelling on disk of the file or folder at `path` when it exists under a name that
     /// differs from `path` in case only: "Images/logo" gives "images/logo" on a file system
-    /// that ignores case. Empty when every part matches exactly, when nothing is there
-    /// (as on Linux), or when a name can't be told apart from an alias (an 8.3 short name). A
-    /// relative path is compared below the working directory; an absolute one from its root.
+    /// that ignores case. Empty when every part matches exactly, or when nothing is there
+    /// (as on Linux). A name no folder lists, such as an 8.3 short name ("RUNNER~1"), is
+    /// taken as it is, and the parts after it are still compared. A relative path is
+    /// compared below the working directory; an absolute one from its root.
     /// Lists one folder per part, so it costs a directory read per part.
     std::string FindPathCaseMismatch(std::string_view path);
 

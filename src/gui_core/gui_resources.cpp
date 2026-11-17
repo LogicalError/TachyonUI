@@ -76,15 +76,16 @@ namespace tachyon
                 if (folded.empty() && SameNameIgnoringCase(entryName, name))
                     folded = entry;
             }
-            if (exact)
-                onDisk /= part;
-            else if (!folded.empty())
+            if (!folded.empty() && !exact)
             {
                 onDisk /= folded;
                 differs = true;
             }
             else
-                return {}; // an alias the folder doesn't list, such as an 8.3 short name
+                // Exact, or a name the folder doesn't list but that opens (the whole path
+                // exists): an alias such as an 8.3 short name, kept as given so the parts
+                // after it are still checked.
+                onDisk /= part;
         }
         return differs ? onDisk.generic_string() : std::string{};
     }
