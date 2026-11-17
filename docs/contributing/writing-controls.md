@@ -782,6 +782,80 @@ Also:
   if (view.nodeDoubleClick.IsDoubleClick(outerID))
   ```
 
+## Drag and drop inside the application
+
+Any element can be a drag source, and any element can be a drop target. They agree on a
+payload: a type number, and a value of any C++ type that goes with it.
+
+- The payload type is a `uint32_t`.
+  - the library's own are in `DragPayload`:
+    - `DragPayload::Image` carries a `DraggedImage`: the registered image, its size, and its
+      RGBA pixels
+    - `DragPayload::Files` carries a `DraggedFiles`: paths
+  - an application picks its own for its own things, any other non-zero value. A
+    four-character code reads well in a debugger.
+
+    ```cpp
+    constexpr uint32_t kAssetPayload = 0x41535354;   // 'ASST'
+    struct DraggedAsset { AssetID id; };
+    ```
+
+- A drag source is an element with `MakeDragSourceHandler<T>`.
+  - a left press arms it, and it becomes a drag once the pointer moves the drag distance. A
+    click stays a click.
+  - the function gives the payload when the drag starts
+  - the last argument draws a ghost of what is dragged by the pointer.
+    `ImageDragGhost(image, size)` draws a picture, fitted into 64 x 64 CSS px.
+
+    ```cpp
+    element.eventHandler = MakeDragSourceHandler<DraggedImage>(app.guiStateManager, DragPayload::Image,
+        [&] { return DraggedImage{ picture, pictureSize, picturePixels }; },
+        app.ImageDragGhost(picture, pictureSize));
+    ```
+
+  - for a ghost of your own, pass any `DragVisualizer`. It runs every frame of the drag and
+    draws in `DragGhostWindowID()`:
+
+    ```cpp
+    [&](const DragVisualContext& drag) {
+        if (app.BeginCursorGhostWindow(app.DragGhostWindowID(), drag.screenPos))
+            app.AddGhostIcon(icon);
+        app.EndGhostWindow();
+    }
+    ```
+
+- A drop target is an element with `MakeDropTargetHandler<T>`.
+  - it takes a drag of that payload type whose value is a `T`
+  - an optional second function can refuse a payload, for example a folder refusing itself
+  - the first function gets the payload and the source's ID at the drop
+
+    ```cpp
+    element.eventHandler = MakeDropTargetHandler<DraggedAsset>(kAssetPayload,
+        [&](const DraggedAsset& asset, ID /*source*/) { slot.asset = asset.id; },
+        [&](const DraggedAsset& asset) { return IsMaterial(asset.id); });
+    ```
+
+- While a drag is over the target, `DropTargetID()` returns its ID. Draw it as the drop target
+  then.
+
+  ```cpp
+  const bool dropHere = app.DropTargetID() == id;
+  Element well{ .id = id, .styleRef = dropHere ? wellDropStyle : wellStyle };
+  ```
+
+- A payload that refers to data, like `DraggedImage`'s pixels, doesn't copy it. The source
+  keeps the data alive while the drag lasts, and in the frame of the drop.
+- Escape cancels the drag. Nothing is dropped, and `DropTargetID()` is Invalid again.
+- The events behind the helpers, for a handler of your own:
+  - `EventType::DragEnter` when the drag comes over the element: return true to take it
+  - `EventType::DragOver` each frame it stays, `EventType::DragOut` when it leaves
+  - `EventType::Drop` at the release: return true if it took the drop
+  - all of them bubble from the element under the pointer up to its parents, as file drops do
+  - `event.state.dragPayloadType` is the type, `event.state.DraggedAs<T>()` the value (null
+    for another type)
+- Elements in a cached panel take drags too. The panel is built again when the drop target
+  comes or goes.
+
 ## Files from other applications
 
 Files and text can be dragged onto an element from another application.
@@ -824,6 +898,25 @@ app.SetFileDropHandler([&](const FileDrop& drop) {
 ```
 
 No built-in control accepts drops.
+
+One control can take both kinds of drag: a picture dragged from another of its controls and
+an image file from another application.
+
+- handle `FileDragOver` and `FileDrop` beside the in-app drag's events
+- draw it as the drop target while `DropTargetID()` returns it. That covers both kinds, where
+  `FileDragTargetID()` covers files only.
+
+```cpp
+EventHandler takesPictures = MakeDropTargetHandler<DraggedImage>(DragPayload::Image,
+    [&](const DraggedImage& image, ID) { Show(image.rgba, image.size); });
+element.eventHandler = [&, takesPictures](ElementEvent&& event) {
+    if (event.type == EventType::FileDragOver)
+        return true;
+    if (event.type == EventType::FileDrop)
+        return OpenImageFile(event.state.droppedFiles);
+    return takesPictures(std::move(event));
+};
+```
 
 ## Pen input
 
@@ -883,8 +976,8 @@ Do it the same way as similar controls:
 | Move in a list | Items the user puts in order: rows, tabs, columns | Drag the item, or press Alt + an arrow key on the focused item. A reorderable group does both. |
 | Close | Items that can be closed, like tabs | A "Close" item in the context menu, and Ctrl+W / Ctrl+F4 on the focused item |
 | Pan and zoom | A canvas the user moves around in: a graph, a plot, a timeline | `PanDragButton` for the middle button (or Alt + left) and `NavigateByWheel` with `GetWheelMode()` for the wheel and a pinch (see Panning and zooming in Common conventions). Never the right button: it opens menus. |
-| Drag and drop | Values that move from one control to another | A drag source and a drop target that agree on a payload type |
-| Files dropped on it | Controls that import or open files | `FileDragOver` and `FileDrop` (see Files from other applications). Draw the element as the drop target while `FileDragTargetID` returns it. |
+| Drag and drop | Values that move from one control to another | `MakeDragSourceHandler<T>` and `MakeDropTargetHandler<T>` with a payload type both know (see Drag and drop inside the application). Draw the element as the drop target while `DropTargetID` returns it. |
+| Files dropped on it | Controls that import or open files | `FileDragOver` and `FileDrop` (see Files from other applications). Draw the element as the drop target while `DropTargetID` returns it. |
 | Copy and paste | Values that can be written as text | Ctrl+C / Ctrl+V while the control has the focus |
 | Placeholder text | Empty text fields | A hint in the hint style, shown while the field is empty |
 | Validation | Text that must be a number, a name, ... | A validator on the editable text |

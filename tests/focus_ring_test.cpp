@@ -75,6 +75,30 @@ namespace tachyon
             EXPECT_TRUE(FocusVisible());
         }
 
+        // A control shown focused (BeginShownState) has the ring whatever the keyboard did, as a
+        // demo of the focused look needs; one the mouse focused has none.
+        TEST_F(FocusRingTest, AShownFocusHasTheRingWithoutTheKeyboard)
+        {
+            const ID shown = app.idManager.CreateStaticID();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.Button(first, "First", [] {});
+                    app.BeginShownState(ElementState::Focused);
+                    app.Button(shown, "Shown", [] {});
+                    app.EndShownState();
+                    app.EndRootWindow();
+                });
+            };
+            frame();
+            app.ClickAt(app.CenterOf(first));
+            frame();
+            ASSERT_FALSE(FocusVisible());
+            auto element = [&](ID id) -> const Element& { return app.elementStorage.GetElementUnsafe(app.elementStorage.FindElementRefByID(id)); };
+            EXPECT_TRUE(app.ShowsFocusRing(element(shown)));
+            EXPECT_FALSE(app.ShowsFocusRing(element(first)));
+        }
+
         // The theme gives focused buttons their own border in the accent: an outline over it,
         // without a halo round them.
         TEST_F(FocusRingTest, TheThemeGivesFocusedButtonsAnAccentBorder)

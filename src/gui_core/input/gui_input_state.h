@@ -4,6 +4,7 @@
 #include <gui_core/gui_id.h>
 #include <gui_core/input/gui_input_enums.h>
 
+#include <any>
 #include <string>
 #include <vector>
 
@@ -94,6 +95,8 @@ namespace tachyon
         tachyon::ID dragSourceID = tachyon::ID::Invalid();
         uint32_t dragPayloadType = 0;
         uintptr_t dragPayloadValue = 0;
+        /// The payload itself; null outside drag events. DraggedAs reads it.
+        const std::any* dragPayload = nullptr;
         ///@}
 
         /// Text typed with this event, or dropped (EventType::FileDrop); UTF-8.
@@ -108,6 +111,10 @@ namespace tachyon
         bool consumed = false;
 
         bool IsPen() const { return pen.IsPen(); }
+
+        /// A drag event's payload as a T; null when it carries none, or another type.
+        template<class T>
+        const T* DraggedAs() const { return dragPayload ? std::any_cast<T>(dragPayload) : nullptr; }
 
         bool LeftDown() const { return (buttons & tachyon::MouseButtons::Left) != tachyon::MouseButtons::None; }
         bool LeftPressed() const { return LeftDown() && ((prevButtons & tachyon::MouseButtons::Left) == tachyon::MouseButtons::None); }

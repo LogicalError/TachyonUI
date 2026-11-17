@@ -169,7 +169,48 @@ namespace tachyon
     EventHandler MakeDropTargetHandler(uint32_t acceptedPayloadType,
                                        std::function<void(uintptr_t payloadValue, ID sourceID)> onDrop,
                                        std::function<bool(uintptr_t payloadValue)> canDrop = nullptr);
-    
+
+    /// Drag source handler for a typed payload: a left press starts a drag of `payloadType`
+    /// carrying what `getPayload` gives, read by targets with InputState::DraggedAs<T>.
+    /// `ghost` draws it by the pointer (GUIApplication::ImageDragGhost for a picture).
+    template<class T>
+    EventHandler MakeDragSourceHandler(GUIStateManager& guiStateManager, uint32_t payloadType,
+                                       std::function<T()> getPayload, DragVisualizer ghost = {})
+    {
+        return MakeDragSourceHandler(guiStateManager, payloadType, nullptr,
+                                     [get = std::move(getPayload)] { return std::any(get()); }, std::move(ghost));
+    }
+
+    /// Drop target handler for a typed payload: takes a drag of `acceptedPayloadType` whose
+    /// payload is a T, when `canDrop` (optional) says so. `onDrop` gets the payload and the
+    /// source's ID.
+    template<class T>
+    EventHandler MakeDropTargetHandler(uint32_t acceptedPayloadType,
+                                       std::function<void(const T& payload, ID sourceID)> onDrop,
+                                       std::function<bool(const T& payload)> canDrop = nullptr)
+    {
+        return [acceptedPayloadType, onDrop = std::move(onDrop), canDrop = std::move(canDrop)](ElementEvent&& event) -> bool
+        {
+            if (event.state.dragPayloadType != acceptedPayloadType)
+                return false;
+            const T* payload = event.state.DraggedAs<T>();
+            if (!payload || (canDrop && !canDrop(*payload)))
+                return false;
+            switch (event.type)
+            {
+                case EventType::Drop:
+                    if (onDrop) onDrop(*payload, event.state.dragSourceID);
+                    return true;
+                case EventType::DragEnter:
+                case EventType::DragOver:
+                case EventType::DragOut:
+                    return true;
+                default:
+                    return false;
+            }
+        };
+    }
+
 
     
     /// Label-drag speed multiplier: 0.1 with Ctrl, 10 with Shift (which wins), else 1.

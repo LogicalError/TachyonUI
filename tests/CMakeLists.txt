@@ -36,6 +36,7 @@ list(APPEND GUI_CORE_TEST_FILES
   node_view_zoom_test.cpp
   vector_field_test.cpp
   command_search_test.cpp
+  svg_gradient_test.cpp
   svg_stroke_test.cpp
   title_bar_test.cpp
   theme_metrics_test.cpp
@@ -68,6 +69,7 @@ list(APPEND GUI_CORE_TEST_FILES
   label_group_alignment_test.cpp
   drag_drop_test.cpp
   file_drop_test.cpp
+  in_app_drag_test.cpp
   pen_input_test.cpp
   plot_test.cpp
   navigation_test.cpp

@@ -984,4 +984,44 @@ namespace tachyon
         // A child's own children are a list of their own.
         EXPECT_EQ(storage.GetElementPtr(nested)->styleRef.layoutStyleIndex, styleManager.GetChildStyles(grouped.layoutStyleIndex)->only.layoutStyleIndex);
     }
+
+    // A window opened between an element and its children (a tooltip shown for it, a popup it
+    // opens) leaves the element open for them: the children go to it, not to the window.
+    TEST_F(ElementStorageTest, AWindowOpenedBeforeAnElementsChildrenLeavesItOpenForThem)
+    {
+        ASSERT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        ASSERT_NE(storage.Add(CreateElement(1)).ref, ElementRef::Invalid());
+        ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        {
+            const ElementRef well = storage.Add(CreateElement(10)).ref;
+            ASSERT_NE(well, ElementRef::Invalid());
+
+            ASSERT_NE(storage.Add(CreateElement(20, ElementFlags::IsWindow)).ref, ElementRef::Invalid());
+            ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+            ASSERT_NE(storage.Add(CreateElement(21)).ref, ElementRef::Invalid());
+            ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+            EXPECT_EQ(storage.GetLastAddedRef(), well) << "the element before the window";
+            EXPECT_EQ(storage.GetLastAddedID().Value(), 10u);
+
+            ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success) << "its children, after the window";
+            ASSERT_NE(storage.Add(CreateElement(11)).ref, ElementRef::Invalid());
+            ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+            EXPECT_EQ(storage.GetLastItemID().Value(), 10u);
+
+            // With no element waiting for children, none is after a window either.
+            ASSERT_NE(storage.Add(CreateElement(30, ElementFlags::IsWindow)).ref, ElementRef::Invalid());
+            ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+            ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+            EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::MissingAdd);
+        }
+        ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        ASSERT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        const ElementRef wellRef = FindRefByIDAtDepth(10, 1);
+        ASSERT_TRUE(wellRef.IsValid());
+        const ElementRef childRef = FindRefByIDAtDepth(11, 2);
+        ASSERT_TRUE(childRef.IsValid());
+        EXPECT_EQ(storage.GetParentRef(childRef), wellRef);
+        EXPECT_EQ(storage.GetParentRef(FindRefByIDAtDepth(21, 2)), FindRefByIDAtDepth(20, 1));
+    }
 }

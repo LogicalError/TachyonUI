@@ -182,6 +182,7 @@ The palette variables that follow the accent:
 | `--accent`, `--caret`, `--divider-hover` | The accent itself | | |
 | `--selection` | Selected text | 35% | 25% |
 | `--accent-soft` | Selected rows and items, over `--bg-panel` | 16% | 12% |
+| `--accent-faint` | A drop target while something is dragged over it | 6% | 6% |
 | `--bg-menu-hover` | The highlighted menu row, over `--bg-popup` | 16% | 12% |
 | `--focus-ring` | The focus outline: the control's own border in the accent | 100% | 100% |
 | `--selected-ring` | A selected node's halo | 16% | 16% |

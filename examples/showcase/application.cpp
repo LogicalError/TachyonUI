@@ -132,7 +132,6 @@ namespace tachyon
         // A theme reload wipes styleManager, so every showcase StyleRef is stale and
         // gets re-registered. Icons and textures survive the reload.
         boxStyleRefs.clear();
-        animatedHueStyle = tachyon::VisualColorStyleIndex::Invalid;
         InitializeShowcaseStyles();
         ApplyNodeCategories();
         ApplyStateColors();
@@ -855,6 +854,54 @@ namespace tachyon
         filesImportNameStyleRef     = theme.GetStyle("files-import-name");
         hierarchyStreamingStyleRef  = theme.GetStyle("hierarchy-streaming");
         hierarchySkeletonRowStyleRef = theme.GetStyle("hierarchy-skeleton-row");
+        misc.panel             = theme.GetStyle("misc-panel");
+        misc.card              = theme.GetStyle("misc-card");
+        misc.caption           = theme.GetStyle("misc-caption");
+        misc.row               = theme.GetStyle("misc-row");
+        misc.label             = theme.GetStyle("misc-label");
+        misc.rowLabel          = theme.GetStyle("misc-row-label");
+        misc.state             = theme.GetStyle("misc-state");
+        misc.stateLabel        = theme.GetStyle("misc-state-label");
+        misc.richText          = theme.GetStyle("misc-rich-text");
+        misc.canvas            = theme.GetStyle("misc-canvas");
+        misc.thumbTile         = theme.GetStyle("misc-thumb-tile");
+        misc.thumb             = theme.GetStyle("misc-thumb");
+        misc.thumbSelected     = theme.GetStyle("misc-thumb-selected");
+        misc.thumbMissing      = theme.GetStyle("misc-thumb-missing");
+        misc.thumbLoading      = theme.GetStyle("misc-thumb-loading");
+        misc.thumbName         = theme.GetStyle("misc-thumb-name");
+        misc.thumbNameSelected = theme.GetStyle("misc-thumb-name-selected");
+        misc.wellColumn        = theme.GetStyle("misc-well-column");
+        misc.well              = theme.GetStyle("misc-well");
+        misc.wellEmpty         = theme.GetStyle("misc-well-empty");
+        misc.wellDrop          = theme.GetStyle("misc-well-drop");
+        misc.iconButton[0]     = theme.GetStyle("icon-button-20");
+        misc.iconButton[1]     = theme.GetStyle("icon-button-24");
+        misc.iconButton[2]     = theme.GetStyle("icon-button-28");
+        misc.iconButton[3]     = theme.GetStyle("icon-button-32");
+        misc.iconButtonPrimary = theme.GetStyle("icon-button-primary");
+        misc.iconButtonDanger  = theme.GetStyle("icon-button-danger");
+        misc.iconButtonGroup   = theme.GetStyle("icon-button-group");
+        {
+            // The vector drawing's colors: palette ones, and two gradient fills.
+            auto solid = [this](const char* var) {
+                return styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor(var)));
+            };
+            misc.ink        = solid("--text-1");
+            misc.accent     = solid("--accent");
+            misc.canvasFill = solid("--bg-canvas");
+            misc.ring       = solid("--pin-int");
+            auto gradient = [this](float angle, color4b from, color4b to) {
+                Gradient g = Gradient::Linear(angle);
+                g.AddStop(from, 0.0f);
+                g.AddStop(to, 1.0f);
+                GradientHandle h;
+                const VisualColorStyle style = VisualColorStyle::Create(gradientManager, g, ColorType::LinearGradient, h);
+                return styleManager.RegisterVisualColorStyle(style, h);
+            };
+            misc.pentagonFill = gradient(90.0f, color4b{ 0xFF, 0x7A, 0x6B, 0xFF }, color4b{ 0x6B, 0x5B, 0xFF, 0xFF });
+            misc.triangleFill = gradient(45.0f, color4b{ 0x34, 0xD1, 0xBF, 0xD9 }, color4b{ 0x6B, 0x9B, 0xFF, 0xD9 });
+        }
         {
             const char* kSideTag[4]   = { "left", "right", "top", "bottom" };
             const char* kVAlignTag[3] = { "top",  "mid",   "bot" };
@@ -1159,6 +1206,53 @@ namespace tachyon
                 demoImagePixels.assign(bytes, bytes + sizeof(pixels));
             }
 
+            // The Misc panel's sample images: thumbnails (a grey ramp, a hue sweep, a glow that
+            // fades out) and the Copy image well's picture. Straight alpha, rows from the top.
+            {
+                auto lerp = [](color4b a, color4b b, float t) {
+                    auto c = [t](uint8_t x, uint8_t y) { return uint8_t(std::lround(float(x) + (float(y) - float(x)) * t)); };
+                    return color4b{ c(a.r, b.r), c(a.g, b.g), c(a.b, b.b), c(a.a, b.a) };
+                };
+                // `colorAt(u, v)` for each pixel, u and v from 0 to 1 across and down.
+                auto make = [this](uint32_t w, uint32_t h, auto colorAt, std::vector<uint8_t>* keep) -> ImageIndex
+                {
+                    std::vector<color4b> pixels(size_t(w) * h);
+                    for (uint32_t y = 0; y < h; y++)
+                        for (uint32_t x = 0; x < w; x++)
+                            pixels[size_t(y) * w + x] = colorAt(float(x) / float(w - 1), float(y) / float(h - 1));
+                    tachyon::Image* image = graphicsContext->CreateImage(pixels.data(), uint2{ w, h }, tachyon::ImageFormat::R8G8B8A8,
+                                                                         tachyon::Sampler::LinearClampToEdge, true);
+                    if (image == nullptr)
+                        return ImageIndex::Invalid;
+                    const ImageIndex index = graphicsContext->RegisterImage(image);
+                    graphicsContext->DestroyImageAtEnd(image, tachyon::DeviceScope::Application);
+                    if (keep != nullptr)
+                    {
+                        const auto* bytes = reinterpret_cast<const uint8_t*>(pixels.data());
+                        keep->assign(bytes, bytes + pixels.size() * sizeof(color4b));
+                    }
+                    return index;
+                };
+                constexpr color4b kBlack{ 0, 0, 0, 255 }, kWhite{ 255, 255, 255, 255 };
+                misc.grey = make(128, 128, [&](float u, float) { return lerp(kBlack, kWhite, u); }, nullptr);
+                misc.hue = make(128, 128, [&](float u, float v)
+                {
+                    static constexpr color4b stops[] = { { 0xFF, 0x4D, 0x4D, 255 }, { 0xFF, 0xD8, 0x4D, 255 }, { 0x4D, 0xFF, 0x88, 255 },
+                                                         { 0x4D, 0xD2, 0xFF, 255 }, { 0x6B, 0x6B, 0xFF, 255 } };
+                    const float t = (u + v) * 0.5f * float(std::size(stops) - 1);
+                    const size_t i = std::min(size_t(t), std::size(stops) - 2);
+                    return lerp(stops[i], stops[i + 1], t - float(i));
+                }, nullptr);
+                misc.glow = make(128, 128, [&](float u, float v)
+                {
+                    return lerp(color4b{ 0x6B, 0x9B, 0xFF, 230 }, color4b{ 0x6B, 0x9B, 0xFF, 0 }, (u + v) * 0.5f);
+                }, nullptr);
+                misc.picture = make(MiscPanel::kPictureWidth, MiscPanel::kPictureHeight, [&](float u, float v)
+                {
+                    return lerp(color4b{ 0xFF, 0x7A, 0x6B, 255 }, color4b{ 0x6B, 0x5B, 0xFF, 255 }, (u * 2.0f + v) / 3.0f);
+                }, &misc.picturePixels);
+            }
+
             // Register icons from SVG
             {
                 // Document types: drawn in the tab's colors (stroke currentColor).
@@ -1178,13 +1272,32 @@ namespace tachyon
                 const char* circleSvg = R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M 12 2 A 10 10 0 1 1 12 22 A 10 10 0 1 1 12 2 Z" fill="#4A90E2"/></svg>)";
                 showcase.circleIcon = textSystem->RegisterIconFromSVG("circle", circleSvg, strlen(circleSvg));
 
-                // Heart icon - simplified triangular approximation
-                const char* heartSvg = R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 21 L6 12 L6 8 L9 5 L12 7 L15 5 L18 8 L18 12 Z" fill="#E74C3C"/></svg>)";
-                showcase.heartIcon = textSystem->RegisterIconFromSVG("heart", heartSvg, strlen(heartSvg));
-
-                // Star icon - simple 5-point star using only lines
-                const char* starSvg = R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2 L14.5 9 L22 9.5 L16.5 14 L18 22 L12 17.5 L6 22 L7.5 14 L2 9.5 L9.5 9 Z" fill="#F39C12"/></svg>)";
-                showcase.starIcon = textSystem->RegisterIconFromSVG("star", starSvg, strlen(starSvg));
+                // A heart and a star: filled (pink, amber; a dim star for a rating's empty one),
+                // and as outlines in white, which take the text color.
+                static constexpr const char* kHeartPath = "M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z";
+                static constexpr const char* kStarPath  = "M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1Z";
+                auto filled = [this](const char* name, const char* path, const char* color)
+                {
+                    const std::string svg = std::format(R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="{}" fill="{}"/></svg>)", path, color);
+                    return textSystem->RegisterIconFromSVG(name, svg.c_str(), svg.size());
+                };
+                auto outline = [this](const char* name, const char* path, const char* color = "#ffffff")
+                {
+                    const std::string svg = std::format(R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="{}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{}"/></svg>)", color, path);
+                    return textSystem->RegisterIconFromSVG(name, svg.c_str(), svg.size());
+                };
+                showcase.heartIcon         = filled("heart", kHeartPath, "#F472B6");
+                showcase.starIcon          = filled("star", kStarPath, "#E5B454");
+                showcase.starDimIcon       = outline("star-dim", kStarPath);   // an empty one, in the text color
+                showcase.heartOutlineIcon  = outline("heart-outline", kHeartPath);
+                showcase.starOutlineIcon   = outline("star-outline", kStarPath);
+                showcase.likeIcon          = outline("like", kHeartPath, "#F472B6");
+                showcase.boldIcon          = outline("bold", "M6 4h8a4 4 0 0 1 0 8H6ZM6 12h9a4 4 0 0 1 0 8H6Z");
+                showcase.italicIcon        = outline("italic", "M19 4h-9M14 20H5M15 4 9 20");
+                showcase.imageIcon         = outline("image", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM9 7a2 2 0 1 0 0 4 2 2 0 0 0 0-4ZM21 15l-3.1-3.1a2 2 0 0 0-2.8 0L6 21");
+                // A small picture to sit in a line of text.
+                const char* pictureSvg = R"svg(<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF7A6B"/><stop offset="1" stop-color="#6B5BFF"/></linearGradient></defs><rect width="16" height="16" rx="3" fill="url(#p)"/></svg>)svg";
+                showcase.inlinePictureIcon = textSystem->RegisterIconFromSVG("inline-picture", pictureSvg, strlen(pictureSvg));
 
                 // Console log-level icons - coloured badge with a white glyph.
                 const char* infoSvg = R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="#4A90E2"/><circle cx="12" cy="7.5" r="1.6" fill="#ffffff"/><rect x="10.4" y="10.5" width="3.2" height="7.5" rx="1.6" fill="#ffffff"/></svg>)";
@@ -1664,9 +1777,14 @@ namespace tachyon
                 return Diagnostics::IsProfilingEnabled() ? std::nullopt : std::optional<uint64_t>(0); };
             return id;
         }
-        // Misc animates while it's built, so it's never cached.
+        // Misc is still, so it's kept; while files are dragged over the app it's built every
+        // frame, for its Paste image well to show the drag.
         const ID id = CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderMiscPanel(); });
-        panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
+        panels[id].cacheSignature = [this]() -> std::optional<uint64_t> {
+            if (IsFileDragging())
+                return std::nullopt;
+            return uint64_t(pastedImageIndex) ^ (uint64_t(misc.selectedThumb) << 32);
+        };
         return id;
     }
 

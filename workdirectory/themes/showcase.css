@@ -1105,17 +1105,212 @@
 
 /* Text shadow and glow samples in the misc panel; the padding leaves the glow room. */
 .text-shadow-sample, .text-glow-sample {
-    padding: 8px;
+    padding: 4px 0px;
     border-width: 0px;
     background-color: transparent;
     color: var(--text-1);
-    font-size: 20px;
+    font-size: 15px;
     font-weight: 600;
     text-wrap: nowrap;
     vertical-align: middle;
 }
-.text-shadow-sample { text-shadow: 1px 2px 3px #00000099; }
-.text-glow-sample   { text-shadow: 0 0 5px var(--accent); }
+.text-shadow-sample { text-shadow: 0 2px 4px #00000080; }
+.text-glow-sample   { text-shadow: 0 0 8px var(--accent); }
+
+/* ---- The Misc panel: its demos in cards, a caption over each ------------------- */
+.misc-panel {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 20px;
+    margin: 0px;
+    padding: 20px;
+    border-width: 0px;
+    background-color: transparent;
+}
+.misc-card {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 12px;
+    margin: 0px;
+    padding: 14px;
+    border-width: 1px;
+    border-color: var(--panel-border);
+    border-radius: var(--radius-lg);
+    background-color: var(--bg-panel);
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+.misc-caption {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 500;
+    text-wrap: wrap;
+}
+/* A labelled row: the label in a 76px column, then what it shows. */
+.misc-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 8px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+}
+.misc-label, .misc-row-label {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 11px;
+    text-wrap: nowrap;
+    flex-shrink: 0;
+}
+.misc-row-label { width: 76px; }
+/* A state's icon button, its name under it. */
+.misc-state {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    width: 32px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    flex-shrink: 0;
+}
+.misc-state-label {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-3);
+    font-size: 10px;
+    text-align: center;
+    text-wrap: nowrap;
+    flex-shrink: 0;
+}
+/* Body text of the rich text card, lines apart as in a paragraph. */
+.misc-rich-text {
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: var(--font-size);
+    line-height: 19px;
+    text-wrap: wrap;
+}
+/* A drawing surface: the canvas color, a dot grid drawn over it. */
+.misc-canvas {
+    margin: 0px;
+    padding: 0px;
+    border-width: 1px;
+    border-color: var(--line-subtle);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-canvas);
+    overflow: hidden;
+}
+/* Image thumbnails: a 76px square, its name under it. */
+.misc-thumb-tile {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px;
+    width: 76px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.misc-thumb, .misc-thumb-selected, .misc-thumb-missing, .misc-thumb-loading {
+    width: 76px;
+    height: 76px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 1px;
+    border-color: var(--line-subtle);
+    border-radius: var(--radius-lg);
+    background-color: transparent;
+    color: var(--text-3);
+    -tachyon-icon-size: 18px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+.misc-thumb:hover { border-color: var(--line-strong); }
+.misc-thumb-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.misc-thumb-missing { background-color: var(--bg-well); }
+.misc-thumb-missing:hover { border-color: var(--line-strong); }
+.misc-thumb-loading { background-color: var(--skeleton); }
+.misc-thumb-name, .misc-thumb-name-selected {
+    max-width: 76px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    color: var(--text-2);
+    font-size: 11px;
+    text-align: center;
+    text-wrap: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+.misc-thumb-name-selected { color: var(--text-1); }
+/* Clipboard image wells: 112px high. Filled, the image with Copy at its corner; empty,
+   a dashed paste target; with an image dragged over it, the accent. */
+.misc-well-column {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 6px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 0px;
+    background-color: transparent;
+    flex-grow: 1;
+    flex-basis: 0px;
+}
+.misc-well, .misc-well-empty, .misc-well-drop {
+    height: 112px;
+    margin: 0px;
+    padding: 0px;
+    border-width: 1px;
+    border-color: var(--line-subtle);
+    border-radius: var(--radius-lg);
+    background-color: var(--bg-well);
+    color: var(--text-3);
+    -tachyon-icon-size: 20px;
+    text-align: center;
+    -tachyon-vertical-text-align: middle;
+    overflow: hidden;
+}
+.misc-well-empty { border-color: var(--line-strong); border-style: dashed; cursor: pointer; }
+.misc-well-empty:hover, .misc-well:hover { border-color: var(--text-3); }
+.misc-well-drop {
+    border-color: var(--accent);
+    border-style: dashed;
+    background-color: var(--accent-faint);
+    -tachyon-icon-color: var(--accent);
+    cursor: pointer;
+}
 
 /* ---- Progress, where the work happens ---------------------------------------- */
 /* The Build panel: the target, its steps, and Cancel and Build under a line. */

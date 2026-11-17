@@ -822,9 +822,11 @@ namespace tachyon
         /// An invalid control's border color (--error) and the halo around it (--invalid-halo).
         tachyon::color4b               invalidColor {};
         tachyon::VisualShadow          invalidHalo {};
-        /// The .link class: its color, :hover color and cursor, for a ContentRun's linkStyle.
-        /// The LinkStyle defaults when the theme has no such class.
+        /// The .link class: its color, :hover color, cursor and underline, for a ContentRun's
+        /// linkStyle. The LinkStyle defaults when the theme has no such class.
         tachyon::LinkStyle             linkStyle {};
+        /// The .link-internal class, for a link that stays in the app (a dotted underline).
+        tachyon::LinkStyle             internalLinkStyle {};
         tachyon::VisualColorStyleIndex checkerAColor, checkerBColor;     ///< transparency checkerboard
         tachyon::VisualColorStyleIndex alphaTrackColor, alphaFillColor;  ///< a color's alpha bar
         tachyon::VisualColorStyleIndex accentColor, panelColor;          ///< a selected swatch's ring and gap

@@ -72,12 +72,13 @@ namespace tachyon
                                "    --divider-hover: {0};\n"
                                "    --selection: {1};\n"
                                "    --accent-soft: {2};\n"
+                               "    --accent-faint: {5};\n"                 // a drop target
                                "    --bg-menu-hover: {3};\n"
                                "    --focus-ring: inset 0 0 0 1px {0};\n"   // the control's own border, in the accent
                                "    --selected-ring: 0 0 0 3px {4};\n"
                                "}}\n",
                                a, Hex(accent, selection), Hex(Over(panel, accent, soft)), Hex(Over(popup, accent, soft)),
-                               Hex(accent, 0.16f));
+                               Hex(accent, 0.16f), Hex(accent, 0.06f));
         }
     }
 
@@ -523,12 +524,16 @@ namespace tachyon
             tint("--frame-band-tint", nodeTints.frameBand);
             tint("--frame-border-tint", nodeTints.frameBorder);
         }
-        if (const Style* link = sheet.GetStyle("link"))
-            linkStyle = LinkStyle{ .color      = link->states[ElementState::None].textColor.GetFirstColor(),
-                                   .hoverColor = link->states[ElementState::Hover].textColor.GetFirstColor(),
-                                   .cursor     = link->cursor };
-        else
-            linkStyle = LinkStyle{};
+        auto linkFrom = [&sheet](const char* name) {
+            const Style* link = sheet.GetStyle(name);
+            return link ? LinkStyle{ .color      = link->states[ElementState::None].textColor.GetFirstColor(),
+                                     .hoverColor = link->states[ElementState::Hover].textColor.GetFirstColor(),
+                                     .cursor     = link->cursor,
+                                     .underline  = link->states[ElementState::None].textStyle.underLine }
+                        : LinkStyle{};
+        };
+        linkStyle         = linkFrom("link");
+        internalLinkStyle = sheet.GetStyle("link-internal") ? linkFrom("link-internal") : linkStyle;
         checkerAColor         = lineColorFromCSS("--checker-a", color4f{ 0.16f, 0.18f, 0.22f, 1.0f });
         checkerBColor         = lineColorFromCSS("--checker-b", color4f{ 0.12f, 0.13f, 0.16f, 1.0f });
         alphaTrackColor       = lineColorFromCSS("--alpha-track", color4f{ 0.04f, 0.05f, 0.06f, 1.0f });

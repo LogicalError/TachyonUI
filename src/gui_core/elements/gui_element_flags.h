@@ -56,6 +56,9 @@ namespace tachyon
         /// Drawn differently every frame (a spinner, a sliding bar): a BeginCached scope
         /// holding it is rebuilt every frame instead of replayed.
         Animated                  = 1u << 24,
+        /// Shown focused (GUIApplication::BeginShownState): its focus ring shows whether or
+        /// not focus came from the keyboard.
+        ShownFocused              = 1u << 26,
 
         IsMenuWindow = IsWindow | WindowUserControlled | WindowNoCaption | WindowIsPopup | Shadows
     };

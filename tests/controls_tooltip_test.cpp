@@ -486,6 +486,33 @@ namespace tachyon
             EXPECT_TRUE(app.tooltipManager.IsVisible());
         }
 
+        // A tooltip set between a box and its children is built right there, in a window of its
+        // own: the box's children still go to the box.
+        TEST_F(ControlsTooltipTest, ATooltipShownBeforeABoxsChildrenLeavesThemToTheBox)
+        {
+            const ID boxID = app.idManager.CreateStaticID(), childID = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.RegisterElement(Element{ .id = boxID, .styleRef = app.theme.emptyVertStyleRef }, LayoutOverride{}.Size(200, 100));
+                app.SetTooltip(boxID, "Help text");
+                EXPECT_EQ(app.elementStorage.BeginChildren(), ElementStorageResult::Success);
+                app.RegisterElement(Element{ .id = childID, .styleRef = app.theme.emptyVertStyleRef }, LayoutOverride{}.Size(50, 50));
+                EXPECT_EQ(app.elementStorage.EndChildren(), ElementStorageResult::Success);
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.InjectMouseMove(app.CenterOf(boxID) + int2{ 60, 0 });
+            app.Frame(draw);
+            app.Frame(draw);
+            app.AdvanceTime(700);
+            app.Frame(draw);
+            ASSERT_TRUE(app.tooltipManager.IsVisible()) << "test setup: shown, so built between the box and its children";
+            app.Frame(draw);
+            const ElementRef child = app.elementStorage.FindElementRefByID(childID);
+            ASSERT_TRUE(child.IsValid());
+            EXPECT_EQ(app.elementStorage.GetParentRef(child), app.elementStorage.FindElementRefByID(boxID));
+        }
+
         // A control's content carries its tooltip (#19); content without one shows none.
         TEST_F(ControlsTooltipTest, AContentTooltipShowsAfterHoverDelay)
         {

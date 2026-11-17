@@ -13,6 +13,10 @@
 
 namespace tachyon
 {
+	/// The paint tag of a link's underline shown at rest (LinkStyle::underline): drawn whether
+	/// or not it's hovered. SKB_PAINT_DECORATION_LINK's is drawn only while hovered.
+	inline constexpr uint32_t kLinkUnderlineAtRest = SKB_TAG('l', 'n', 'k', 'u');
+
     // An editor's whole text, as UTF-8.
     inline std::string EditorText(const skb_editor_t* editor)
     {
@@ -134,7 +138,7 @@ namespace tachyon
 		// Link runs as codepoint ranges into `text` (the editor's text), for the selectable-rich
 		// editor: drives link styling applied to the editor and hover/color in RenderEditor.
 		// Populated by RegisterEditableRichText; empty for non-rich / non-editable text.
-		struct LinkRange { intptr_t contentId; int32_t start; int32_t end; skb_color_t color; skb_color_t hoverColor; };
+		struct LinkRange { intptr_t contentId; int32_t start; int32_t end; skb_color_t color; skb_color_t hoverColor; TextDecoration underline; };
 		std::vector<LinkRange> linkRanges;
 
 		// Content ID currently being hovered (0 = none); drives hover paint state in RenderText

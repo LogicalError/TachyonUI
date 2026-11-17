@@ -27,6 +27,7 @@ namespace tachyon
         m_frameVisualizerOverrideCurrent = {};
         m_frameVisualizerOverrideNext    = {};
         m_dragValidatedTargetID = ID::Invalid();
+        m_dragTakerID           = ID::Invalid();
     }
 
     void DragDropState::ClearEvents()
@@ -38,6 +39,7 @@ namespace tachyon
         m_dragEventSourceID       = ID::Invalid();
         m_dragEventPayloadType    = 0;
         m_dragEventPayloadValue   = 0;
+        m_dragEventPayload.reset();
     }
 
     void DragDropState::SetEventPayload(ID sourceID, uint32_t payloadType, uintptr_t payloadValue)
@@ -163,6 +165,7 @@ namespace tachyon
                 if (releaseTarget != ID::Invalid())
                 {
                     m_dragDropTargetID = releaseTarget;
+                    m_dragEventPayload = std::move(m_dragPayload);   // the Drop handler reads it
                 }
                 else if (m_dragOverID != ID::Invalid())
                 {

@@ -1048,6 +1048,24 @@ namespace tachyon
 			return m_skribidiContext->styleManager->RegisterColorStyle(ColorStyle::Create(c), ImageIndex::Invalid);
 		};
 
+		// Under everything, the boxes of runs with a background (inline code): rounded, and
+		// without the text's shadow.
+		ctx->view = textView;
+		for (int32_t ri = 0; ri < layout_runs_count; ri++)
+		{
+			const skb_layout_run_t* run = &layout_runs[ri];
+			if (run->type == SKB_CONTENT_RUN_ICON)
+				continue;
+			const skb_attribute_paint_t paint = skb_attributes_get_paint(SKB_PAINT_TEXT_BACKGROUND, SKB_PAINT_STATE_DEFAULT,
+				skb_layout_get_layout_run_attributes(layout, run), layout_params->attribute_collection);
+			if (paint.paint_tag != SKB_PAINT_TEXT_BACKGROUND || paint.color.a == 0)
+				continue;
+			const skb_rect2_t r = view_transform_rect(&ctx->view, run->bounds);
+			const int32_t x0 = int32_t(std::floor(r.x)), y0 = int32_t(std::floor(r.y));
+			const IntRect box{ x0, y0, int32_t(std::ceil(r.x + r.width)) - x0, int32_t(std::ceil(r.y + r.height)) - y0 };
+			ctx->guiRenderer->RenderQuad(box, clipRect, runColorIndex(paint), m_skribidiContext->styleManager->Px(3.0f));
+		}
+
 		// Under the text, its decorations and its icon, every shadow; then those themselves.
 		ctx->DrawWithShadows(entry->textShadows, [&]
 		{
@@ -1062,9 +1080,11 @@ namespace tachyon
 				const skb_attribute_set_t run_attributes = skb_layout_get_layout_run_attributes(layout, run);
 				const uint32_t paint_state = (run->content_id != 0 && run->content_id == entry->hoveredContentId)
 					? SKB_PAINT_STATE_HOVER : SKB_PAINT_STATE_DEFAULT;
-				// A link's underline is shown ONLY on hover; plain underlines always show.
-				const bool isLinkDeco = (decoration->line.paint_tag == SKB_PAINT_DECORATION_LINK);
-				if (isLinkDeco && paint_state != SKB_PAINT_STATE_HOVER)
+				// A link's underline shows at rest when its style has one, else only while it's
+				// hovered; plain underlines always show.
+				const bool hoverOnly  = (decoration->line.paint_tag == SKB_PAINT_DECORATION_LINK);
+				const bool isLinkDeco = hoverOnly || decoration->line.paint_tag == kLinkUnderlineAtRest;
+				if (hoverOnly && paint_state != SKB_PAINT_STATE_HOVER)
 					continue;
 				const skb_attribute_paint_t paint = skb_attributes_get_paint(decoration->line.paint_tag, paint_state, run_attributes, layout_params->attribute_collection);
 				if (paint.paint_tag != decoration->line.paint_tag)
@@ -1132,9 +1152,10 @@ namespace tachyon
 				skb_attribute_paint_t paint = skb_attributes_get_paint(SKB_PAINT_TEXT, paint_state, run_attributes, layout_params->attribute_collection);
 
 				skb_color_t color = paint.color;
-				// A run with its own colour (link) renders in that colour; otherwise the
-				// element's single text colour is used.
-				const VisualColorStyleIndex glyphColor = (run->content_id != 0) ? runColorIndex(paint) : entry->textColorIndex;
+				// A run with its own colour (a link, or ContentRun::color) renders in that colour;
+				// otherwise the element's single text colour is used.
+				const VisualColorStyleIndex glyphColor = (paint.paint_tag == SKB_PAINT_TEXT && paint.color.a != 0)
+					? runColorIndex(paint) : entry->textColorIndex;
 				for (int32_t gi = run->glyph_range.start; gi < run->glyph_range.end; gi++)
 				{
 					const skb_glyph_t* glyph = &glyphs[gi];
