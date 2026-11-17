@@ -22,7 +22,8 @@ namespace tachyon::detail
     std::span<const EmbeddedFile> EmbeddedShaderFiles();
 
     /// The file whose key ends `path` at a folder boundary: "themes/styles.css" and
-    /// "C:/app/resources/themes/../themes/styles.css" both find "themes/styles.css". Case is
-    /// ignored on Windows, as Windows file names do. Empty when none does.
+    /// "C:/app/resources/themes/../themes/styles.css" both find "themes/styles.css". The case
+    /// must match on every platform, so a wrong case found on Windows fails there as it would on
+    /// Linux. Empty when none does.
     std::span<const std::byte> FindEmbeddedFile(std::span<const EmbeddedFile> files, std::string_view path);
 }

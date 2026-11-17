@@ -1,5 +1,6 @@
 #include <gui_core/diagnostics/gui_logging.h>
 #include <gui_core/gui_embedded_files_internal.h>
+#include <gui_core/gui_resources.h>
 #include <gui_core/graphics/vulkan/vk_types.h>
 #include <gui_core/graphics/vulkan/vk_rhi.h>
 #include <gui_core/graphics/vulkan/vk_device_context.h>
@@ -84,6 +85,7 @@ VkBuffer GUIRenderContext::QuadIndices(tachyon::vulkan::VulkanDeviceContext& dev
 // Reads a SPIR-V file into words; empty on failure.
 static std::vector<uint32_t> ReadSpirvFile(const std::string& filePath)
 {
+    if (!tachyon::CheckPathCase(filePath)) return {};
     std::ifstream file(filePath, std::ios::ate | std::ios::binary);
     if (!file.is_open()) return {};
 

@@ -5,6 +5,7 @@
 
 #include <gui_core/diagnostics/gui_logging.h>
 #include <gui_core/diagnostics/gui_profiler.h>
+#include <gui_core/gui_resources.h>
 
 #include <gui_core/text/gui_icon_text_placement.h>
 #include <gui_core/text/gui_text_atlas_manager.h>
@@ -244,7 +245,7 @@ namespace tachyon
 
 	IconID SkribidiTextSystem::RegisterIconFromSVGFile(const char* path)
 	{
-		if (!path)
+		if (!path || !CheckPathCase(path))
 			return IconID::Invalid;
 
 		std::ifstream file(path, std::ios::binary | std::ios::ate);

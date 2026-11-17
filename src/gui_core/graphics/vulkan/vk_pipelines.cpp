@@ -1,5 +1,6 @@
 ﻿#include <gui_core/graphics/vulkan/vk_types.h>
 #include <gui_core/diagnostics/gui_logging.h>
+#include <gui_core/gui_resources.h>
 #include <gui_core/graphics/vulkan/vk_pipelines.h>
 #include <gui_core/graphics/vulkan/vk_initializers.h>
 
@@ -218,6 +219,8 @@ void PipelineBuilder::enable_depthtest(bool depthWriteEnable, VkCompareOp op)
 
 bool tachyon::vulkan::load_shader_module(const char* filePath, VkDevice device, const VkAllocationCallbacks* callbacks, VkShaderModule* outShaderModule)
 {
+    if (!tachyon::CheckPathCase(filePath))
+        return false;
     // Opened at the end so tellg() gives the size.
     std::ifstream file(filePath, std::ios::ate | std::ios::binary);
 
