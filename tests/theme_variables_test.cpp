@@ -10,7 +10,9 @@
 #include <gui_core/style/gui_style_sheet.h>
 #include <gui_core/diagnostics/gui_logging.h>
 
+#include <algorithm>
 #include <string>
+#include <vector>
 
 namespace tachyon
 {
@@ -373,6 +375,28 @@ namespace tachyon
             const uint32_t again = app.styleManager.Generation();
             Frame();
             EXPECT_EQ(app.styleManager.Generation(), again) << "the same value again changes nothing";
+        }
+
+        // The theme that loaded is logged by its path from the working directory, as the app
+        // names it, not the full path the resource root gives it.
+        TEST_F(ThemeVariableChanges, ALoadedThemeIsLoggedByItsShortPath)
+        {
+            struct Captured { std::vector<std::string> messages; } captured;
+            auto sink = [](const Diagnostics::LogRecord& record, void* context) {
+                char message[512];
+                Diagnostics::FormatLogMessage(record, message);
+                static_cast<Captured*>(context)->messages.push_back(message);
+            };
+            const Diagnostics::LogSeverity minimum = Diagnostics::GetMinimumLogSeverity();
+            Diagnostics::SetMinimumLogSeverity(Diagnostics::LogSeverity::Info);
+            ASSERT_TRUE(Diagnostics::AddLogSink(sink, &captured));
+            app.RequestReloadTheme("themes/light.css", 1.0f);
+            Frame();
+            Diagnostics::RemoveLogSink(sink, &captured);
+            Diagnostics::SetMinimumLogSeverity(minimum);
+            const auto loaded = std::ranges::find_if(captured.messages, [](const std::string& m) { return m.starts_with("loaded "); });
+            ASSERT_NE(loaded, captured.messages.end());
+            EXPECT_TRUE(loaded->starts_with("loaded themes/light.css:")) << *loaded;
         }
 
         // Dark keeps its changes and Light its own; back on Dark, they're back.

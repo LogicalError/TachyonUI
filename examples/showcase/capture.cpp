@@ -60,8 +60,11 @@ namespace tachyon
         };
 
         // What's captured, in order. A panel's first frames lay it out, measure its text and
-        // load its images before it's read.
+        // load its images before it's read. The main window comes first, while its log holds
+        // only what the app logged as it started, not the shots saved: its dark shot is the
+        // README's screenshot (docs/screenshot.png).
         constexpr CaptureShot kCaptureShots[] = {
+            { "Main",         CaptureScene::Main },
             { "Viewport",     CaptureScene::Panel, "Viewport" },
             { "NodeView",     CaptureScene::Panel, "NodeView" },
             { "StateMachine", CaptureScene::Panel, "StateMachine" },
@@ -92,7 +95,6 @@ namespace tachyon
             { "ContextMenu",    CaptureScene::Panel, "Inspector", CaptureAct::RightClick, CaptureTarget::Text, "Click me" },
             { "ColorPicker",    CaptureScene::Panel, "Inspector", CaptureAct::Click,      CaptureTarget::ColorSwatch },
             { "GradientEditor", CaptureScene::Panel, "Inspector", CaptureAct::Click,      CaptureTarget::GradientSwatch },
-            { "Main",       CaptureScene::Main },
             { "MenuFile",   CaptureScene::Main, nullptr, CaptureAct::Click, CaptureTarget::Text, "File" },
             { "MenuEdit",   CaptureScene::Main, nullptr, CaptureAct::Click, CaptureTarget::Text, "Edit" },
             { "TasksPopover", CaptureScene::Main, nullptr, CaptureAct::Click, CaptureTarget::TasksPill },

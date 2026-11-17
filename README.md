@@ -24,7 +24,7 @@
   <a href="CHANGELOG.md"><b>Changelog</b></a>
 </p>
 
-![The showcase application: docking, a node graph, the profiler, a file browser and a log](docs/screenshot.png)
+![The showcase application: document tabs in the title bar, docked panels with a 3D viewport, a node graph, a state machine, the inspector, a file browser, a log and a build in progress](docs/screenshot.png)
 
 TachyonUI is for building tools: game and level editors, audio editors, image and 3D tools.
 It opens its own windows out of the box, and can also be embedded in an application that
