@@ -44,6 +44,7 @@
 
     --accent: #6B9BFF;
     --accent-soft: #202A3D;        /* the accent at 16% over --bg-panel */
+    --accent-faint: #6B9BFF0F;     /* the accent at 6% */
     --on-accent: #0B0C0F;
     --on-accent-muted: #0B0C0F9E;  /* --on-accent at 62% */
 

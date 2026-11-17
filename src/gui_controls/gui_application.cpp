@@ -1393,8 +1393,7 @@ namespace tachyon
                             m_uiCache->Invalidate(captureScopeId);
                         // Windows get an OS-drawn shadow instead.
                         const bool isWindow = (childElement.flags & ElementFlags::IsWindow) != ElementFlags::None;
-                        const bool ring     = !isWindow && (state & ElementState::Focused) != ElementState::None &&
-                                              guiStateManager.Interaction().IsFocusVisible();
+                        const bool ring     = !isWindow && ShowsFocusRing(childElement);
                         if (!isWindow)
                             RenderBoxShadows(rectLayout, parentClipRectScreen, ts, ring);
                         // The topmost invalid element: an error halo, growing in as it turns invalid.
@@ -2058,7 +2057,6 @@ namespace tachyon
             const UICacheManager::Scope* scope = m_uiCache ? m_uiCache->Find(id) : nullptr;
             return scope && !scope->missedThisFrame;
         };
-        const ID previousTarget = m_fileDragTargetID;
         m_fileDragTargetID = ID::Invalid();
         if (inputManager)
         {
@@ -2091,13 +2089,16 @@ namespace tachyon
                     offer(drop, over);
             }
         }
-        // The drop target is drawn as one: redraw where it was and where it is.
-        if (m_fileDragTargetID != previousTarget)
+        // The drop target is drawn as one: redraw where it was and where it is, for a drag from
+        // another application or from this one (whose target the dispatch just set).
+        const ID target = DropTargetID();
+        if (target != m_drawnDropTargetID)
         {
-            if (previousTarget != ID::Invalid())
-                InvalidateCachedScopesAbove(previousTarget);
-            if (m_fileDragTargetID != ID::Invalid())
-                InvalidateCachedScopesAbove(m_fileDragTargetID);
+            if (m_drawnDropTargetID != ID::Invalid())
+                InvalidateCachedScopesAbove(m_drawnDropTargetID);
+            if (target != ID::Invalid())
+                InvalidateCachedScopesAbove(target);
+            m_drawnDropTargetID = target;
         }
     }
 }

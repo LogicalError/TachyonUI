@@ -76,6 +76,7 @@ namespace tachyon
             EXPECT_TRUE(Near(Color("--caret"), teal));
             EXPECT_TRUE(Near(Color("--divider-hover"), teal));
             EXPECT_TRUE(Near(Color("--selection"), Rgba(0x34D1BF59)));
+            EXPECT_TRUE(Near(Color("--accent-faint"), Rgba(0x34D1BF0F)));   // 6%: a drop target
             const color4b panel = Color("--bg-panel"), popup = Color("--bg-popup");
             auto over = [&](color4b base, float amount) {
                 auto mix = [amount](byte from, byte to) { return byte(std::lround(float(from) + (float(to) - float(from)) * amount)); };
@@ -116,7 +117,7 @@ namespace tachyon
                 app.SetAccent(std::nullopt);
                 app.RequestReloadTheme(palette, 1.0f);
                 Frame();
-                const char* names[] = { "--accent", "--caret", "--divider-hover", "--selection", "--accent-soft", "--bg-menu-hover" };
+                const char* names[] = { "--accent", "--caret", "--divider-hover", "--selection", "--accent-soft", "--accent-faint", "--bg-menu-hover" };
                 color4b own[std::size(names)];
                 for (size_t i = 0; i < std::size(names); ++i)
                     own[i] = Color(names[i]);

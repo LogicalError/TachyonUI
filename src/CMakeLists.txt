@@ -306,6 +306,12 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/.. FILES ${GUI_FILES})
 target_link_libraries(gui_core
   PUBLIC  vma Vulkan::Headers
   PRIVATE Vulkan::Vulkan vkbootstrap skribidi nanosvg)
+# nanosvg is header-only, included from the third-party cache, whose headers the build
+# doesn't track: the one file that compiles it is rebuilt when the cache's copy changes.
+if(EXISTS "${TACHYON_TP_INSTALL}/include/nanosvg/nanosvg.h")
+  set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/gui_core/text/skribidi/internal/nanosvg_bridge.cpp
+    PROPERTIES OBJECT_DEPENDS "${TACHYON_TP_INSTALL}/include/nanosvg/nanosvg.h")
+endif()
 if(TACHYON_SDL)
   target_link_libraries(gui_core PRIVATE ${TACHYON_SDL_TARGET})
   if(APPLE)   # the cursor size from the universal-access preferences

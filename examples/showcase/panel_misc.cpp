@@ -1,24 +1,38 @@
 #include "application.h"
+#include <gui_controls/gui_file_thumbnails.h>
+#include <gui_controls/gui_node_view_helpers.h>
 #include <gui_core/diagnostics/gui_logging.h>
 
 //
-// This file is for testing and prototyping various miscellaneous GUI rendering features that don't fit into other categories, such as custom draw, on-demand color styles, polygons, dashed borders, etc.
+// The Misc panel: drawing, icon buttons, rich text, image thumbnails and the clipboard's image
+// wells, each in a card with a caption; then cards of further text and image demos.
 //
 
 #include <algorithm>
-#include <chrono>
+#include <array>
 #include <cmath>
 #include <format>
 #include <iterator>
+#include <numbers>
+#include <span>
 #include <vector>
 
 static constexpr tachyon::Diagnostics::LogCategory kLogShowcase = tachyon::Diagnostics::MakeLogCategory("showcase");
 
 namespace tachyon
 {
+    namespace
+    {
+        color4b ToBytes(color4f c)
+        {
+            auto b = [](float v) { return uint8_t(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+            return color4b{ b(c.r), b(c.g), b(c.b), b(c.a) };
+        }
+    }
+
     void Application::CopyDemoImage()
     {
-        const ClipboardImage image{ 64, 64, demoImagePixels };
+        const ClipboardImage image{ MiscPanel::kPictureWidth, MiscPanel::kPictureHeight, misc.picturePixels };
         if (!clipboard || !clipboard->SetImage(image))
             ShowToast(ToastDesc{ .severity = Severity::Warning, .title = "Image not copied", .body = "This clipboard takes no images." });
     }
@@ -31,12 +45,31 @@ namespace tachyon
             ShowToast(ToastDesc{ .severity = Severity::Info, .title = "No image to paste", .body = "The clipboard holds no image." });
             return;
         }
-        tachyon::Image* created = graphicsContext->CreateImage(const_cast<uint8_t*>(image.rgba.data()), uint2{ image.width, image.height },
+        ShowPastedImage(image.rgba.data(), uint2{ image.width, image.height });
+    }
+
+    void Application::PasteImageFile(const std::string& path)
+    {
+        // The shell's picture of the file, as large as the well can use.
+        static const FileThumbnails::Reader reader = FileThumbnails::ShellReader();
+        FileThumbnails::Picture picture;
+        if (!reader || !reader(std::filesystem::path(reinterpret_cast<const char8_t*>(path.c_str())), 512, picture) || picture.rgba.empty())
+        {
+            ShowToast(ToastDesc{ .severity = Severity::Info, .title = "No image to paste",
+                                 .body = "That file has no picture to show." });
+            return;
+        }
+        ShowPastedImage(picture.rgba.data(), picture.size);
+    }
+
+    void Application::ShowPastedImage(const uint8_t* rgba, uint2 size)
+    {
+        tachyon::Image* created = graphicsContext->CreateImage(const_cast<uint8_t*>(rgba), size,
                                                                ImageFormat::R8G8B8A8, Sampler::LinearClampToEdge, true);
         if (created == nullptr)
         {
             ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Image not pasted",
-                                 .body = std::format("A {} x {} image can't be made here.", image.width, image.height) });
+                                 .body = std::format("A {} x {} image can't be made here.", size.x, size.y) });
             return;
         }
         // The one pasted before goes once the GPU is done with it.
@@ -47,395 +80,437 @@ namespace tachyon
         }
         pastedImage      = created;
         pastedImageIndex = graphicsContext->RegisterImage(created);
-        pastedImageSize  = uint2{ image.width, image.height };
+        pastedImageSize  = size;
     }
 
     void Application::RenderMiscPanel()
     {
-        BeginHorizontalWrap();
+        BeginHorizontalWrap(idManager.AllocateDynamicID("miscPanel"), misc.panel);
+        MiscVectorDrawingCard();
+        MiscIconButtonsCard();
+        MiscRichTextCard();
+        MiscThumbnailsCard();
+        MiscClipboardWellsCard();
+        MiscExtraCards();
+        EndHorizontalWrap();
+    }
 
-        // Get current time from the system clock for animating some elements
-        static const auto s_appStart = std::chrono::steady_clock::now();
-        auto now = std::chrono::steady_clock::now();
-        float elapsedMilliseconds = std::chrono::duration<float, std::milli>(now - s_appStart).count();
+    // Paths, handles, fills, gradients and dashes on a canvas with a dot grid. Laid out on a
+    // 420 x 200 board, scaled to fit the canvas and centred in it.
+    void Application::MiscVectorDrawingCard()
+    {
+        BeginVertical(idManager.AllocateDynamicID("drawingCard"), misc.card, LayoutOverride::FixedSize(420, 300));
+        Text("Vector drawing · paths, handles, fills, gradients, dashes", misc.caption);
 
-        int2 size = { styleManager.Px(490), styleManager.Px(200) };
+        tachyon::Element canvas{ .id = idManager.AllocateDynamicID("drawingCanvas"), .styleRef = misc.canvas };
+        const ElementRef ref = RegisterElement(std::move(canvas), LayoutOverride::Auto().FlexGrow(1));
+        if (ref.IsValid())
         {
-            tachyon::ID id = idManager.AllocateDynamicID();
-            tachyon::Element shapeBox{};
-            shapeBox.id = id;
-            shapeBox.state = guiStateManager.GetCurrentState(shapeBox.id);
-            shapeBox.styleRef = boxStyleRefs[showcase.testBoxStyleCount];
-            shapeBox.flags = tachyon::ElementFlags::Animated;   // its shapes turn, and its gradient moves
-
-            auto addRes = elementStorage.Add(std::move(shapeBox), tachyon::LayoutOverride::FixedSize(Pixels{ size.x }, Pixels{ size.y }));
-            VERIFY(addRes.status);
-            VERIFY(windowRegistry.Add(addRes.ref));
-
-            VERIFY(elementStorage.AddCustomDraw(addRes.ref, [elapsedMilliseconds, this](tachyon::CustomDrawContext& ctx)
+            VERIFY(elementStorage.AddCustomDraw(ref, [this](tachyon::CustomDrawContext& ctx)
             {
-                // Coords are inner-rect-local LAYOUT pixels.
                 const StyleManager& sm = styleManager;
-                const tachyon::LineStyle lineStyle      = { .colorStyleIndex = theme.lineWhiteStyle, .lineWidth = sm.Px(3.0f) };
-                const tachyon::LineStyle innerLineStyle = { .colorStyleIndex = triangleFillStyle, .lineWidth = sm.Px(10.0f) };
-                const tachyon::LineStyle outerLineStyle = { .colorStyleIndex = theme.lineDarkStyle, .lineWidth = innerLineStyle.lineWidth + sm.Px(3.0f) };
+                const IntRect inner = ctx.ElementInnerRect();
+                RenderCanvasGrid(ctx, sm.Px(16), theme.GetColor("--canvas-dot"), sm.Px(2.0f), int2{ sm.Px(8), sm.Px(8) },
+                                 IntRect{ 0, 0, inner.w, inner.h });
 
-                ctx.RenderLine({ sm.Px(24), sm.Px(120) }, { sm.Px(24), sm.Px(24) }, { sm.Px(180), sm.Px(24) }, { sm.Px(180), sm.Px(120) }, lineStyle);
-                ctx.RenderDot({ sm.Px(24.0f), sm.Px(120.0f) }, sm.Px(20.0f), { 1.0f, 0.2f, 0.2f, 1.0f });
+                const float s  = std::min(float(inner.w) / 420.0f, float(inner.h) / 200.0f);
+                const float ox = (float(inner.w) - 420.0f * s) * 0.5f;
+                const float oy = (float(inner.h) - 200.0f * s) * 0.5f;
+                auto at  = [&](float x, float y) { return float2{ ox + x * s, oy + y * s }; };
+                auto atI = [&](float x, float y) { const float2 p = at(x, y); return int2{ int32_t(std::lround(p.x)), int32_t(std::lround(p.y)) }; };
 
-                // Rotate triangle over time. elapsedMilliseconds is in ms.
-                float t = elapsedMilliseconds * 0.001f; // seconds
-                float angle = t; // radians (1 radian per second)
-                float s = std::sin(angle);
-                float c = std::cos(angle);
-
-                // Element-local triangle points.
-                tachyon::float2 pa { sm.Px(260.f), sm.Px( 40.f) };
-                tachyon::float2 pb { sm.Px(300.f), sm.Px(130.f) };
-                tachyon::float2 pc { sm.Px(220.f), sm.Px(130.f) };
-
-                // Compute centroid and rotate around it
-                tachyon::float2 center = (pa + pb + pc) * (1.0f / 3.0f);
-
-                auto rotatePoint = [&](const tachyon::float2& p) -> tachyon::float2
+                // An arc through two anchors, its handles straight up from them.
+                const LineStyle path   { .colorStyleIndex = misc.ink,    .lineWidth = sm.Px(3.0f) };
+                const LineStyle handle { .colorStyleIndex = misc.accent, .lineWidth = sm.Px(1.0f), .dashSize = sm.Px(3.0f) };
+                const LineStyle anchor { .colorStyleIndex = misc.accent, .lineWidth = sm.Px(2.0f) };
+                ctx.RenderLine(atI(24, 160), atI(24, 40), atI(140, 40), atI(140, 160), path);
+                for (const float x : { 24.0f, 140.0f })
                 {
-                    tachyon::float2 v{ p.x - center.x, p.y - center.y };
-                    tachyon::float2 rp{ v.x * c - v.y * s, v.x * s + v.y * c };
-                    tachyon::float2 finalP{ rp.x + center.x, rp.y + center.y };
-                    return tachyon::float2{ (finalP.x + 0.5f), (finalP.y + 0.5f) };
-                };
+                    ctx.RenderLine(atI(x, 160), atI(x, 60), handle);
+                    const int2 knob = atI(x, 60);
+                    const int32_t half = sm.Px(4);
+                    ctx.RenderQuad(IntRect{ knob.x - half, knob.y - half, half * 2, half * 2 }, misc.accent);
+                    ctx.RenderDisc(atI(x, 160), sm.Px(6.0f), misc.canvasFill);
+                    ctx.RenderCircle(at(x, 160), sm.Px(6.0f), anchor);
+                }
 
-                ctx.RenderTriangle(rotatePoint(pa), rotatePoint(pb), rotatePoint(pc), triangleFillStyle);
+                // A pentagon filled with a gradient, outlined.
+                const float2 pentagon[] = { at(215, 40), at(262, 74), at(244, 130), at(186, 130), at(168, 74) };
+                int2 outline[std::size(pentagon)];
+                std::ranges::transform(pentagon, outline, [](float2 p) { return int2{ int32_t(std::lround(p.x)), int32_t(std::lround(p.y)) }; });
+                ctx.RenderFilledPolygon(pentagon, misc.pentagonFill);
+                ctx.RenderPolyline(outline, true, LineStyle{ .colorStyleIndex = misc.ink, .lineWidth = sm.Px(2.0f) });
 
-                // Second triangle + colorwheel, centered at (400, 90) element-local.
-                tachyon::int2 c2{ sm.Px(400), sm.Px(90) };
-                ctx.RenderTriangle(
-                    tachyon::float2{ sm.Px(-40.f), sm.Px( 30.f) } + c2,
-                    tachyon::float2{          0.f, sm.Px(-50.f) } + c2,
-                    tachyon::float2{ sm.Px( 40.f), sm.Px( 30.f) } + c2,
-                    triangleFillStyle2);
-                ctx.RenderCircle(c2, sm.Px(60.f), outerLineStyle);
-                ctx.RenderCircle(c2, sm.Px(60.f), innerLineStyle);
+                // A triangle, a dashed ring round it.
+                ctx.RenderTriangle(at(310, 160), at(350, 40), at(390, 160), misc.triangleFill);
+                const float radius = 40.0f * s;
+                const float dash   = 2.0f * std::numbers::pi_v<float> * radius / 10.0f;   // five dashes
+                ctx.RenderCircle(at(350, 120), radius, LineStyle{ .colorStyleIndex = misc.ring, .lineWidth = sm.Px(6.0f), .dashSize = dash });
             }));
         }
+        EndVertical();
+    }
 
-        // ---- Demo: on-demand color style, polygon, dashed border, per-run font ----
+    // Square icon buttons: the states, the four sizes, a group in a well, one with a label,
+    // and the primary and destructive kinds.
+    void Application::MiscIconButtonsCard()
+    {
+        BeginVertical(idManager.AllocateDynamicID("iconButtonsCard"), misc.card, LayoutOverride::FixedSize(330, 300));
+        Text("Icon buttons · square hit area, state layer, never stretched", misc.caption);
+        const StyleRef usual = misc.iconButton[1];
+
+        // Each state shown on its own button, its name under it: hover, pressed and focus held,
+        // on and off as set.
+        BeginHorizontal(idManager.AllocateDynamicID("statesRow"), misc.row);
+        Text("States", misc.rowLabel);
+        static constexpr const char* kStates[] = { "rest", "hover", "press", "focus", "on", "off" };
+        BeginHorizontal(idManager.AllocateDynamicID("states"), theme.emptyHorzStyleRef, LayoutOverride::Auto().NoGrow());
+        for (int i = 0; i < int(std::size(kStates)); ++i)
         {
-            // --- Demo 1: on-demand color style (animated hue) ---
-            {
-                float hue = std::fmod(elapsedMilliseconds * 0.06f, 360.0f); // cycle hue
-                float h   = hue / 60.0f;
-                float s   = 1.0f, v = 1.0f;
-                int   hi  = (int)h % 6;
-                float f   = h - (float)(int)h;
-                float p   = v * (1 - s), q = v * (1 - s * f), t2 = v * (1 - s * (1 - f));
-                float r, g, b;
-                if (hi == 0) { r=v; g=t2; b=p; }
-                else if (hi == 1) { r=q; g=v; b=p; }
-                else if (hi == 2) { r=p; g=v; b=t2; }
-                else if (hi == 3) { r=p; g=q; b=v; }
-                else if (hi == 4) { r=t2; g=p; b=v; }
-                else              { r=v;  g=p; b=q; }
-
-                tachyon::ColorStyle cs;
-                cs.type = tachyon::ColorType::SolidColor;
-                cs.gradient.stopCount = 1;
-                cs.gradient.stops[0].SetColor(tachyon::color4b { (uint8_t)(r*255), (uint8_t)(g*255), (uint8_t)(b*255), 255 });
-
-                if (animatedHueStyle == tachyon::VisualColorStyleIndex::Invalid)
-                    animatedHueStyle = styleManager.CreateColorStyle(cs);
-                else
-                    styleManager.UpdateColorStyle(animatedHueStyle, cs);
-            }
-
-            // --- Demo 2: polygon and dashed border ---
-
-            size = { styleManager.Px(490), styleManager.Px(220) };
-            tachyon::ID demoId = idManager.AllocateDynamicID();
-            tachyon::Element demoBox{};
-            demoBox.id = demoId;
-            demoBox.state = guiStateManager.GetCurrentState(demoId);
-            demoBox.styleRef = boxStyleRefs[showcase.testBoxStyleCount];
-
-            auto demoRes = elementStorage.Add(std::move(demoBox), tachyon::LayoutOverride::FixedSize(Pixels{ size.x }, Pixels{ size.y }));
-            VERIFY(demoRes.status);
-            VERIFY(windowRegistry.Add(demoRes.ref));
-
-            VERIFY(elementStorage.AddCustomDraw(demoRes.ref, [this](tachyon::CustomDrawContext& ctx)
-            {
-                // Coords are inner-rect-local LAYOUT pixels.
-                const StyleManager& sm = styleManager;
-
-                // Demo 1: line using animated on-demand color style
-                tachyon::LineStyle animStyle { .colorStyleIndex = animatedHueStyle, .lineWidth = sm.Px(4.0f) };
-                ctx.RenderLine({ sm.Px(10), sm.Px(20) }, { sm.Px(150), sm.Px(20) }, animStyle);
-
-                // Demo 2a: filled hexagon
-                const float hexRadius = sm.Px(55.0f);
-                tachyon::float2 hexCenter = { sm.Px(230.f), sm.Px(110.f) };
-                tachyon::float2 hexPts[6];
-                for (int i = 0; i < 6; i++) {
-                    float a = i * (3.14159f / 3.0f);
-                    hexPts[i] = hexCenter + tachyon::float2{ std::cos(a) * hexRadius, std::sin(a) * hexRadius };
-                }
-                ctx.RenderFilledPolygon(hexPts, triangleFillStyle);
-
-                // Demo 2b: outlined pentagon
-                const float pentRadius = sm.Px(50.0f);
-                tachyon::float2 pentCenterF = { sm.Px(80.f), sm.Px(120.f) };
-                tachyon::int2 pentPts[5];
-                for (int i = 0; i < 5; i++) {
-                    float a = i * (2.0f * 3.14159f / 5.0f) - 3.14159f / 2.0f;
-                    pentPts[i] = tachyon::int2 { (int)(pentCenterF.x + std::cos(a) * pentRadius), (int)(pentCenterF.y + std::sin(a) * pentRadius) };
-                }
-                tachyon::LineStyle pentStyle { .colorStyleIndex = theme.lineWhiteStyle, .lineWidth = sm.Px(2.5f) };
-                ctx.RenderPolyline(pentPts, /*closed=*/true, pentStyle);
-
-                // Demo 3: dashed box
-                ctx.RenderBox(
-                    tachyon::IntRect { .position = { sm.Px(340), sm.Px(60) }, .size = { sm.Px(130), sm.Px(80) } },
-                    theme.dashedStyleRef.visualBoxStyleIndex, tachyon::ElementState::None);
-            }));
+            BeginVertical(idManager.AllocateDynamicID(std::format("stateColumn{}", i)), misc.state);
+            if (i == 1) BeginShownState(ElementState::Hover);
+            if (i == 2) BeginShownState(ElementState::Hover | ElementState::Active);
+            if (i == 3) BeginShownState(ElementState::Focused);
+            if (i == 4) BeginSelected();
+            if (i == 5) BeginDisabled();
+            Button(idManager.AllocateDynamicID(std::format("state{}", i)), GUIContent{ showcase.heartOutlineIcon, {}, "Favorite" }, [] {}, usual);
+            if (i == 5) EndDisabled();
+            if (i == 4) EndSelected();
+            if (i >= 1 && i <= 3) EndShownState();
+            Text(kStates[i], misc.stateLabel);
+            EndVertical();
         }
+        EndHorizontal();
+        EndHorizontal();
 
-        // Standalone icon examples
+        BeginHorizontal(idManager.AllocateDynamicID("sizesRow"), misc.row);
+        Text("Sizes", misc.rowLabel);
+        static constexpr const char* kSizes[] = { "20px", "24px, the usual", "28px", "32px" };
+        for (int i = 0; i < 4; ++i)
+            Button(idManager.AllocateDynamicID(std::format("size{}", i)), GUIContent{ showcase.starOutlineIcon, {}, kSizes[i] }, [] {}, misc.iconButton[i]);
+        EndHorizontal();
+
+        BeginHorizontal(idManager.AllocateDynamicID("groupRow"), misc.row);
+        Text("Group", misc.rowLabel);
+        BeginHorizontal(idManager.AllocateDynamicID("group"), misc.iconButtonGroup);
+        Toggle(idManager.AllocateDynamicID("bold"),   misc.bold,   GUIContent{ showcase.boldIcon,   {}, "Bold" },   usual);
+        Toggle(idManager.AllocateDynamicID("italic"), misc.italic, GUIContent{ showcase.italicIcon, {}, "Italic" }, usual);
+        Toggle(idManager.AllocateDynamicID("link"),   misc.link,   GUIContent{ theme.linkIcon,      {}, "Link" },   usual);
+        EndHorizontal();
+        EndHorizontal();
+
+        BeginHorizontal(idManager.AllocateDynamicID("labelRow"), misc.row);
+        Text("With label", misc.rowLabel);
+        Toggle(idManager.AllocateDynamicID("like"), misc.liked, GUIContent{ showcase.likeIcon, "Like" }, theme.controls->toggle, LayoutOverride::Auto().NoGrow());
+        EndHorizontal();
+
+        BeginHorizontal(idManager.AllocateDynamicID("kindsRow"), misc.row);
+        Text("Kinds", misc.rowLabel);
+        Button(idManager.AllocateDynamicID("play"), GUIContent{ showcase.playIcon, {}, "Play" }, [] {}, misc.iconButtonPrimary, LayoutOverride::FixedSize(28, 28));
+        Button(idManager.AllocateDynamicID("delete"), GUIContent{ theme.deleteIcon, {}, "Delete" }, [] {}, misc.iconButtonDanger, LayoutOverride::FixedSize(28, 28));
+        Button(idManager.AllocateDynamicID("more"), GUIContent{ showcase.moreIcon, {}, "More" }, [] {}, misc.iconButton[2]);
+        EndHorizontal();
+        EndVertical();
+    }
+
+    // Links (one inside the app, dotted), bold, italic, inline code and an inline image,
+    // icons in the line, other scripts, and a text shadow and a glow.
+    void Application::MiscRichTextCard()
+    {
+        BeginVertical(idManager.AllocateDynamicID("richTextCard"), misc.card, LayoutOverride::FixedSize(360, 300));
+        Text("Rich text · links, inline code, inline images, scripts", misc.caption);
+
+        // A line of rich text, `lines` high; its links say which was clicked.
+        auto richText = [this](std::string_view key, std::span<ContentRun> runs, int lines)
         {
-            tachyon::int2 iconSize = { styleManager.Px(48), styleManager.Px(48) };
-
-            // Circle icon
-            tachyon::Element circleIconElem {};
-            circleIconElem.id = idManager.AllocateDynamicID();
-            circleIconElem.iconID = showcase.circleIcon;
-            circleIconElem.state = guiStateManager.GetCurrentState(circleIconElem.id);
-            circleIconElem.styleRef = theme.firstIconStyleRef;
-
-            auto circleRes = elementStorage.Add(std::move(circleIconElem), tachyon::LayoutOverride::FixedSize(Pixels{ iconSize.x }, Pixels{ iconSize.y }));
-            VERIFY(circleRes.status);
-            VERIFY(windowRegistry.Add(circleRes.ref));
-
-            // Heart icon
-            tachyon::Element heartIconElem {};
-            heartIconElem.id = idManager.AllocateDynamicID();
-            heartIconElem.iconID = showcase.heartIcon;
-            heartIconElem.state = guiStateManager.GetCurrentState(heartIconElem.id);
-            heartIconElem.styleRef = theme.regularControls.button;
-
-            auto heartRes = elementStorage.Add(std::move(heartIconElem), tachyon::LayoutOverride::FixedSize(Pixels{ iconSize.x }, Pixels{ iconSize.y }));
-            VERIFY(heartRes.status);
-            VERIFY(windowRegistry.Add(heartRes.ref));
-
-            // Star icon
-            tachyon::Element starIconElem {};
-            starIconElem.id = idManager.AllocateDynamicID();
-            starIconElem.iconID = showcase.starIcon;
-            starIconElem.state = guiStateManager.GetCurrentState(starIconElem.id);
-            starIconElem.styleRef = theme.regularControls.button;
-
-            auto starRes = elementStorage.Add(std::move(starIconElem), tachyon::LayoutOverride::FixedSize(Pixels{ iconSize.x }, Pixels{ iconSize.y }));
-            VERIFY(starRes.status);
-            VERIFY(windowRegistry.Add(starRes.ref));
-        }
-
-        // Icon + Text button example
-        {
-            tachyon::int2 buttonSize = { styleManager.Px(200), styleManager.Px(48) };
-            tachyon::ID iconButtonId = idManager.AllocateDynamicID();
-            tachyon::ElementState state = guiStateManager.GetCurrentState(iconButtonId);
-
-            // Create button with icon and text using rich text
-            static tachyon::ContentRun buttonContent[] =
+            const ID id = idManager.AllocateDynamicID(key);
+            const ElementState state = guiStateManager.GetCurrentState(id);
+            const TextID textID = textSystem->RegisterRichText(id, runs, misc.richText, state);
+            tachyon::Element element{ .id = id, .styleRef = misc.richText };
+            element.state  = state;
+            element.textID = textID;
+            element.eventHandler = [this, textID](ElementEvent&& event) -> bool
             {
-                { .type = tachyon::ContentRun::Icon, .iconID = showcase.heartIcon, .iconWidth = 24.0f, .iconHeight = 24.0f },
-                { .type = tachyon::ContentRun::Text, .text = " Like This!" }
-            };
-
-            tachyon::Element iconButtonElem{};
-            iconButtonElem.id = iconButtonId;
-            iconButtonElem.state = guiStateManager.GetCurrentState(iconButtonElem.id);
-            iconButtonElem.styleRef = theme.regularControls.button;
-            iconButtonElem.textID = textSystem->RegisterRichText(iconButtonId, buttonContent, theme.regularControls.button, state);
-            iconButtonElem.eventHandler = MakeButtonHandler([]()
-            {
-                TACHYON_LOG_INFO(kLogShowcase, "Icon button clicked!");
-            });
-
-            auto addRes = elementStorage.Add(std::move(iconButtonElem), tachyon::LayoutOverride::FixedSize(Pixels{ buttonSize.x }, Pixels{ buttonSize.y }));
-            VERIFY(addRes.status);
-            VERIFY(windowRegistry.Add(addRes.ref));
-            tabChainManager.RegisterTabTarget(iconButtonId);
-        }
-
-        // Rich text with multiple icons example
-        {
-            tachyon::int2 richTextSize = { styleManager.Px(300), styleManager.Px(60) };
-            tachyon::ID richTextId = idManager.AllocateDynamicID();
-            tachyon::ElementState state = guiStateManager.GetCurrentState(richTextId);
-
-            static tachyon::ContentRun richContent[] =
-            {
-                {.type = tachyon::ContentRun::Text, .text = "Rate: " },
-                {.type = tachyon::ContentRun::Icon, .iconID = showcase.starIcon, .iconWidth = 16.0f, .iconHeight = 16.0f },
-                {.type = tachyon::ContentRun::Icon, .iconID = showcase.starIcon, .iconWidth = 16.0f, .iconHeight = 16.0f },
-                {.type = tachyon::ContentRun::Icon, .iconID = showcase.starIcon, .iconWidth = 16.0f, .iconHeight = 16.0f },
-                {.type = tachyon::ContentRun::Icon, .iconID = showcase.starIcon, .iconWidth = 16.0f, .iconHeight = 16.0f },
-                {.type = tachyon::ContentRun::Icon, .iconID = showcase.starIcon, .iconWidth = 16.0f, .iconHeight = 16.0f },
-                {.type = tachyon::ContentRun::Text, .text = " Favorite: " },
-                {.type = tachyon::ContentRun::Icon, .iconID = showcase.heartIcon, .iconWidth = 16.0f, .iconHeight = 16.0f }
-            };
-
-            tachyon::Element richTextElem{};
-            richTextElem.id = richTextId;
-            richTextElem.state = guiStateManager.GetCurrentState(richTextElem.id);
-            richTextElem.styleRef = theme.textStyleRef;
-            richTextElem.textID = textSystem->RegisterRichText(richTextId, richContent, theme.textStyleRef, state);
-
-            auto addRes = elementStorage.Add(std::move(richTextElem), tachyon::LayoutOverride::FixedSize(Pixels{ richTextSize.x }, Pixels{ richTextSize.y }));
-            VERIFY(addRes.status);
-            VERIFY(windowRegistry.Add(addRes.ref));
-        }
-
-        // Rich text with clickable links
-        {
-            tachyon::int2 linkTextSize = { styleManager.Px(400), styleManager.Px(60) };
-            tachyon::ID linkTextId = idManager.AllocateDynamicID();
-            tachyon::ElementState state = guiStateManager.GetCurrentState(linkTextId);
-
-            // The links take the theme's .link style; a theme reload changes it.
-            tachyon::ContentRun linkContent[] =
-            {
-                { .type = tachyon::ContentRun::Text, .text = "Learn about " },
-                { .type = tachyon::ContentRun::Text, .text = "our documentation",
-                  .contentId = 1, .isLink = true, .linkStyle = theme.linkStyle },
-                { .type = tachyon::ContentRun::Text, .text = " or check " },
-                { .type = tachyon::ContentRun::Text, .text = "the source",
-                  .contentId = 2, .isLink = true, .linkStyle = theme.linkStyle },
-                { .type = tachyon::ContentRun::Text, .text = " for more info." },
-            };
-
-            tachyon::TextID linkTextID = textSystem->RegisterRichText(linkTextId, linkContent, theme.textStyleRef, state);
-
-            tachyon::Element linkElem{};
-            linkElem.id = linkTextId;
-            linkElem.state = guiStateManager.GetCurrentState(linkElem.id);
-            linkElem.styleRef = theme.textStyleRef;
-            linkElem.textID = linkTextID;
-            linkElem.eventHandler = [this, linkTextID](ElementEvent&& event)->bool
-            {
-                if (event.type != tachyon::EventType::MouseMove && event.type != tachyon::EventType::MouseDown)
+                if (event.type != EventType::MouseMove && event.type != EventType::MouseDown)
                     return false;
-
-                // event.rect->innerRect is in layout space - use LocalCursor so the
-                // subtract stays in the same space under any ancestor contentTransform.
-                int2 pos = (event.rect != nullptr)
-                    ? event.LocalCursor(elementStorage) - event.rect->innerRect.position
-                    : event.state.screenPos;
-                intptr_t hitId =
-                    textSystem->HitTestContent(linkTextID, pos.x, pos.y);
-                textSystem->SetHoveredContent(linkTextID, hitId);
-                if (hitId != 0 && event.type == tachyon::EventType::MouseDown && event.state.LeftPressed())
+                // The rect is in layout space: LocalCursor keeps the subtraction in that space
+                // under any ancestor's contentTransform.
+                const int2 pos = event.rect != nullptr ? event.LocalCursor(elementStorage) - event.rect->innerRect.position
+                                                       : event.state.screenPos;
+                const intptr_t hit = textSystem->HitTestContent(textID, pos.x, pos.y);
+                textSystem->SetHoveredContent(textID, hit);
+                if (hit != 0 && event.type == EventType::MouseDown && event.state.LeftPressed())
                 {
-                    TACHYON_LOG_INFO(kLogShowcase, "Link clicked: {}", hitId == 1 ? "documentation" : "source");
+                    TACHYON_LOG_INFO(kLogShowcase, "Link clicked: {}", hit == 1 ? "documentation" : "source");
                     return true;
                 }
                 return false;
             };
+            RegisterElement(std::move(element), LayoutOverride::FixedSize(332, 19 * lines));
+        };
 
-            auto addRes = elementStorage.Add(std::move(linkElem), tachyon::LayoutOverride::FixedSize(Pixels{ linkTextSize.x }, Pixels{ linkTextSize.y }));
-            VERIFY(addRes.status);
-            VERIFY(windowRegistry.Add(addRes.ref));
-        }
+        const color4b text1 = ToBytes(theme.GetColor("--text-1"));
+        const color4b well  = ToBytes(theme.GetColor("--bg-well"));
+        static const TextStyle boldStyle   { .fontSize = 12.0f, .weight = FontWeight::SemiBold };
+        static const TextStyle italicStyle { .fontSize = 12.0f, .style = FontStyle::Italic };
+        static const TextStyle codeStyle   { .fontSize = 11.0f, .family = FontFamily::Monospace };
 
-        // Image element - drop an image straight into the flow. Two display
-        // sizes, then a clickable one standing in for an image-selection field.
+        ContentRun links[] =
         {
-            Image(demoImageIndex, tachyon::LayoutOverride::FixedSize(96, 96));
-            Image(demoImageIndex, tachyon::LayoutOverride::FixedSize(48, 48));
+            { .type = ContentRun::Text, .text = "Learn about " },
+            { .type = ContentRun::Text, .text = "our documentation", .contentId = 1, .isLink = true, .linkStyle = theme.linkStyle },
+            { .type = ContentRun::Text, .text = " or read " },
+            { .type = ContentRun::Text, .text = "the source", .contentId = 2, .isLink = true, .linkStyle = theme.internalLinkStyle },
+            { .type = ContentRun::Text, .text = " for more." },
+        };
+        richText("links", links, 2);
 
-            // The same image shown differently (ImageDisplay): its red as grey, red and blue
-            // swapped, as if it held linear values, and tinted.
-            Image(demoImageIndex, ImageDisplay::Channel(ImageChannel::Red), tachyon::LayoutOverride::FixedSize(48, 48));
-            SetTooltip("Its red channel, as grey");
-            ImageDisplay swapped;
-            swapped.red  = ImageChannel::Blue;
-            swapped.blue = ImageChannel::Red;
-            Image(demoImageIndex, swapped, tachyon::LayoutOverride::FixedSize(48, 48));
-            SetTooltip("Red and blue swapped");
-            ImageDisplay encoded;
-            encoded.srgbEncode = true;
-            Image(demoImageIndex, encoded, tachyon::LayoutOverride::FixedSize(48, 48));
-            SetTooltip("sRGB-encoded, as for an image of linear values");
-            ImageDisplay tinted;
-            tinted.tint = color4f{ 1.0f, 0.6f, 0.2f, 1.0f };
-            Image(demoImageIndex, tinted, tachyon::LayoutOverride::FixedSize(48, 48));
-            SetTooltip("Tinted orange");
+        ContentRun styled[] =
+        {
+            { .type = ContentRun::Text, .text = "Bold", .textStyleOverride = &boldStyle, .color = text1 },
+            { .type = ContentRun::Text, .text = ", " },
+            { .type = ContentRun::Text, .text = "italic", .textStyleOverride = &italicStyle },
+            { .type = ContentRun::Text, .text = ", " },
+            { .type = ContentRun::Text, .text = " inline code ", .textStyleOverride = &codeStyle, .background = well, .color = text1 },
+            { .type = ContentRun::Text, .text = ", and an image " },
+            { .type = ContentRun::Icon, .iconID = showcase.inlinePictureIcon, .iconWidth = 16.0f, .iconHeight = 16.0f },
+            { .type = ContentRun::Text, .text = " in the line." },
+        };
+        richText("styled", styled, 1);
 
-            const tachyon::ID fieldID = idManager.AllocateDynamicID("imageField");
-            tachyon::Element field{};
-            field.id              = fieldID;
-            field.styleRef        = theme.imageStyleRef;
-            field.backgroundImage = demoImageIndex;
-            field.state           = guiStateManager.GetCurrentState(fieldID);
-            field.eventHandler    = [](tachyon::ElementEvent&& ev) -> bool
+        ContentRun rating[] =
+        {
+            { .type = ContentRun::Text, .text = "Rate " },
+            { .type = ContentRun::Icon, .iconID = showcase.starIcon,    .iconWidth = 12.0f, .iconHeight = 12.0f },
+            { .type = ContentRun::Icon, .iconID = showcase.starIcon,    .iconWidth = 12.0f, .iconHeight = 12.0f },
+            { .type = ContentRun::Icon, .iconID = showcase.starIcon,    .iconWidth = 12.0f, .iconHeight = 12.0f },
+            { .type = ContentRun::Icon, .iconID = showcase.starIcon,    .iconWidth = 12.0f, .iconHeight = 12.0f },
+            { .type = ContentRun::Icon, .iconID = showcase.starDimIcon, .iconWidth = 12.0f, .iconHeight = 12.0f },
+            { .type = ContentRun::Text, .text = " · Favorite " },
+            { .type = ContentRun::Icon, .iconID = showcase.heartIcon,   .iconWidth = 12.0f, .iconHeight = 12.0f },
+        };
+        richText("rating", rating, 1);
+
+        Text(reinterpret_cast<const char*>(u8"한국어 · 中文 · 日本語 · العربية · हिन्दी · ไทย"), misc.richText);
+
+        BeginHorizontal(idManager.AllocateDynamicID("shadows"), misc.row, LayoutOverride::Auto().NoGrow());
+        Text("Text shadow", textShadowSampleStyleRef);
+        Text("Glow", textGlowSampleStyleRef);
+        EndHorizontal();
+        EndVertical();
+    }
+
+    // 76px thumbnails: a picked one, one with alpha over the checkerboard, one still loading,
+    // and one whose file has no picture.
+    void Application::MiscThumbnailsCard()
+    {
+        BeginVertical(idManager.AllocateDynamicID("thumbnailsCard"), misc.card, LayoutOverride::FixedSize(470, 220));
+        Text("Image thumbnails · selected, alpha, loading, missing", misc.caption);
+        BeginHorizontal(idManager.AllocateDynamicID("thumbs"), misc.row, LayoutOverride::Auto().NoGrow());
+
+        struct Thumb { const char* name; ImageIndex image; bool alpha; };
+        const Thumb thumbs[] = { { "gradient.png", misc.grey, false }, { "hue.png", misc.hue, false }, { "glow.png", misc.glow, true } };
+        for (int i = 0; i < int(std::size(thumbs)); ++i)
+        {
+            const Thumb thumb = thumbs[i];
+            const bool selected = misc.selectedThumb == i;
+            BeginVertical(idManager.AllocateDynamicID(std::format("thumbTile{}", i)), misc.thumbTile);
+            const ID id = idManager.AllocateDynamicID(std::format("thumb{}", i));
+            tachyon::Element tile{ .id = id, .styleRef = selected ? misc.thumbSelected : misc.thumb };
+            tile.state = guiStateManager.GetCurrentState(id);
+            tile.eventHandler = [this, i](ElementEvent&& event) -> bool
             {
-                if (ev.type == tachyon::EventType::MouseDown && ev.state.LeftPressed())
+                if (event.type != EventType::MouseDown || !event.state.LeftPressed())
+                    return false;
+                misc.selectedThumb = i;
+                return true;
+            };
+            const ElementRef ref = RegisterElement(std::move(tile), LayoutOverride{});
+            if (ref.IsValid())
+            {
+                VERIFY(elementStorage.AddCustomDraw(ref, [this, thumb](tachyon::CustomDrawContext& ctx)
                 {
-                    TACHYON_LOG_INFO(kLogShowcase, "Image field: open picker");
+                    const IntRect inner = ctx.ElementInnerRect();
+                    const IntRect box{ 0, 0, inner.w, inner.h };
+                    const float radius = styleManager.Px(5.0f);
+                    if (thumb.alpha)
+                    {
+                        const int32_t cell = std::max(1, styleManager.Px(8));
+                        for (int32_t y = 0; y < box.h; y += cell)
+                            for (int32_t x = 0; x < box.w; x += cell)
+                                ctx.RenderQuad(box, IntRect{ x, y, cell, cell },
+                                               ((x / cell + y / cell) % 2 == 0) ? theme.checkerAColor : theme.checkerBColor, radius);
+                    }
+                    ctx.RenderQuad(box, theme.imageFillColorStyle, radius, thumb.image);
+                }));
+            }
+            Text(thumb.name, selected ? misc.thumbNameSelected : misc.thumbName);
+            EndVertical();
+        }
+
+        // Still loading: a skeleton for the picture and for the name.
+        BeginVertical(idManager.AllocateDynamicID("thumbLoading"), misc.thumbTile);
+        Skeleton(idManager.AllocateDynamicID("thumbSkeleton"), misc.thumbLoading);
+        Skeleton(idManager.AllocateDynamicID("nameSkeleton"), LayoutOverride::FixedSize(52, 8));
+        EndVertical();
+
+        // A file with no picture to show: the image icon on the well.
+        BeginVertical(idManager.AllocateDynamicID("thumbMissing"), misc.thumbTile);
+        {
+            // The icon goes through the text system, which sizes it as the style says.
+            const ID id = idManager.AllocateDynamicID("missing");
+            tachyon::Element tile{ .id = id, .styleRef = misc.thumbMissing };
+            tile.state  = guiStateManager.GetCurrentState(id);
+            tile.textID = textSystem->RegisterText(id, showcase.imageIcon, {}, tile.styleRef, tile.state);
+            RegisterElement(std::move(tile), LayoutOverride{});
+        }
+        Text("old.tga", misc.thumbName);
+        EndVertical();
+
+        EndHorizontal();
+        EndVertical();
+    }
+
+    // The clipboard's image: copied from a well that shows it, pasted into one, or an image file
+    // dragged in from another application dropped on it (the accent while it's over the well).
+    void Application::MiscClipboardWellsCard()
+    {
+        BeginVertical(idManager.AllocateDynamicID("wellsCard"), misc.card, LayoutOverride::FixedSize(680, 220));
+        Text("Clipboard image wells · copy from, paste into", misc.caption);
+        BeginHorizontal(idManager.AllocateDynamicID("wells"), misc.row);
+
+        // Draws `image` over the well's inside, keeping its shape and centred.
+        auto drawImage = [this](ElementRef ref, ImageIndex image, uint2 size, bool cover)
+        {
+            VERIFY(elementStorage.AddCustomDraw(ref, [this, image, size, cover](tachyon::CustomDrawContext& ctx)
+            {
+                const IntRect inner = ctx.ElementInnerRect();
+                const float sx = float(inner.w) / float(std::max(1u, size.x));
+                const float sy = float(inner.h) / float(std::max(1u, size.y));
+                const float scale = cover ? std::max(sx, sy) : std::min(sx, sy);
+                const int32_t w = int32_t(std::lround(float(size.x) * scale)), h = int32_t(std::lround(float(size.y) * scale));
+                const IntRect box{ (inner.w - w) / 2, (inner.h - h) / 2, w, h };
+                ctx.RenderQuad(box, IntRect{ 0, 0, inner.w, inner.h }, theme.imageFillColorStyle, styleManager.Px(5.0f), image);
+            }));
+        };
+
+        // Copy image: the picture, Copy at its bottom right. The picture drags onto Paste image.
+        BeginVertical(idManager.AllocateDynamicID("copyColumn"), misc.wellColumn);
+        Text("Copy image", misc.label);
+        {
+            const ID id = idManager.AllocateDynamicID("copyWell");
+            const uint2 size{ MiscPanel::kPictureWidth, MiscPanel::kPictureHeight };
+            tachyon::Element well{ .id = id, .styleRef = misc.well };
+            well.state = guiStateManager.GetCurrentState(id);
+            well.eventHandler = MakeDragSourceHandler<DraggedImage>(guiStateManager, DragPayload::Image,
+                [this, size] { return DraggedImage{ misc.picture, size, misc.picturePixels }; },
+                ImageDragGhost(misc.picture, size));
+            const ElementRef ref = RegisterElement(std::move(well), LayoutOverride{});
+            if (ref.IsValid())
+                drawImage(ref, misc.picture, size, true);
+            VERIFY(elementStorage.BeginChildren());
+            const int32_t inset = styleManager.Px(6);
+            Button(idManager.AllocateDynamicID("copyImage"), GUIContent{ showcase.copyIcon, "Copy", "Puts the picture on the clipboard" },
+                   [this] { CopyDemoImage(); }, theme.controls->button,
+                   LayoutOverride{}.Absolute(PositionConstraintAxis::kAuto, inset, inset, PositionConstraintAxis::kAuto));
+            EndArea();
+            SetTooltip(id, "Drag the picture onto Paste image");
+        }
+        EndVertical();
+
+        // Paste image: click to paste, or drop the Copy image well's picture or an image file;
+        // the accent while one's dragged over.
+        BeginVertical(idManager.AllocateDynamicID("pasteColumn"), misc.wellColumn);
+        Text("Paste image", misc.label);
+        {
+            const ID id = idManager.AllocateDynamicID("pasteWell");
+            const bool dragOver = DropTargetID() == id;
+            const bool filled   = pastedImage != nullptr && !dragOver;
+            tachyon::Element well{ .id = id, .styleRef = dragOver ? misc.wellDrop : filled ? misc.well : misc.wellEmpty };
+            well.state = guiStateManager.GetCurrentState(id);
+            if (!filled)
+                well.textID = textSystem->RegisterText(id, showcase.imageIcon, {}, well.styleRef, well.state);
+            EventHandler takesPictures = MakeDropTargetHandler<DraggedImage>(DragPayload::Image,
+                [this](const DraggedImage& image, ID) { ShowPastedImage(image.rgba.data(), image.size); },
+                [](const DraggedImage& image) { return image.rgba.size() == size_t(image.size.x) * image.size.y * 4; });
+            well.eventHandler = [this, takesPictures](ElementEvent&& event) -> bool
+            {
+                if (takesPictures(ElementEvent{ event }))
+                    return true;
+                if (event.type == EventType::FileDragOver)
+                    return true;
+                if (event.type == EventType::FileDrop)
+                {
+                    if (event.state.droppedFiles.empty())
+                        return false;   // text isn't an image
+                    PasteImageFile(event.state.droppedFiles.front());
+                    return true;
+                }
+                if (event.type == EventType::MouseDown && event.state.LeftPressed())
+                {
+                    PasteImage();
                     return true;
                 }
                 return false;
             };
-            auto fRes = elementStorage.Add(std::move(field), tachyon::LayoutOverride::FixedSize(64, 64));
-            VERIFY(fRes.status);
-            VERIFY(windowRegistry.Add(fRes.ref));
-            SetTooltip("Click to choose an image");
-
-            // The clipboard: the sample image copied to it, and the image on it (a screenshot,
-            // say) pasted here.
-            Button(idManager.AllocateDynamicID("copyImage"), "Copy image", [this] { CopyDemoImage(); });
-            SetTooltip("Puts the sample image on the clipboard");
-            Button(idManager.AllocateDynamicID("pasteImage"), "Paste image", [this] { PasteImage(); });
-            SetTooltip("Shows the image on the clipboard, such as a screenshot");
-            if (pastedImage != nullptr)
-                Image(pastedImageIndex, pastedImageSize, tachyon::LayoutOverride::FixedSize(160, 96));
+            const ElementRef ref = RegisterElement(std::move(well), LayoutOverride{});
+            if (ref.IsValid() && filled)
+                drawImage(ref, pastedImageIndex, pastedImageSize, false);
+            SetTooltip("Pastes the image on the clipboard. The picture dragged from Copy image, or an image file from another application, shows too");
         }
+        EndVertical();
 
-        // --- Demo: per-run font override via textStyleOverride ---
+        EndHorizontal();
+        EndVertical();
+    }
+
+    // Further demos: fonts per run and per field, scripts drawn by fallback fonts, CJK regional
+    // forms, ways to show an image, and where a box puts its icon.
+    void Application::MiscExtraCards()
+    {
+        // ---- Fonts: a run in a font registered from code, one in the generic monospace; a
+        // field in a font of its own.
+        BeginVertical(idManager.AllocateDynamicID("fontsCard"), misc.card, LayoutOverride::Auto().NoGrow());
+        Text("Fonts · per run, and a field in its own", misc.caption);
         {
-            // A family registered from code (one face) and a generic family.
-            static const tachyon::FontID boldFontId = [this]
+            static const FontID boldFontId = [this]
             {
                 const std::string boldFace = ResourceFile("fonts/Inter/Inter-Bold.ttf");
                 const std::string_view boldFaces[] = { boldFace };
                 return textSystem->RegisterFontFamily("Inter Bold", boldFaces);
             }();
+            static TextStyle boldStyle { .fontSize = 16.0f, .fontId = FontID::Invalid };
+            static TextStyle monoStyle { .fontSize = 14.0f, .family = FontFamily::Monospace };
+            boldStyle.fontId = boldFontId;
 
-            static tachyon::TextStyle boldStyle  { .fontSize = 16.0f, .fontId = tachyon::FontID::Invalid };
-            static tachyon::TextStyle monoStyle  { .fontSize = 14.0f, .family = tachyon::FontFamily::Monospace };
-            boldStyle.fontId   = boldFontId;
-
-            tachyon::int2 mixedFontSize = { styleManager.Px(420), styleManager.Px(30) };
-            tachyon::ID mixedFontId = idManager.AllocateDynamicID();
-            tachyon::ElementState mixedState = guiStateManager.GetCurrentState(mixedFontId);
-
-            static tachyon::ContentRun mixedFontRuns[] =
+            static ContentRun mixedFontRuns[] =
             {
-                { .type = tachyon::ContentRun::Text, .text = "Normal " },
-                { .type = tachyon::ContentRun::Text, .text = "Bold ",     .textStyleOverride = &boldStyle },
-                { .type = tachyon::ContentRun::Text, .text = "Monospace", .textStyleOverride = &monoStyle },
+                { .type = ContentRun::Text, .text = "Normal " },
+                { .type = ContentRun::Text, .text = "Bold ",     .textStyleOverride = &boldStyle },
+                { .type = ContentRun::Text, .text = "Monospace", .textStyleOverride = &monoStyle },
             };
+            const ID id = idManager.AllocateDynamicID("mixedFonts");
+            const ElementState state = guiStateManager.GetCurrentState(id);
+            tachyon::Element mixed{ .id = id, .styleRef = misc.richText };
+            mixed.state  = state;
+            mixed.textID = textSystem->RegisterRichText(id, mixedFontRuns, misc.richText, state);
+            RegisterElement(std::move(mixed), LayoutOverride::FixedSize(320, 30));
 
-            tachyon::Element mixedElem{};
-            mixedElem.id       = mixedFontId;
-            mixedElem.state    = mixedState;
-            mixedElem.styleRef = theme.textStyleRef;
-            mixedElem.textID   = textSystem->RegisterRichText(mixedFontId, mixedFontRuns, theme.textStyleRef, mixedState);
-
-            auto addRes = elementStorage.Add(std::move(mixedElem), tachyon::LayoutOverride::FixedSize(Pixels{ mixedFontSize.x }, Pixels{ mixedFontSize.y }));
-            VERIFY(addRes.status);
-            VERIFY(windowRegistry.Add(addRes.ref));
+            static const FontID serifFont = [this]
+            {
+                const std::string face = ResourceFile("fonts/Noto-otf/NotoSerif-Regular.otf");
+                const std::string_view faces[] = { face };
+                return textSystem->RegisterFontFamily("Noto Serif", faces);
+            }();
+            static std::string serifText = "This text box uses Noto Serif";
+            Field(serifText, styleManager.WithTextOverride(theme.controls->textbox, { .font = serifFont }),
+                  LayoutOverride::Auto().MinWidth(320).NoGrow());
         }
+        EndVertical();
 
-        // --- Script coverage: text the default font lacks, drawn by fallback fonts ---
+        // ---- Scripts the default font lacks, drawn by fallback fonts.
+        BeginVertical(idManager.AllocateDynamicID("scriptsCard"), misc.card, LayoutOverride::Auto().NoGrow());
+        Text("Scripts · drawn by fallback fonts", misc.caption);
         {
             static const char8_t* const samples[] =
             {
@@ -449,22 +524,18 @@ namespace tachyon
                 u8"Thai:     สวัสดีชาวโลก",
                 u8"Mixed:    Inter, 中文, 한국어 and العربية on one line",
             };
-            BeginVertical(tachyon::LayoutOverride::Auto().NoGrow());
+            BeginVertical(idManager.AllocateDynamicID("scriptLines"), theme.emptyVertStyleRef, LayoutOverride::Auto().NoGrow());
             for (const char8_t* sample : samples)
-                Text(reinterpret_cast<const char*>(sample));
+                Text(reinterpret_cast<const char*>(sample), misc.richText);
             EndVertical();
         }
+        EndVertical();
 
-        // --- Text shadow and glow (CSS text-shadow) --------------------------------
-        BeginHorizontal(tachyon::LayoutOverride::Auto().NoGrow());
-        Text("Text shadow", textShadowSampleStyleRef);
-        Text("Glow", textGlowSampleStyleRef);
-        EndHorizontal();
-
-        // --- Per-element text overrides (StyleManager::WithTextOverride) -----------
+        // ---- Regional forms: each column in its own language, so the characters they share
+        // (the first row) take that region's letterforms from one CJK font.
+        BeginVertical(idManager.AllocateDynamicID("regionalCard"), misc.card, LayoutOverride::Auto().NoGrow());
+        Text("Regional forms · one CJK font, five languages", misc.caption);
         {
-            // Translation table: each column's text is in its own language, so shared
-            // characters (first row) take that region's letterforms from one CJK font.
             static const char* const languages[] = { "ja", "zh-Hans", "zh-Hant", "zh-HK", "ko" };
             static const char* const headers[]   = { "", "Japanese", "Simplified", "Traditional", "Hong Kong", "Korean" };
             static const char8_t* const rows[][6] =
@@ -474,77 +545,92 @@ namespace tachyon
                 { u8"Delete",   u8"削除",        u8"删除",        u8"刪除",        u8"刪除",        u8"삭제" },
                 { u8"Edit",     u8"編集",        u8"编辑",        u8"編輯",        u8"編輯",        u8"편집" },
             };
-            const int colWidth = styleManager.Px(96);
-            BeginVertical(tachyon::LayoutOverride::Auto().NoGrow());
+            const int colWidth = styleManager.Px(88);
+            BeginHorizontal(LayoutOverride::Auto().NoGrow());
+            for (const char* header : headers)
+                Text(header, LayoutOverride::Auto().MinWidth(Pixels{ colWidth }));
+            EndHorizontal();
+            for (const auto& row : rows)
             {
-                BeginHorizontal(tachyon::LayoutOverride::Auto().NoGrow());
-                for (const char* header : headers)
-                    Text(header, tachyon::LayoutOverride::Auto().MinWidth(Pixels{ colWidth }));
-                EndHorizontal();
-                for (const auto& row : rows)
+                BeginHorizontal(LayoutOverride::Auto().NoGrow());
+                Text(reinterpret_cast<const char*>(row[0]), LayoutOverride::Auto().MinWidth(Pixels{ colWidth }));
+                for (int c = 0; c < 5; ++c)
                 {
-                    BeginHorizontal(tachyon::LayoutOverride::Auto().NoGrow());
-                    Text(reinterpret_cast<const char*>(row[0]), tachyon::LayoutOverride::Auto().MinWidth(Pixels{ colWidth }));
-                    for (int c = 0; c < 5; ++c)
-                    {
-                        const tachyon::StyleRef style = styleManager.WithTextOverride(theme.staticTextStyleRef, { .language = tachyon::LanguageTag(languages[c]) });
-                        Text(reinterpret_cast<const char*>(row[c + 1]), style, tachyon::LayoutOverride::Auto().MinWidth(Pixels{ colWidth }));
-                    }
-                    EndHorizontal();
+                    const StyleRef style = styleManager.WithTextOverride(theme.staticTextStyleRef, { .language = LanguageTag(languages[c]) });
+                    Text(reinterpret_cast<const char*>(row[c + 1]), style, LayoutOverride::Auto().MinWidth(Pixels{ colWidth }));
                 }
+                EndHorizontal();
             }
-            EndVertical();
+        }
+        EndVertical();
 
-            // A text box with its own font; all other text keeps the CSS font.
-            static const tachyon::FontID serifFont = [this]
+        // ---- One image shown in different ways (ImageDisplay), and an image field.
+        BeginVertical(idManager.AllocateDynamicID("displayCard"), misc.card, LayoutOverride::Auto().NoGrow());
+        Text("Image display · channels, swaps, encoding, tint; an image field", misc.caption);
+        BeginHorizontal(idManager.AllocateDynamicID("displays"), misc.row, LayoutOverride::Auto().NoGrow());
+        {
+            Image(demoImageIndex, LayoutOverride::FixedSize(64, 64));
+            SetTooltip("As it is");
+            Image(demoImageIndex, ImageDisplay::Channel(ImageChannel::Red), LayoutOverride::FixedSize(64, 64));
+            SetTooltip("Its red channel, as grey");
+            ImageDisplay swapped;
+            swapped.red  = ImageChannel::Blue;
+            swapped.blue = ImageChannel::Red;
+            Image(demoImageIndex, swapped, LayoutOverride::FixedSize(64, 64));
+            SetTooltip("Red and blue swapped");
+            ImageDisplay encoded;
+            encoded.srgbEncode = true;
+            Image(demoImageIndex, encoded, LayoutOverride::FixedSize(64, 64));
+            SetTooltip("sRGB-encoded, as for an image of linear values");
+            ImageDisplay tinted;
+            tinted.tint = color4f{ 1.0f, 0.6f, 0.2f, 1.0f };
+            Image(demoImageIndex, tinted, LayoutOverride::FixedSize(64, 64));
+            SetTooltip("Tinted orange");
+
+            const ID fieldID = idManager.AllocateDynamicID("imageField");
+            tachyon::Element field{ .id = fieldID, .styleRef = theme.imageStyleRef };
+            field.backgroundImage = demoImageIndex;
+            field.state           = guiStateManager.GetCurrentState(fieldID);
+            field.eventHandler    = [](ElementEvent&& event) -> bool
             {
-                const std::string face = ResourceFile("fonts/Noto-otf/NotoSerif-Regular.otf");
-                const std::string_view faces[] = { face };
-                return textSystem->RegisterFontFamily("Noto Serif", faces);
-            }();
-            static std::string serifText = "This text box uses Noto Serif";
-            Field(serifText, styleManager.WithTextOverride(theme.controls->textbox, { .font = serifFont }),
-                  tachyon::LayoutOverride::Auto().MinWidth(320).NoGrow());
-        }
-
-        // --- Icon + Text Examples with iconTextGap and iconSide ---
-
-        {
-            AddBox(idManager.AllocateDynamicID(), theme.iconLeftStyleRef, showcase.circleIcon, "Left");
-
-            AddBox(idManager.AllocateDynamicID(), theme.iconRightStyleRef, showcase.starIcon, "Right");
-
-            AddBox(idManager.AllocateDynamicID(), theme.iconTopStyleRef, showcase.circleIcon, "Top");
-
-            AddBox(idManager.AllocateDynamicID(), theme.iconBottomStyleRef, showcase.starIcon, "Bottom");
-        }
-
-        // --- Vertical-align demo matrix -----------------------------------------
-        // 4 icon sides x 3 vertical alignments (-tachyon-vertical-text-align). The
-        // boxes share an 80px min-height so the alignment differences show.
-        {
-            static const tachyon::IconID kSideIcon[4] = {
-                showcase.circleIcon, showcase.starIcon, showcase.circleIcon, showcase.starIcon
+                if (event.type == EventType::MouseDown && event.state.LeftPressed())
+                {
+                    TACHYON_LOG_INFO(kLogShowcase, "Image field: open picker");
+                    return true;
+                }
+                return false;
             };
-            static const char* kLabel[4][3] = {
-                { "L / top",    "L / mid",    "L / bot"    },
-                { "R / top",    "R / mid",    "R / bot"    },
-                { "T / top",    "T / mid",    "T / bot"    },
-                { "B / top",    "B / mid",    "B / bot"    },
+            RegisterElement(std::move(field), LayoutOverride::FixedSize(64, 64));
+            SetTooltip("Click to choose an image");
+        }
+        EndHorizontal();
+        EndVertical();
+
+        // ---- Where a box puts its icon (-tachyon-icon-side), and its text's vertical
+        // alignment on each side (-tachyon-vertical-text-align).
+        BeginVertical(idManager.AllocateDynamicID("iconSideCard"), misc.card, LayoutOverride::Auto().Width(560).NoGrow());
+        Text("Icon placement · side, and vertical alignment", misc.caption);
+        BeginHorizontalWrap(idManager.AllocateDynamicID("iconSides"), theme.emptyHorzWrapStyleRef);
+        {
+            AddBox(idManager.AllocateDynamicID(), theme.iconLeftStyleRef,   showcase.circleIcon, "Left");
+            AddBox(idManager.AllocateDynamicID(), theme.iconRightStyleRef,  showcase.starIcon,   "Right");
+            AddBox(idManager.AllocateDynamicID(), theme.iconTopStyleRef,    showcase.circleIcon, "Top");
+            AddBox(idManager.AllocateDynamicID(), theme.iconBottomStyleRef, showcase.starIcon,   "Bottom");
+
+            static const IconID* const kSideIcon[4] = { &showcase.circleIcon, &showcase.starIcon, &showcase.circleIcon, &showcase.starIcon };
+            static const char* const kLabel[4][3] =
+            {
+                { "L / top", "L / mid", "L / bot" },
+                { "R / top", "R / mid", "R / bot" },
+                { "T / top", "T / mid", "T / bot" },
+                { "B / top", "B / mid", "B / bot" },
             };
             for (int s = 0; s < 4; ++s)
-            {
                 for (int v = 0; v < 3; ++v)
-                {
-                    AddBox(idManager.AllocateDynamicID(),
-                           iconVAlignDemoStyleRefs[s][v],
-                           kSideIcon[s],
-                           kLabel[s][v]);
-                }
-            }
+                    AddBox(idManager.AllocateDynamicID(), iconVAlignDemoStyleRefs[s][v], *kSideIcon[s], kLabel[s][v]);
         }
-
         EndHorizontalWrap();
+        EndVertical();
     }
 
 }

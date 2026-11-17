@@ -258,7 +258,7 @@ namespace tachyon
 		size_t overrideRunCount = 0;
 		for (const auto& run : inputRuns)
 			if (run.type == ContentRun::Text &&
-			    ((run.isLink && run.contentId != 0) || run.textStyleOverride != nullptr))
+			    ((run.isLink && run.contentId != 0) || run.textStyleOverride != nullptr || run.background.a != 0 || run.color.a != 0))
 				overrideRunCount++;
 		linkAttrStorage.reserve(overrideRunCount);
 
@@ -280,9 +280,17 @@ namespace tachyon
 					skb_color_t hoverColor = toSKBColor(run.linkStyle.hoverColor);
 					linkAttrs.data[n++] = skb_attribute_make_paint_color(SKB_PAINT_TEXT, SKB_PAINT_STATE_DEFAULT, color);
 					linkAttrs.data[n++] = skb_attribute_make_paint_color(SKB_PAINT_TEXT, SKB_PAINT_STATE_HOVER, hoverColor);
-					linkAttrs.data[n++] = skb_attribute_make_paint_color(SKB_PAINT_DECORATION_LINK, SKB_PAINT_STATE_DEFAULT, color);
-					linkAttrs.data[n++] = skb_attribute_make_paint_color(SKB_PAINT_DECORATION_LINK, SKB_PAINT_STATE_HOVER, hoverColor);
-					linkAttrs.data[n++] = skb_attribute_make_decoration(SKB_DECORATION_LINE_UNDER, SKB_DECORATION_STYLE_SOLID, 0.0f, 0.0f, SKB_PAINT_DECORATION_LINK);
+					// Its underline at rest, sized as the style says; without one, the default
+					// line, shown only while hovered.
+					const TextDecoration& under = run.linkStyle.underline;
+					const uint32_t underTag = under.thickness > 0 ? kLinkUnderlineAtRest : uint32_t(SKB_PAINT_DECORATION_LINK);
+					linkAttrs.data[n++] = skb_attribute_make_paint_color(underTag, SKB_PAINT_STATE_DEFAULT, color);
+					linkAttrs.data[n++] = skb_attribute_make_paint_color(underTag, SKB_PAINT_STATE_HOVER, hoverColor);
+					linkAttrs.data[n++] = under.thickness > 0
+						? skb_attribute_make_decoration(SKB_DECORATION_LINE_UNDER, (skb_decoration_style_t)under.style,
+						                                context.styleManager->Px(float(under.thickness)), context.styleManager->Px(float(under.offset)),
+						                                underTag)
+						: skb_attribute_make_decoration(SKB_DECORATION_LINE_UNDER, SKB_DECORATION_STYLE_SOLID, 0.0f, 0.0f, underTag);
 					linkAttrs.count = n;
 
 					linkAttrStorage.push_back(linkAttrs); // no reallocation: reserved above
@@ -293,18 +301,26 @@ namespace tachyon
 						linkAttrSet,
 						run.contentId));
 				}
-				else if (run.textStyleOverride != nullptr)
+				else if (run.textStyleOverride != nullptr || run.background.a != 0 || run.color.a != 0)
 				{
-					// Shared text attributes, then the style override.
+					// Shared text attributes, then the style override, the run's color and the box
+					// under it.
 					RegisteredText::PerRunLinkAttributes overrideAttrs;
 					std::span<skb_attribute_t> overrideSpan{overrideAttrs.data, RegisteredText::PerRunLinkAttributes::kMaxCount};
 					int n = 0;
-					const int copyMax = RegisteredText::PerRunLinkAttributes::kMaxCount - 16;
+					const int copyMax = RegisteredText::PerRunLinkAttributes::kMaxCount - 18;
 					for (int k = 0; k < attributeSet.attributes_count && n < copyMax; k++)
 						overrideAttrs.data[n++] = attributeSet.attributes[k];
-					const TextStyle overrideStyle = context.styleManager ? context.styleManager->ToPixels(*run.textStyleOverride)
-					                                                     : *run.textStyleOverride;
-					n += style_to_attributes(&overrideStyle, overrideSpan, n, fontIdToFamilyId);
+					if (run.textStyleOverride != nullptr)
+					{
+						const TextStyle overrideStyle = context.styleManager ? context.styleManager->ToPixels(*run.textStyleOverride)
+						                                                     : *run.textStyleOverride;
+						n += style_to_attributes(&overrideStyle, overrideSpan, n, fontIdToFamilyId);
+					}
+					if (run.color.a != 0)
+						overrideAttrs.data[n++] = skb_attribute_make_paint_color(SKB_PAINT_TEXT, SKB_PAINT_STATE_DEFAULT, toSKBColor(run.color));
+					if (run.background.a != 0)
+						overrideAttrs.data[n++] = skb_attribute_make_paint_color(SKB_PAINT_TEXT_BACKGROUND, SKB_PAINT_STATE_DEFAULT, toSKBColor(run.background));
 					overrideAttrs.count = n;
 
 					linkAttrStorage.push_back(overrideAttrs);
@@ -539,7 +555,7 @@ namespace tachyon
 			text.append(run.text);
 			if (run.isLink && run.contentId != 0)
 				outLinks.push_back({ run.contentId, start, codepoints,
-				                     toSKBColor(run.linkStyle.color), toSKBColor(run.linkStyle.hoverColor) });
+				                     toSKBColor(run.linkStyle.color), toSKBColor(run.linkStyle.hoverColor), run.linkStyle.underline });
 		}
 		return text;
 	}

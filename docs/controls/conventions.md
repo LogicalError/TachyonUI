@@ -127,7 +127,7 @@ They are defined in `src/gui_core/layout/gui_constraints.h`.
     pointer and the keyboard do
   - only the look changes: input works as usual
   - for a preview or a screenshot of a control's states side by side
-  - a focus ring also needs the focus visible: `guiStateManager.Interaction().SetFocusVisible(true)`
+  - shown focused, a control draws its focus ring too, however the focus last moved
 
 ```cpp
 BeginShownState(ElementState::Hover | ElementState::Active);   // looks pressed

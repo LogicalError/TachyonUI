@@ -6,7 +6,10 @@
 
 #include <any>
 #include <functional>
+#include <span>
 #include <stdint.h>
+#include <string>
+#include <vector>
 
 namespace tachyon
 {
@@ -14,6 +17,32 @@ namespace tachyon
     /// @{
 
     struct InputState;
+    enum ImageIndex : uint32_t;   ///< defined in gui_image.h
+
+    /// Payload types the library defines, for payloads any control may take. They sit at the
+    /// top of the range: an application's own types are any other non-zero value (a
+    /// four-character code reads well in a debugger, 0x47524944 for 'GRID').
+    namespace DragPayload
+    {
+        inline constexpr uint32_t Image = 0xFFFF0001u;   ///< a DraggedImage
+        inline constexpr uint32_t Files = 0xFFFF0002u;   ///< a DraggedFiles
+    }
+
+    /// A picture being dragged (DragPayload::Image). It refers to the source's pixels rather
+    /// than copying them: the source keeps them alive while the drag lasts and in the frame of
+    /// the drop.
+    struct DraggedImage
+    {
+        ImageIndex               image{};   ///< the registered image, for drawing it
+        uint2                    size{};    ///< in pixels
+        std::span<const uint8_t> rgba;      ///< size.x * size.y * 4 bytes; empty when only drawn
+    };
+
+    /// Files being dragged inside the application (DragPayload::Files): paths, UTF-8.
+    struct DraggedFiles
+    {
+        std::vector<std::string> paths;
+    };
 
     /// What a DragVisualizer draws from: the pointer, the source and target, and the payload.
     struct DragVisualContext
@@ -54,10 +83,12 @@ namespace tachyon
         ID m_dragOutTargetID       = ID::Invalid();
         ID m_dragDropTargetID      = ID::Invalid();
         ID m_dragValidatedTargetID = ID::Invalid();
+        ID m_dragTakerID           = ID::Invalid();
 
         ID        m_dragEventSourceID       = ID::Invalid();
         uint32_t  m_dragEventPayloadType    = 0;
         uintptr_t m_dragEventPayloadValue   = 0;
+        std::any  m_dragEventPayload;       ///< a dropped payload, kept until its Drop is dispatched
         int32_t   m_startDistance           = kDragStartDistance;
 
         ID   ResolveDropTarget(ID hoveredID) const;
@@ -80,11 +111,17 @@ namespace tachyon
         ID GetOutTargetID()       const { return m_dragOutTargetID;       }
         ID GetDropTargetID()      const { return m_dragDropTargetID;      }
         ID GetValidatedTargetID() const { return m_dragValidatedTargetID; }
+        /// The element whose handler took the drag under the pointer: the validated target or
+        /// one of its ancestors. Invalid when nothing there takes it.
+        ID GetTakerID()           const { return m_dragTakerID;           }
 
         ID        GetEventSourceID()       const { return m_dragEventSourceID;     }
         uint32_t  GetEventPayloadType()    const { return m_dragEventPayloadType;  }
         uintptr_t GetEventPayloadValue()   const { return m_dragEventPayloadValue; }
         const std::any& GetPayload()       const { return m_dragPayload; }
+        /// The payload the drag events of this frame carry: the drag's own, or the one just
+        /// dropped (the drag itself is over by then).
+        const std::any& GetEventPayload()  const { return m_dragEventPayload.has_value() ? m_dragEventPayload : m_dragPayload; }
 
         // Mutation
 
@@ -98,7 +135,10 @@ namespace tachyon
         void SetStartDistance(int32_t pixels) { m_startDistance = pixels; }
         void Cancel();
 
-        void SetValidatedTargetID(ID id) { m_dragValidatedTargetID = id; }
+        /// The element under the pointer whose chain took the drag (`validated`), and the one in
+        /// that chain that took it (`taker`).
+        void SetValidatedTargetID(ID validated, ID taker) { m_dragValidatedTargetID = validated; m_dragTakerID = taker; }
+        void SetValidatedTargetID(ID id) { SetValidatedTargetID(id, id); }
 
         void SetFrameVisualizerOverride(DragVisualizer visualizer) { m_frameVisualizerOverrideNext = std::move(visualizer); }
         void ClearFrameVisualizerOverride();

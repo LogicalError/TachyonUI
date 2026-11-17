@@ -116,6 +116,9 @@ namespace tachyon
         color4b     color      { 64, 148, 255, 255 };
         color4b     hoverColor { 128, 200, 255, 255 };
         MouseCursor cursor     = MouseCursor::Pointer; ///< over the link
+        /// Its underline at rest, in CSS px: thickness, offset under the text, solid or dotted.
+        /// A thickness of 0 underlines it only while it's hovered.
+        TextDecoration underline {};
 
         bool operator==(const LinkStyle&) const noexcept = default;
     };
@@ -141,6 +144,11 @@ namespace tachyon
         /// Text style of this run in place of the element's (font, size, weight, ...); null
         /// uses the element's. Caller-owned; must outlive the frame, like `text`.
         const TextStyle* textStyleOverride = nullptr;
+        /// A box under this run, in this color (inline code on a well, say); alpha 0 is none.
+        color4b background {};
+        /// This run's text color in place of the element's (bold text in a brighter one, say);
+        /// alpha 0 keeps the element's. A link takes its linkStyle's colors instead.
+        color4b color {};
 
         uint64_t GetHashCode() const
         {
@@ -161,9 +169,13 @@ namespace tachyon
             hash = Hash::Combine(hash, static_cast<uint64_t>(contentId), isLink ? 1u : 0u);
             if (isLink)
                 hash = Hash::Combine(hash, Hash::Calculate(linkStyle.color), Hash::Calculate(linkStyle.hoverColor),
-                                     Hash::Calculate(linkStyle.cursor));
+                                     Hash::Calculate(linkStyle.cursor), linkStyle.underline.GetHashCode());
             if (textStyleOverride)
                 hash = Hash::Combine(hash, textStyleOverride->GetHashCode());
+            if (background.a != 0)
+                hash = Hash::Combine(hash, Hash::Calculate(background));
+            if (color.a != 0)
+                hash = Hash::Combine(hash, Hash::Calculate(color), 1u);
             return hash;
         }
     };

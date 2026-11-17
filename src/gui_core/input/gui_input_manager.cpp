@@ -150,18 +150,19 @@ namespace tachyon
         return false;
     }
 
-    static bool DispatchDragEventToElement(GUIStateManager& guiStateManager,
+    // Returns the element that took the event: the target or an ancestor; Invalid when none did.
+    static ID DispatchDragEventToElement(GUIStateManager& guiStateManager,
                                            ElementStorage& storage,
                                            ID targetID,
                                            EventType type,
                                            int2 screenPos)
     {
         if (targetID == ID::Invalid() || type == EventType::None)
-            return false;
+            return ID::Invalid();
 
         ElementRef ref = storage.FindElementRefByID(targetID);
         if (!ref.IsValid())
-            return false;
+            return ID::Invalid();
 
         InputState state{};
         state.screenPos       = screenPos;
@@ -169,6 +170,7 @@ namespace tachyon
         state.dragSourceID    = guiStateManager.Drag().GetEventSourceID();
         state.dragPayloadType = guiStateManager.Drag().GetEventPayloadType();
         state.dragPayloadValue = guiStateManager.Drag().GetEventPayloadValue();
+        state.dragPayload      = &guiStateManager.Drag().GetEventPayload();
 
         // Bubble up like the hover chain, so a parent drop target (e.g. a tree row)
         // receives drag events over its inner children.
@@ -185,11 +187,11 @@ namespace tachyon
                     .elementRef = ref
                 }))
             {
-                return true;
+                return elem.id;
             }
             ref = storage.GetParentRef(ref);
         }
-        return false;
+        return ID::Invalid();
     }
 
     // ---------------------------------------------------------------------------
@@ -747,8 +749,8 @@ namespace tachyon
 
         if (dragEnterTargetID != ID::Invalid())
         {
-            const bool accepted = DispatchDragEventToElement(guiStateManager, storage, dragEnterTargetID, EventType::DragEnter, m_prevScreenPos);
-            guiStateManager.Drag().SetValidatedTargetID(accepted ? dragOverTargetID : ID::Invalid());
+            const ID taker = DispatchDragEventToElement(guiStateManager, storage, dragEnterTargetID, EventType::DragEnter, m_prevScreenPos);
+            guiStateManager.Drag().SetValidatedTargetID(taker != ID::Invalid() ? dragOverTargetID : ID::Invalid(), taker);
         }
 
         if (dragOverTargetID != ID::Invalid())

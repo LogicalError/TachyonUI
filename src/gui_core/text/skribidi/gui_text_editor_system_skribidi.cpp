@@ -120,9 +120,15 @@ namespace tachyon
                 skb_temp_alloc_t* tmp = m_skribidiContext->temp_alloc;
                 skb_editor_set_attribute(ed, tmp, range, skb_attribute_make_paint_color(SKB_PAINT_TEXT, SKB_PAINT_STATE_DEFAULT, link.color));
                 skb_editor_set_attribute(ed, tmp, range, skb_attribute_make_paint_color(SKB_PAINT_TEXT, SKB_PAINT_STATE_HOVER, link.hoverColor));
-                skb_editor_set_attribute(ed, tmp, range, skb_attribute_make_paint_color(SKB_PAINT_DECORATION_LINK, SKB_PAINT_STATE_DEFAULT, link.color));
-                skb_editor_set_attribute(ed, tmp, range, skb_attribute_make_paint_color(SKB_PAINT_DECORATION_LINK, SKB_PAINT_STATE_HOVER, link.hoverColor));
-                skb_editor_set_attribute(ed, tmp, range, skb_attribute_make_decoration(SKB_DECORATION_LINE_UNDER, SKB_DECORATION_STYLE_SOLID, 0.0f, 0.0f, SKB_PAINT_DECORATION_LINK));
+                // Underlined at rest when its style says so, else only while hovered.
+                const TextDecoration& under = link.underline;
+                const uint32_t underTag = under.thickness > 0 ? kLinkUnderlineAtRest : uint32_t(SKB_PAINT_DECORATION_LINK);
+                skb_editor_set_attribute(ed, tmp, range, skb_attribute_make_paint_color(underTag, SKB_PAINT_STATE_DEFAULT, link.color));
+                skb_editor_set_attribute(ed, tmp, range, skb_attribute_make_paint_color(underTag, SKB_PAINT_STATE_HOVER, link.hoverColor));
+                skb_editor_set_attribute(ed, tmp, range, under.thickness > 0
+                    ? skb_attribute_make_decoration(SKB_DECORATION_LINE_UNDER, (skb_decoration_style_t)under.style,
+                                                    m_skribidiContext->styleManager->Px(float(under.thickness)), m_skribidiContext->styleManager->Px(float(under.offset)), underTag)
+                    : skb_attribute_make_decoration(SKB_DECORATION_LINE_UNDER, SKB_DECORATION_STYLE_SOLID, 0.0f, 0.0f, underTag));
             }
 
             skb_editor_set_on_text_change_callback(m_skribidiContext->editor, on_editor_text_change, m_skribidiContext);
@@ -265,15 +271,17 @@ namespace tachyon
                     {
                         const skb_layout_run_t* run = &layout_runs[decoration->line.layout_run_idx];
                         const skb_attribute_set_t run_attributes = skb_layout_get_layout_run_attributes(edit_layout, run);
-                        // A link's underline shows only while it's hovered; plain underlines always show.
-                        const bool isLinkDeco = (decoration->line.paint_tag == SKB_PAINT_DECORATION_LINK);
+                        // A link's underline shows at rest when its style has one, else only while it's
+                        // hovered; plain underlines always show.
+                        const bool hoverOnly  = (decoration->line.paint_tag == SKB_PAINT_DECORATION_LINK);
+                        const bool isLinkDeco = hoverOnly || decoration->line.paint_tag == kLinkUnderlineAtRest;
                         intptr_t linkContentId = 0;
                         if (isLinkDeco && run->glyph_range.start < run->glyph_range.end)
                             linkAtOffset(para_global_offset + clusters[glyphs[run->glyph_range.start].cluster_idx].text_offset, linkContentId);
                         // linkContentId != 0 guards the "nothing hovered" case (hoveredContentId == 0).
                         const uint32_t state = (isLinkDeco && linkContentId != 0 && linkContentId == entry->hoveredContentId)
                             ? SKB_PAINT_STATE_HOVER : SKB_PAINT_STATE_DEFAULT;
-                        if (isLinkDeco && state != SKB_PAINT_STATE_HOVER)
+                        if (hoverOnly && state != SKB_PAINT_STATE_HOVER)
                             continue;
                         const skb_attribute_paint_t paint = skb_attributes_get_paint(decoration->line.paint_tag, state, run_attributes, layout_params->attribute_collection);
                         if (paint.paint_tag == decoration->line.paint_tag)

@@ -157,7 +157,6 @@ namespace tachyon
         tachyon::VisualColorStyleIndex triangleFillStyle;
         tachyon::VisualColorStyleIndex triangleFillStyle2;
         tachyon::VisualColorStyleIndex quadFillStyle;
-        tachyon::VisualColorStyleIndex animatedHueStyle = tachyon::VisualColorStyleIndex::Invalid; // misc panel; recreated after a theme reload
 
         tachyon::ColorStyle triangleFillColorStyle;
         tachyon::ColorStyle quadFillColorStyle;
@@ -165,10 +164,34 @@ namespace tachyon
         ImageIndex checkerboardIndex { ImageIndex::Invalid };
         ImageIndex demoImageIndex { ImageIndex::Invalid };   // sample image for the Image() element demo
         std::vector<uint8_t> demoImagePixels;                 // its RGBA, for "Copy image"
-        // "Paste image": the clipboard's image, shown in the Misc panel, while there is one.
+        // The image pasted into the Misc panel's Paste image well (from the clipboard, or a file
+        // dropped on it), while there is one.
         tachyon::Image*  pastedImage = nullptr;
         ImageIndex       pastedImageIndex { ImageIndex::Invalid };
         uint2            pastedImageSize {};
+        // The Misc panel: its cards' styles, the colors its drawing uses (made again after a
+        // theme reload), its sample images, and what's picked in it.
+        struct MiscPanel
+        {
+            StyleRef panel, card, caption, row, label, rowLabel, state, stateLabel, richText, canvas;
+            StyleRef thumbTile, thumb, thumbSelected, thumbMissing, thumbLoading, thumbName, thumbNameSelected;
+            StyleRef wellColumn, well, wellEmpty, wellDrop;
+            StyleRef iconButton[4];   // 20, 24, 28 and 32 square
+            StyleRef iconButtonPrimary, iconButtonDanger, iconButtonGroup;
+
+            tachyon::VisualColorStyleIndex ink, accent, canvasFill, ring, pentagonFill, triangleFill;
+
+            // The thumbnails' images (a grey ramp, a hue sweep, a glow fading out) and the
+            // Copy image well's picture, with its RGBA for the clipboard.
+            ImageIndex           grey { ImageIndex::Invalid }, hue { ImageIndex::Invalid },
+                                 glow { ImageIndex::Invalid }, picture { ImageIndex::Invalid };
+            std::vector<uint8_t> picturePixels;
+            static constexpr uint32_t kPictureWidth = 256, kPictureHeight = 128;
+
+            int  selectedThumb = 1;
+            bool bold = true, italic = false, link = false;   // the group's toggles
+            bool liked = false;
+        } misc;
         // Work under way, shown where it happens: the build in the Build panel, an import in
         // the Files panel, the shaders compiling in the viewport, the hierarchy loading, and
         // the indexing and the background tasks in the status bar. Times are seconds on the
@@ -439,8 +462,18 @@ namespace tachyon
 
             // Icon IDs
             IconID circleIcon = IconID::Invalid;
-            IconID heartIcon = IconID::Invalid;
-            IconID starIcon = IconID::Invalid;
+            IconID heartIcon = IconID::Invalid;   // filled, pink
+            IconID starIcon = IconID::Invalid;    // filled, amber
+            // The Misc panel's: outlines in the text color (icon buttons, a rating's empty star),
+            // Like's pink heart, the picture icon and a small picture for rich text.
+            IconID heartOutlineIcon  = IconID::Invalid;
+            IconID starOutlineIcon   = IconID::Invalid;
+            IconID starDimIcon       = IconID::Invalid;
+            IconID likeIcon          = IconID::Invalid;
+            IconID boldIcon          = IconID::Invalid;
+            IconID italicIcon        = IconID::Invalid;
+            IconID imageIcon         = IconID::Invalid;
+            IconID inlinePictureIcon = IconID::Invalid;
 
             // Console log-level icons (+ monochrome variants for the filter toggles)
             IconID infoIcon      = IconID::Invalid;
@@ -788,10 +821,21 @@ namespace tachyon
         void RenderStatusProgress();
         /// Over the viewport while its shaders compile: a sliding bar along its top and a pill.
         void RenderViewportBusy(ID viewportID);
-        /// Puts the sample image on the clipboard.
+        /// The Misc panel's cards, in RenderMiscPanel's order.
+        void MiscVectorDrawingCard();
+        void MiscIconButtonsCard();
+        void MiscRichTextCard();
+        void MiscThumbnailsCard();
+        void MiscClipboardWellsCard();
+        void MiscExtraCards();
+        /// Puts the Copy image well's picture on the clipboard.
         void CopyDemoImage();
-        /// Shows the clipboard's image in the Misc panel, in place of the one pasted before.
+        /// Shows the clipboard's image in the Paste image well, in place of the one pasted before.
         void PasteImage();
+        /// Shows an image file's picture (as the shell reads it) in the Paste image well.
+        void PasteImageFile(const std::string& path);
+        /// Shows `rgba` (straight alpha, rows from the top) in the Paste image well.
+        void ShowPastedImage(const uint8_t* rgba, uint2 size);
         void RenderTablePanel();
         void RenderLogPanel(LogPanel& panel);
         void RenderTreeTablePanel();

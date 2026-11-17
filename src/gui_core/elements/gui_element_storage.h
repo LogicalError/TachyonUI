@@ -167,8 +167,10 @@ namespace tachyon
         [[nodiscard]] ElementStorageResult AddPostLayout(const ElementRef& ref, PostLayoutCallback callback);
 
         /// Begins adding children to the last added element; elements without BeginChildren are
-        /// leaves. MissingAdd when no element is open for children (none added, or just closed);
-        /// DuplicateCall when called twice for one element.
+        /// leaves. A window added and closed in between (a tooltip or popup built for the element)
+        /// doesn't count: the children still go to the element. MissingAdd when no element is
+        /// open for children (none added, or just closed); DuplicateCall when called twice for one
+        /// element.
         [[nodiscard]] ElementStorageResult BeginChildren();
 
         /// Closes the innermost BeginChildren. Fails outside construction or without one open.
@@ -472,6 +474,11 @@ namespace tachyon
             ElementRef ref = {};
             uint32_t startChildIndex = 0;
             ID itemBefore = ID::Invalid();   ///< for a window: the last item before it
+            /// For a window: the element added before it, still open for children (Invalid when
+            /// none was), so a window opened between an element and its children is harmless.
+            ElementRef addedBefore = ElementRef::Invalid();
+            ID addedIDBefore = ID::Invalid();
+            bool childrenBegunBefore = false;
         };
 
         std::vector<ParentStackEntry> m_parentStack;
@@ -481,6 +488,10 @@ namespace tachyon
         ID m_lastAddedID = ID::Invalid();  ///< persists across BeginChildren/EndChildren
         ID m_lastItemID = ID::Invalid();   ///< see GetLastItemID
         bool m_childrenBegun = false;
+        /// The last-added state when the last window was added, for its BeginChildren to keep.
+        ElementRef m_addedBeforeWindow = ElementRef::Invalid();
+        ID m_addedIDBeforeWindow = ID::Invalid();
+        bool m_childrenBegunBeforeWindow = false;
 
         uint32_t m_elementCount = 0;
 

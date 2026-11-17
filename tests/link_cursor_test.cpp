@@ -117,6 +117,21 @@ namespace tachyon
             light.Cleanup();
         }
 
+        // Links are underlined at rest, 3px under the text; .link-internal's dotted, for a link
+        // that stays in the app.
+        TEST(LinkStyleTheme, LinksAreUnderlinedInternalOnesDotted)
+        {
+            HeadlessGUIApp app;
+            ASSERT_TRUE(app.Initialize());
+            EXPECT_EQ(app.theme.linkStyle.underline.thickness, 1);
+            EXPECT_EQ(app.theme.linkStyle.underline.offset, 3);
+            EXPECT_EQ(app.theme.linkStyle.underline.style, DecorationStyle::Solid);
+            EXPECT_EQ(app.theme.internalLinkStyle.underline.style, DecorationStyle::Dotted);
+            EXPECT_EQ(app.theme.internalLinkStyle.underline.offset, 3);
+            EXPECT_EQ(app.theme.internalLinkStyle.color, app.theme.linkStyle.color) << "the same colors";
+            app.Cleanup();
+        }
+
         // Over a link the app shows the link's cursor; elsewhere, the element's own.
         TEST(LinkStyleTheme, TheAppShowsTheLinksCursor)
         {

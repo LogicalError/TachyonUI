@@ -761,6 +761,41 @@ namespace tachyon
         EXPECT_EQ(vert->borderRadius.bottomRight, 0);
     }
 
+    // Icon buttons are fixed squares (20, 24, 28, 32) with a 14px icon, 16 from 28, a state
+    // layer over the whole square, and accent-soft with an accent icon when on.
+    TEST(StyleSheet, ShippedIconButtonsAreSquaresOfFourSizes)
+    {
+        std::ifstream paletteFile("themes/dark.css"), stylesFile("themes/styles.css");
+        ASSERT_TRUE(paletteFile.good() && stylesFile.good());
+        std::ostringstream ss;
+        ss << paletteFile.rdbuf() << '\n' << stylesFile.rdbuf();
+        const StyleSheet s = ParseStyleSheet(ss.view());
+
+        struct Size { const char* name; int32_t side; uint16_t icon; };
+        for (const Size size : { Size{ "icon-button-20", 20, 14 }, Size{ "icon-button-24", 24, 14 },
+                                 Size{ "icon-button-28", 28, 16 }, Size{ "icon-button-32", 32, 16 } })
+        {
+            const Style* style = s.GetStyle(size.name);
+            ASSERT_NE(style, nullptr) << size.name;
+            EXPECT_EQ(style->layoutData.width,  size.side) << size.name;
+            EXPECT_EQ(style->layoutData.height, size.side) << size.name;
+            EXPECT_EQ(style->iconSize, size.icon) << size.name;
+            EXPECT_EQ(style->stateLayer, StateLayer::Content) << size.name;
+            EXPECT_EQ(style->states[ElementState::Selected].iconColor.GetFirstColor(),
+                      color4b(0x6B, 0x9B, 0xFF, 0xFF)) << size.name;
+            EXPECT_EQ(style->states[ElementState::Selected].backgroundColor.GetFirstColor(),
+                      color4b(0x20, 0x2A, 0x3D, 0xFF)) << size.name;
+        }
+
+        const Style* primary = s.GetStyle("icon-button-primary");
+        const Style* danger  = s.GetStyle("icon-button-danger");
+        ASSERT_NE(primary, nullptr);
+        ASSERT_NE(danger, nullptr);
+        EXPECT_EQ(primary->states[ElementState::None].backgroundColor.GetFirstColor(), color4b(0x6B, 0x9B, 0xFF, 0xFF));
+        EXPECT_EQ(danger->states[ElementState::None].iconColor.GetFirstColor(),  color4b(0xEF, 0x6A, 0x6A, 0xFF));
+        EXPECT_EQ(danger->states[ElementState::Hover].iconColor.GetFirstColor(), color4b(0xEF, 0x6A, 0x6A, 0xFF));
+    }
+
     // Single-line text fields centre their text when made taller than it.
     TEST(StyleSheet, ShippedTextboxCentresItsTextVertically)
     {

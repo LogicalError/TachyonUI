@@ -26,6 +26,34 @@ if (Button("Reset", [this] { Reset(); }))   // true the frame after the click
     statusText = "Reset done";
 ```
 
+### Icon buttons
+
+A button with only an icon is a square a row never stretches. The theme has a class per size:
+
+- `icon-button-20`, `icon-button-24` (the usual size), `icon-button-28`, `icon-button-32`
+  - the icon is 14px, and 16px from 28
+  - hover and pressed lay the text color over the whole square, at 8% and 14%
+  - focused: a 1px accent border
+  - with `Toggle`, on is the soft accent fill with the icon in the accent
+- `icon-button-primary`: the main action of a group (Play, Run), filled with the accent; 24px square
+- `icon-button-danger`: an action that removes something; the icon in the error color; 24px square
+- `icon-button-group`: a well round icon buttons that belong together (Bold, Italic, Link)
+
+Look a class up once with `theme.GetStyle`, after each theme load.
+
+```cpp
+const StyleRef iconButton = theme.GetStyle("icon-button-24");
+Button(GUIContent{ deleteIcon, {}, "Delete" }, [this] { Delete(); }, theme.GetStyle("icon-button-danger"));
+
+BeginHorizontal(theme.GetStyle("icon-button-group"));
+Toggle(bold,   GUIContent{ boldIcon,   {}, "Bold" },   iconButton);
+Toggle(italic, GUIContent{ italicIcon, {}, "Italic" }, iconButton);
+EndHorizontal();
+```
+
+- Give each icon button a tooltip: it has no text to say what it does.
+- To make a primary or danger button another size, pass a fixed size: `LayoutOverride::FixedSize(28, 28)`.
+
 ## BusyButton
 
 A button that can show it's at work, for example while a save runs.

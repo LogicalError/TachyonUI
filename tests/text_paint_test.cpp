@@ -163,6 +163,77 @@ namespace tachyon
             EXPECT_GT(textSystem->LayoutsMade(), layouts);
         }
 
+        // A link with an underline in its style shows it at rest, as far under the text as its
+        // offset says; without one, its underline shows only while it's hovered.
+        TEST_F(TextPaintTest, ALinksUnderlineShowsAtRestWhenItsStyleHasOne)
+        {
+            const StyleRef style = styleManager.Register(BaseStyle());
+            auto draw = [&](LinkStyle link) {
+                ContentRun runs[] = {
+                    { .type = ContentRun::Text, .text = "Read " },
+                    { .type = ContentRun::Text, .text = "docs", .contentId = 1, .isLink = true, .linkStyle = link },
+                };
+                const TextID id = textSystem->RegisterRichText(element, runs, style, ElementState::None);
+                return Render(id);
+            };
+            const size_t glyphs = draw(LinkStyle{}).size();   // the text alone: no underline at rest
+
+            LinkStyle underlined;
+            underlined.underline.thickness = 1;
+            underlined.underline.offset    = 1;
+            const std::vector<GlyphDraw> near = draw(underlined);
+            ASSERT_GT(near.size(), glyphs) << "the underline, at rest";
+
+            underlined.underline.offset = 4;
+            const std::vector<GlyphDraw> far = draw(underlined);
+            ASSERT_EQ(far.size(), near.size());
+            // Drawn first: under the text.
+            EXPECT_NEAR(far.front().pos.y - near.front().pos.y, 3.0f, 1.0f) << "three px further down";
+
+            underlined.underline.style = DecorationStyle::Dotted;
+            EXPECT_GT(draw(underlined).size(), glyphs) << "dotted, at rest too";
+        }
+
+        // A run with a background (inline code, say) has a box drawn under it, as wide as the run
+        // and in its color; the runs around it have none.
+        TEST_F(TextPaintTest, ARunsBackgroundIsDrawnUnderIt)
+        {
+            const StyleRef style = styleManager.Register(BaseStyle());
+            ContentRun runs[] = {
+                { .type = ContentRun::Text, .text = "Run " },
+                { .type = ContentRun::Text, .text = "code", .background = kGreen },
+                { .type = ContentRun::Text, .text = " here" },
+            };
+            const TextID id = textSystem->RegisterRichText(element, runs, style, ElementState::None);
+            graphicsContext.Renderer().quads.clear();
+            const std::vector<GlyphDraw> glyphs = Render(id);
+            const auto& quads = graphicsContext.Renderer().quads;
+            ASSERT_EQ(quads.size(), 1u) << "one box, under the middle run";
+            EXPECT_EQ(quads[0].color, ColorIndex(kGreen));
+            // Under the four glyphs of "code", and no others.
+            const IntRect box = quads[0].rect;
+            const auto under = std::ranges::count_if(glyphs, [&](const GlyphDraw& g) {
+                const float middle = g.pos.x + g.size.x * 0.5f;
+                return g.size.x > 0.0f && middle > float(box.x) && middle < float(box.x + box.w);
+            });
+            EXPECT_EQ(under, 4);
+        }
+
+        TEST_F(TextPaintTest, ARunsColorPaintsOnlyItsGlyphs)
+        {
+            const StyleRef style = styleManager.Register(BaseStyle());
+            ContentRun runs[] = {
+                { .type = ContentRun::Text, .text = "Run " },
+                { .type = ContentRun::Text, .text = "bold", .color = kGreen },
+                { .type = ContentRun::Text, .text = " here" },
+            };
+            const TextID id = textSystem->RegisterRichText(element, runs, style, ElementState::None);
+            const std::vector<GlyphDraw> glyphs = Render(id);
+            EXPECT_EQ(CountColor(glyphs, ColorIndex(kGreen)), 4u);
+            EXPECT_EQ(CountColor(glyphs, ColorIndex(kGreen)) + CountColor(glyphs, ColorIndex(kBlue)), glyphs.size())
+                << "the other runs keep the element's color";
+        }
+
         TEST_F(TextPaintTest, ADecorationIsDrawnInTheTextColorUnlessItHasItsOwn)
         {
             Style s = BaseStyle();

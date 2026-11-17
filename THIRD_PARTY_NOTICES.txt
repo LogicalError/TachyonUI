@@ -14,7 +14,7 @@ tests and is not distributed.
   - budouxc commit a044d49: MIT (https://github.com/memononen/budouxc)
   - Vulkan Memory Allocator v3.1.0: MIT (https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator)
   - vk-bootstrap v1.3.287: MIT (https://github.com/charles-lunarg/vk-bootstrap)
-  - NanoSVG copied: zlib (https://github.com/memononen/nanosvg)
+  - NanoSVG copied, altered (gradients in objectBoundingBox units): zlib (https://github.com/memononen/nanosvg)
   - Unicode data (emoji and line-break tables): Unicode-3.0 (https://www.unicode.org/license.txt)
   - Inter font (fonts/Inter): OFL-1.1 (https://github.com/rsms/inter)
   - JetBrains Mono 2.304 (fonts/JetBrainsMono, Regular and Bold): OFL-1.1 (https://github.com/JetBrains/JetBrainsMono)
@@ -421,7 +421,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ==============================================================================
-NanoSVG copied
+NanoSVG copied, altered: in gradients with objectBoundingBox units, a plain number is a fraction of the shape's box
 zlib - https://github.com/memononen/nanosvg
 ==============================================================================
 

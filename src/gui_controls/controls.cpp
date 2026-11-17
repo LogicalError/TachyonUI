@@ -25,6 +25,8 @@ namespace tachyon
     tachyon::ElementRef GUIApplication::RegisterElementInternal(tachyon::Element&& element, LayoutOverride&& constraints, bool updateState)
     {
         if (updateState) element.state |= guiStateManager.GetCurrentState(element.id);
+        if ((guiStateManager.Construction().ShownStates() & ElementState::Focused) != ElementState::None)
+            element.flags |= ElementFlags::ShownFocused;
         const bool animatesSelected = (element.flags & ElementFlags::AnimatesSelected) != ElementFlags::None;
         auto addRes = elementStorage.Add(std::move(element), std::move(constraints));
         VERIFY(addRes.status);
@@ -488,6 +490,20 @@ namespace tachyon
                            uint32_t(std::lround(std::abs(uv.max.y - uv.min.y) * float(sourceSize.y))) };
         const int2 size = AspectFit(shown, constraints);
         Image(id, image, uv, display, style, tachyon::LayoutOverride::FixedSize(Pixels{ size.x }, Pixels{ size.y }));
+    }
+
+    DragVisualizer GUIApplication::ImageDragGhost(ImageIndex image, uint2 size)
+    {
+        return [this, image, size](const DragVisualContext& drag)
+        {
+            if (BeginCursorGhostWindow(DragGhostWindowID(), drag.screenPos, theme.ghostWindowStyleRef))
+            {
+                const int32_t box = styleManager.Px(64);
+                Image(idManager.AllocateDynamicID("dragGhostImage"), image, size, theme.imageStyleRef,
+                      LayoutOverride::FixedSize(Pixels{ box }, Pixels{ box }));
+            }
+            EndGhostWindow();
+        };
     }
 
     bool GUIApplication::Button(ID id, const GUIContent& content, std::function<void()> onClick, StyleRef style, LayoutOverride&& constraints)

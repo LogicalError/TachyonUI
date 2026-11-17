@@ -85,6 +85,12 @@ namespace tachyon
             }
         }
 
+        if ((GetElementUnsafe(newChildRef).flags & ElementFlags::IsWindow) != ElementFlags::None)
+        {
+            m_addedBeforeWindow         = m_lastAddedRef;
+            m_addedIDBeforeWindow       = m_lastAddedID;
+            m_childrenBegunBeforeWindow = m_childrenBegun;
+        }
         m_lastAddedRef = newChildRef;
         m_lastAddedID = GetElementUnsafe(newChildRef).id;
         if ((GetElementUnsafe(newChildRef).flags & ElementFlags::IsWindow) == ElementFlags::None)
@@ -285,11 +291,15 @@ namespace tachyon
         while (childDepth >= m_depths.size()) { m_depths.emplace_back(); }
 
         uint32_t startChildIndex = m_depths[childDepth].Size();
+        const bool window = (GetElementUnsafe(parentRef).flags & ElementFlags::IsWindow) != ElementFlags::None;
         m_parentStack.push_back(ParentStackEntry
             {
                 .ref = parentRef,
                 .startChildIndex = startChildIndex,
-                .itemBefore = m_lastItemID
+                .itemBefore = m_lastItemID,
+                .addedBefore = window ? m_addedBeforeWindow : ElementRef::Invalid(),
+                .addedIDBefore = window ? m_addedIDBeforeWindow : ID::Invalid(),
+                .childrenBegunBefore = window && m_childrenBegunBeforeWindow,
             });
         return ElementStorageResult::Success;
     }
@@ -332,9 +342,19 @@ namespace tachyon
                 applyChildStyle(endChildIndex - 1, false, true);
         }
 
-        // The parent, finished, is the item at its level; a window leaves the item as it was.
+        // The parent, finished, is the item at its level; a window leaves the item as it was,
+        // and the element added before it still open for its children.
         const Element& parent = GetElementUnsafe(entry.ref);
-        m_lastItemID = (parent.flags & ElementFlags::IsWindow) != ElementFlags::None ? entry.itemBefore : parent.id;
+        if ((parent.flags & ElementFlags::IsWindow) != ElementFlags::None)
+        {
+            m_lastItemID    = entry.itemBefore;
+            m_lastAddedRef  = entry.addedBefore;
+            m_childrenBegun = entry.childrenBegunBefore;
+            if (entry.addedBefore.IsValid())
+                m_lastAddedID = entry.addedIDBefore;
+            return ElementStorageResult::Success;
+        }
+        m_lastItemID = parent.id;
 
         // Prevents a second BeginChildren on the now-complete element.
         m_lastAddedRef = ElementRef::Invalid();
@@ -491,6 +511,11 @@ namespace tachyon
             entry.ownerRef = move.Remap(entry.ownerRef);
         if (m_lastAddedRef.IsValid())
             m_lastAddedRef = move.Remap(m_lastAddedRef);
+        if (m_addedBeforeWindow.IsValid())
+            m_addedBeforeWindow = move.Remap(m_addedBeforeWindow);
+        for (ParentStackEntry& entry : m_parentStack)
+            if (entry.addedBefore.IsValid())
+                entry.addedBefore = move.Remap(entry.addedBefore);
 
         if (outMove != nullptr)
             *outMove = std::move(move);
@@ -563,6 +588,9 @@ namespace tachyon
         m_lastAddedID = ID::Invalid();
         m_lastItemID = ID::Invalid();
         m_childrenBegun = false;
+        m_addedBeforeWindow = ElementRef::Invalid();
+        m_addedIDBeforeWindow = ID::Invalid();
+        m_childrenBegunBeforeWindow = false;
         m_idIndex.clear();
         m_idIndexStale = false;
     }

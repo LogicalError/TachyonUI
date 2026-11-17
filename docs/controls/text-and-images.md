@@ -88,11 +88,22 @@ It has no default style: you must pass one.
 A link's `linkStyle` sets:
 
 - its color
-- its color under the pointer, when it's also underlined
+- its color under the pointer
 - the pointer's cursor over it: the hand, unless the style says otherwise
+- its underline at rest (`underline`): thickness and offset under the text in CSS px, solid or dotted
+  - a thickness of 0 underlines the link only while the pointer is over it
 
-`theme.linkStyle` comes from the `.link` class: its `color`, plus the `color` and `cursor`
-under `:hover`.
+`theme.linkStyle` comes from the `.link` class: its `color`, its `text-underline-*` properties, plus the
+`color` and `cursor` under `:hover`.
+
+- The default theme underlines links at rest: 1px, 3px under the text.
+- `theme.internalLinkStyle` is for a link that stays inside the app (opens a panel, selects an object).
+  - It comes from the `.link-internal` class: the same colors, a dotted underline.
+  - A theme without that class uses `theme.linkStyle` for both.
+
+```cpp
+{ .type = ContentRun::Text, .text = "the source", .contentId = 2, .isLink = true, .linkStyle = theme.internalLinkStyle },
+```
 
 ```cpp
 ContentRun runs[] =
@@ -108,6 +119,36 @@ SelectableText(docsTextID, runs, [this](intptr_t contentId) { if (contentId == 1
 ```
 
 Pass `theme.linkStyle` again every frame, so the links follow a theme reload.
+
+### A run's own look
+
+Rich text drawn with `ITextSystem::RegisterRichText` can give each text run its own look:
+
+- `textStyleOverride`: a whole `TextStyle` in place of the element's (font, size, weight, italic)
+  - you own it: keep it alive as long as the text, a `static` for example
+- `color`: the run's text color in place of the element's
+  - alpha 0, the default, keeps the element's color
+  - a link takes its `linkStyle`'s colors instead
+- `background`: a box with rounded corners under the run, in this color
+  - for inline code on a well, say
+  - alpha 0, the default, draws none
+
+```cpp
+static const TextStyle bold { .fontSize = 12.0f, .weight = FontWeight::SemiBold };
+static const TextStyle code { .fontSize = 11.0f, .family = FontFamily::Monospace };
+const color4b text1 = ToBytes(theme.GetColor("--text-1"));   // your color4f -> color4b helper
+const color4b well  = ToBytes(theme.GetColor("--bg-well"));
+
+ContentRun runs[] =
+{
+    { .type = ContentRun::Text, .text = "Bold", .textStyleOverride = &bold, .color = text1 },
+    { .type = ContentRun::Text, .text = ", then " },
+    { .type = ContentRun::Text, .text = " inline code ", .textStyleOverride = &code, .background = well },
+};
+```
+
+`SelectableText` keeps the links of its runs; the other looks above are for text drawn with
+`RegisterRichText`.
 
 ## Image
 

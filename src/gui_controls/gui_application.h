@@ -1402,6 +1402,21 @@ namespace tachyon
         /// application's own, such as opening the files.
         void SetFileDropHandler(std::function<void(const FileDrop&)> handler) { m_fileDropHandler = std::move(handler); }
 
+        /// The element that takes the drag under the pointer, wherever the drag came from: files
+        /// from another application (FileDragTargetID), else a drag started in this one (the
+        /// element whose handler returned true to EventType::DragEnter). Invalid when none does.
+        /// A control that takes both draws itself as the drop target while this is its ID.
+        ID DropTargetID() const
+        {
+            return m_fileDragTargetID != ID::Invalid() ? m_fileDragTargetID : guiStateManager.Drag().GetTakerID();
+        }
+        /// The window a drag's ghost goes in, by the pointer (see BeginCursorGhostWindow). One
+        /// drag at a time, so every kind of drag shares it.
+        ID DragGhostWindowID() const { return tabDragGhostWindowID; }
+        /// A ghost for a drag of a picture: `image` fitted into 64 x 64 CSS px by the pointer,
+        /// keeping its shape. For MakeDragSourceHandler's `ghost`.
+        DragVisualizer ImageDragGhost(ImageIndex image, uint2 size);
+
         /// Items emitted in between render as selected.
         bool BeginSelected() { guiStateManager.Construction().PushSelected(); return true; }
         /// Closes BeginSelected.
@@ -1422,6 +1437,15 @@ namespace tachyon
         bool BeginShownState(ElementState states) { guiStateManager.Construction().PushShownState(states); return true; }
         /// Closes BeginShownState.
         void EndShownState() { guiStateManager.Construction().PopShownState(); }
+        /// Whether `element` draws its focus ring (:focus-visible): it's focused and focus came
+        /// from the keyboard, or it's shown focused (BeginShownState).
+        bool ShowsFocusRing(const tachyon::Element& element) const
+        {
+            if ((element.state & ElementState::Focused) == ElementState::None)
+                return false;
+            return (element.flags & ElementFlags::ShownFocused) != ElementFlags::None
+                || guiStateManager.Interaction().IsFocusVisible();
+        }
 
         ///@}
 
@@ -2945,7 +2969,7 @@ namespace tachyon
         std::optional<int2> contextMenuScreenPos; ///< the right-click or OpenContextMenu point; else below the target
         bool m_contextMenuClaimed = false;   ///< a context menu opened this frame; the first one wins
         uint32_t m_contextMenuOpenings = 0;  ///< see ContextMenuOpenings
-        ID tabDragGhostWindowID{ ID::Invalid() }; ///< ghost window for dragged dock tab / drop overlay
+        ID tabDragGhostWindowID{ ID::Invalid() }; ///< ghost window of a drag (dock tab, document, payload) and the dock drop overlay
 
         FrameTimingSample frameTimingHistory[kFrameHistoryCount] = {};
         int               frameTimingHead = 0;           ///< next write slot
@@ -3354,11 +3378,13 @@ namespace tachyon
         void RunPressOutsideWatches();
         /// After dispatch: offers a drag from another application to the element under the
         /// pointer in the window it's over (by `input`'s hit test) and up, and its drop; then
-        /// gives a drop none took to the file drop handler.
+        /// gives a drop none took to the file drop handler. Redraws the drop target, of either
+        /// kind of drag, where it was and where it is.
         void DispatchFileDrops(const FrameInput& input);
         /// The first element from `overID` up whose handler takes `type`; Invalid when none does.
         ID   OfferFileDrop(EventType type, ID overID, int2 screenPos, const FileDrop* drop);
         ID   m_fileDragTargetID = ID::Invalid();
+        ID   m_drawnDropTargetID = ID::Invalid();   ///< DropTargetID as the cached scopes last drew it
         std::vector<FileDrop> m_heldFileDrops;   ///< dropped on a cached scope drawn from its capture: offered next frame
         std::function<void(const FileDrop&)> m_fileDropHandler;
         std::vector<TextStyle> m_mnemonicStyles;  ///< this frame's underlined mnemonic letters (MessageDialog)

@@ -24,6 +24,9 @@
  *
  * Bounding box calculation based on http://blog.hackers-cafe.net/2009/06/how-to-calculate-bezier-curves-bounding.html
  *
+ * Altered for TachyonUI: in gradients with objectBoundingBox units (the default), a
+ * plain number is a fraction of the shape's box (nsvg__convertGradientCoord).
+ *
  */
 
 #ifndef NANOSVG_H
@@ -818,6 +821,15 @@ static float nsvg__convertToPixels(NSVGparser* p, NSVGcoordinate c, float orig, 
 	return c.value;
 }
 
+// A gradient's coordinate in pixels. In objectBoundingBox units a plain number is a fraction
+// of the box (0 its near edge, 1 its far one), as a percentage is.
+static float nsvg__convertGradientCoord(NSVGparser* p, NSVGcoordinate c, float orig, float length, int objectSpace)
+{
+	if (objectSpace && c.units == NSVG_UNITS_USER)
+		return orig + c.value * length;
+	return nsvg__convertToPixels(p, c, orig, length);
+}
+
 static NSVGgradientData* nsvg__findGradientData(NSVGparser* p, const char* id)
 {
 	NSVGgradientData* grad = p->gradients;
@@ -878,13 +890,14 @@ static NSVGgradient* nsvg__createGradient(NSVGparser* p, const char* id, const f
 		sh = nsvg__actualHeight(p);
 	}
 	sl = sqrtf(sw*sw + sh*sh) / sqrtf(2.0f);
+	const int objectSpace = data->units == NSVG_OBJECT_SPACE;
 
 	if (data->type == NSVG_PAINT_LINEAR_GRADIENT) {
 		float x1, y1, x2, y2, dx, dy;
-		x1 = nsvg__convertToPixels(p, data->linear.x1, ox, sw);
-		y1 = nsvg__convertToPixels(p, data->linear.y1, oy, sh);
-		x2 = nsvg__convertToPixels(p, data->linear.x2, ox, sw);
-		y2 = nsvg__convertToPixels(p, data->linear.y2, oy, sh);
+		x1 = nsvg__convertGradientCoord(p, data->linear.x1, ox, sw, objectSpace);
+		y1 = nsvg__convertGradientCoord(p, data->linear.y1, oy, sh, objectSpace);
+		x2 = nsvg__convertGradientCoord(p, data->linear.x2, ox, sw, objectSpace);
+		y2 = nsvg__convertGradientCoord(p, data->linear.y2, oy, sh, objectSpace);
 		// Calculate transform aligned to the line
 		dx = x2 - x1;
 		dy = y2 - y1;
@@ -893,11 +906,11 @@ static NSVGgradient* nsvg__createGradient(NSVGparser* p, const char* id, const f
 		grad->xform[4] = x1; grad->xform[5] = y1;
 	} else {
 		float cx, cy, fx, fy, r;
-		cx = nsvg__convertToPixels(p, data->radial.cx, ox, sw);
-		cy = nsvg__convertToPixels(p, data->radial.cy, oy, sh);
-		fx = nsvg__convertToPixels(p, data->radial.fx, ox, sw);
-		fy = nsvg__convertToPixels(p, data->radial.fy, oy, sh);
-		r = nsvg__convertToPixels(p, data->radial.r, 0, sl);
+		cx = nsvg__convertGradientCoord(p, data->radial.cx, ox, sw, objectSpace);
+		cy = nsvg__convertGradientCoord(p, data->radial.cy, oy, sh, objectSpace);
+		fx = nsvg__convertGradientCoord(p, data->radial.fx, ox, sw, objectSpace);
+		fy = nsvg__convertGradientCoord(p, data->radial.fy, oy, sh, objectSpace);
+		r = nsvg__convertGradientCoord(p, data->radial.r, 0, sl, objectSpace);
 		// Calculate transform aligned to the circle
 		grad->xform[0] = r; grad->xform[1] = 0;
 		grad->xform[2] = 0; grad->xform[3] = r;

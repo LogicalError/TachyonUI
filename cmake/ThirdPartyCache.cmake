@@ -47,8 +47,10 @@ endif()
 # What the cache was built for; a cache built for other choices is rebuilt. vcpkg-msbuild:
 # built without vcpkg's Visual Studio integration. sdl-link: SDL is a static library.
 # library-alloc: the text libraries allocate through gui_core's library allocator.
+# nanosvg: the copy in third_party/nanosvg is altered, so a change to it reaches the cache.
+file(SHA1 "${PROJECT_SOURCE_DIR}/third_party/nanosvg/nanosvg.h" _tachyon_nanosvg_hash)
 set(_tachyon_tp_signature
-  "sdl=${TACHYON_SDL};system-sdl=${TACHYON_SYSTEM_SDL};system-harfbuzz=${TACHYON_SYSTEM_HARFBUZZ};system-vma=${TACHYON_SYSTEM_VMA};vcpkg-msbuild=off;sdl-link=static;library-alloc=1")
+  "sdl=${TACHYON_SDL};system-sdl=${TACHYON_SYSTEM_SDL};system-harfbuzz=${TACHYON_SYSTEM_HARFBUZZ};system-vma=${TACHYON_SYSTEM_VMA};vcpkg-msbuild=off;sdl-link=static;library-alloc=1;nanosvg=${_tachyon_nanosvg_hash}")
 
 function(_tachyon_build_third_party_config cfg)
   set(stamp "${TACHYON_TP_INSTALL}/.stamp-${cfg}")
