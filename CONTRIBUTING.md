@@ -18,7 +18,8 @@ Follow [Requirements](README.md#requirements) and [Quick start](README.md#quick-
 * `src/gui_controls`: `GUIApplication`, the controls, docking, menus, tooltips and transitions.
 * `examples`: small programs that each show one thing; `tests`: the unit and GPU tests.
 * `docs`: the guides; [docs/README.md](docs/README.md) is the place to start.
-* `docs/contributing`: notes for working on the library itself, such as [Writing a control](docs/contributing/writing-controls.md).
+* `docs/contributing`: notes for working on the library itself, such as [Writing a control](docs/contributing/writing-controls.md)
+  and [Resource paths](docs/contributing/resource-paths.md) (name every theme, font, icon and shader file in its exact case).
 
 ## Pull requests
 

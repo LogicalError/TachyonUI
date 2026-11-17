@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include <gmock/gmock.h>
 #include <gui_core/diagnostics/gui_logging.h>
+#include <gui_core/gui_resources.h>
 
 #include <cstdio>
 #include <filesystem>
@@ -50,6 +51,8 @@ int main(int argc, char** argv)
     EnsureWorkingDirectory(argc > 0 ? argv[0] : nullptr);
     // Every test boots a theme; only problems are worth printing.
     tachyon::Diagnostics::SetMinimumLogSeverity(tachyon::Diagnostics::LogSeverity::Warning);
+    // A resource named in the wrong case fails here as it would on Linux.
+    tachyon::SetPathCaseCheck(tachyon::PathCaseCheck::Fail);
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

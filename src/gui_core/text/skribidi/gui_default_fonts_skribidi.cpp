@@ -146,6 +146,8 @@ static const skb_font_create_params_t k_synthetic_bold = { SKB_DEFAULT_EMBOLDEN_
 static bool add_font(skb_font_collection_t* font_collection, const std::string& path, uint8_t family,
 	const skb_font_create_params_t* params = nullptr)
 {
+	if (!CheckPathCase(path))
+		return false;
 	if (skb_font_collection_add_font(font_collection, path.c_str(), family, params))
 		return true;
 	TACHYON_LOG_WARNING(k_log_text, "could not load font {}", path);
@@ -173,6 +175,11 @@ static bool add_optional_font(skb_font_collection_t* font_collection, const std:
 {
 	if (fonts.missing.contains(path))
 		return false;
+	if (!CheckPathCase(path))
+	{
+		fonts.missing.insert(path);
+		return false;
+	}
 	if (skb_font_collection_add_font(font_collection, path.c_str(), family, params))
 		return true;
 	fonts.missing.insert(path);

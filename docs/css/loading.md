@@ -36,6 +36,18 @@ block and used in a rule with `var(--accent)` (see
 - `dark.css`, `light.css`, `styles.css` and their fonts are built into the library.
 - A file with the same name on disk replaces the built-in one.
 
+## File names and case
+
+- Name each file in the case it has on disk, in code and in `@import` and `url()`.
+  - Windows and macOS find a file whatever the case of its name; Linux doesn't.
+  - The built-in copies are found by their exact name on every platform, so a wrong case
+    doesn't fall back to them either.
+- Debug builds log an error when a theme, font or icon file is named in the wrong case.
+  - `tachyon::SetPathCaseCheck(tachyon::PathCaseCheck::Fail)` refuses such a file instead,
+    so the mistake fails on Windows as it would on Linux.
+  - For example, call it at the start of your app's tests.
+- [Resource paths](../contributing/resource-paths.md) has the details.
+
 ## Load order
 
 - The files are joined in the order of the table above and parsed once.

@@ -124,6 +124,7 @@ list(APPEND GUI_CORE_TEST_FILES
   skribidi_shaping_test.cpp
   font_set_test.cpp
   built_in_resources_test.cpp
+  resource_path_case_test.cpp
   controls_dropdown_test.cpp
   controls_autocomplete_test.cpp
   keyboard_focus_test.cpp
@@ -165,6 +166,8 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${GUI_CORE_TEST_FILES})
 set(TACHYON_TUTORIAL_SOURCES "${PROJECT_SOURCE_DIR}/examples/tutorial/my_app.cpp" "${PROJECT_SOURCE_DIR}/examples/tutorial/my_app.h")
 target_sources(gui_core_tests PRIVATE ${TACHYON_TUTORIAL_SOURCES})
 source_group("Tutorial" FILES ${TACHYON_TUTORIAL_SOURCES})
+# resource_path_case_test.cpp checks the paths the source names against workdirectory/.
+target_compile_definitions(gui_core_tests PRIVATE "TACHYON_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\"")
 
 # gui_controls gives us the widget layer (GUIApplication, BeginTable, etc.)
 # that integration tests drive through the headless harness. It transitively

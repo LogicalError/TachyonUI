@@ -37,7 +37,6 @@ namespace
 #ifdef _WIN32
         // Backslashes separate folders only on Windows.
         EXPECT_FALSE(FindBuiltInResource("C:\\app\\resources\\themes\\styles.css").empty());
-        EXPECT_FALSE(FindBuiltInResource("C:\\app\\Resources\\Themes\\Styles.css").empty()) << "Windows paths ignore case";
 #endif
         EXPECT_FALSE(FindBuiltInResource("fonts/JetBrainsMono/JetBrainsMono-Bold.ttf").empty());
     }
