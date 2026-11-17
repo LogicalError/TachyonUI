@@ -171,6 +171,10 @@ namespace tachyon
         /// 0: the backend's default (Vulkan: 4096). The device may hold fewer;
         /// graphicsContext->GetImageSlotCount() says how many there are.
         uint32_t imageSlots = 0;
+        /// Which GPU to render with, when there's more than one: "integrated", "discrete", the
+        /// GPU's number in the log's list, or part of its name (GraphicsContext::SetGpuPreference).
+        /// Empty: the backend's choice, a discrete GPU first. TACHYON_GPU takes its place when set.
+        std::string_view gpu {};
     };
 
     /// The application: owns the windows, the systems and the frame loop. Subclass it, build

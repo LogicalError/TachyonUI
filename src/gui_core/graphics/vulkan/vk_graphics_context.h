@@ -72,6 +72,7 @@ namespace tachyon::vulkan
         void SetAllocationHooks(const tachyon::AllocationHooks& hooks) override { deviceContext.SetAllocationHooks(hooks); }
         /// 4096 by default; fewer when the device can't sample that many in a shader stage.
         void SetImageSlotCount(uint32_t count) override { deviceContext.requestedImageSlots = std::max(1u, count); }
+        void SetGpuPreference(std::string_view preference) override { deviceContext.gpuPreference = std::string(preference); }
         /// The slots asked for before Initialize; the ones there are after it.
         uint32_t GetImageSlotCount() const override
         {

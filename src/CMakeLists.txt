@@ -172,6 +172,8 @@ list(APPEND GUI_FILES
   gui_core/graphics/gui_custom_draw_context.cpp
 
   gui_core/graphics/gui_graphics_context.h
+  gui_core/graphics/gui_gpu_choice.cpp
+  gui_core/graphics/gui_gpu_choice.h
 
   gui_core/graphics/gui_image.h
 

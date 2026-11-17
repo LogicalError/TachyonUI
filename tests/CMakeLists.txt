@@ -57,6 +57,7 @@ list(APPEND GUI_CORE_TEST_FILES
   result_test.cpp
   measured_sizes_test.cpp
   ui_state_test.cpp
+  gpu_choice_test.cpp
   view_state_test.cpp
   layout_presets_test.cpp
   clipboard_image_test.cpp

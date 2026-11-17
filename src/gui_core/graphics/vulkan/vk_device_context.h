@@ -336,6 +336,8 @@ namespace tachyon::vulkan
 
         /// Image slots asked for (VulkanGraphicsContext::SetImageSlotCount); set before Initialize.
         uint32_t         requestedImageSlots = 4096;
+        /// The GPU asked for (GraphicsContext::SetGpuPreference); set before Initialize.
+        std::string      gpuPreference;
         /// The image slots there are: the ones asked for, or fewer when the device holds
         /// fewer sampled images per shader stage. Set by Initialize.
         uint32_t         imageSlots          = 0;

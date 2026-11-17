@@ -108,6 +108,10 @@ namespace tachyon::vulkan
         bool                     havePresentEnd{ false };
         double                   lastBuildSeconds{ 0.0 };
         bool                     lastBuildValid{ false };
+        /// How long this frame's swapchain image took to acquire; counted with present's wait.
+        double                   acquireSeconds{ 0.0 };
+        /// The last presented frame's swapchain wait: acquiring its image and presenting it.
+        double                   lastSwapchainWaitSeconds{ 0.0 };
         /// Recorded and submitted, waiting for PresentWindowFrame.
         bool                     presentPending{ false };
         FrameData*               readbackPending{ nullptr };
@@ -163,6 +167,8 @@ namespace tachyon::vulkan
         void RenderWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing) override;
         void RecordWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect) override;
         std::optional<double> PresentWindowFrame() override;
+        /// The last presented frame's wait on the swapchain, in seconds (PresentWindowFrame's).
+        double LastSwapchainWaitSeconds() const { return lastSwapchainWaitSeconds; }
         bool NeedsRecord() const override { return resize_requested; }
         void RecordFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing);
         
