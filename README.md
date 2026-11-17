@@ -44,7 +44,8 @@ already has a Vulkan renderer.
 
 - Windows x64
 - Visual Studio 2026 with CMake 4.2 or newer, or Visual Studio 2022 with CMake 3.22 or newer
-- The [Vulkan SDK](https://vulkan.lunarg.com/)
+- The [Vulkan SDK](https://vulkan.lunarg.com/) 1.4.341 or newer, for its Slang shader compiler
+  (or an older SDK and a [Slang release](https://github.com/shader-slang/slang/releases) 2026.1 or newer)
 - Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
 
 ### Linux
@@ -53,7 +54,8 @@ already has a Vulkan renderer.
 - GCC 13 or newer, or Clang 17 or newer
 - CMake 3.22 or newer and Ninja
 - The X11 and Wayland development packages SDL3 needs ([list for Ubuntu](.github/linux-packages.txt))
-- The [Vulkan SDK](https://vulkan.lunarg.com/), or your distribution's Vulkan and glslang packages
+- The [Vulkan SDK](https://vulkan.lunarg.com/) 1.4.341 or newer, or your distribution's Vulkan
+  packages and a [Slang release](https://github.com/shader-slang/slang/releases) 2026.1 or newer
 - Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
 
 ### macOS
@@ -62,7 +64,9 @@ Not tested on a Mac yet (help would be appreciated!). CI builds it and runs the 
 
 - Apple Clang
 - CMake 3.22 or newer and Ninja
-- The [Vulkan SDK](https://vulkan.lunarg.com/), or Homebrew's `vulkan-headers`, `vulkan-loader`, `molten-vk` and `glslang`
+- The [Vulkan SDK](https://vulkan.lunarg.com/) 1.4.341 or newer, or Homebrew's `vulkan-headers`,
+  `vulkan-loader` and `molten-vk` and a [Slang release](https://github.com/shader-slang/slang/releases) 2026.1 or newer
+- The build finds `slangc` through `VULKAN_SDK` or the `PATH`; set `SLANGC` to the executable to pick another
 - Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
 
 ### To run

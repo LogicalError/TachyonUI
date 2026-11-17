@@ -47,6 +47,9 @@ namespace tachyon::vulkan
         /// BeginWindowFrame gates their reuse.
         VulkanImage drawImage = {};
         VulkanImage depthImage = {};
+        /// The layout the slot's last commands left drawImage in: GENERAL after drawing,
+        /// TRANSFER_SRC_OPTIMAL once copied out (to the swapchain, the host's image, or read back).
+        VkImageLayout drawImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
         /// GPU timestamps at the start and the end of the frame's drawing; none when the
         /// queue can't time.
@@ -143,7 +146,7 @@ namespace tachyon::vulkan
         VkCommandBuffer BeginWindowFrame(FrameData& currentFrame, VulkanGraphicsContext* graphics = nullptr);
         void EndWindowFrame(FrameData& currentFrame);
 
-        void PerformReadback(const VulkanImage& drawImage);
+        void PerformReadback(FrameData& frame);
 
         /// GPU time of the drawing of this window's most recent finished frame, in seconds; 0
         /// until one finished, or when the device can't time.

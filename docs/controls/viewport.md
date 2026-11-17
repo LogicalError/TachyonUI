@@ -74,6 +74,8 @@ void DrawScene(const ViewportRenderContext& ctx)
 
 - Matrices act on column vectors (`p' = M * p`); `r0` to `r3` are their rows.
   - In GLSL, declare them `layout(row_major)`, or transpose them.
+  - In Slang, read them as four `float4` rows and take a `dot` with each.
+    - For example, the showcase's `examples/showcase/shaders/scene.slang`.
 - Right-handed, y up.
 - Clip space is Vulkan's: y down, depth from 0 (near) to 1 (far).
 

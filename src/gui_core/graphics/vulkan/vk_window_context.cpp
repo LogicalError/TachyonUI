@@ -418,6 +418,7 @@ VkCommandBuffer VulkanWindowContext::BeginWindowFrame(FrameData& currentFrame, V
         graphics->RecordScenes(state.commandBuffer, id);
 
     tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+    currentFrame.drawImageLayout = VK_IMAGE_LAYOUT_GENERAL;
     tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     // Layered and render-to-image windows clear to transparent, others to opaque black.
@@ -499,6 +500,7 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
             TACHYON_VK_CHECK(acq);
 
         tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        currentFrame.drawImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         // After the acquire semaphore's wait (ALL_COMMANDS, below), not racing it.
         tachyon::vulkan::transition_image(state.commandBuffer, swapchain.swapchainImages[swapchain.swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                              VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
@@ -511,6 +513,7 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
     {
         // Ready to read back, and the source of the copy into the host's image.
         tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        currentFrame.drawImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         if (targetImage != VK_NULL_HANDLE)
         {
             // The host reads the image in its fragment shaders after this submission,
@@ -606,7 +609,7 @@ std::optional<double> VulkanWindowContext::PresentWindowFrame()
     if (FrameData* frame = std::exchange(readbackPending, nullptr))
     {
         WaitForFence(deviceContext->device, frame->renderFence);
-        PerformReadback(frame->drawImage);
+        PerformReadback(*frame);
     }
 
     // Layered windows don't redraw on SDL expose events, so update them explicitly.
@@ -619,8 +622,9 @@ std::optional<double> VulkanWindowContext::PresentWindowFrame()
     return presentSeconds;
 }
 
-void VulkanWindowContext::PerformReadback(const VulkanImage& drawImage)
+void VulkanWindowContext::PerformReadback(FrameData& frame)
 {
+    const VulkanImage& drawImage = frame.drawImage;
     VkCommandBuffer cmd = deviceContext->immCommandBuffer;
     TACHYON_VK_CHECK(vkResetFences(deviceContext->device, 1, &deviceContext->immFence));
     TACHYON_VK_CHECK(vkResetCommandBuffer(cmd, 0));
@@ -628,11 +632,12 @@ void VulkanWindowContext::PerformReadback(const VulkanImage& drawImage)
     VkCommandBufferBeginInfo beginInfo = tachyon::vulkan::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     TACHYON_VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
 
-    // With a swapchain or as a render-to-image window, EndWindowFrame already left
-    // drawImage in TRANSFER_SRC_OPTIMAL; layered windows still have it in GENERAL.
-    if (swapchain.swapchain == VK_NULL_HANDLE && !renderToImage)
+    // A layered window's frame is still in GENERAL the first time it's read back; copied out
+    // already (a swapchain's or the host's image, or read back before), it stays as it is.
+    if (frame.drawImageLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
     {
-        tachyon::vulkan::transition_image(cmd, drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        tachyon::vulkan::transition_image(cmd, drawImage.image, frame.drawImageLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        frame.drawImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
     }
 
     VkBufferImageCopy region = {};
@@ -704,7 +709,7 @@ bool VulkanWindowContext::ReadPixels(std::span<uint8_t> bgra)
         cachedBitmap.resize(bufferSize);
     }
     WaitForFence(deviceContext->device, last.renderFence);
-    PerformReadback(last.drawImage);
+    PerformReadback(last);
     std::memcpy(bgra.data(), cachedBitmap.data(), size_t(drawExtent.width) * drawExtent.height * 4);
     return true;
 }

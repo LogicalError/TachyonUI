@@ -1093,6 +1093,7 @@ tachyon::vulkan::VulkanDeviceContext::DeviceRequirements tachyon::vulkan::Vulkan
     requirements.features13.dynamicRendering = true;
     requirements.features13.synchronization2 = true;
     requirements.features13.robustImageAccess = true;
+    requirements.features13.shaderDemoteToHelperInvocation = true;   // the shaders' discard
 
     requirements.features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     requirements.features12.bufferDeviceAddress = true;
@@ -1111,6 +1112,7 @@ tachyon::vulkan::VulkanDeviceContext::DeviceRequirements tachyon::vulkan::Vulkan
     requirements.features11.storageBuffer16BitAccess = true;
 
     requirements.features.shaderInt16 = true;
+    requirements.features.shaderInt64 = true;   // the shaders' buffer addresses
     requirements.features.robustBufferAccess = true;
 
     requirements.deviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -1144,6 +1146,7 @@ bool tachyon::vulkan::VulkanDeviceContext::CheckPhysicalDeviceSupport(VkPhysical
     TACHYON_REQUIRE_FEATURE(features13, dynamicRendering);
     TACHYON_REQUIRE_FEATURE(features13, synchronization2);
     TACHYON_REQUIRE_FEATURE(features13, robustImageAccess);
+    TACHYON_REQUIRE_FEATURE(features13, shaderDemoteToHelperInvocation);
     TACHYON_REQUIRE_FEATURE(features12, bufferDeviceAddress);
     TACHYON_REQUIRE_FEATURE(features12, descriptorIndexing);
     TACHYON_REQUIRE_FEATURE(features12, descriptorBindingPartiallyBound);
@@ -1158,6 +1161,7 @@ bool tachyon::vulkan::VulkanDeviceContext::CheckPhysicalDeviceSupport(VkPhysical
     TACHYON_REQUIRE_FEATURE(features11, storageBuffer16BitAccess);
 #undef TACHYON_REQUIRE_FEATURE
     if (required.features.shaderInt16 && !have.features.shaderInt16) missing("features.shaderInt16");
+    if (required.features.shaderInt64 && !have.features.shaderInt64) missing("features.shaderInt64");
     if (required.features.robustBufferAccess && !have.features.robustBufferAccess) missing("features.robustBufferAccess");
 
     uint32_t extensionCount = 0;

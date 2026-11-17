@@ -192,8 +192,8 @@ namespace
 
     bool IsResourceName(std::string_view name)
     {
-        static constexpr std::array kExtensions{ ".css", ".ttf", ".otf", ".svg", ".spv", ".frag", ".vert",
-                                                 ".comp", ".glsl", ".json", ".png", ".jpg" };
+        static constexpr std::array kExtensions{ ".css", ".ttf", ".otf", ".svg", ".spv", ".slang",
+                                                 ".json", ".png", ".jpg" };
         const size_t dot = name.find_last_of('.');
         if (dot == std::string_view::npos)
             return false;

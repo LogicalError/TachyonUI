@@ -172,7 +172,10 @@ add_custom_command(TARGET my_app POST_BUILD
   - a graphics backend is the part that draws; the default one uses Vulkan
   - the library only hands it primitives, such as boxes and glyphs
   - see `PrimitiveSpec` in `gui_core/graphics/gui_render_primitives.h`
-  - the Vulkan backend's GLSL shaders are in `workdirectory/shaders`
+  - the Vulkan backend's shaders are in `workdirectory/shaders`
+    - they're written in [Slang](https://shader-slang.org/): one `*_shader.slang` file per
+      primitive kind, with its `vertexMain` and `fragmentMain`
+    - for example, `box_shader.slang` builds into `box_shader.vert.spv` and `box_shader.frag.spv`
 
 ---
 

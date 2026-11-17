@@ -3,22 +3,14 @@
 # SetResourceRoot(TACHYON_RESOURCE_DIR), so it runs from any folder.
 
 # The 3D scene's shaders, compiled to SPIR-V and built into the showcase, as gui_core's are.
-set(_showcase_glsl "${CMAKE_CURRENT_SOURCE_DIR}/shaders/scene.vert" "${CMAKE_CURRENT_SOURCE_DIR}/shaders/scene.frag")
+set(_showcase_slang "${CMAKE_CURRENT_SOURCE_DIR}/shaders/scene.slang")
 set(_showcase_spirv "")
-set(_showcase_shader_entries "")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/shaders")
-foreach(_glsl IN LISTS _showcase_glsl)
-  get_filename_component(_name "${_glsl}" NAME)
-  set(_spv "${CMAKE_CURRENT_BINARY_DIR}/shaders/${_name}.spv")
-  add_custom_command(
-    OUTPUT "${_spv}"
-    COMMAND ${CMAKE_COMMAND} -DVALIDATOR=${GLSL_VALIDATOR} -DSOURCE=${_glsl} -DOUTPUT=${_spv}
-            -P "${PROJECT_SOURCE_DIR}/cmake/CompileShader.cmake"
-    DEPENDS "${_glsl}"
-    COMMENT "Compiling the showcase's ${_name}"
-    VERBATIM)
-  list(APPEND _showcase_spirv "${_spv}")
-  list(APPEND _showcase_shader_entries "${_name}.spv=${_spv}")
+tachyon_compile_slang("${_showcase_slang}" "${CMAKE_CURRENT_BINARY_DIR}/shaders" _showcase_spirv)
+set(_showcase_shader_entries "")
+foreach(_spv IN LISTS _showcase_spirv)
+  get_filename_component(_name "${_spv}" NAME)
+  list(APPEND _showcase_shader_entries "${_name}=${_spv}")
 endforeach()
 set(_showcase_shader_source "${CMAKE_CURRENT_BINARY_DIR}/generated/showcase_shaders.cpp")
 string(REPLACE ";" "|" _showcase_shader_arg "${_showcase_shader_entries}")
@@ -56,7 +48,7 @@ tachyon_add_example(showcase
   panel_view.cpp
   scene_renderer.h
   scene_renderer.cpp
-  ${_showcase_glsl}
+  ${_showcase_slang}
   "${_showcase_shader_source}"
 
   # The theme files it uses, for editing them in the IDE

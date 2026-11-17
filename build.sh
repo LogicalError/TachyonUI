@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds TachyonUI, its examples and tests on Linux and macOS: ./build.sh [Debug|Release]
-# Needs CMake, Ninja, a C++20 compiler, the Vulkan SDK (or the distribution's Vulkan and
-# glslang packages), and Git LFS for the fonts.
+# Needs CMake, Ninja, a C++20 compiler, the Vulkan SDK 1.4.341 or newer (or the
+# distribution's Vulkan packages and Slang 2026.1 or newer), and Git LFS for the fonts.
 set -e
 config="${1:-Debug}"
 cd "$(dirname "$0")"
