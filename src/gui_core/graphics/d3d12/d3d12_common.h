@@ -22,6 +22,10 @@ namespace tachyon::d3d12
 {
     using Microsoft::WRL::ComPtr;
 
+    /// What a window frame draws into, as on Vulkan: 8-bit BGRA, and 32-bit float depth.
+    inline constexpr DXGI_FORMAT kDrawFormat  = DXGI_FORMAT_B8G8R8A8_UNORM;
+    inline constexpr DXGI_FORMAT kDepthFormat = DXGI_FORMAT_D32_FLOAT;
+
     /// A failed call's HRESULT as text, for errors and logs ("0x887A0005").
     std::string HResultText(HRESULT hr);
 

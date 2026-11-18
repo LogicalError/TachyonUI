@@ -3,15 +3,6 @@
 #include <chrono>
 #include <utility>
 
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-// Undefine Windows macro that conflicts with our CreateWindow method
-#undef CreateWindow
-#endif
-
 #include <VkBootstrap.h>
 #define VMA_DEBUG_LOG_FORMAT
 #include <vk_mem_alloc.h>
@@ -31,6 +22,7 @@
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>
 #include <gui_core/graphics/vulkan/vk_window_context.h>
 #include <gui_core/graphics/vulkan/vk_defaults.h>
+#include <gui_core/windows/gui_layered_window.h>
 #include <gui_core/graphics/gui_graphics_context.h>
 
 using namespace tachyon::vulkan;
@@ -741,106 +733,10 @@ void VulkanWindowContext::TransitionTarget(VkCommandBuffer cmd, VkImageLayout fr
     vkCmdPipelineBarrier2(cmd, &dependency);
 }
 
-void VulkanWindowContext::UpdateLayeredWindowFromCache()
-{
-#ifdef _WIN32
-    if (drawExtent.width == 0 || drawExtent.height == 0)
-        return;
-
-    HWND hwnd = (HWND)nativeHandle;
-    if (!hwnd)
-        return;
-    
-    HDC hdcScreen = GetDC(NULL);
-    if (!hdcScreen)
-        return;
-    
-    HDC hdcMem = CreateCompatibleDC(hdcScreen);
-    if (!hdcMem)
-    {
-        ReleaseDC(NULL, hdcScreen);
-        return;
-    }
-    
-    BITMAPINFO bmi = {};
-    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth = drawExtent.width;
-    bmi.bmiHeader.biHeight = -(int)drawExtent.height; // Top-down DIB
-    bmi.bmiHeader.biPlanes = 1;
-    bmi.bmiHeader.biBitCount = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-    
-    void* bits = nullptr;
-    HBITMAP hbmp = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
-    if (!hbmp)
-    {
-        DeleteDC(hdcMem);
-        ReleaseDC(NULL, hdcScreen);
-        return;
-    }
-    
-    if (!bits)
-    {
-        DeleteObject(hbmp);
-        DeleteDC(hdcMem);
-        ReleaseDC(NULL, hdcScreen);
-        return;
-    }
-    
-    // RGB is already premultiplied by the shader.
-    uint32_t pixelCount = drawExtent.width * drawExtent.height;
-    uint8_t* src = cachedBitmap.data();
-    uint8_t* dst = (uint8_t*)bits;
-    
-    for (uint32_t i = 0; i < pixelCount; i++)
-    {
-        uint8_t b = src[i * 4 + 0];
-        uint8_t g = src[i * 4 + 1];
-        uint8_t r = src[i * 4 + 2];
-        uint8_t a = src[i * 4 + 3];
-        
-        dst[i * 4 + 0] = b;
-        dst[i * 4 + 1] = g;
-        dst[i * 4 + 2] = r;
-        dst[i * 4 + 3] = a;
-    }
-    
-    HBITMAP hOldBmp = (HBITMAP)SelectObject(hdcMem, hbmp);
-    if (!hOldBmp || hOldBmp == HGDI_ERROR)
-    {
-        DeleteObject(hbmp);
-        DeleteDC(hdcMem);
-        ReleaseDC(NULL, hdcScreen);
-        return;
-    }
-    
-    POINT ptSrc = {0, 0};
-    SIZE szWnd = {(LONG)drawExtent.width, (LONG)drawExtent.height};
-
-    BLENDFUNCTION blend = {};
-    blend.BlendOp = AC_SRC_OVER;
-    blend.SourceConstantAlpha = 255;
-    blend.AlphaFormat = AC_SRC_ALPHA;
-    
-    // Only the content and size, fully opaque (the window backend clears a hidden or resized
-    // window until this). No position: the window stays where the window manager put it. The
-    // last recorded position is stale once the window moves without its picture changing (a
-    // drag ghost following the cursor), and setting it would move the window back each frame.
-    // The window backend shows and hides the window: shown here, SDL takes it for a window the
-    // OS showed and restores it, which activates it.
-    UpdateLayeredWindow(hwnd, hdcScreen, nullptr, &szWnd, hdcMem, &ptSrc, 0, &blend, ULW_ALPHA);
-    
-    SelectObject(hdcMem, hOldBmp);
-    DeleteObject(hbmp);
-    DeleteDC(hdcMem);
-    ReleaseDC(NULL, hdcScreen);
-#endif
-}
-
 void VulkanWindowContext::UpdateTransparentWindow()
 {
     if (needsReadback && !cachedBitmap.empty())
-        UpdateLayeredWindowFromCache();
+        tachyon::ShowLayeredPixels(nativeHandle, cachedBitmap, { drawExtent.width, drawExtent.height });
 }
 
 void VulkanWindowContext::RenderWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing)
@@ -958,18 +854,11 @@ VulkanWindowContext* VulkanWindowContext::Create(tachyon::ID id, void* nativeHan
     // On Windows, layered (WS_EX_LAYERED) windows get no surface and present via
     // UpdateLayeredWindow; elsewhere transparent windows use surface alpha compositing.
     bool shouldCreateSurface = !context->renderToImage;
-#ifdef _WIN32
-    if (nativeHandle)
+    if (tachyon::IsLayeredWindow(nativeHandle))
     {
-        HWND hwnd = (HWND)nativeHandle;
-        LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        if (exStyle & WS_EX_LAYERED)
-        {
-            shouldCreateSurface = false;
-            context->needsReadback = true;
-        }
+        shouldCreateSurface = false;
+        context->needsReadback = true;
     }
-#endif
     
     if (shouldCreateSurface)
     {

@@ -127,6 +127,8 @@ list(APPEND GUI_FILES
   gui_core/windows/gui_window_backend.cpp
   gui_core/windows/gui_layered_fade.h
   gui_core/windows/gui_layered_fade.cpp
+  gui_core/windows/gui_layered_window.h
+  gui_core/windows/gui_layered_window.cpp
   gui_core/windows/gui_os_window_manager.cpp
   gui_core/windows/gui_image_window_backend.h
   gui_core/windows/gui_image_window_backend.cpp
@@ -242,9 +244,14 @@ endif()
 if(TACHYON_D3D12)
   list(APPEND GUI_FILES
     gui_core/graphics/d3d12/d3d12_common.h
+    gui_core/graphics/d3d12/d3d12_device.cpp
     gui_core/graphics/d3d12/d3d12_device.h
     gui_core/graphics/d3d12/d3d12_graphics_context.cpp
     gui_core/graphics/d3d12/d3d12_graphics_context.h
+    gui_core/graphics/d3d12/d3d12_rhi.cpp
+    gui_core/graphics/d3d12/d3d12_rhi.h
+    gui_core/graphics/d3d12/d3d12_text_atlas.cpp
+    gui_core/graphics/d3d12/d3d12_text_atlas.h
     gui_core/graphics/d3d12/d3d12_window_context.cpp
     gui_core/graphics/d3d12/d3d12_window_context.h)
 endif()
@@ -332,7 +339,7 @@ if(TACHYON_VULKAN)
     PRIVATE Vulkan::Vulkan vkbootstrap)
 endif()
 if(TACHYON_D3D12)
-  target_link_libraries(gui_core PRIVATE d3d12 dxgi)
+  target_link_libraries(gui_core PRIVATE d3d12 dxgi d3d12ma)
 endif()
 # The graphics backends built in, 0 or 1 each, for code that uses one only when it's there.
 target_compile_definitions(gui_core PUBLIC

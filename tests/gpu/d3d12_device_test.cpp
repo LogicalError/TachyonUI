@@ -57,6 +57,28 @@ TEST_F(D3D12Test, AWindowPresentsAndReadsBackItsFrame)
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
 }
 
+// A transparent window is layered on Windows: no swapchain, its frame is read back and shown
+// with UpdateLayeredWindow, and what's not drawn on stays see-through.
+TEST_F(D3D12Test, ATransparentWindowIsLayeredAndClearWhereNothingIsDrawn)
+{
+    const tachyon::OSWindowHandle window = windowBackend->CreateWindow("d3d12-transparent", tachyon::IntRect{ -3000, -3000, 120, 80 },
+                                                                       tachyon::WindowFlags::Transparent, nullptr);
+    ASSERT_NE(window, nullptr);
+    tachyon::IWindowContext* context = graphics->CreateWindowContext(windowBackend->GetNativeHandle(window), window, tachyon::ID{},
+                                                                     { 120, 80 }, tachyon::WindowFlags::Transparent, {});
+    ASSERT_NE(context, nullptr);
+
+    for (int frame = 0; frame < 3; ++frame)
+        context->RenderWindowFrame(graphics, tachyon::IntRect{ 0, 0, 120, 80 }, false);
+    std::vector<uint8_t> pixels(size_t(120) * 80 * 4);
+    ASSERT_TRUE(context->ReadPixels(pixels));
+    EXPECT_TRUE(std::all_of(pixels.begin(), pixels.end(), [](uint8_t c) { return c == 0; })) << "transparent, not opaque black";
+
+    graphics->DestroyWindowContext(context);
+    windowBackend->DestroyWindow(window);
+    EXPECT_TRUE(sink.Empty()) << sink.Dump();
+}
+
 // The "cpu" preference picks WARP, Windows' software renderer, which CI runs the tests on.
 class D3D12WarpTest : public D3D12Test
 {
@@ -97,11 +119,11 @@ TEST(D3D12Application, AnAppThatAsksForItRendersWithIt)
         app.Cleanup();
         GTEST_SKIP() << "no window system";
     }
-    if (app.graphicsContext->GetAPI() != tachyon::GraphicsAPI::D3D12)
+    // Read before Cleanup, which frees the context.
+    if (const tachyon::GraphicsAPI api = app.graphicsContext->GetAPI(); api != tachyon::GraphicsAPI::D3D12)
     {
         app.Cleanup();
-        GTEST_SKIP() << "no GPU runs the Direct3D 12 backend: the app fell back to "
-                     << tachyon::GraphicsAPIName(app.graphicsContext->GetAPI());
+        GTEST_SKIP() << "no GPU runs the Direct3D 12 backend: the app fell back to " << tachyon::GraphicsAPIName(api);
     }
     app.windowID = app.idManager.CreateStaticID();
     app.SetRedrawMode(tachyon::RedrawMode::Always);

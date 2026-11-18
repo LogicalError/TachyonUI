@@ -289,5 +289,6 @@ if(TACHYON_SDL AND TACHYON_D3D12)
   # The Direct3D 12 backend itself, with its debug layer's messages recorded.
   tachyon_add_gpu_tests(gui_d3d12_tests
     gpu/d3d12_test_harness.h
-    gpu/d3d12_device_test.cpp)
+    gpu/d3d12_device_test.cpp
+    gpu/d3d12_draw_test.cpp)
 endif()

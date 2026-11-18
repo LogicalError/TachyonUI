@@ -82,6 +82,24 @@ if(TACHYON_VULKAN)
   endif()
 endif()
 
+# D3D12MA is the Direct3D 12 backend's; without it, it isn't built.
+if(NOT DEFINED TACHYON_D3D12)
+  set(TACHYON_D3D12 OFF)
+endif()
+if(TACHYON_D3D12)
+  # ---- D3D12MA (static lib) ----
+  add_library(d3d12ma STATIC
+    D3D12MemoryAllocator/include/D3D12MemAlloc.h
+    D3D12MemoryAllocator/src/D3D12MemAlloc.cpp
+  )
+  target_include_directories(d3d12ma PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/D3D12MemoryAllocator/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/d3d12ma>
+  )
+  target_link_libraries(d3d12ma PUBLIC d3d12 dxgi)
+  set_property(TARGET d3d12ma PROPERTY CXX_STANDARD 20)
+endif()
+
 # ---- nanosvg (header-only) ----
 add_subdirectory(nanosvg)
 
@@ -163,7 +181,7 @@ endif()
 # conflict with the engine's default /MD at link time. A per-target
 # property override sidesteps patching vendored code.
 set(_tachyon_third_party_targets
-  vma nanosvg SDL_uclibc SDL3-static vkbootstrap
+  vma nanosvg SDL_uclibc SDL3-static vkbootstrap d3d12ma
   skribidi budouxc harfbuzz
   libunibreak SheenBidi
   gtest gtest_main gmock gmock_main
@@ -225,6 +243,19 @@ if(_tachyon_tp_standalone)
     install(EXPORT vkbootstrapTargets
       FILE vkbootstrapConfig.cmake
       DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vkbootstrap)
+  endif()
+
+  if(TACHYON_D3D12)
+    # d3d12ma — static
+    install(TARGETS d3d12ma EXPORT d3d12maTargets
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(FILES D3D12MemoryAllocator/include/D3D12MemAlloc.h
+      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/d3d12ma)
+    install(EXPORT d3d12maTargets
+      FILE d3d12maConfig.cmake
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/d3d12ma)
   endif()
 
   # skribidi installs its library via its own install() calls, but its

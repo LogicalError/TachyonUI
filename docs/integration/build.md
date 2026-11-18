@@ -43,7 +43,7 @@ Options (set before `add_subdirectory`):
 | `TACHYON_INSTALL_THIRD_PARTY` | on | Bundles the third-party libraries into the install. |
 | `TACHYON_SDL` | on | Builds the SDL window backend and clipboard. Off builds without SDL. |
 | `TACHYON_VULKAN` | on | Builds the Vulkan graphics backend. Off builds without Vulkan (no Vulkan SDK needed): the app runs on the null backend and draws nothing. |
-| `TACHYON_D3D12` | off | Windows only. Builds the Direct3D 12 backend, which is on its way: so far it starts its device and presents its windows, without drawing the UI yet. |
+| `TACHYON_D3D12` | off | Windows only. Builds the Direct3D 12 backend, which is on its way: it draws the UI into its OS windows, transparent popups and tooltips included, but not yet into render-to-image windows (`WindowRenderToImage`) or 3D scenes. Brings D3D12 Memory Allocator. |
 | `TACHYON_SYSTEM_SDL` | off | Uses the host's SDL3. |
 | `TACHYON_SYSTEM_HARFBUZZ` | off | Uses the host's HarfBuzz. |
 | `TACHYON_SYSTEM_VMA` | off | Uses the host's VulkanMemoryAllocator. |
