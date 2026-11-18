@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <gui_controls/gui_application_internal.h>
+#include <gui_core/graphics/gui_default_graphics_context.h>
 #include <gui_core/graphics/null/gui_null_graphics_context.h>
 #include <gui_core/windows/null/gui_null_window_backend.h>
 #include <gui_core/windows/gui_image_window_backend.h>
@@ -62,6 +63,43 @@ namespace
             return true;
         }
     };
+
+    // An app that asks for no GPU gets the null backend; one that asks for an API that isn't
+    // built in fails to start, naming the build option.
+    TEST(GraphicsAPIChoice, NoneIsTheNullBackend)
+    {
+        NullBackendApp app;
+        app.SetWindowBackend(std::make_unique<tachyon::NullWindowBackend>());
+        tachyon::GUIApplication::InitializeOptions options;
+        options.graphicsAPI = tachyon::GraphicsAPI::None;
+        ASSERT_TRUE(app.Initialize(options));
+        EXPECT_EQ(app.graphicsContext->GetAPI(), tachyon::GraphicsAPI::None);
+        app.Cleanup();
+    }
+
+    TEST(GraphicsAPIChoice, AnAPIThatIsntBuiltInFailsToStart)
+    {
+        for (const tachyon::GraphicsAPI api : { tachyon::GraphicsAPI::Vulkan, tachyon::GraphicsAPI::D3D12 })
+        {
+            const bool builtIn = api == tachyon::GraphicsAPI::Vulkan ? TACHYON_VULKAN : TACHYON_D3D12;
+            EXPECT_EQ(tachyon::CreateGraphicsContext(api) != nullptr, builtIn) << tachyon::GraphicsAPIName(api);
+            if (builtIn)
+            {
+                EXPECT_EQ(tachyon::CreateGraphicsContext(api)->GetAPI(), api);
+                continue;
+            }
+            NullBackendApp app;
+            app.SetWindowBackend(std::make_unique<tachyon::NullWindowBackend>());
+            tachyon::GUIApplication::InitializeOptions options;
+            options.graphicsAPI = api;
+            const tachyon::Result<void> result = app.Initialize(options);
+            ASSERT_FALSE(result) << tachyon::GraphicsAPIName(api);
+            EXPECT_EQ(result.GetError().code, tachyon::ErrorCode::Unsupported);
+            EXPECT_NE(result.GetError().message.find(api == tachyon::GraphicsAPI::Vulkan ? "TACHYON_VULKAN" : "TACHYON_D3D12"),
+                      std::string::npos) << result.GetError().message;
+            app.Cleanup();
+        }
+    }
 
     // What an app shows for the API it renders with, as the showcase's status bar does.
     TEST(GraphicsAPINames, EachAPIHasItsName)

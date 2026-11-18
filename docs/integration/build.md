@@ -43,7 +43,7 @@ Options (set before `add_subdirectory`):
 | `TACHYON_INSTALL_THIRD_PARTY` | on | Bundles the third-party libraries into the install. |
 | `TACHYON_SDL` | on | Builds the SDL window backend and clipboard. Off builds without SDL. |
 | `TACHYON_VULKAN` | on | Builds the Vulkan graphics backend. Off builds without Vulkan (no Vulkan SDK needed): the app runs on the null backend and draws nothing. |
-| `TACHYON_D3D12` | off | Windows only. The Direct3D 12 backend is on its way; so far this builds its shaders (DXIL) into `gui_core`. |
+| `TACHYON_D3D12` | off | Windows only. Builds the Direct3D 12 backend, which is on its way: so far it starts its device and presents its windows, without drawing the UI yet. |
 | `TACHYON_SYSTEM_SDL` | off | Uses the host's SDL3. |
 | `TACHYON_SYSTEM_HARFBUZZ` | off | Uses the host's HarfBuzz. |
 | `TACHYON_SYSTEM_VMA` | off | Uses the host's VulkanMemoryAllocator. |
@@ -68,6 +68,27 @@ add_subdirectory(external/TachyonUI)
   - `gui_core` defines `TACHYON_VULKAN` and `TACHYON_D3D12`, each `0` or `1`
   - for example, `#if TACHYON_VULKAN` around code that uses `VulkanGraphicsContext`
   - the CMake package sets `TachyonUI_VULKAN` and `TachyonUI_D3D12` the same way
+
+### Choosing the graphics backend
+
+With more than one backend built in, an app picks one when it starts:
+
+- Set `graphicsAPI` in the options you pass to `Initialize`:
+  - empty, the default: Vulkan
+  - `GraphicsAPI::D3D12`: Direct3D 12
+  - `GraphicsAPI::None`: no GPU, the null backend, which draws nothing
+- A backend that isn't built in makes `Initialize` fail, naming the option that builds it.
+  - For example, `D3D12` without `TACHYON_D3D12`: "Direct3D 12 isn't built in: build with
+    TACHYON_D3D12 on".
+- A backend whose device can't start gives way to the default one, with a warning in the log.
+  - For example, Direct3D 12 needs Shader Model 6.6, which Windows 11's D3D12 runtime has.
+- A backend set with `SetGraphicsBackend` takes the place of the option.
+
+```cpp
+GUIApplication::InitializeOptions options;
+options.graphicsAPI = GraphicsAPI::D3D12;
+GUIApplication::Initialize(options);
+```
 
 - The bundled SDL3 is a static library.
 - If your SDL3 is a DLL instead, on Windows it must sit next to the executable, for

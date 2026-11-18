@@ -219,6 +219,7 @@ set_target_properties(gui_core_tests PROPERTIES
 #   gui_vulkan_tests: the Vulkan backend itself. These boot a VulkanGraphicsContext with the
 #     validation and synchronization-validation layers recording into a sink, so backend bugs
 #     (descriptor overflow, sync hazards, leaks) become test failures.
+#   gui_d3d12_tests: the Direct3D 12 backend itself, its debug layer's messages failing them.
 
 # tachyon_add_gpu_tests(<target> <sources...>): a GPU test program.
 function(tachyon_add_gpu_tests target)
@@ -282,4 +283,11 @@ if(TACHYON_SDL AND TACHYON_VULKAN)
   # gui_core links vma, Vulkan and vk-bootstrap PRIVATE (a static library), so the harness
   # links them itself to reach the backend.
   target_link_libraries(gui_vulkan_tests PRIVATE vma Vulkan::Vulkan vkbootstrap)
+endif()
+
+if(TACHYON_SDL AND TACHYON_D3D12)
+  # The Direct3D 12 backend itself, with its debug layer's messages recorded.
+  tachyon_add_gpu_tests(gui_d3d12_tests
+    gpu/d3d12_test_harness.h
+    gpu/d3d12_device_test.cpp)
 endif()

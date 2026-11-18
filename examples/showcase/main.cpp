@@ -33,6 +33,9 @@ int main(int argc, char* argv[])
     //                   the workdirectory without it.
     // --capture <folder>: saves every panel, in the dark and the light theme, as
     //                     <folder>/<theme>/<Panel>.png, and quits.
+    // --graphics <api>: render with vulkan, d3d12 or none (no GPU); the default backend
+    //                   without it.
+    tachyon::GUIApplication::InitializeOptions initializeOptions;
     for (int i = 1; i + 1 < argc; ++i)
     {
         if (std::string_view(argv[i]) == "--ui-scale")
@@ -47,6 +50,14 @@ int main(int argc, char* argv[])
             application->SetFilesRoot(argv[i + 1]);
         else if (std::string_view(argv[i]) == "--capture")
             application->SetCaptureDir(argv[i + 1]);
+        else if (std::string_view(argv[i]) == "--graphics")
+        {
+            const std::string_view api = argv[i + 1];
+            if (api == "vulkan")      initializeOptions.graphicsAPI = tachyon::GraphicsAPI::Vulkan;
+            else if (api == "d3d12")  initializeOptions.graphicsAPI = tachyon::GraphicsAPI::D3D12;
+            else if (api == "none")   initializeOptions.graphicsAPI = tachyon::GraphicsAPI::None;
+            else TACHYON_LOG_WARNING(kLogShowcase, "--graphics {}: not vulkan, d3d12 or none (ignored)", api);
+        }
     }
 #if TACHYON_SDL
     // A capture drives itself with injected input: a click elsewhere on the desktop while it
@@ -62,7 +73,7 @@ int main(int argc, char* argv[])
     int returnCode = EXIT_FAILURE;
     try
     {
-        if (application->Initialize())
+        if (application->Initialize(initializeOptions))
         {
             const tachyon::Result<void> runResult = application->Run();
             // A capture leaves the saved layout and theme as they were.
