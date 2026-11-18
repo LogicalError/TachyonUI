@@ -11,8 +11,12 @@
 #include <gui_core/windows/gui_window_flags.h>
 #include <gui_core/windows/sdl/gui_window_backend_sdl.h>
 
+#include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_properties.h>
+
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -128,6 +132,9 @@ namespace SDLGPUTestHarness
         tachyon::SDLWindowBackend*              windowBackend = nullptr;
         DebugSink                               sink;
 
+        // Sets the backend up before its Initialize (a host's device); false skips the test.
+        virtual bool BeforeInitialize() { return true; }
+
         void SetUp() override
         {
             graphics      = new tachyon::sdlgpu::SDLGPUGraphicsContext();
@@ -135,6 +142,11 @@ namespace SDLGPUTestHarness
             windowBackend->SetGraphicsContext(graphics);
             graphics->SetDebugConfig({ &DebugSink::Record, &sink });
             graphics->SetDriver(GetParam());
+            if (!BeforeInitialize())
+            {
+                TearDown();
+                GTEST_SKIP() << "SDL finds no device for its " << GetParam() << " driver";
+            }
             if (!graphics->Initialize(windowBackend))
             {
                 TearDown();
@@ -209,6 +221,90 @@ namespace SDLGPUTestHarness
         {
             const uint8_t* p = pixels.data() + (size_t(y) * kSize.x + size_t(x)) * 4;
             return { p[2], p[1], p[0], p[3] };
+        }
+    };
+
+    // A render-to-image window on a device the test makes as a host would (with the GUI's
+    // requirements, in debug mode), handed to the backend, and destroyed after its Cleanup.
+    class SDLGPUHostDeviceTest : public SDLGPUImageWindowTest
+    {
+    protected:
+        SDL_GPUDevice* hostDevice = nullptr;
+
+        bool BeforeInitialize() override
+        {
+            const SDL_PropertiesID props = SDL_CreateProperties();
+            tachyon::sdlgpu::SDLGPUGraphicsContext::ApplyDeviceRequirements(props);
+            SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, true);
+            SDL_SetStringProperty(props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, GetParam());
+            hostDevice = SDL_CreateGPUDeviceWithProperties(props);
+            SDL_DestroyProperties(props);
+            if (hostDevice == nullptr)
+                return false;
+            graphics->SetExternalDevice(hostDevice);
+            return true;
+        }
+
+        void TearDown() override
+        {
+            SDLGPUImageWindowTest::TearDown();
+            if (hostDevice != nullptr)
+                SDL_DestroyGPUDevice(hostDevice);
+            hostDevice = nullptr;
+        }
+
+        // A texture of the host's, `size`, filled with `rgba` by a render pass of the host's own
+        // command buffer, submitted before the GUI's frame.
+        SDL_GPUTexture* HostTexture(tachyon::uint2 size, SDL_GPUTextureFormat format, SDL_FColor rgba)
+        {
+            SDL_GPUTextureCreateInfo info{};
+            info.type                 = SDL_GPU_TEXTURETYPE_2D;
+            info.format               = format;
+            info.usage                = SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER;
+            info.width                = size.x;
+            info.height               = size.y;
+            info.layer_count_or_depth = 1;
+            info.num_levels           = 1;
+            SDL_GPUTexture* texture = SDL_CreateGPUTexture(hostDevice, &info);
+            if (texture == nullptr)
+                return nullptr;
+            SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(hostDevice);
+            SDL_GPUColorTargetInfo target{};
+            target.texture     = texture;
+            target.clear_color = rgba;
+            target.load_op     = SDL_GPU_LOADOP_CLEAR;
+            target.store_op    = SDL_GPU_STOREOP_STORE;
+            SDL_EndGPURenderPass(SDL_BeginGPURenderPass(cmd, &target, 1, nullptr));
+            SDL_SubmitGPUCommandBuffer(cmd);
+            return texture;
+        }
+
+        // A BGRA8 texture of the host's read back, as the host would.
+        std::vector<uint8_t> Download(SDL_GPUTexture* texture, tachyon::uint2 size)
+        {
+            const uint32_t bytes = size.x * size.y * 4;
+            const SDL_GPUTransferBufferCreateInfo info{ SDL_GPU_TRANSFERBUFFERUSAGE_DOWNLOAD, bytes, 0 };
+            SDL_GPUTransferBuffer* buffer = SDL_CreateGPUTransferBuffer(hostDevice, &info);
+            SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(hostDevice);
+            SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
+            SDL_GPUTextureRegion region{};
+            region.texture = texture;
+            region.w       = size.x;
+            region.h       = size.y;
+            region.d       = 1;
+            SDL_GPUTextureTransferInfo to{};
+            to.transfer_buffer = buffer;
+            SDL_DownloadFromGPUTexture(copy, &region, &to);
+            SDL_EndGPUCopyPass(copy);
+            SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+            SDL_WaitForGPUFences(hostDevice, true, &fence, 1);
+            SDL_ReleaseGPUFence(hostDevice, fence);
+            std::vector<uint8_t> out(bytes);
+            const auto* mapped = static_cast<const uint8_t*>(SDL_MapGPUTransferBuffer(hostDevice, buffer, false));
+            std::copy(mapped, mapped + bytes, out.begin());
+            SDL_UnmapGPUTransferBuffer(hostDevice, buffer);
+            SDL_ReleaseGPUTransferBuffer(hostDevice, buffer);
+            return out;
         }
     };
 

@@ -45,6 +45,8 @@ EndWindow();
   each frame of the window can be copied into an image of yours:
   - on Direct3D 12, into a texture: see
     [Copying a window into your texture](d3d12-device.md#copying-a-window-into-your-texture)
+  - on SDL GPU, into a texture: see
+    [Copying a window into your texture](sdlgpu-device.md#copying-a-window-into-your-texture)
 
 ```cpp
 vk->SetWindowImageTarget(windowID, hostImage, VkExtent2D{ 400, 300 });

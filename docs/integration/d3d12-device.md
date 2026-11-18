@@ -168,4 +168,4 @@ d3d12->SetWindowImageTarget(windowID, nullptr);       // no more copies
 
 ---
 
-[Previous: Using your own Vulkan device](vulkan-device.md) | [Integration](../integration.md) | [Next: Your own window and input](window-and-input.md)
+[Previous: Using your own Vulkan device](vulkan-device.md) | [Integration](../integration.md) | [Next: Using your own SDL GPU device](sdlgpu-device.md)

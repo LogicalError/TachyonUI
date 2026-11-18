@@ -7,6 +7,7 @@
 #include <gui_core/graphics/null/gui_null_graphics_context.h>
 
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_properties.h>
 
 #include <memory>
 #include <string>
@@ -59,6 +60,27 @@ namespace tachyon::sdlgpu
         SDLGPUGraphicsContext();
         ~SDLGPUGraphicsContext() override;
 
+        // ---- A host's own device ------------------------------------------------------------
+
+        /// Sets on `props` what the GUI's shaders need of a device a host makes with
+        /// SDL_CreateGPUDeviceWithProperties: the shader formats they're built in (SPIR-V, and
+        /// DXIL on Windows), and on Vulkan the features they use (16-bit storage and types,
+        /// draw parameters), as SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER. Options of
+        /// the host's own replace those: then enable storageBuffer16BitAccess,
+        /// uniformAndStorageBuffer16BitAccess and shaderDrawParameters (Vulkan 1.1),
+        /// shaderFloat16 (1.2) and shaderInt16 (1.0) in them, with Vulkan 1.2. What it points to
+        /// lives as long as the program.
+        static void ApplyDeviceRequirements(SDL_PropertiesID props);
+        /// Whether `device` takes the GUI's shaders; what it lacks, one line each, in
+        /// `problems`. SDL can't tell which Vulkan features a device has: one made without
+        /// ApplyDeviceRequirements' may draw wrongly, which its debug mode reports.
+        static bool CheckDeviceSupport(SDL_GPUDevice* device, std::string* problems = nullptr);
+        /// Render on the host's device instead of making one. Call before Initialize, which fails
+        /// when the device can't be used. Debug mode is the host's choice when it makes the
+        /// device; SDL GPU's messages go to the DebugConfig. Cleanup leaves the device to the host,
+        /// which destroys it after.
+        void SetExternalDevice(SDL_GPUDevice* device);
+
         GraphicsAPI      GetAPI() const override { return GraphicsAPI::SDLGPU; }
         /// The GPU, and the driver SDL renders with: "NVIDIA GeForce RTX 4070 (vulkan)".
         std::string_view GetDeviceName() const override;
@@ -78,7 +100,8 @@ namespace tachyon::sdlgpu
         uint32_t         GetImageSlotCount() const override;
 
         /// Makes the device, on a driver that takes the shaders the GUI has (SPIR-V, DXIL) and,
-        /// on Vulkan, has the 16-bit types they use. Fails when SDL finds none.
+        /// on Vulkan, has the 16-bit types they use. Fails when SDL finds none. With a host's
+        /// device (SetExternalDevice), checks it instead (CheckDeviceSupport).
         Result<void> Initialize(IWindowBackend* windowBackend) override;
         void         Cleanup() override;
 
@@ -91,6 +114,7 @@ namespace tachyon::sdlgpu
 
         ImageSet*  GetImageSet() const override;
         ImageIndex RegisterImage(Image* image) override;
+        /// A host's texture's slot (RegisterExternalImage) goes too; the texture stays the host's.
         void       UnregisterImage(ImageIndex index) override;
 
         /// The gradient pages into the image set, the styles uploaded where they changed, and
@@ -112,6 +136,25 @@ namespace tachyon::sdlgpu
         /// and depth (D32_FLOAT), drawn by `record` in `window`'s next frame before its UI.
         ImageIndex RenderScene(ID key, ID window, uint2 size, color4f clear,
                                std::function<void(const ScenePayload& scene)> record) override;
+
+        // ---- A host's own textures, on its device (SetExternalDevice) -----------------------
+
+        /// A texture the host renders (a 3D viewport) in the image set, for the Image control
+        /// or a primitive to sample with `sampler`. It has SDL_GPU_TEXTUREUSAGE_SAMPLER; it stays
+        /// the host's and must outlive every GUI frame that samples it. SDL orders the host's
+        /// submits and the GUI's on the device: render it in a command buffer submitted before
+        /// the GUI's frame (during OnGUI), and it shows in that frame.
+        ImageIndex RegisterExternalImage(SDL_GPUTexture* texture, Sampler sampler);
+        /// Points an existing index at another texture, for example after a resize, under the
+        /// same rules. No GUI frame in flight may still sample the old one (WaitIdle).
+        void       UpdateExternalImage(ImageIndex index, SDL_GPUTexture* texture, Sampler sampler);
+
+        /// The host texture a render-to-image window (WindowFlags::RenderToImage) is copied
+        /// into each frame; null stops. Can be set before the window exists. An
+        /// SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM texture of `size`: the window's size, as the copy
+        /// isn't scaled (another size gets the part they share). It holds premultiplied alpha,
+        /// transparent where the UI draws nothing. Read it in work submitted after the GUI's frame.
+        void SetWindowImageTarget(ID window, SDL_GPUTexture* texture, uint2 size);
 
         /// Waits until the GPU has done all work submitted so far.
         void WaitIdle();
