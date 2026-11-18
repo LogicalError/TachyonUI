@@ -1,6 +1,5 @@
 #include <gui_core/elements/gui_element_storage.h>
 
-#include <gui_core/input/gui_input_state.h>
 
 #include <gui_core/state/gui_state_manager.h>
 

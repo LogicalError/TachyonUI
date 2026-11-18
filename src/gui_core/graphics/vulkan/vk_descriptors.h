@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <deque>
 #include <span>
+#include <vector>
 
 #include <vulkan/vulkan.h>
 

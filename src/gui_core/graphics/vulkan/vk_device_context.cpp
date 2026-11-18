@@ -1,10 +1,6 @@
 #include <vulkan/vulkan.h>
-#include <gui_core/gui_base_types.h>
 #include <gui_core/graphics/vulkan/vk_types.h>
-#include <gui_core/graphics/vulkan/vk_descriptors.h>
-#include <gui_core/graphics/vulkan/vk_window_context.h>
 #include <gui_core/graphics/vulkan/vk_device_context.h>
-#include <gui_core/graphics/vulkan/vk_defaults.h>
 
 #include <atomic>
 

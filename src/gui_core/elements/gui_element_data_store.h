@@ -6,7 +6,6 @@
 #include <stddef.h>
 #include <new>
 #include <typeindex>
-#include <typeinfo>
 #include <unordered_map>
 #include <utility>
 

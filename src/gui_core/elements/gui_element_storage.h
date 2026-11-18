@@ -3,12 +3,9 @@
 
 #pragma once
 
-#include <gui_core/style/gui_style.h>
-#include <gui_core/style/gui_style_ref.h>
 
 #include <gui_core/layout/gui_constraints.h>
 
-#include <gui_core/elements/gui_element_flags.h>
 #include <gui_core/elements/gui_element.h>
 #include <gui_core/elements/gui_element_iterators.h>
 
@@ -16,7 +13,6 @@
 
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_base_types.h>
-#include <gui_core/gui_enum_operators.h>
 
 #include <unordered_map>
 

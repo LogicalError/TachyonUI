@@ -10,7 +10,6 @@
 #include <gui_core/gui_base_types.h>
 #include <gui_core/graphics/gui_graphics_api.h>
 
-#include <algorithm>
 #include <cmath>
 
 namespace tachyon

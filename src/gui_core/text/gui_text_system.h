@@ -5,7 +5,6 @@
 #include <gui_core/gui_hash.h>
 
 #include <gui_core/text/gui_numeric_field_config.h>
-#include <gui_core/text/gui_numeric_type.h>
 #include <gui_core/text/gui_text_converter.h>
 
 #include <gui_core/input/gui_platform_input_handler.h>

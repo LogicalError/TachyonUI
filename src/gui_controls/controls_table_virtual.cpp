@@ -8,11 +8,11 @@
 
 #include "controls_table_internal.h"
 
+#include <gui_controls/gui_table_helpers.h>
 #include <gui_core/layout/gui_layout_helpers.h>
 
 #include <algorithm>
 #include <assert.h>
-#include <chrono>
 #include <limits>
 
 namespace tachyon

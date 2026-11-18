@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 #include <assert.h>
-#include <algorithm>
 #include <functional>
 
 

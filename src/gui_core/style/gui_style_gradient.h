@@ -2,6 +2,7 @@
 
 #include <gui_core/gui_base_types.h>
 
+#include <algorithm>
 #include <span>
 #include <cmath>
 #include <array>

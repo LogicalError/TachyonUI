@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include <vulkan/vulkan.h>
+
 namespace tachyon::vulkan
 {
     /// @addtogroup graphics_vulkan

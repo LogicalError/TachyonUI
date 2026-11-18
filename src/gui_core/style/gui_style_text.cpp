@@ -1,4 +1,3 @@
-#include <gui_core/gui_base_types.h>
 #include <gui_core/gui_hash.h>
 #include <gui_core/style/gui_style_text.h>
 

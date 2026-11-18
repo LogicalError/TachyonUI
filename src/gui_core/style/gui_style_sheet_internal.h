@@ -4,7 +4,6 @@
 #include <gui_core/gui_from_chars.h>
 
 #include <algorithm>
-#include <charconv>
 #include <cmath>
 #include <format>
 #include <cctype>

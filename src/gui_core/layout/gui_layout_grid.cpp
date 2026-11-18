@@ -1,11 +1,9 @@
 #include <gui_core/layout/gui_layout_grid.h>
 #include <gui_core/layout/gui_layout_helpers.h>
 
-#include <gui_core/diagnostics/gui_profiler.h>
 
 #include <algorithm>
 #include <assert.h>
-#include <numeric>
 
 namespace tachyon
 {

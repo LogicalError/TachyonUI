@@ -1,4 +1,3 @@
-﻿#include <gui_core/graphics/vulkan/vk_types.h>
 #include <gui_core/diagnostics/gui_logging.h>
 #include <gui_core/gui_resources.h>
 #include <gui_core/graphics/vulkan/vk_pipelines.h>

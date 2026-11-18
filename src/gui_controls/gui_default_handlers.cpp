@@ -5,8 +5,6 @@
 #include <gui_core/elements/gui_element_storage.h>
 #include <gui_core/style/gui_style_manager.h>
 
-#include <chrono>
-#include <memory>
 
 namespace tachyon
 {

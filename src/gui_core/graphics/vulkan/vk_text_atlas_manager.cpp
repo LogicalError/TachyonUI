@@ -1,9 +1,7 @@
 #include <gui_core/diagnostics/gui_logging.h>
 #include <gui_core/graphics/gui_graphics_context.h>
 
-#include <gui_core/graphics/vulkan/vk_types.h>
 #include <gui_core/graphics/vulkan/vk_image.h>
-#include <gui_core/graphics/vulkan/vk_descriptors.h>
 #include <gui_core/graphics/vulkan/vk_text_atlas_manager.h>
 #include <gui_core/graphics/vulkan/vk_device_context.h>
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>

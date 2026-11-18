@@ -2,7 +2,6 @@
 #include <gui_core/input/gui_pointer_drag.h>
 #include <gui_core/input/gui_input_state.h>
 
-#include <cstdlib>
 
 namespace tachyon
 {

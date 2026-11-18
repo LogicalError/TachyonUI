@@ -6,6 +6,7 @@
 #include <gui_core/windows/gui_os_window_manager.h>
 
 #include <gui_core/graphics/vulkan/vk_types.h>
+#include <gui_core/graphics/vulkan/vk_descriptors.h>
 #include <gui_core/graphics/vulkan/vk_device_context.h>
 
 namespace tachyon

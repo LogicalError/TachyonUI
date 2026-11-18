@@ -1,8 +1,6 @@
 ﻿#include <gui_core/graphics/vulkan/vk_types.h>
 #include <gui_core/graphics/vulkan/vk_descriptors.h>
-#include <gui_core/graphics/vulkan/vk_initializers.h>
 
-#include <algorithm>
 
 using namespace tachyon::vulkan;
 

@@ -5,7 +5,8 @@
 // RebuildTreeIndex derives skipCount / ancestorLineMask / isLastSibling;
 // ReorderTreeRow moves a subtree (with reparenting) for drag-drop.
 
-#include "gui_application.h"
+
+#include <gui_controls/gui_widget_state_types.h>   // TreeDropPosition
 
 #include <concepts>
 #include <iterator>

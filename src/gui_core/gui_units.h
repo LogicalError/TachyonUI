@@ -1,6 +1,6 @@
 #pragma once
 
-#include <compare>
+#include <compare>   // the defaulted operator<=>
 #include <stdint.h>
 
 namespace tachyon

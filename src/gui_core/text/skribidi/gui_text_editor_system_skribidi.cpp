@@ -8,7 +8,6 @@
 #include <gui_core/state/gui_state_manager.h>
 
 #include <gui_core/text/gui_text_atlas_manager.h>
-#include <gui_core/text/gui_clipboard.h>
 
 #include <gui_core/text/skribidi/gui_text_system_skribidi.h>
 #include <gui_core/text/skribidi/internal/gui_skribidi_context.h>

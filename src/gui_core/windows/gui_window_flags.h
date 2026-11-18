@@ -2,6 +2,8 @@
 
 #include <gui_core/gui_enum_operators.h>
 
+#include <cstdint>
+
 namespace tachyon
 {
     /// @addtogroup windows

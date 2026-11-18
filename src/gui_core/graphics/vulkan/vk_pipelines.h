@@ -1,6 +1,10 @@
 ﻿#pragma once
 
-class PipelineBuilder 
+#include <vulkan/vulkan.h>
+
+#include <vector>
+
+class PipelineBuilder
 {
 public:
     std::vector<VkPipelineShaderStageCreateInfo> _shaderStages;

@@ -12,7 +12,6 @@
 #include <gui_core/text/gui_text_system.h>
 
 #include <optional>
-#include <algorithm>
 #include <atomic>
 
 namespace tachyon

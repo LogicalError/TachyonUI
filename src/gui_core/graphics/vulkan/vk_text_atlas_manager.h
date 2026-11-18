@@ -1,6 +1,9 @@
 #pragma once
 
+#include <gui_core/graphics/gui_image.h>
 #include <gui_core/text/gui_text_atlas_manager.h>
+
+#include <vulkan/vulkan.h>
 
 namespace tachyon::vulkan
 {

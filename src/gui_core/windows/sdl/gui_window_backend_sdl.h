@@ -9,7 +9,6 @@
 #include <atomic>
 #include <vector>
 #include <unordered_set>
-#include <unordered_map>
 
 struct SDL_Window;
 struct SDL_Cursor;
