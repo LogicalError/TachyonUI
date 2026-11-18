@@ -49,7 +49,7 @@ static void EnsureWorkingDirectory(const char* argv0)
     }
 }
 
-// --graphics=vulkan|d3d12|none: the apps that don't choose a backend get this one instead of
+// --graphics=vulkan|d3d12|sdlgpu|none: the apps that don't choose a backend get this one instead of
 // the default, so the whole-app GPU tests run on it. Taken out of the arguments; false when
 // it names an API that isn't built in.
 static bool TakeGraphicsOption(int& argc, char** argv)
@@ -61,12 +61,13 @@ static bool TakeGraphicsOption(int& argc, char** argv)
         if (!arg.starts_with(kOption))
             continue;
         const std::string_view name = arg.substr(kOption.size());
-        const tachyon::GraphicsAPI api = name == "d3d12" ? tachyon::GraphicsAPI::D3D12
-                                       : name == "none"  ? tachyon::GraphicsAPI::None
-                                                         : tachyon::GraphicsAPI::Vulkan;
-        if ((name != "vulkan" && name != "d3d12" && name != "none") || !tachyon::SetDefaultGraphicsAPIOverride(api))
+        const tachyon::GraphicsAPI api = name == "d3d12"  ? tachyon::GraphicsAPI::D3D12
+                                       : name == "sdlgpu" ? tachyon::GraphicsAPI::SDLGPU
+                                       : name == "none"   ? tachyon::GraphicsAPI::None
+                                                          : tachyon::GraphicsAPI::Vulkan;
+        if ((name != "vulkan" && name != "d3d12" && name != "sdlgpu" && name != "none") || !tachyon::SetDefaultGraphicsAPIOverride(api))
         {
-            std::fprintf(stderr, "%s: not vulkan, d3d12 or none, or not built in\n", argv[i]);
+            std::fprintf(stderr, "%s: not vulkan, d3d12, sdlgpu or none, or not built in\n", argv[i]);
             return false;
         }
         std::memmove(argv + i, argv + i + 1, sizeof(char*) * size_t(argc - i));

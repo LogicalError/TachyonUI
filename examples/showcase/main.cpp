@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
     //                   the workdirectory without it.
     // --capture <folder>: saves every panel, in the dark and the light theme, as
     //                     <folder>/<theme>/<Panel>.png, and quits.
-    // --graphics <api>: render with vulkan, d3d12 or none (no GPU); the default backend
+    // --graphics <api>: render with vulkan, d3d12, sdlgpu or none (no GPU); the default backend
     //                   without it.
     tachyon::GUIApplication::InitializeOptions initializeOptions;
     for (int i = 1; i + 1 < argc; ++i)
@@ -55,8 +55,9 @@ int main(int argc, char* argv[])
             const std::string_view api = argv[i + 1];
             if (api == "vulkan")      initializeOptions.graphicsAPI = tachyon::GraphicsAPI::Vulkan;
             else if (api == "d3d12")  initializeOptions.graphicsAPI = tachyon::GraphicsAPI::D3D12;
+            else if (api == "sdlgpu") initializeOptions.graphicsAPI = tachyon::GraphicsAPI::SDLGPU;
             else if (api == "none")   initializeOptions.graphicsAPI = tachyon::GraphicsAPI::None;
-            else TACHYON_LOG_WARNING(kLogShowcase, "--graphics {}: not vulkan, d3d12 or none (ignored)", api);
+            else TACHYON_LOG_WARNING(kLogShowcase, "--graphics {}: not vulkan, d3d12, sdlgpu or none (ignored)", api);
         }
     }
 #if TACHYON_SDL

@@ -62,13 +62,19 @@ option(TACHYON_FALLBACK_FONTS "Ship the optional Noto fallback fonts with the re
 option(TACHYON_EMBED_RESOURCES "Compile the default themes and fonts into the library" ON)
 
 # The graphics backends built in. Vulkan is the default; an app picks Direct3D 12 (Windows
-# only) with InitializeOptions::graphicsAPI. With none, the app runs on the null backend (no
-# GPU, nothing drawn).
+# only) or SDL GPU with InitializeOptions::graphicsAPI. With none, the app runs on the null
+# backend (no GPU, nothing drawn).
 option(TACHYON_VULKAN "Build the Vulkan graphics backend" ON)
 if(WIN32)
   option(TACHYON_D3D12 "Build the Direct3D 12 graphics backend" OFF)
 else()
   set(TACHYON_D3D12 OFF)
+endif()
+# SDL3's GPU API, over Vulkan, Direct3D 12 or Metal. It's on its way: so far it starts its
+# device and presents its windows, without drawing the UI. It needs SDL (TACHYON_SDL).
+option(TACHYON_SDLGPU "Build the SDL GPU graphics backend (so far its device and windows only)" OFF)
+if(TACHYON_SDLGPU AND NOT TACHYON_SDL)
+  message(FATAL_ERROR "TACHYON_SDLGPU needs TACHYON_SDL")
 endif()
 
 if(TACHYON_VULKAN)

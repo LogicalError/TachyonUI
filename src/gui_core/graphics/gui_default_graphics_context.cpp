@@ -8,6 +8,9 @@
 #if TACHYON_D3D12
 #include <gui_core/graphics/d3d12/d3d12_graphics_context.h>
 #endif
+#if TACHYON_SDLGPU
+#include <gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h>
+#endif
 
 namespace tachyon
 {
@@ -24,6 +27,10 @@ namespace tachyon
 #if TACHYON_D3D12
         case GraphicsAPI::D3D12:
             return std::make_unique<d3d12::D3D12GraphicsContext>();
+#endif
+#if TACHYON_SDLGPU
+        case GraphicsAPI::SDLGPU:
+            return std::make_unique<sdlgpu::SDLGPUGraphicsContext>();
 #endif
         default:
             return nullptr;
@@ -54,6 +61,7 @@ namespace tachyon
         {
         case GraphicsAPI::Vulkan: return "TACHYON_VULKAN";
         case GraphicsAPI::D3D12:  return "TACHYON_D3D12";
+        case GraphicsAPI::SDLGPU: return "TACHYON_SDLGPU";
         default:                  return {};
         }
     }

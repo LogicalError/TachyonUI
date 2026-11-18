@@ -256,6 +256,16 @@ if(TACHYON_D3D12)
     gui_core/graphics/d3d12/d3d12_window_context.h)
 endif()
 
+# The SDL GPU backend (TACHYON_SDLGPU), on SDL's own library.
+if(TACHYON_SDLGPU)
+  list(APPEND GUI_FILES
+    gui_core/graphics/sdlgpu/sdlgpu_device.h
+    gui_core/graphics/sdlgpu/sdlgpu_graphics_context.cpp
+    gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h
+    gui_core/graphics/sdlgpu/sdlgpu_window_context.cpp
+    gui_core/graphics/sdlgpu/sdlgpu_window_context.h)
+endif()
+
 # Create GUI static library
 # The SDL window backend and clipboard (TACHYON_SDL).
 if(TACHYON_SDL)
@@ -344,7 +354,8 @@ endif()
 # The graphics backends built in, 0 or 1 each, for code that uses one only when it's there.
 target_compile_definitions(gui_core PUBLIC
   TACHYON_VULKAN=$<BOOL:${TACHYON_VULKAN}>
-  TACHYON_D3D12=$<BOOL:${TACHYON_D3D12}>)
+  TACHYON_D3D12=$<BOOL:${TACHYON_D3D12}>
+  TACHYON_SDLGPU=$<BOOL:${TACHYON_SDLGPU}>)
 # nanosvg is header-only, included from the third-party cache, whose headers the build
 # doesn't track: the one file that compiles it is rebuilt when the cache's copy changes.
 if(EXISTS "${TACHYON_TP_INSTALL}/include/nanosvg/nanosvg.h")
