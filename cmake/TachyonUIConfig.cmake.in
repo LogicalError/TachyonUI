@@ -13,6 +13,8 @@
 #                                                        GUIApplication::SetResourceRoot
 #   TACHYON_SDL_TARGET                                the SDL target the libraries link
 #                                                        (SDL3::SDL3-static when bundled)
+#   TachyonUI_VULKAN, TachyonUI_D3D12                 whether the package has that graphics
+#                                                        backend (ON / OFF)
 #
 # The package is built with MSVC for Windows x64 and links the same toolchain
 # as its consumer; mixing C++ runtimes or standard library versions is not
@@ -23,7 +25,12 @@ include(CMakeFindDependencyMacro)
 
 # The install prefix doubles as the prefix of the bundled third-party libraries.
 list(PREPEND CMAKE_PREFIX_PATH "${PACKAGE_PREFIX_DIR}")
-find_dependency(Vulkan)
+# The graphics backends built in; gui_core defines TACHYON_VULKAN and TACHYON_D3D12 (0 or 1).
+set(TachyonUI_VULKAN @TACHYON_VULKAN@)
+set(TachyonUI_D3D12 @TACHYON_D3D12@)
+if(TachyonUI_VULKAN)
+  find_dependency(Vulkan)
+endif()
 if(@TACHYON_SDL@)
   find_dependency(SDL3 CONFIG)
   # The SDL the libraries link, for a consumer that calls SDL too.
@@ -36,13 +43,15 @@ find_dependency(SheenBidi CONFIG)
 find_dependency(libunibreak CONFIG)
 find_dependency(budouxc CONFIG)
 find_dependency(skribidi CONFIG)
-if(@TACHYON_SYSTEM_VMA@)
-  find_dependency(VulkanMemoryAllocator CONFIG)
-else()
-  find_dependency(vma CONFIG)
+if(TachyonUI_VULKAN)
+  if(@TACHYON_SYSTEM_VMA@)
+    find_dependency(VulkanMemoryAllocator CONFIG)
+  else()
+    find_dependency(vma CONFIG)
+  endif()
+  find_dependency(vkbootstrap CONFIG)
 endif()
 find_dependency(nanosvg CONFIG)
-find_dependency(vkbootstrap CONFIG)
 
 # The libraries link skribidi under its short name.
 if(TARGET skribidi::skribidi AND NOT TARGET skribidi)

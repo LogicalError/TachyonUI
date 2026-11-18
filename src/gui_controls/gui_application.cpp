@@ -11,7 +11,11 @@
 #include <gui_core/windows/sdl/gui_sdl_clipboard.h>
 #include <gui_core/windows/sdl/gui_window_backend_sdl.h>
 #endif
+#if TACHYON_VULKAN
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>
+#else
+#include <gui_core/graphics/null/gui_null_graphics_context.h>
+#endif
 
 #include <algorithm>
 #include <climits>
@@ -173,8 +177,13 @@ namespace tachyon
         textSystem       = new tachyon::SkribidiTextSystem(m_allocationHooks);
         inputManager     = std::make_unique<tachyon::InputManager>();
         inputBroadcaster = tachyon::InputHandlerBroadcaster({ inputManager.get(), textSystem });
+        // The default: Vulkan, or with no GPU backend built in, the null one.
         if (!m_graphicsBackend)
+#if TACHYON_VULKAN
             m_graphicsBackend = std::make_unique<vulkan::VulkanGraphicsContext>();
+#else
+            m_graphicsBackend = std::make_unique<NullGraphicsContext>();
+#endif
         graphicsContext  = m_graphicsBackend.get();
         graphicsContext->SetAllocationHooks(m_allocationHooks);
         if (options.imageSlots > 0)

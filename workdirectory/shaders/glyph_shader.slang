@@ -22,8 +22,9 @@ struct VSOutput
 };
 
 [shader("vertex")]
-VSOutput vertexMain(int vertexIndex : SV_VulkanVertexID)
+VSOutput vertexMain(VertexInput vertex)
 {
+    const int vertexIndex = VertexIndex(vertex);
     Glyph glyph = LoadPrimitive<Glyph>(kGlyphSlot, vertexIndex / 4);
     float2 offset = QuadCorner(vertexIndex % 4); // the corner, from the index buffer
 

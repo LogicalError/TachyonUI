@@ -237,7 +237,7 @@ namespace tachyon
         bool           depthOnly = false;
     };
 
-    /// Push-constant slot order matches the GLSL push block (box, glyph, dot,
+    /// Push-constant slot order matches the shaders' (all_common.slang: box, glyph, dot,
     /// line, triangle). The block is exactly 128 bytes, with no room for more
     /// addresses, so Quad shares the Triangle slot, Circle the Line slot and Occluder
     /// the Box slot: each pass writes its own buffer address into its slot before

@@ -13,8 +13,9 @@ struct Occluder
 };
 
 [shader("vertex")]
-float4 vertexMain(int vertexIndex : SV_VulkanVertexID) : SV_Position
+float4 vertexMain(VertexInput vertex) : SV_Position
 {
+    const int vertexIndex = VertexIndex(vertex);
     // Occluders share the box slot of the push constants.
     Occluder occluder = LoadPrimitive<Occluder>(kBoxSlot, vertexIndex / 4);
     float2 corner = QuadCorner(vertexIndex % 4); // the corner, from the index buffer

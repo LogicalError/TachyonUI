@@ -2371,7 +2371,7 @@ namespace tachyon
             StatusText("Ready");
         EndHorizontal();
         const std::string_view gpu = graphicsContext->GetDeviceName();
-        const std::string_view api = graphicsContext->GetAPI() == GraphicsAPI::Vulkan ? "Vulkan" : "No GPU";
+        const std::string_view api = GraphicsAPIName(graphicsContext->GetAPI());
         StatusText(gpu.empty() ? std::string(api) : std::format("{} \u00B7 {}", api, gpu));
         StatusText(std::format("{:.2f} ms \u00B7 {:.0f} fps", frameMs, frameMs > 0.0f ? 1000.0f / frameMs : 0.0f),
                    LayoutOverride::Auto().FlexGrow(1));

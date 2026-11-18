@@ -4,7 +4,10 @@
 #include <gui_controls/controls_toolbar_dock.h>
 #include <gui_core/input/gui_pointer_drag.h>
 
+#include "scene.h"
+#if TACHYON_VULKAN
 #include "scene_renderer.h"
+#endif
 
 #include <chrono>
 #include <filesystem>
@@ -237,7 +240,9 @@ namespace tachyon
         std::vector<SceneObject> sceneObjects;
         int              sceneSelected = -1;
         ViewportView     scene;
+#if TACHYON_VULKAN
         SceneRenderer    sceneRenderer;
+#endif
         // The sketch pad: strokes drawn with the pen (or the mouse), wider where it pressed harder.
         struct SketchPoint  { float2 pos; float width; };
         struct SketchStroke { std::vector<SketchPoint> points; };

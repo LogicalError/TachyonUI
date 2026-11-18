@@ -140,8 +140,6 @@ list(APPEND GUI_CORE_TEST_FILES
   pointer_drag_test.cpp
   gesture_test.cpp
   link_cursor_test.cpp
-  upload_worker_test.cpp
-  frame_waits_test.cpp
   table_scrollbar_test.cpp
   controls_table_frozen_test.cpp
   controls_table_cells_test.cpp
@@ -163,6 +161,13 @@ list(APPEND GUI_CORE_TEST_FILES
   pixel_snap_test.cpp
   main.cpp
 )
+
+# The Vulkan backend's own parts, without a device.
+if(TACHYON_VULKAN)
+  list(APPEND GUI_CORE_TEST_FILES
+    upload_worker_test.cpp
+    frame_waits_test.cpp)
+endif()
 
 add_executable(gui_core_tests ${GUI_CORE_TEST_FILES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${GUI_CORE_TEST_FILES})
@@ -213,7 +218,7 @@ set_target_properties(gui_core_tests PROPERTIES
 # leaks) become test failures. Individual tests SKIP themselves when no suitable
 # device/display is present, so the target is safe to build everywhere.
 # They drive real windows through SDL.
-if(TACHYON_SDL)
+if(TACHYON_SDL AND TACHYON_VULKAN)
   list(APPEND GUI_GPU_TEST_FILES
     gpu/gpu_test_harness.h
     gpu/gpu_injected_input.h

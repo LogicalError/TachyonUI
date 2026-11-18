@@ -61,7 +61,19 @@ option(TACHYON_FALLBACK_FONTS "Ship the optional Noto fallback fonts with the re
 # included) must call SetResourceRoot with a folder that holds themes/ and fonts/.
 option(TACHYON_EMBED_RESOURCES "Compile the default themes and fonts into the library" ON)
 
-find_package(Vulkan REQUIRED)
+# The graphics backends built in. Vulkan is the default. Direct3D 12 (Windows only) is on its
+# way: so far its option builds its shaders (DXIL, compiled in next to the SPIR-V). With none,
+# the app runs on the null backend (no GPU, nothing drawn).
+option(TACHYON_VULKAN "Build the Vulkan graphics backend" ON)
+if(WIN32)
+  option(TACHYON_D3D12 "Build the Direct3D 12 graphics backend (so far its shaders only)" OFF)
+else()
+  set(TACHYON_D3D12 OFF)
+endif()
+
+if(TACHYON_VULKAN)
+  find_package(Vulkan REQUIRED)
+endif()
 
 include(CompilerOptions)
 include(Submodules)

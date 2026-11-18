@@ -39,8 +39,9 @@ struct VSOutput
 static const float kTau = 6.28318530718;
 
 [shader("vertex")]
-VSOutput vertexMain(int vertexIndex : SV_VulkanVertexID)
+VSOutput vertexMain(VertexInput vertex)
 {
+    const int vertexIndex = VertexIndex(vertex);
     // Circles share the line slot of the push constants.
     Circle circle = LoadPrimitive<Circle>(kLineSlot, vertexIndex / 4);
     float2 corner = QuadCorner(vertexIndex % 4); // the corner, from the index buffer

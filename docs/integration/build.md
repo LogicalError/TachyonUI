@@ -42,6 +42,8 @@ Options (set before `add_subdirectory`):
 | `TACHYON_INSTALL` | on when top-level | Adds install rules and the CMake package. |
 | `TACHYON_INSTALL_THIRD_PARTY` | on | Bundles the third-party libraries into the install. |
 | `TACHYON_SDL` | on | Builds the SDL window backend and clipboard. Off builds without SDL. |
+| `TACHYON_VULKAN` | on | Builds the Vulkan graphics backend. Off builds without Vulkan (no Vulkan SDK needed): the app runs on the null backend and draws nothing. |
+| `TACHYON_D3D12` | off | Windows only. The Direct3D 12 backend is on its way; so far this builds its shaders (DXIL) into `gui_core`. |
 | `TACHYON_SYSTEM_SDL` | off | Uses the host's SDL3. |
 | `TACHYON_SYSTEM_HARFBUZZ` | off | Uses the host's HarfBuzz. |
 | `TACHYON_SYSTEM_VMA` | off | Uses the host's VulkanMemoryAllocator. |
@@ -61,6 +63,11 @@ set(TACHYON_SYSTEM_SDL      ON)
 set(TACHYON_SYSTEM_HARFBUZZ ON)
 add_subdirectory(external/TachyonUI)
 ```
+
+- Code can check which graphics backends were built in:
+  - `gui_core` defines `TACHYON_VULKAN` and `TACHYON_D3D12`, each `0` or `1`
+  - for example, `#if TACHYON_VULKAN` around code that uses `VulkanGraphicsContext`
+  - the CMake package sets `TachyonUI_VULKAN` and `TachyonUI_D3D12` the same way
 
 - The bundled SDL3 is a static library.
 - If your SDL3 is a DLL instead, on Windows it must sit next to the executable, for
@@ -172,10 +179,14 @@ add_custom_command(TARGET my_app POST_BUILD
   - a graphics backend is the part that draws; the default one uses Vulkan
   - the library only hands it primitives, such as boxes and glyphs
   - see `PrimitiveSpec` in `gui_core/graphics/gui_render_primitives.h`
-  - the Vulkan backend's shaders are in `workdirectory/shaders`
+  - the shaders are in `workdirectory/shaders`
     - they're written in [Slang](https://shader-slang.org/): one `*_shader.slang` file per
       primitive kind, with its `vertexMain` and `fragmentMain`
-    - for example, `box_shader.slang` builds into `box_shader.vert.spv` and `box_shader.frag.spv`
+    - each backend gets its own build of them: SPIR-V for Vulkan, DXIL for Direct3D 12
+    - for example, `box_shader.slang` builds into `box_shader.vert.spv` and
+      `box_shader.frag.spv`, and with `TACHYON_D3D12` also `box_shader.vert.dxil` and
+      `box_shader.frag.dxil`
+    - `TACHYON_D3D12` picks the Direct3D 12 bindings in them (`all_common.slang`)
 
 ---
 

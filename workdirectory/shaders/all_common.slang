@@ -133,8 +133,54 @@ struct Quad
     float4  tint;         // multiplies the color
 };
 
-// The push constants (GPUDrawPushConstants): 128 bytes. The world matrix is its four columns,
-// as the C++ side stores it; a primitive kind's buffer is at its PrimitiveSpec::pushSlot.
+static const int kBoxSlot      = 0;
+static const int kGlyphSlot    = 1;
+static const int kDotSlot      = 2;
+static const int kLineSlot     = 3;
+static const int kTriangleSlot = 4;
+
+#if defined(TACHYON_D3D12)
+// Direct3D 12: the matrix, the time and the draw's first vertex as root constants (b0); the
+// primitive and style buffers as root SRVs (t0 to t6), a GPU virtual address each, in place of
+// Vulkan's buffer addresses.
+struct PushConstants
+{
+    float4 worldColumns[4];
+    float  elapsedTime;   // seconds since app start
+    uint   firstVertex;   // the draw's first vertex: SV_VertexID starts at 0
+};
+ConstantBuffer<PushConstants> pc : register(b0);
+
+ByteAddressBuffer boxBuffer      : register(t0);
+ByteAddressBuffer glyphBuffer    : register(t1);
+ByteAddressBuffer dotBuffer      : register(t2);
+ByteAddressBuffer lineBuffer     : register(t3);
+ByteAddressBuffer triangleBuffer : register(t4);
+ByteAddressBuffer boxStyles      : register(t5);
+ByteAddressBuffer colorStyles    : register(t6);
+
+// The `index`-th primitive of type T in slot `slot`. Callers pass a constant slot, so the
+// switch folds away.
+T LoadPrimitive<T>(int slot, int index)
+{
+    const uint offset = uint(index) * sizeof(T);
+    switch (slot)
+    {
+    case kBoxSlot:   return boxBuffer.Load<T>(offset);
+    case kGlyphSlot: return glyphBuffer.Load<T>(offset);
+    case kDotSlot:   return dotBuffer.Load<T>(offset);
+    case kLineSlot:  return lineBuffer.Load<T>(offset);
+    default:         return triangleBuffer.Load<T>(offset);
+    }
+}
+BoxStyle   LoadBoxStyle(int index)   { return boxStyles.Load<BoxStyle>(uint(index) * sizeof(BoxStyle)); }
+ColorStyle LoadColorStyle(int index) { return colorStyles.Load<ColorStyle>(uint(index) * sizeof(ColorStyle)); }
+
+struct VertexInput { uint id : SV_VertexID; };
+int VertexIndex(VertexInput input) { return input.id + int(pc.firstVertex); }
+#else
+// Vulkan: the push constants (GPUDrawPushConstants), 128 bytes. The world matrix is its four
+// columns, as the C++ side stores it; a primitive kind's buffer is at its PrimitiveSpec::pushSlot.
 struct PushConstants
 {
     float4   worldColumns[4];
@@ -146,16 +192,16 @@ struct PushConstants
 };
 [[vk::push_constant]] ConstantBuffer<PushConstants> pc;
 
-static const int kBoxSlot      = 0;
-static const int kGlyphSlot    = 1;
-static const int kDotSlot      = 2;
-static const int kLineSlot     = 3;
-static const int kTriangleSlot = 4;
-
 // The `index`-th primitive of type T in push-constant slot `slot`.
 T LoadPrimitive<T>(int slot, int index) { return ((T*)pc.primitiveAddresses[slot])[index]; }
 BoxStyle   LoadBoxStyle(int index)   { return ((BoxStyle*)pc.boxStyleAddress)[index]; }
 ColorStyle LoadColorStyle(int index) { return ((ColorStyle*)pc.colorStyleAddress)[index]; }
+
+// The vertex index with the draw's vertex offset in it, which the draws start each kind's
+// primitives at.
+struct VertexInput { int id : SV_VulkanVertexID; };
+int VertexIndex(VertexInput input) { return input.id; }
+#endif
 
 // GLSL's mod: x - y * floor(x / y), which keeps the sign of y (fmod keeps x's).
 float  glslMod(float x, float y)   { return x - y * floor(x / y); }

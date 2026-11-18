@@ -63,6 +63,14 @@ namespace
         }
     };
 
+    // What an app shows for the API it renders with, as the showcase's status bar does.
+    TEST(GraphicsAPINames, EachAPIHasItsName)
+    {
+        EXPECT_EQ(tachyon::GraphicsAPIName(tachyon::GraphicsAPI::None), "No GPU");
+        EXPECT_EQ(tachyon::GraphicsAPIName(tachyon::GraphicsAPI::Vulkan), "Vulkan");
+        EXPECT_EQ(tachyon::GraphicsAPIName(tachyon::GraphicsAPI::D3D12), "Direct3D 12");
+    }
+
     TEST(NullBackends, RunsTheApplicationWithoutAGPU)
     {
         NullBackendApp app;

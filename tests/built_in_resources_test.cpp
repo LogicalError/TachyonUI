@@ -8,7 +8,9 @@
 
 #include <gui_core/gui_embedded_files_internal.h>
 #include <gui_core/gui_resources.h>
+#include <gui_core/graphics/gui_render_primitives.h>
 
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -39,6 +41,41 @@ namespace
         EXPECT_FALSE(FindBuiltInResource("C:\\app\\resources\\themes\\styles.css").empty());
 #endif
         EXPECT_FALSE(FindBuiltInResource("fonts/JetBrainsMono/JetBrainsMono-Bold.ttf").empty());
+    }
+
+    // Each backend built in has both shaders of every primitive kind, in its own format.
+    TEST(BuiltInShaders, EveryKindHasItsPairForEachBackend)
+    {
+        std::vector<std::string_view> extensions;
+        if (TACHYON_VULKAN) extensions.push_back(".spv");
+        if (TACHYON_D3D12)  extensions.push_back(".dxil");
+        if (extensions.empty()) GTEST_SKIP() << "built without a GPU backend";
+        for (const PrimitiveSpec& spec : kPrimitiveSpecs)
+            for (const std::string_view stage : { ".vert", ".frag" })
+                for (const std::string_view extension : extensions)
+                {
+                    const std::string name = std::string(spec.shaderBaseName) + std::string(stage) + std::string(extension);
+                    EXPECT_FALSE(detail::FindEmbeddedFile(detail::EmbeddedShaderFiles(), name).empty()) << name;
+                }
+    }
+
+    // Direct3D 12 runs only signed DXIL: a container, "DXBC", whose 16-byte hash isn't zero.
+    TEST(BuiltInShaders, TheDXILIsSigned)
+    {
+        if (!TACHYON_D3D12) GTEST_SKIP() << "built without Direct3D 12";
+        size_t dxil = 0;
+        for (const detail::EmbeddedFile& file : detail::EmbeddedShaderFiles())
+        {
+            if (!file.key.ends_with(".dxil"))
+                continue;
+            ++dxil;
+            ASSERT_GE(file.data.size(), 20u) << file.key;
+            EXPECT_EQ(std::memcmp(file.data.data(), "DXBC", 4), 0) << file.key;
+            const auto hash = file.data.subspan(4, 16);
+            EXPECT_TRUE(std::any_of(hash.begin(), hash.end(), [](std::byte b) { return b != std::byte{ 0 }; }))
+                << file.key << " is unsigned";
+        }
+        EXPECT_EQ(dxil, std::size(kPrimitiveSpecs) * 2);
     }
 
     TEST(BuiltInResources, OnlyAtAFolderBoundary)

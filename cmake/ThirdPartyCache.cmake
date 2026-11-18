@@ -50,7 +50,7 @@ endif()
 # nanosvg: the copy in third_party/nanosvg is altered, so a change to it reaches the cache.
 file(SHA1 "${PROJECT_SOURCE_DIR}/third_party/nanosvg/nanosvg.h" _tachyon_nanosvg_hash)
 set(_tachyon_tp_signature
-  "sdl=${TACHYON_SDL};system-sdl=${TACHYON_SYSTEM_SDL};system-harfbuzz=${TACHYON_SYSTEM_HARFBUZZ};system-vma=${TACHYON_SYSTEM_VMA};vcpkg-msbuild=off;sdl-link=static;library-alloc=1;nanosvg=${_tachyon_nanosvg_hash}")
+  "vulkan=${TACHYON_VULKAN};sdl=${TACHYON_SDL};system-sdl=${TACHYON_SYSTEM_SDL};system-harfbuzz=${TACHYON_SYSTEM_HARFBUZZ};system-vma=${TACHYON_SYSTEM_VMA};vcpkg-msbuild=off;sdl-link=static;library-alloc=1;nanosvg=${_tachyon_nanosvg_hash}")
 
 function(_tachyon_build_third_party_config cfg)
   set(stamp "${TACHYON_TP_INSTALL}/.stamp-${cfg}")
@@ -100,6 +100,7 @@ function(_tachyon_build_third_party_config cfg)
       -B "${TACHYON_TP_BUILD}"
       "-DCMAKE_INSTALL_PREFIX=${TACHYON_TP_INSTALL}"
       "-DTACHYON_BUILD_TESTS=${TACHYON_BUILD_TESTS}"
+      "-DTACHYON_VULKAN=${TACHYON_VULKAN}"
       "-DTACHYON_SDL=${TACHYON_SDL}"
       "-DTACHYON_SYSTEM_SDL=${TACHYON_SYSTEM_SDL}"
       "-DTACHYON_SYSTEM_HARFBUZZ=${TACHYON_SYSTEM_HARFBUZZ}"
@@ -171,21 +172,23 @@ find_package(libunibreak CONFIG REQUIRED)
 find_package(budouxc CONFIG REQUIRED)
 find_package(skribidi CONFIG REQUIRED)
 
-if(TACHYON_SYSTEM_VMA)
-  if(NOT TARGET GPUOpen::VulkanMemoryAllocator)
-    find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+if(TACHYON_VULKAN)
+  if(TACHYON_SYSTEM_VMA)
+    if(NOT TARGET GPUOpen::VulkanMemoryAllocator)
+      find_package(VulkanMemoryAllocator CONFIG REQUIRED)
+    endif()
+    # An alias can't name an alias, which is what VMA's own project defines.
+    get_target_property(_vma_target GPUOpen::VulkanMemoryAllocator ALIASED_TARGET)
+    if(NOT _vma_target)
+      set(_vma_target GPUOpen::VulkanMemoryAllocator)
+    endif()
+    add_library(vma ALIAS ${_vma_target})
+  else()
+    find_package(vma CONFIG REQUIRED)
   endif()
-  # An alias can't name an alias, which is what VMA's own project defines.
-  get_target_property(_vma_target GPUOpen::VulkanMemoryAllocator ALIASED_TARGET)
-  if(NOT _vma_target)
-    set(_vma_target GPUOpen::VulkanMemoryAllocator)
-  endif()
-  add_library(vma ALIAS ${_vma_target})
-else()
-  find_package(vma CONFIG REQUIRED)
+  find_package(vkbootstrap CONFIG REQUIRED)
 endif()
 find_package(nanosvg CONFIG REQUIRED)
-find_package(vkbootstrap CONFIG REQUIRED)
 if(TACHYON_BUILD_TESTS)
   find_package(GTest CONFIG REQUIRED)
 endif()

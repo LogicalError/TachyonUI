@@ -11,7 +11,9 @@
 #include <gui_core/windows/gui_window_flags.h>
 #include <gui_core/graphics/gui_graphics_context.h>
 #include <gui_core/windows/sdl/gui_window_backend_sdl.h>
+#if TACHYON_VULKAN
 #include <gui_core/windows/sdl/gui_window_backend_sdl_vulkan.h>
+#endif
 
 #include <SDL3/SDL.h>
 #include <cassert>
@@ -1484,7 +1486,7 @@ namespace tachyon
         Uint32 btnstate = SDL_GetGlobalMouseState(&x, &y);
         m_mousePos.x = static_cast<int>(x);
         m_mousePos.y = static_cast<int>(y);
-        m_mouseButtons = ToMouseButtons(btnstate);
+        m_mouseButtons = m_options.physicalButtons ? ToMouseButtons(btnstate) : MouseButtons::None;
 
         // Track the last focusable window for input rerouting from tooltips.
         SDL_Window* focused = SDL_GetKeyboardFocus();
@@ -2143,7 +2145,9 @@ namespace tachyon
     void SDLWindowBackend::SetGraphicsContext(GraphicsContext* graphicsContext)
     {
         IWindowBackend::SetGraphicsContext(graphicsContext);
+#if TACHYON_VULKAN
         InstallSDLVulkanSurfaceFactory(graphicsContext);
+#endif
     }
 
 } // namespace tachyon

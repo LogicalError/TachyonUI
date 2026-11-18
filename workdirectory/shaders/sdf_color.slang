@@ -1,6 +1,33 @@
 // Shared color resolution for SDF-based rendering: the bindless images and the color styles.
 
-// Every registered image, by its ImageIndex (set 0, binding 0).
+#if defined(TACHYON_D3D12)
+// Every registered image, by its ImageIndex: its texture in the descriptor heap, and which of
+// the static samplers it uses (0 nearest repeat, 1 linear repeat, 2 linear clamp to edge), one
+// uint per image.
+ByteAddressBuffer imageSamplers : register(t7);
+SamplerState      samplers[3]   : register(s0);
+
+Texture2D Image(uint index)
+{
+    const DescriptorHandle<Texture2D> handle = DescriptorHandle<Texture2D>(uint2(NonUniformResourceIndex(index), 0));
+    return handle;
+}
+
+float2 ImageSize(uint index)
+{
+    uint width, height;
+    Image(index).GetDimensions(width, height);
+    return float2(width, height);
+}
+
+float4 SampleImage(uint index, float2 uv)
+{
+    const uint sampler = imageSamplers.Load(index * 4);
+    return Image(index).Sample(samplers[NonUniformResourceIndex(sampler)], uv);
+}
+float4 FetchImage(uint index, int2 texel) { return Image(index).Load(int3(texel, 0)); }
+#else
+// Every registered image, by its ImageIndex (set 0, binding 0), with its own sampler.
 [[vk::binding(0, 0)]] Sampler2D allTextures[];
 
 float2 ImageSize(uint index)
@@ -12,6 +39,7 @@ float2 ImageSize(uint index)
 
 float4 SampleImage(uint index, float2 uv) { return allTextures[NonUniformResourceIndex(index)].Sample(uv); }
 float4 FetchImage(uint index, int2 texel) { return allTextures[NonUniformResourceIndex(index)].Load(int3(texel, 0)); }
+#endif
 
 float4 getGradientColor(uint gradientPageIdx, float2 texSize, float offset, float gradientIndex)
 {

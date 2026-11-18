@@ -191,53 +191,59 @@ list(APPEND GUI_FILES
   gui_core/graphics/null/gui_null_graphics_context.h
   gui_core/graphics/null/gui_null_graphics_context.cpp
 
-
-  # Graphics/Vulkan Backend
-  gui_core/graphics/vulkan/vk_defaults.h
-
-  gui_core/graphics/vulkan/vk_descriptors.cpp
-  gui_core/graphics/vulkan/vk_descriptors.h
-
-  gui_core/graphics/vulkan/vk_device_context.cpp
-  gui_core/graphics/vulkan/vk_device_context.h
-
-  gui_core/graphics/vulkan/vk_graphics_context.cpp
-  gui_core/graphics/vulkan/vk_graphics_context.h
-
-  gui_core/graphics/vulkan/vk_image.h
-  gui_core/graphics/vulkan/vk_images.cpp
-  gui_core/graphics/vulkan/vk_images.h
-
-  gui_core/graphics/vulkan/vk_initializers.cpp
-  gui_core/graphics/vulkan/vk_initializers.h
-
-  gui_core/graphics/vulkan/vk_meshes.h
-
-  gui_core/graphics/vulkan/vk_pipelines.cpp
-  gui_core/graphics/vulkan/vk_pipelines.h
-
-
-  gui_core/graphics/vulkan/vk_rhi.cpp
-  gui_core/graphics/vulkan/vk_rhi.h
-
-  gui_core/graphics/vulkan/vk_text_atlas_manager.cpp
-  gui_core/graphics/vulkan/vk_text_atlas_manager.h
-
-  gui_core/graphics/vulkan/vk_types.h
-
-  gui_core/graphics/vulkan/vk_upload_worker.cpp
-  gui_core/graphics/vulkan/vk_upload_worker.h
-
-  gui_core/graphics/vulkan/vk_window_context.cpp
-  gui_core/graphics/vulkan/vk_window_context.h
 )
+
+# The Vulkan backend (TACHYON_VULKAN).
+if(TACHYON_VULKAN)
+  list(APPEND GUI_FILES
+    gui_core/graphics/vulkan/vk_defaults.h
+
+    gui_core/graphics/vulkan/vk_descriptors.cpp
+    gui_core/graphics/vulkan/vk_descriptors.h
+
+    gui_core/graphics/vulkan/vk_device_context.cpp
+    gui_core/graphics/vulkan/vk_device_context.h
+
+    gui_core/graphics/vulkan/vk_graphics_context.cpp
+    gui_core/graphics/vulkan/vk_graphics_context.h
+
+    gui_core/graphics/vulkan/vk_image.h
+    gui_core/graphics/vulkan/vk_images.cpp
+    gui_core/graphics/vulkan/vk_images.h
+
+    gui_core/graphics/vulkan/vk_initializers.cpp
+    gui_core/graphics/vulkan/vk_initializers.h
+
+    gui_core/graphics/vulkan/vk_meshes.h
+
+    gui_core/graphics/vulkan/vk_pipelines.cpp
+    gui_core/graphics/vulkan/vk_pipelines.h
+
+
+    gui_core/graphics/vulkan/vk_rhi.cpp
+    gui_core/graphics/vulkan/vk_rhi.h
+
+    gui_core/graphics/vulkan/vk_text_atlas_manager.cpp
+    gui_core/graphics/vulkan/vk_text_atlas_manager.h
+
+    gui_core/graphics/vulkan/vk_types.h
+
+    gui_core/graphics/vulkan/vk_upload_worker.cpp
+    gui_core/graphics/vulkan/vk_upload_worker.h
+
+    gui_core/graphics/vulkan/vk_window_context.cpp
+    gui_core/graphics/vulkan/vk_window_context.h)
+endif()
 
 # Create GUI static library
 # The SDL window backend and clipboard (TACHYON_SDL).
 if(TACHYON_SDL)
+  if(TACHYON_VULKAN)
+    list(APPEND GUI_FILES
+      gui_core/windows/sdl/gui_window_backend_sdl_vulkan.cpp
+      gui_core/windows/sdl/gui_window_backend_sdl_vulkan.h)
+  endif()
   list(APPEND GUI_FILES
-    gui_core/windows/sdl/gui_window_backend_sdl_vulkan.cpp
-    gui_core/windows/sdl/gui_window_backend_sdl_vulkan.h
     gui_core/windows/sdl/gui_window_backend_sdl.cpp
     gui_core/windows/sdl/gui_window_backend_sdl.h
     gui_core/windows/sdl/gui_sdl_clipboard.cpp
@@ -245,7 +251,7 @@ if(TACHYON_SDL)
 endif()
 
 # Files compiled into gui_core: the default themes and fonts (TACHYON_EMBED_RESOURCES), and
-# the Vulkan backend's shaders.
+# the graphics backends' shaders (cmake/Shaders.cmake).
 set(_tachyon_embedded_resources
   themes/dark.css
   themes/light.css
@@ -267,13 +273,13 @@ if(TACHYON_EMBED_RESOURCES)
   endforeach()
 endif()
 set(_tachyon_shader_entries "")
-foreach(_spirv IN LISTS SPIRV_BINARY_FILES)
-  get_filename_component(_spirv_name "${_spirv}" NAME)
-  list(APPEND _tachyon_shader_entries "${_spirv_name}=${_spirv}")
+foreach(_shader IN LISTS SHADER_BINARY_FILES)
+  get_filename_component(_shader_name "${_shader}" NAME)
+  list(APPEND _tachyon_shader_entries "${_shader_name}=${_shader}")
 endforeach()
 
 set(_tachyon_resources_source "${PROJECT_BINARY_DIR}/generated/gui_core/gui_embedded_resources.cpp")
-set(_tachyon_shaders_source   "${PROJECT_BINARY_DIR}/generated/gui_core/vk_embedded_shaders.cpp")
+set(_tachyon_shaders_source   "${PROJECT_BINARY_DIR}/generated/gui_core/gui_embedded_shaders.cpp")
 string(REPLACE ";" "|" _tachyon_resource_arg "${_tachyon_resource_entries}")
 string(REPLACE ";" "|" _tachyon_shader_arg "${_tachyon_shader_entries}")
 add_custom_command(
@@ -287,7 +293,7 @@ add_custom_command(
   OUTPUT "${_tachyon_shaders_source}"
   COMMAND "${CMAKE_COMMAND}" "-DOUTPUT=${_tachyon_shaders_source}" -DFUNCTION=EmbeddedShaderFiles
           "-DFILES=${_tachyon_shader_arg}" -P "${PROJECT_SOURCE_DIR}/cmake/EmbedFiles.cmake"
-  DEPENDS ${SPIRV_BINARY_FILES} "${PROJECT_SOURCE_DIR}/cmake/EmbedFiles.cmake"
+  DEPENDS ${SHADER_BINARY_FILES} "${PROJECT_SOURCE_DIR}/cmake/EmbedFiles.cmake"
   COMMENT "Compiling the shaders into gui_core"
   VERBATIM)
 add_library(gui_core STATIC ${GUI_FILES} "${_tachyon_resources_source}" "${_tachyon_shaders_source}")
@@ -302,12 +308,19 @@ target_include_directories(gui_core PUBLIC
   $<INSTALL_INTERFACE:include>)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR}/.. FILES ${GUI_FILES})
 
-# vma and the Vulkan headers are PUBLIC because the public device-context headers
-# expose Vulkan and VMA types (host-provided device). Everything else is an
-# implementation detail of the static library.
-target_link_libraries(gui_core
-  PUBLIC  vma Vulkan::Headers
-  PRIVATE Vulkan::Vulkan vkbootstrap skribidi nanosvg)
+target_link_libraries(gui_core PRIVATE skribidi nanosvg)
+if(TACHYON_VULKAN)
+  # vma and the Vulkan headers are PUBLIC because the public device-context headers
+  # expose Vulkan and VMA types (host-provided device). Everything else is an
+  # implementation detail of the static library.
+  target_link_libraries(gui_core
+    PUBLIC  vma Vulkan::Headers
+    PRIVATE Vulkan::Vulkan vkbootstrap)
+endif()
+# The graphics backends built in, 0 or 1 each, for code that uses one only when it's there.
+target_compile_definitions(gui_core PUBLIC
+  TACHYON_VULKAN=$<BOOL:${TACHYON_VULKAN}>
+  TACHYON_D3D12=$<BOOL:${TACHYON_D3D12}>)
 # nanosvg is header-only, included from the third-party cache, whose headers the build
 # doesn't track: the one file that compiles it is rebuilt when the cache's copy changes.
 if(EXISTS "${TACHYON_TP_INSTALL}/include/nanosvg/nanosvg.h")
