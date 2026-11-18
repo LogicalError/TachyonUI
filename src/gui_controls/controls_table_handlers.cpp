@@ -12,7 +12,6 @@
 #include <gui_core/layout/gui_layout_helpers.h>
 
 #include <algorithm>
-#include <chrono>
 
 namespace tachyon
 {

@@ -8,7 +8,6 @@
 #include <gui_core/gui_id.h>
 #include <gui_core/input/gui_gesture.h>
 #include <gui_core/style/gui_style.h>
-#include <gui_core/style/gui_color_conversions.h>
 
 namespace tachyon
 {

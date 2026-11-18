@@ -1,5 +1,6 @@
 #pragma once
 
+#include <gui_core/gui_id.h>
 #include <gui_core/gui_platform.h>
 
 #include <stdint.h>

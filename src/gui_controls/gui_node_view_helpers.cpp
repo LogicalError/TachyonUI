@@ -1,7 +1,6 @@
 #include <gui_controls/gui_node_view_helpers.h>
 
 #include <gui_core/graphics/gui_custom_draw_context.h>
-#include <gui_core/graphics/gui_renderer.h>   // LineStyle
 
 #include <algorithm>
 #include <cmath>

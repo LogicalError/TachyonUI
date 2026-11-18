@@ -1,5 +1,6 @@
 #pragma once
 
+#include <gui_core/input/gui_input_enums.h>
 #include <gui_core/text/gui_utf8.h>
 #include <gui_core/text/gui_text_system.h>
 #include <gui_core/style/gui_style_manager.h>

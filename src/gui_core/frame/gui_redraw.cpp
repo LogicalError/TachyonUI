@@ -1,7 +1,6 @@
 #include <gui_core/frame/gui_redraw.h>
 
 #include <algorithm>
-#include <climits>
 
 namespace tachyon
 {

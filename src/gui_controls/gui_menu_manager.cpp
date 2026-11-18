@@ -17,7 +17,6 @@
 
 #include <gui_core/gui_id_manager.h>
 
-#include <algorithm>
 #include <assert.h>
 
 namespace tachyon

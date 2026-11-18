@@ -8,7 +8,7 @@
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_base_types.h>
 #include <gui_core/input/gui_gesture.h>
-#include <gui_core/text/gui_text_system.h>   // IconID
+#include <gui_core/style/gui_style_text.h>   // IconID
 
 // Plain state holders for several controls (no frame callbacks or logic).
 

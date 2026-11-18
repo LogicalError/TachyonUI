@@ -20,7 +20,6 @@
 
 #include <SDL3/SDL.h>
 #include <cassert>
-#include <climits>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>

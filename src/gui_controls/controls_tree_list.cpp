@@ -2,7 +2,6 @@
 #include <gui_controls/gui_tree_utils.h>
 
 #include <algorithm>
-#include <chrono>
 #include <string>
 
 namespace tachyon

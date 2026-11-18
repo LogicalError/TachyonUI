@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "mock_window_backend.h"
 
 #include <vector>
 
@@ -94,14 +95,14 @@ namespace
         app.Frame([&] { (void)app.windowManager->GetOrCreateWindow(app.RootWindowID(), "root", IntRect{ 0, 0, 1200, 600 }, nullptr); });
         ASSERT_NE(app.windowManager->GetWindowHandle(app.RootWindowID()), nullptr);
         auto clickButton = [&](size_t index, WindowMode current, WindowMode expected) {
-            ON_CALL(app.mockBackend, GetWindowMode(_)).WillByDefault(Return(current));
+            ON_CALL(app.MockBackend(), GetWindowMode(_)).WillByDefault(Return(current));
             Frame(flags);
             const auto children = ChildIDs(app, barID);
             ASSERT_EQ(children.size(), 6u);
-            EXPECT_CALL(app.mockBackend, SetWindowMode(_, expected)).Times(1);
+            EXPECT_CALL(app.MockBackend(), SetWindowMode(_, expected)).Times(1);
             app.ClickAt(app.CenterOf(children[index]));
             Frame(flags);
-            ::testing::Mock::VerifyAndClearExpectations(&app.mockBackend);
+            ::testing::Mock::VerifyAndClearExpectations(&app.MockBackend());
         };
         clickButton(3, WindowMode::Normal,     WindowMode::Minimized);
         clickButton(4, WindowMode::Normal,     WindowMode::Maximized);

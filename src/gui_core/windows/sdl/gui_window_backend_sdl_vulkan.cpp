@@ -3,11 +3,8 @@
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
-#include <gui_core/gui_base_types.h>
 #include <gui_core/windows/sdl/gui_window_backend_sdl.h>
 #include <gui_core/windows/sdl/gui_window_backend_sdl_vulkan.h>
-#include <gui_core/graphics/vulkan/vk_types.h>
-#include <gui_core/graphics/vulkan/vk_descriptors.h>
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>
 #include <gui_core/graphics/vulkan/vk_device_context.h>
 

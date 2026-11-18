@@ -11,7 +11,6 @@
 
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_base_types.h>
-#include <gui_core/gui_enum_operators.h>
 
 #include <functional>
 #include <vector>

@@ -1,5 +1,6 @@
 #include <gui_core/text/gui_utf8.h>
 #include "headless_gui_app.h"
+#include "mock_window_backend.h"
 
 #include <gui_core/input/gui_input_manager.h>
 #include <gui_core/input/gui_input_enums.h>
@@ -15,6 +16,7 @@ namespace GUITest
 {
 
 HeadlessGUIApp::HeadlessGUIApp(std::string themePath)
+    : m_mockBackend(std::make_unique<NiceMock<MockWindowBackend>>())
 {
     m_themePath = std::move(themePath);
     m_rootWindowID.value.dynamicParts.mode      = tachyon::IDMode::Static;
@@ -37,36 +39,36 @@ tachyon::Result<void> HeadlessGUIApp::Initialize(const InitializeOptions& option
     monitor.workArea   = tachyon::IntRect{ 0, 0, 1920, 1080 };
     monitor.isPrimary  = true;
     std::vector<tachyon::MonitorInfo> monitors{ monitor };
-    ON_CALL(mockBackend, GetMonitors()).WillByDefault(Return(monitors));
-    ON_CALL(mockBackend, GetMonitorAt(_)).WillByDefault(Return(0));
-    ON_CALL(mockBackend, GetMonitorFromWindow(_)).WillByDefault(Return(0));
-    ON_CALL(mockBackend, GetScreenMousePos()).WillByDefault(Return(tachyon::int2{0,0}));
-    ON_CALL(mockBackend, GetMouseButtons()).WillByDefault(Return(tachyon::MouseButtons::None));
+    ON_CALL(*m_mockBackend, GetMonitors()).WillByDefault(Return(monitors));
+    ON_CALL(*m_mockBackend, GetMonitorAt(_)).WillByDefault(Return(0));
+    ON_CALL(*m_mockBackend, GetMonitorFromWindow(_)).WillByDefault(Return(0));
+    ON_CALL(*m_mockBackend, GetScreenMousePos()).WillByDefault(Return(tachyon::int2{0,0}));
+    ON_CALL(*m_mockBackend, GetMouseButtons()).WillByDefault(Return(tachyon::MouseButtons::None));
     // Popup/tooltip window creation returns a stable non-null sentinel so
     // OSWindowManager registers the window; GetWindowRect returns the monitor
     // area so layout doesn't collapse popups.
     static int dummyHandleStorage = 0;
     tachyon::OSWindowHandle fakeHandle = &dummyHandleStorage;
-    ON_CALL(mockBackend, CreateWindow(_, ::testing::An<tachyon::int2>(), _, _))
+    ON_CALL(*m_mockBackend, CreateWindow(_, ::testing::An<tachyon::int2>(), _, _))
         .WillByDefault(Return(fakeHandle));
-    ON_CALL(mockBackend, CreateWindow(_, ::testing::An<tachyon::IntRect>(), _, _))
+    ON_CALL(*m_mockBackend, CreateWindow(_, ::testing::An<tachyon::IntRect>(), _, _))
         .WillByDefault(Return(fakeHandle));
-    ON_CALL(mockBackend, IsWindow(_)).WillByDefault(Return(true));
-    ON_CALL(mockBackend, GetWindowRect(_))
+    ON_CALL(*m_mockBackend, IsWindow(_)).WillByDefault(Return(true));
+    ON_CALL(*m_mockBackend, GetWindowRect(_))
         .WillByDefault(Return(tachyon::IntRect{ 0, 0, 200, 300 }));
-    ON_CALL(mockBackend, GetWindowPos(_)).WillByDefault(Return(tachyon::int2{ 0, 0 }));
-    ON_CALL(mockBackend, GetWindowSize(_)).WillByDefault(Return(tachyon::int2{ 200, 300 }));
-    ON_CALL(mockBackend, GetTicks()).WillByDefault(Return(0u));
+    ON_CALL(*m_mockBackend, GetWindowPos(_)).WillByDefault(Return(tachyon::int2{ 0, 0 }));
+    ON_CALL(*m_mockBackend, GetWindowSize(_)).WillByDefault(Return(tachyon::int2{ 200, 300 }));
+    ON_CALL(*m_mockBackend, GetTicks()).WillByDefault(Return(0u));
 
     // Slots GUIApplication's Initialize() normally fills. StubTextSystem measures
     // text by character count; no font backend.
     textSystem    = &ownedTextSystem;
     ownedTextSystem.SetStyleManager(&styleManager);
-    windowBackend = &mockBackend;
+    windowBackend = m_mockBackend.get();
     inputManager  = std::make_unique<tachyon::InputManager>();
     layoutEngine  = std::make_unique<tachyon::LayoutEngine>(*textSystem, guiStateManager.GetScrollManagement());
     // Menus, tooltips and popups reach the mock-backed OSWindowManager through this.
-    windowManager = std::make_unique<tachyon::OSWindowManager>(nullptr, &mockBackend);
+    windowManager = std::make_unique<tachyon::OSWindowManager>(nullptr, m_mockBackend.get());
 
     // Static window IDs Initialize() reserves for tooltip / context-menu /
     // tab-drag-ghost popups; widgets using them assert otherwise.

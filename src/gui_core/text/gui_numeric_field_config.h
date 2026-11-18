@@ -4,7 +4,6 @@
 #include <cfloat>
 #include <cmath>
 #include <stdint.h>
-#include <type_traits>
 
 namespace tachyon
 {

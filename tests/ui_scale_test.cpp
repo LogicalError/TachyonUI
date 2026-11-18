@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "mock_window_backend.h"
 
 #include <filesystem>
 #include <fstream>
@@ -24,7 +25,7 @@ namespace tachyon
         monitor.workArea     = IntRect{ 0, 0, 1920, 1080 };
         monitor.isPrimary    = true;
         monitor.contentScale = 1.5f;
-        ON_CALL(app.mockBackend, GetMonitors()).WillByDefault(Return(std::vector<MonitorInfo>{ monitor }));
+        ON_CALL(app.MockBackend(), GetMonitors()).WillByDefault(Return(std::vector<MonitorInfo>{ monitor }));
         app.Frame([] {});
         app.Frame([] {});
         EXPECT_FLOAT_EQ(app.styleManager.GetUIScale(), 1.5f) << "moved to a 150% monitor";

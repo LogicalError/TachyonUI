@@ -1,20 +1,15 @@
-#include <cmath>
 
-#include <gui_core/style/gui_style_manager.h>
 
 #include <gui_core/state/gui_state_manager.h>
 #include <gui_core/input/gui_pointer_drag.h>
 
-#include <gui_core/text/gui_text_atlas_manager.h>
 #include <gui_core/text/gui_clipboard.h>
 
 #include <gui_core/text/skribidi/gui_text_system_skribidi.h>
 #include <gui_core/text/skribidi/internal/gui_skribidi_context.h>
 
 #include <gui_core/graphics/gui_graphics_context.h>
-#include <gui_core/graphics/gui_renderer.h>
 
-#include <gui_core/windows/gui_os_window_manager.h>
 
 #include <skribidi/skb_rich_layout.h>
 

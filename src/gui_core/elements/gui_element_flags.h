@@ -1,6 +1,5 @@
 #pragma once
 
-#include <gui_core/gui_base_types.h>
 #include <gui_core/gui_enum_operators.h>
 
 namespace tachyon

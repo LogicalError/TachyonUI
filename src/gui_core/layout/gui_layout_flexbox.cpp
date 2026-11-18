@@ -1,8 +1,6 @@
 #include <gui_core/gui_base_types.h>
 
-#include <gui_core/elements/gui_element_storage.h>
 
-#include <gui_core/diagnostics/gui_profiler.h>
 
 #include <gui_core/layout/gui_layout_flexbox.h>
 #include <gui_core/layout/gui_layout_helpers.h>

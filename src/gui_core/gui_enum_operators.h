@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 // Macro to enable bitwise operators for enum classes
 #define TACHYON_ENUM_OPERATORS(EnumType) \
     inline static EnumType operator|(EnumType a, EnumType b) { return static_cast<EnumType>(static_cast<std::underlying_type_t<EnumType>>(a) | static_cast<std::underlying_type_t<EnumType>>(b)); } \

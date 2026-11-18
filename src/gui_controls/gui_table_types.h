@@ -6,7 +6,6 @@
 #include <gui_core/gui_units.h>
 #include <gui_core/gui_base_types.h>
 #include <gui_core/style/gui_style.h>
-#include <gui_core/style/gui_style_manager.h>
 #include <gui_core/layout/gui_layout_grid.h>
 #include <gui_core/layout/gui_constraints.h>
 #include <gui_core/elements/gui_element.h>
@@ -19,7 +18,6 @@
 #include <cassert>
 #include <functional>
 #include <memory>
-#include <optional>
 #include <unordered_map>
 #include <vector>
 

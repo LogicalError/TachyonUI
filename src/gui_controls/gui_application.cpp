@@ -4,7 +4,6 @@
 #include <gui_core/diagnostics/gui_logging.h>
 
 #include <gui_core/diagnostics/gui_profiler.h>
-#include <gui_core/style/gui_style_sheet.h>
 #include <gui_core/text/skribidi/gui_text_system_skribidi.h>
 #include <gui_core/windows/gui_window_sync.h>
 #if TACHYON_SDL
@@ -14,15 +13,11 @@
 #include <gui_core/graphics/gui_default_graphics_context.h>
 
 #include <algorithm>
-#include <climits>
 #include <cmath>
 #include <thread>
 #include <filesystem>
 #include <format>
 #include <chrono>
-#include <fstream>
-#include <iterator>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>

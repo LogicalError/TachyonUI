@@ -3,7 +3,6 @@
 #include <gui_core/input/gui_platform_input_handler.h>
 #include <gui_core/input/gui_undo_history.h>
 #include <gui_core/text/gui_text_system.h>
-#include <gui_core/gui_hash.h>
 #include <gui_core/memory/gui_library_allocator.h>
 
 #include <span>

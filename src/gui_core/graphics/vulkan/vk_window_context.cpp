@@ -1,5 +1,4 @@
 #include <functional>
-#include <deque>
 #include <chrono>
 #include <utility>
 
@@ -10,13 +9,11 @@
 #include <gui_core/gui_base_types.h>
 #include <gui_core/diagnostics/gui_profiler.h>
 
-#include <gui_core/input/gui_platform_input_handler.h>
 
 #include <gui_core/graphics/vulkan/vk_types.h>
 #include <gui_core/graphics/vulkan/vk_initializers.h>
 #include <gui_core/graphics/vulkan/vk_image.h>
 #include <gui_core/graphics/vulkan/vk_images.h>
-#include <gui_core/graphics/vulkan/vk_pipelines.h>
 #include <gui_core/graphics/vulkan/vk_descriptors.h>
 #include <gui_core/graphics/vulkan/vk_device_context.h>
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>

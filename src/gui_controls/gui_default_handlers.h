@@ -17,7 +17,6 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
-#include <memory>
 #include <stdint.h>
 #include <type_traits>
 

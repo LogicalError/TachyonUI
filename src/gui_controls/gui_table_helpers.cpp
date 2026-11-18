@@ -1,9 +1,7 @@
 #include <gui_controls/gui_table_helpers.h>
 
-#include <gui_core/style/gui_style.h>
 
 #include <algorithm>
-#include <cmath>
 
 namespace tachyon::TableHelpers
 {

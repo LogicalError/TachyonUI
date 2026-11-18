@@ -2,7 +2,6 @@
 
 #include <gui_core/text/gui_text_system.h>
 
-#include <gui_core/diagnostics/gui_profiler.h>
 
 #include <gui_core/gui_base_types.h>
 #include <gui_core/elements/gui_element_storage.h>

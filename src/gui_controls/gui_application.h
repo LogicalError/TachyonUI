@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -16,7 +15,6 @@
 #include <span>
 #include <functional>
 #include <initializer_list>
-#include <limits>
 #include <string>
 #include <thread>
 #include <utility>
@@ -26,7 +24,6 @@
 #include <gui_core/graphics/gui_renderer.h>
 
 #include <gui_core/text/gui_clipboard.h>
-#include <gui_core/text/skribidi/gui_text_system_skribidi.h>
 #include <gui_core/text/gui_text_system.h>
 #include <gui_core/text/gui_text_atlas_manager.h>
 
@@ -66,7 +63,6 @@
 #include <gui_controls/gui_tooltip_manager.h>
 #include <gui_controls/gui_menu_manager.h>
 #include <gui_controls/gui_dock_node.h>
-#include <gui_controls/gui_table_helpers.h>
 #include <gui_controls/gui_theme.h>
 #include <gui_controls/gui_content.h>
 #include <gui_controls/gui_progress_types.h>

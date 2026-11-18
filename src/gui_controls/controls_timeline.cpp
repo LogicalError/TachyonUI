@@ -6,8 +6,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <format>
-#include <string>
 #include <vector>
 
 namespace tachyon

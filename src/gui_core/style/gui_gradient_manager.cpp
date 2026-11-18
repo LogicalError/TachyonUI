@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <assert.h>
 #include <cstring>
-#include <bit>
 
 namespace tachyon
 {

@@ -18,7 +18,6 @@
 
 #include <chrono>
 #include <functional>
-#include <string_view>
 #include <vector>
 
 namespace tachyon

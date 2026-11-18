@@ -14,9 +14,7 @@
 
 #include <functional>
 #include <source_location>
-#include <span>
 #include <string_view>
-#include <vector>
 
 namespace tachyon
 {

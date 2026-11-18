@@ -7,7 +7,6 @@
 
 #include <functional>
 #include <string>
-#include <vector>
 
 // TreeView / ListView / GridView data + construction state.
 

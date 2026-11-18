@@ -5,8 +5,6 @@
 
 #include <gui_controls/gui_application.h>
 
-#include <algorithm>
-#include <chrono>
 #include <vector>
 
 namespace tachyon::TableInternal

@@ -2,13 +2,9 @@
 
 #include <algorithm>
 
-#include <array>
-#include <cerrno>
-#include <cmath>
 #include <cstdlib>
 #include <memory>
 #include <string>
-#include <chrono>
 
 namespace tachyon
 {

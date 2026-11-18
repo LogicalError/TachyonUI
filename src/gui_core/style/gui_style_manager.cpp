@@ -3,7 +3,6 @@
 
 #include <gui_core/style/gui_style_manager.h>
 
-#include <gui_core/graphics/gui_buffer.h>
 #include <gui_core/graphics/gui_image.h>
 
 #include <algorithm>

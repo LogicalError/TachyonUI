@@ -9,7 +9,6 @@
 #include <gui_core/graphics/vulkan/vk_meshes.h>
 #include <gui_core/graphics/vulkan/vk_rhi.h>
 #include <gui_core/graphics/vulkan/vk_upload_worker.h>
-#include <gui_core/graphics/vulkan/vk_descriptors.h>
 #include <gui_core/memory/gui_allocation_hooks.h>
 
 #include <vulkan/vulkan.h>
@@ -17,7 +16,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <array>
 #include <deque>
 #include <mutex>
 #include <optional>
