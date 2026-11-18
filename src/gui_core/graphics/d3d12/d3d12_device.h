@@ -41,16 +41,18 @@ namespace tachyon::d3d12
         explicit operator bool() const { return allocation != nullptr; }
     };
 
-    /// An image (GraphicsContext::CreateImage): a texture sampled by the shaders.
+    /// An image (GraphicsContext::CreateImage): a texture sampled by the shaders. A host's
+    /// (RegisterExternalImage) has no allocation: its texture stays the host's.
     class D3D12Image final : public Image
     {
     public:
         ComPtr<D3D12MA::Allocation> allocation;
+        ID3D12Resource*             external = nullptr;
         DXGI_FORMAT                 format  = DXGI_FORMAT_UNKNOWN;
         Sampler                     sampler = Sampler::NearestRepeat;
         uint2                       size {};
 
-        ID3D12Resource* Resource() const { return allocation ? allocation->GetResource() : nullptr; }
+        ID3D12Resource* Resource() const { return allocation ? allocation->GetResource() : external; }
     };
 
     /// The static sampler (s0, s1, s2) the shaders sample an image with: its row in the
@@ -96,8 +98,9 @@ namespace tachyon::d3d12
 
     struct D3D12GraphicsContext::Impl
     {
-        DebugConfig debug;
-        std::string gpuPreference;
+        DebugConfig    debug;
+        ExternalDevice external;   ///< the host's device and queue, when it gave them
+        std::string    gpuPreference;
         std::string deviceName;
         bool        debugLayer = false;   ///< the debug layer is on: its messages go to `debug`
         bool        tearing    = false;   ///< presenting without vsync is allowed (variable refresh)
@@ -116,7 +119,9 @@ namespace tachyon::d3d12
         UINT64              submitted = 0;
         HANDLE              waitEvent = nullptr;
 
-        /// Runs `list` and signals the fence's next value, which it returns.
+        /// What the next submit waits for on the queue (AddFrameWait), a fence once each.
+        std::vector<std::pair<ComPtr<ID3D12Fence>, UINT64>> frameWaits;
+        /// Runs `list`, after the frame waits, and signals the fence's next value, which it returns.
         UINT64 Submit(ID3D12CommandList* list);
         /// Waits on the CPU until the fence reaches `value`.
         void   Wait(UINT64 value);
@@ -224,6 +229,12 @@ namespace tachyon::d3d12
             std::function<void(const ScenePayload& scene)> record;
         };
         std::unordered_map<ID, Scene> scenes;
+
+        // ---- A host's textures (RegisterExternalImage, SetWindowImageTarget) -----------
+        /// By image index: what the image set points at for a host's texture.
+        std::unordered_map<uint32_t, std::unique_ptr<D3D12Image>> externalImages;
+        /// The texture a render-to-image window is copied into, by window.
+        std::unordered_map<ID, ID3D12Resource*> imageTargets;
         std::vector<SceneRequest>     sceneRequests;
         uint64_t                      sceneFrame = 0;
 

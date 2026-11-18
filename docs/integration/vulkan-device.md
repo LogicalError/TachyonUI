@@ -256,4 +256,4 @@ vk->AddFrameWait(computeDone, computeValue, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_
 
 ---
 
-[Previous: Adding the library to a build](build.md) | [Integration](../integration.md) | [Next: Your own window and input](window-and-input.md)
+[Previous: Adding the library to a build](build.md) | [Integration](../integration.md) | [Next: Using your own Direct3D 12 device](d3d12-device.md)

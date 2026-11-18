@@ -4,78 +4,9 @@
 
 #include "d3d12_test_harness.h"
 
-#include <gui_core/graphics/gui_renderer.h>
-#include <gui_core/style/gui_gradient_manager.h>
-#include <gui_core/style/gui_style_manager.h>
-#include <gui_core/windows/gui_window_flags.h>
-
 #include <d3d12.h>
 
-#include <array>
-#include <cstring>
-#include <vector>
-
 using namespace D3D12TestHarness;
-
-namespace
-{
-    class D3D12ImageWindowTest : public D3D12Test
-    {
-    protected:
-        static constexpr tachyon::int2    kSize{ 320, 240 };
-        static constexpr tachyon::IntRect kFullClip{ 0, 0, kSize.x, kSize.y };
-
-        tachyon::GradientManager gradientManager{ 256 };
-        tachyon::StyleManager    styleManager{ gradientManager };
-        tachyon::IWindowContext* window = nullptr;
-        std::vector<uint8_t>     pixels = std::vector<uint8_t>(size_t(kSize.x) * kSize.y * 4);
-
-        void SetUp() override
-        {
-            D3D12Test::SetUp();
-            if (IsSkipped() || HasFatalFailure())
-                return;
-            // With no styles PrepareFrame would have nothing to upload.
-            styleManager.Register(tachyon::Style{});
-            tachyon::ID id;
-            id.value.dynamicParts.mode      = tachyon::IDMode::Static;
-            id.value.dynamicParts.hashValue = 0x1A6E;
-            window = graphics->CreateWindowContext(nullptr, nullptr, id, kSize, tachyon::WindowFlags::RenderToImage, {});
-            ASSERT_NE(window, nullptr);
-        }
-
-        void TearDown() override
-        {
-            if (window != nullptr)
-                graphics->DestroyWindowContext(window);
-            window = nullptr;
-            if (graphics != nullptr)
-                gradientManager.ReleaseAll(graphics);
-            D3D12Test::TearDown();
-        }
-
-        // One frame of what `emit` draws, read back into `pixels`.
-        template <class Emit>
-        void RenderFrame(Emit&& emit)
-        {
-            graphics->PrepareFrame(styleManager, gradientManager, 0.0f);
-            tachyon::GUIRenderer* r = graphics->guiRenderer;
-            if (r->BeginWindow(window->GetID()))
-            {
-                emit(r);
-                r->EndWindow();
-            }
-            window->RenderWindowFrame(graphics, kFullClip, false);
-            ASSERT_TRUE(window->ReadPixels(pixels));
-        }
-
-        std::array<int, 4> Rgba(int x, int y) const   // the frame is BGRA8
-        {
-            const uint8_t* p = pixels.data() + (size_t(y) * kSize.x + size_t(x)) * 4;
-            return { p[2], p[1], p[0], p[3] };
-        }
-    };
-}
 
 // A render-to-image window has no OS window: it draws, and what it draws is read back, the
 // rest left transparent.

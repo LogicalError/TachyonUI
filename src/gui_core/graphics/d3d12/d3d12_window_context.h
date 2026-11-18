@@ -57,6 +57,8 @@ namespace tachyon::d3d12
         bool MakeSizedResources(uint32_t width, uint32_t height);
         void ReleaseSizedResources();
         void Draw(Frame& frame, D3D12_CPU_DESCRIPTOR_HANDLE rtv);
+        /// The frame (a copy source by now) into the host's texture (SetWindowImageTarget).
+        void CopyToTarget(Frame& frame, ID3D12Resource* target);
         /// A layered or render-to-image window's frame starts transparent; a swapchain's opaque black.
         float ClearAlpha() const { return m_layered || m_toImage ? 0.0f : 1.0f; }
 

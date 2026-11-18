@@ -10,7 +10,11 @@
 #include <memory>
 #include <string>
 
+struct ID3D12CommandQueue;
+struct ID3D12Device;
+struct ID3D12Fence;
 struct ID3D12GraphicsCommandList;
+struct ID3D12Resource;
 
 namespace tachyon::d3d12
 {
@@ -48,11 +52,30 @@ namespace tachyon::d3d12
         void* userData = nullptr;
     };
 
+    /// A host's device and queue, for the GUI to render on (SetExternalDevice) instead of making
+    /// its own. The GUI holds a reference to each while it runs, and releases it at Cleanup.
+    struct ExternalDevice
+    {
+        /// Runs Shader Model 6.6 with resource binding tier 3 (CheckDeviceSupport).
+        ID3D12Device*       device = nullptr;
+        /// A direct queue of `device`: every GUI submit, wait and present goes here. Direct3D 12
+        /// queues are free-threaded, so the host submits to it from any thread.
+        ID3D12CommandQueue* queue = nullptr;
+    };
+
     class D3D12GraphicsContext : public NullGraphicsContext
     {
     public:
         D3D12GraphicsContext();
         ~D3D12GraphicsContext() override;
+
+        /// Whether `device` runs the GUI's shaders; what it lacks, one line each, in `problems`.
+        static bool CheckDeviceSupport(ID3D12Device* device, std::string* problems = nullptr);
+        /// Render on the host's device and queue instead of making them. Call before Initialize,
+        /// which fails when they can't be used. The debug layer is the host's to turn on; its
+        /// messages go to the DebugConfig. A device the host made isn't checked for leaks at
+        /// Cleanup, as the host's own references remain.
+        void SetExternalDevice(const ExternalDevice& external);
 
         GraphicsAPI      GetAPI() const override { return GraphicsAPI::D3D12; }
         std::string_view GetDeviceName() const override;
@@ -101,6 +124,35 @@ namespace tachyon::d3d12
         ImageIndex RenderScene(ID key, ID window, uint2 size, color4f clear,
                                std::function<void(const ScenePayload& scene)> record) override;
 
+        // ---- A host's own textures, on its device (SetExternalDevice) -----------------------
+
+        /// A texture the host renders (a 3D viewport) in the image set, for the Image control
+        /// or a primitive to sample with `sampler`. The texture stays the host's and must
+        /// outlive every GUI frame that samples it. Call it while the UI is built (OnGUI).
+        ///
+        /// The GUI's frame reads it in D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE: the host leaves
+        /// it so in work submitted to the GUI's queue before the GUI's frame (which orders the
+        /// two), and moves it out only in work submitted after.
+        ImageIndex RegisterExternalImage(ID3D12Resource* texture, Sampler sampler);
+        /// Points an existing index at another texture, for example after a resize, under the
+        /// same rules. No GUI frame in flight may still sample the old one (WaitIdle).
+        void       UpdateExternalImage(ImageIndex index, ID3D12Resource* texture, Sampler sampler);
+
+        /// The host texture a render-to-image window (WindowFlags::RenderToImage) is copied
+        /// into each frame; null stops. Can be set before the window exists. A
+        /// DXGI_FORMAT_B8G8R8A8_UNORM texture the window's size: a texture of another size gets
+        /// the part they share, as it isn't scaled. The GUI's frame moves it from
+        /// D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE to COPY_DEST, copies, and leaves it in
+        /// ALL_SHADER_RESOURCE; the host reads it in work submitted after the GUI's frame and
+        /// leaves it in that state.
+        void SetWindowImageTarget(ID window, ID3D12Resource* texture);
+
+        /// The GUI's next frame waits on the queue for `fence` to reach `value`: for work the
+        /// host submits to another queue (async compute) that the GUI shows. Waits on the same
+        /// fence merge (the higher value). Call it while the UI is built (OnGUI) or before the
+        /// frame; the frame after that one doesn't wait on it again.
+        void AddFrameWait(ID3D12Fence* fence, uint64_t value);
+
         /// Waits until the GPU has done all work submitted so far.
         void WaitIdle();
 
@@ -109,6 +161,9 @@ namespace tachyon::d3d12
         Impl& Internal() { return *m_impl; }
 
     private:
+        /// The host's device and queue, checked (SetExternalDevice).
+        Result<void> AdoptExternalDevice();
+
         std::unique_ptr<Impl> m_impl;
     };
     /// @}

@@ -125,15 +125,8 @@ namespace tachyon::d3d12
         bool Suitable(IDXGIAdapter1* adapter, const DXGI_ADAPTER_DESC1& desc, GpuKind& kind)
         {
             ComPtr<ID3D12Device> device;
-            if (FAILED(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device))))
-                return false;
-            D3D12_FEATURE_DATA_SHADER_MODEL model{ D3D_SHADER_MODEL_6_6 };
-            if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &model, sizeof(model)))
-                || model.HighestShaderModel < D3D_SHADER_MODEL_6_6)
-                return false;
-            D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
-            if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options)))
-                || options.ResourceBindingTier < D3D12_RESOURCE_BINDING_TIER_3)
+            if (FAILED(D3D12CreateDevice(adapter, D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&device)))
+                || !D3D12GraphicsContext::CheckDeviceSupport(device.Get()))
                 return false;
             D3D12_FEATURE_DATA_ARCHITECTURE architecture{};
             device->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &architecture, sizeof(architecture));
@@ -142,6 +135,53 @@ namespace tachyon::d3d12
                                                                    : GpuKind::Discrete;
             return true;
         }
+    }
+
+    bool D3D12GraphicsContext::CheckDeviceSupport(ID3D12Device* device, std::string* problems)
+    {
+        std::string missing;
+        D3D12_FEATURE_DATA_SHADER_MODEL model{ D3D_SHADER_MODEL_6_6 };
+        if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &model, sizeof(model)))
+            || model.HighestShaderModel < D3D_SHADER_MODEL_6_6)
+            missing += "Shader Model 6.6 (descriptor heap indexing)\n";
+        D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
+        if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options)))
+            || options.ResourceBindingTier < D3D12_RESOURCE_BINDING_TIER_3)
+            missing += "resource binding tier 3\n";
+        if (problems != nullptr)
+            *problems = missing;
+        return missing.empty();
+    }
+
+    void D3D12GraphicsContext::SetExternalDevice(const ExternalDevice& external)
+    {
+        m_impl->external = external;
+    }
+
+    Result<void> D3D12GraphicsContext::AdoptExternalDevice()
+    {
+        Impl& d = *m_impl;
+        const ExternalDevice& external = d.external;
+        if (external.device == nullptr || external.queue == nullptr)
+            return Error{ ErrorCode::InvalidArgument, "Direct3D 12: the host's device needs both its device and its queue" };
+        if (external.queue->GetDesc().Type != D3D12_COMMAND_LIST_TYPE_DIRECT)
+            return Error{ ErrorCode::InvalidArgument, "Direct3D 12: the host's queue isn't a direct (graphics) queue" };
+        ComPtr<ID3D12Device> queueDevice;
+        if (FAILED(external.queue->GetDevice(IID_PPV_ARGS(&queueDevice))) || queueDevice.Get() != external.device)
+            return Error{ ErrorCode::InvalidArgument, "Direct3D 12: the host's queue isn't its device's" };
+        if (std::string problems; !CheckDeviceSupport(external.device, &problems))
+            return Error{ ErrorCode::Unsupported, "Direct3D 12: the host's device lacks:\n" + problems };
+
+        d.device = external.device;
+        d.queue  = external.queue;
+        // Its adapter, for the memory allocator and the GPU's name.
+        if (HRESULT hr = d.factory->EnumAdapterByLuid(d.device->GetAdapterLuid(), IID_PPV_ARGS(&d.adapter)); FAILED(hr))
+            return Error{ ErrorCode::Failed, std::format("Direct3D 12: the host's device's adapter wasn't found ({})", HResultText(hr)) };
+        DXGI_ADAPTER_DESC1 desc{};
+        d.adapter->GetDesc1(&desc);
+        d.deviceName = FromWide(desc.Description);
+        TACHYON_LOG_INFO(kLogD3D12, "Using the host's GPU: {}", d.deviceName);
+        return {};
     }
 
     D3D12GraphicsContext::D3D12GraphicsContext() : m_impl(std::make_unique<Impl>())
@@ -186,7 +226,10 @@ namespace tachyon::d3d12
 #else
         const bool wantDebug = true;
 #endif
-        if (wantDebug)
+        // A host's device is made already: enabling the debug layer now would remove it. Its
+        // messages come through if the host turned it on.
+        const bool external = d.external.device != nullptr || d.external.queue != nullptr;
+        if (wantDebug && !external)
         {
             ComPtr<ID3D12Debug> debug;
             if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))
@@ -203,47 +246,57 @@ namespace tachyon::d3d12
         BOOL tearing = FALSE;
         d.tearing = SUCCEEDED(d.factory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tearing, sizeof(tearing))) && tearing;
 
-        // The GPUs, the fastest first, and the first that runs the shaders unless the app or
-        // TACHYON_GPU asks for another.
-        std::vector<Candidate> candidates;
-        TACHYON_LOG_INFO(kLogD3D12, "Detected Direct3D 12 GPUs:");
-        for (UINT i = 0;; ++i)
+        if (external)
         {
-            ComPtr<IDXGIAdapter1> adapter;
-            if (d.factory->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter)) == DXGI_ERROR_NOT_FOUND)
-                break;
-            DXGI_ADAPTER_DESC1 desc{};
-            adapter->GetDesc1(&desc);
-            GpuKind kind = GpuKind::Other;
-            const std::string name = FromWide(desc.Description);
-            if (!Suitable(adapter.Get(), desc, kind))
-            {
-                TACHYON_LOG_INFO(kLogD3D12, "  -: {} (no Shader Model 6.6 with resource binding tier 3)", name);
-                continue;
-            }
-            TACHYON_LOG_INFO(kLogD3D12, "  {}: {} ({})", candidates.size(), name, GpuKindName(kind));
-            candidates.push_back({ adapter, { name, kind } });
+            if (Result<void> adopted = AdoptExternalDevice(); !adopted)
+                return fail(adopted.GetError().code, adopted.GetError().message);
         }
-        if (candidates.empty())
-            return fail(ErrorCode::Unsupported, "Direct3D 12: no GPU runs Shader Model 6.6 with resource binding tier 3 "
-                                                "(Windows 11's D3D12 runtime has it)");
-        std::vector<GpuInfo> infos;
-        for (const Candidate& c : candidates)
-            infos.push_back(c.info);
-        const size_t chosen = ChooseGpu(infos, GpuPreference(d.gpuPreference)).value_or(0);
-        d.adapter    = candidates[chosen].adapter;
-        d.deviceName = candidates[chosen].info.name;
-        TACHYON_LOG_INFO(kLogD3D12, "Using GPU {}: {} ({})", chosen, d.deviceName, GpuKindName(candidates[chosen].info.kind));
+        else
+        {
+            // The GPUs, the fastest first, and the first that runs the shaders unless the app or
+            // TACHYON_GPU asks for another.
+            std::vector<Candidate> candidates;
+            TACHYON_LOG_INFO(kLogD3D12, "Detected Direct3D 12 GPUs:");
+            for (UINT i = 0;; ++i)
+            {
+                ComPtr<IDXGIAdapter1> adapter;
+                if (d.factory->EnumAdapterByGpuPreference(i, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&adapter)) == DXGI_ERROR_NOT_FOUND)
+                    break;
+                DXGI_ADAPTER_DESC1 desc{};
+                adapter->GetDesc1(&desc);
+                GpuKind kind = GpuKind::Other;
+                const std::string name = FromWide(desc.Description);
+                if (!Suitable(adapter.Get(), desc, kind))
+                {
+                    TACHYON_LOG_INFO(kLogD3D12, "  -: {} (no Shader Model 6.6 with resource binding tier 3)", name);
+                    continue;
+                }
+                TACHYON_LOG_INFO(kLogD3D12, "  {}: {} ({})", candidates.size(), name, GpuKindName(kind));
+                candidates.push_back({ adapter, { name, kind } });
+            }
+            if (candidates.empty())
+                return fail(ErrorCode::Unsupported, "Direct3D 12: no GPU runs Shader Model 6.6 with resource binding tier 3 "
+                                                    "(Windows 11's D3D12 runtime has it)");
+            std::vector<GpuInfo> infos;
+            for (const Candidate& c : candidates)
+                infos.push_back(c.info);
+            const size_t chosen = ChooseGpu(infos, GpuPreference(d.gpuPreference)).value_or(0);
+            d.adapter    = candidates[chosen].adapter;
+            d.deviceName = candidates[chosen].info.name;
+            TACHYON_LOG_INFO(kLogD3D12, "Using GPU {}: {} ({})", chosen, d.deviceName, GpuKindName(candidates[chosen].info.kind));
 
-        if (HRESULT hr = D3D12CreateDevice(d.adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&d.device)); FAILED(hr))
-            return fail(ErrorCode::Failed, std::format("Direct3D 12: D3D12CreateDevice failed ({})", HResultText(hr)));
-        if (d.debugLayer && SUCCEEDED(d.device.As(&d.infoQueue)))
-            d.infoQueue->RegisterMessageCallback(&OnDebugMessage, D3D12_MESSAGE_CALLBACK_FLAG_NONE, &d, &d.messageCallback);
+            if (HRESULT hr = D3D12CreateDevice(d.adapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(&d.device)); FAILED(hr))
+                return fail(ErrorCode::Failed, std::format("Direct3D 12: D3D12CreateDevice failed ({})", HResultText(hr)));
 
-        const D3D12_COMMAND_QUEUE_DESC queueDesc{ D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
-                                                  D3D12_COMMAND_QUEUE_FLAG_NONE, 0 };
-        if (HRESULT hr = d.device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&d.queue)); FAILED(hr))
-            return fail(ErrorCode::Failed, std::format("Direct3D 12: CreateCommandQueue failed ({})", HResultText(hr)));
+            const D3D12_COMMAND_QUEUE_DESC queueDesc{ D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_PRIORITY_NORMAL,
+                                                      D3D12_COMMAND_QUEUE_FLAG_NONE, 0 };
+            if (HRESULT hr = d.device->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&d.queue)); FAILED(hr))
+                return fail(ErrorCode::Failed, std::format("Direct3D 12: CreateCommandQueue failed ({})", HResultText(hr)));
+        }
+        if (d.debugLayer || external)
+            if (SUCCEEDED(d.device.As(&d.infoQueue)))
+                d.infoQueue->RegisterMessageCallback(&OnDebugMessage, D3D12_MESSAGE_CALLBACK_FLAG_NONE, &d, &d.messageCallback);
+
         if (HRESULT hr = d.device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&d.submitFence)); FAILED(hr))
             return fail(ErrorCode::Failed, std::format("Direct3D 12: CreateFence failed ({})", HResultText(hr)));
         d.submitted = 0;
@@ -269,6 +322,9 @@ namespace tachyon::d3d12
         // are among the live images.
         d.sceneRequests.clear();
         d.scenes.clear();
+        d.externalImages.clear();
+        d.imageTargets.clear();
+        d.frameWaits.clear();
         {
             std::lock_guard lock(d.uploadMutex);
             d.imageUploads.clear();
@@ -302,9 +358,10 @@ namespace tachyon::d3d12
         d.submitFence.Reset();
         d.submitted = 0;
         d.queue.Reset();
-        // Everything made from the device holds it: a reference left is an object leaked.
+        // Everything made from the device holds it: a reference left to one the GUI made is an
+        // object leaked. A host's keeps the host's own.
         if (d.device)
-            if (const ULONG left = d.device.Detach()->Release(); left != 0)
+            if (const ULONG left = d.device.Detach()->Release(); left != 0 && d.external.device == nullptr)
             {
                 const std::string message = std::format("Direct3D 12: the device is still referenced {} time(s): objects made from it leaked", left);
                 if (d.debug.callback != nullptr)
@@ -486,6 +543,60 @@ namespace tachyon::d3d12
     {
         MarkContentChanged();
         GetImageSet()->Remove(index);
+        // A host's texture: its slot's view is gone, and the frames in flight have their copy.
+        m_impl->externalImages.erase(uint32_t(index));
+    }
+
+    ImageIndex D3D12GraphicsContext::RegisterExternalImage(ID3D12Resource* texture, Sampler sampler)
+    {
+        Impl& d = *m_impl;
+        if (!d.device || texture == nullptr)
+            return ImageIndex::Invalid;
+        const ImageIndex index = d.imageSet.ReserveIndex();
+        if (index != ImageIndex::Invalid)
+        {
+            MarkContentChanged();
+            UpdateExternalImage(index, texture, sampler);
+        }
+        return index;
+    }
+
+    void D3D12GraphicsContext::UpdateExternalImage(ImageIndex index, ID3D12Resource* texture, Sampler sampler)
+    {
+        Impl& d = *m_impl;
+        if (!d.device || index == ImageIndex::Invalid || texture == nullptr)
+            return;
+        const D3D12_RESOURCE_DESC desc = texture->GetDesc();
+        std::unique_ptr<D3D12Image>& image = d.externalImages[uint32_t(index)];
+        if (!image)
+            image = std::make_unique<D3D12Image>();
+        image->external = texture;
+        image->format   = desc.Format;
+        image->sampler  = sampler;
+        image->size     = { uint32_t(desc.Width), desc.Height };
+        d.imageSet.SetImage(index, image.get());
+        MarkContentChanged();
+    }
+
+    void D3D12GraphicsContext::SetWindowImageTarget(ID window, ID3D12Resource* texture)
+    {
+        if (texture == nullptr)
+            m_impl->imageTargets.erase(window);
+        else
+            m_impl->imageTargets[window] = texture;
+    }
+
+    void D3D12GraphicsContext::AddFrameWait(ID3D12Fence* fence, uint64_t value)
+    {
+        if (fence == nullptr)
+            return;
+        for (auto& [waited, at] : m_impl->frameWaits)
+            if (waited.Get() == fence)
+            {
+                at = std::max<UINT64>(at, value);
+                return;
+            }
+        m_impl->frameWaits.emplace_back(fence, value);
     }
 
     void D3D12GraphicsContext::PrepareFrame(StyleManager& styleManager, GradientManager& gradientManager, float elapsedTimeSecs)

@@ -1,7 +1,7 @@
 # Integration
 
 These pages are for programs that already have some of their own setup: their own build,
-Vulkan device, windows or main loop. In them, the host is your program and the GUI is
+Vulkan or Direct3D 12 device, windows or main loop. In them, the host is your program and the GUI is
 TachyonUI running inside it.
 
 - Read only the pages that apply to you.
@@ -22,6 +22,7 @@ TachyonUI running inside it.
 | --- | --- |
 | [Adding the library to a build](integration/build.md) | Subproject or installed package; CMake options; resources. |
 | [Using your own Vulkan device](integration/vulkan-device.md) | Device requirements, handing it over, showing your own image. |
+| [Using your own Direct3D 12 device](integration/d3d12-device.md) | The same, on Direct3D 12. |
 | [Your own window and input](integration/window-and-input.md) | Writing a window backend; images on the clipboard; running SDL's event loop yourself. |
 | [Your own loop](integration/frame-loop.md) | Per-frame calls; errors and device loss. |
 | [Rendering the UI into a host image](integration/render-to-image.md) | Windows without an OS window: copy to your image, read pixels, inject input. |
@@ -31,6 +32,7 @@ TachyonUI running inside it.
 \htmlonly <div class="page-tree"> \endhtmlonly
 \subpage md_docs_2integration_2build
 \subpage md_docs_2integration_2vulkan-device
+\subpage md_docs_2integration_2d3d12-device
 \subpage md_docs_2integration_2window-and-input
 \subpage md_docs_2integration_2frame-loop
 \subpage md_docs_2integration_2render-to-image

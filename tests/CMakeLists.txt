@@ -301,5 +301,6 @@ if(TACHYON_SDL AND TACHYON_D3D12)
     gpu/d3d12_test_harness.h
     gpu/d3d12_device_test.cpp
     gpu/d3d12_draw_test.cpp
-    gpu/d3d12_scene_test.cpp)
+    gpu/d3d12_scene_test.cpp
+    gpu/d3d12_external_device_test.cpp)
 endif()
