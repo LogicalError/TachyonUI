@@ -278,6 +278,15 @@ if(TACHYON_SDL AND (TACHYON_VULKAN OR TACHYON_D3D12))
                            TEST_PREFIX "D3D12." EXTRA_ARGS "--graphics=d3d12")
     endif()
   endif()
+  # And on SDL GPU (gui_gpu_tests --graphics=sdlgpu), as SDLGPU.<test>, on the driver SDL picks
+  # (SDL_GPU_DRIVER names another). Off by default, as above.
+  if(TACHYON_SDLGPU)
+    option(TACHYON_GPU_TESTS_ON_SDLGPU "Run gui_gpu_tests a second time, on SDL GPU" OFF)
+    if(TACHYON_GPU_TESTS_ON_SDLGPU)
+      gtest_discover_tests(gui_gpu_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 60
+                           TEST_PREFIX "SDLGPU." EXTRA_ARGS "--graphics=sdlgpu")
+    endif()
+  endif()
 endif()
 
 if(TACHYON_SDL AND TACHYON_VULKAN)
@@ -312,5 +321,6 @@ if(TACHYON_SDL AND TACHYON_SDLGPU)
   tachyon_add_gpu_tests(gui_sdlgpu_tests
     gpu/sdlgpu_test_harness.h
     gpu/sdlgpu_device_test.cpp
-    gpu/sdlgpu_draw_test.cpp)
+    gpu/sdlgpu_draw_test.cpp
+    gpu/sdlgpu_scene_test.cpp)
 endif()

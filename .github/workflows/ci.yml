@@ -163,6 +163,13 @@ jobs:
           New-Item -Path HKLM:\SOFTWARE\Khronos\Vulkan\Drivers -Force | Out-Null
           New-ItemProperty -Path HKLM:\SOFTWARE\Khronos\Vulkan\Drivers -Name $icd -Value 0 -PropertyType DWord -Force | Out-Null
 
+      # The whole-app GPU tests on SDL GPU, through SDL's Vulkan driver on lavapipe.
+      - name: Whole-app GPU tests on SDL GPU (Debug, lavapipe)
+        timeout-minutes: 15
+        env:
+          SDL_GPU_DRIVER: vulkan
+        run: bin/Debug/gui_gpu_tests.exe --graphics=sdlgpu
+
       - name: Package consumer renders a frame
         timeout-minutes: 10
         env:
@@ -282,7 +289,7 @@ jobs:
           if [ "${{ matrix.vulkan }}" = "OFF" ]; then
             cmake -S . -B build -G "Ninja Multi-Config" -DTACHYON_VULKAN=OFF
           else
-            cmake -S . -B build -G "Ninja Multi-Config" "-DSLANGC=$(find "${{ runner.temp }}/slang" -name slangc -type f | head -n 1)"
+            cmake -S . -B build -G "Ninja Multi-Config" "-DSLANGC=$(find "${{ runner.temp }}/slang" -name slangc -type f | head -n 1)" -DTACHYON_SDLGPU=ON
           fi
       - if: steps.third-party-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6.1.0
@@ -315,6 +322,17 @@ jobs:
         run: |
           xvfb-run -a bin/Debug/gui_gpu_tests
           xvfb-run -a bin/Debug/gui_vulkan_tests
+      # SDL GPU on lavapipe, through SDL's Vulkan driver: the backend with the validation layers'
+      # messages failing its tests, and the whole-app GPU tests again on it.
+      - name: SDL GPU tests (Debug, lavapipe)
+        if: matrix.vulkan != 'OFF'
+        env:
+          LD_LIBRARY_PATH: ${{ runner.temp }}/vulkansdk/1.4.309.0/x86_64/lib
+          VK_LAYER_PATH: ${{ runner.temp }}/vulkansdk/1.4.309.0/x86_64/share/vulkan/explicit_layer.d
+          SDL_GPU_DRIVER: vulkan
+        run: |
+          xvfb-run -a bin/Debug/gui_sdlgpu_tests
+          xvfb-run -a bin/Debug/gui_gpu_tests --graphics=sdlgpu
 
       - name: Install the package
         if: matrix.vulkan != 'OFF'

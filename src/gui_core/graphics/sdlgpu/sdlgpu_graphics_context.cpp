@@ -8,6 +8,7 @@
 #include <gui_core/graphics/sdlgpu/sdlgpu_window_context.h>
 #include <gui_core/style/gui_gradient_manager.h>
 #include <gui_core/style/gui_style_manager.h>
+#include <gui_core/windows/gui_window_flags.h>
 
 #include <vulkan/vulkan_core.h>
 
@@ -22,6 +23,18 @@ namespace tachyon::sdlgpu
 {
     namespace
     {
+        // Lets go of a scene's textures and image slot.
+        void ReleaseScene(SDLGPUGraphicsContext& graphics, SDLGPUGraphicsContext::Impl::Scene& scene)
+        {
+            if (scene.index != ImageIndex::Invalid)
+                graphics.UnregisterImage(scene.index);
+            if (scene.color != nullptr)
+                graphics.DestroyImageAtEnd(scene.color, DeviceScope::Frame);
+            if (scene.depth != nullptr)
+                graphics.DestroyImageAtEnd(scene.depth, DeviceScope::Frame);
+            scene = {};
+        }
+
         // SDL GPU's own messages go to the debug callback; the rest of SDL's log as before.
         void SDLCALL OnSDLLog(void* userData, int category, SDL_LogPriority priority, const char* message)
         {
@@ -237,6 +250,9 @@ namespace tachyon::sdlgpu
     void SDLGPUGraphicsContext::Cleanup()
     {
         Impl& d = *m_impl;
+        // Scenes' textures are among the live images.
+        d.sceneRequests.clear();
+        d.scenes.clear();
         if (d.device != nullptr)
         {
             SDL_WaitForGPUIdle(d.device);
@@ -447,10 +463,60 @@ namespace tachyon::sdlgpu
             PrepareFrame(*d.lastStyles, *d.lastGradients, d.elapsedTime);
     }
 
+    void SDLGPUGraphicsContext::BeginFrame()
+    {
+        NullGraphicsContext::BeginFrame();
+        Impl& d = *m_impl;
+        // Last frame's scenes are recorded; the ones no longer asked for go.
+        d.sceneRequests.clear();
+        ++d.sceneFrame;
+        for (auto it = d.scenes.begin(); it != d.scenes.end();)
+        {
+            if (d.sceneFrame - it->second.lastFrame > Impl::kSceneKeepFrames)
+            {
+                ReleaseScene(*this, it->second);
+                it = d.scenes.erase(it);
+            }
+            else
+                ++it;
+        }
+    }
+
+    ImageIndex SDLGPUGraphicsContext::RenderScene(ID key, ID window, uint2 size, color4f clear,
+                                                  std::function<void(const ScenePayload& scene)> record)
+    {
+        Impl& d = *m_impl;
+        if (d.device == nullptr || size.x == 0 || size.y == 0)
+            return ImageIndex::Invalid;
+        MarkContentChanged();   // its pixels are drawn again, its image slot the same
+        Impl::Scene& scene = d.scenes[key];
+        scene.lastFrame = d.sceneFrame;
+        if (scene.color == nullptr || scene.extent != size)
+        {
+            // Made again at the new size; SDL frees the old textures once the frames using them are done.
+            ReleaseScene(*this, scene);
+            scene.lastFrame = d.sceneFrame;
+            scene.color = d.CreateTargetImage(size, Impl::kSceneColorFormat, SDL_GPU_TEXTUREUSAGE_COLOR_TARGET | SDL_GPU_TEXTUREUSAGE_SAMPLER,
+                                              Sampler::LinearClampToEdge);
+            scene.depth = d.CreateTargetImage(size, kDepthFormat, SDL_GPU_TEXTUREUSAGE_DEPTH_STENCIL_TARGET, Sampler::NearestRepeat);
+            if (scene.color == nullptr || scene.depth == nullptr)
+            {
+                ReleaseScene(*this, scene);
+                return ImageIndex::Invalid;
+            }
+            scene.extent = size;
+            scene.index  = RegisterImage(scene.color);
+        }
+        d.sceneRequests.push_back({ key, window, clear, std::move(record) });
+        return scene.index;
+    }
+
     IWindowContext* SDLGPUGraphicsContext::CreateWindowContext(void* nativeWindowHandle, OSWindowHandle osHandle, ID id, int2 size,
                                                                WindowFlags windowFlags, OnGuiFunc onGui)
     {
         Impl& d = *m_impl;
+        if (d.device != nullptr && (windowFlags & WindowFlags::RenderToImage) != WindowFlags::None)
+            return SDLGPUWindowContext::Create(*this, nullptr, nullptr, osHandle, id, size, windowFlags, std::move(onGui));
         SDL_Window* window = d.device != nullptr && nativeWindowHandle != nullptr && d.resolveWindow != nullptr
                            ? d.resolveWindow(osHandle) : nullptr;
         if (window == nullptr)

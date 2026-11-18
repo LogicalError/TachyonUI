@@ -2,11 +2,11 @@
 # (showcase.css, icons, the Noto fallback fonts) load from workdirectory/ through
 # SetResourceRoot(TACHYON_RESOURCE_DIR), so it runs from any folder.
 
-# The 3D scene's renderer and shaders, with the Vulkan or Direct3D 12 backend: the shaders
-# compiled to SPIR-V and DXIL as the backends built in need, and built into the showcase, as
-# gui_core's are. Without either the Viewport panel has no scene drawn.
+# The 3D scene's renderer and shaders, with the Vulkan, Direct3D 12 or SDL GPU backend: the
+# shaders compiled to SPIR-V and DXIL as the backends built in need, and built into the
+# showcase, as gui_core's are. Without any the Viewport panel has no scene drawn.
 set(_showcase_scene_files "")
-if(TACHYON_VULKAN OR TACHYON_D3D12)
+if(TACHYON_VULKAN OR TACHYON_D3D12 OR TACHYON_SDLGPU)
   set(_showcase_slang "${CMAKE_CURRENT_SOURCE_DIR}/shaders/scene.slang")
   set(_showcase_shaders "")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/shaders")
@@ -15,6 +15,12 @@ if(TACHYON_VULKAN OR TACHYON_D3D12)
   endif()
   if(TACHYON_D3D12)
     tachyon_compile_slang("${_showcase_slang}" "${CMAKE_CURRENT_BINARY_DIR}/shaders" _showcase_shaders dxil)
+  endif()
+  if(TACHYON_SDLGPU)
+    tachyon_compile_slang("${_showcase_slang}" "${CMAKE_CURRENT_BINARY_DIR}/shaders" _showcase_shaders sdl-spirv)
+    if(WIN32)
+      tachyon_compile_slang("${_showcase_slang}" "${CMAKE_CURRENT_BINARY_DIR}/shaders" _showcase_shaders sdl-dxil)
+    endif()
   endif()
   set(_showcase_shader_entries "")
   foreach(_shader IN LISTS _showcase_shaders)

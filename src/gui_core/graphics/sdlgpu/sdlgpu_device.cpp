@@ -253,4 +253,76 @@ namespace tachyon::sdlgpu
         m_images[slot] = nullptr;
         m_free.push_back(slot);
     }
+
+    // ---- Scenes ---------------------------------------------------------------------------
+
+    SDLGPUImage* SDLGPUGraphicsContext::Impl::CreateTargetImage(uint2 size, SDL_GPUTextureFormat format, SDL_GPUTextureUsageFlags usage,
+                                                                Sampler sampler)
+    {
+        SDL_GPUTextureCreateInfo info{};
+        info.type                 = SDL_GPU_TEXTURETYPE_2D;
+        info.format               = format;
+        info.usage                = usage;
+        info.width                = size.x;
+        info.height               = size.y;
+        info.layer_count_or_depth = 1;
+        info.num_levels           = 1;
+        SDL_GPUTexture* texture = SDL_CreateGPUTexture(device, &info);
+        if (texture == nullptr)
+        {
+            TACHYON_LOG_ERROR(kLogSDLGPU, "a target of {}x{} failed ({})", size.x, size.y, SDL_GetError());
+            return nullptr;
+        }
+        auto* image    = new SDLGPUImage();
+        image->texture = texture;
+        image->sampler = sampler;
+        image->size    = size;
+        std::lock_guard lock(copyMutex);
+        liveImages.insert(image);
+        return image;
+    }
+
+    void SDLGPUGraphicsContext::Impl::RecordScenes(SDL_GPUCommandBuffer* cmd, ID window)
+    {
+        for (const SceneRequest& request : sceneRequests)
+        {
+            if (request.window != window)
+                continue;
+            const auto it = scenes.find(request.key);
+            if (it == scenes.end() || it->second.color == nullptr)
+                continue;
+            const Scene& scene = it->second;
+
+            // Cleared in a pass of its own, so the app's passes (and copies) come after it.
+            SDL_GPUColorTargetInfo color{};
+            color.texture     = scene.color->texture;
+            color.clear_color = SDL_FColor{ request.clear.r, request.clear.g, request.clear.b, request.clear.a };
+            color.load_op     = SDL_GPU_LOADOP_CLEAR;
+            color.store_op    = SDL_GPU_STOREOP_STORE;
+            SDL_GPUDepthStencilTargetInfo depth{};
+            depth.texture          = scene.depth->texture;
+            depth.clear_depth      = 1.0f;
+            depth.load_op          = SDL_GPU_LOADOP_CLEAR;
+            depth.store_op         = SDL_GPU_STOREOP_STORE;
+            depth.stencil_load_op  = SDL_GPU_LOADOP_DONT_CARE;
+            depth.stencil_store_op = SDL_GPU_STOREOP_DONT_CARE;
+            SDL_EndGPURenderPass(SDL_BeginGPURenderPass(cmd, &color, 1, &depth));
+            if (!request.record)
+                continue;
+
+            SDLGPUSceneRender state;
+            state.device        = device;
+            state.commandBuffer = cmd;
+            state.colorTexture  = scene.color->texture;
+            state.depthTexture  = scene.depth->texture;
+            state.colorFormat   = kSceneColorFormat;
+            state.depthFormat   = kDepthFormat;
+            state.extent        = scene.extent;
+            state.colorTarget   = color;
+            state.colorTarget.load_op = SDL_GPU_LOADOP_LOAD;
+            state.depthTarget   = depth;
+            state.depthTarget.load_op = SDL_GPU_LOADOP_LOAD;
+            request.record(ScenePayload(state));
+        }
+    }
 }

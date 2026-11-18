@@ -44,8 +44,9 @@ Options (set before `add_subdirectory`):
 | `TACHYON_SDL` | on | Builds the SDL window backend and clipboard. Off builds without SDL. |
 | `TACHYON_VULKAN` | on | Builds the Vulkan graphics backend. Off builds without Vulkan (no Vulkan SDK needed): the app runs on the null backend and draws nothing. |
 | `TACHYON_D3D12` | off | Windows only. Builds the Direct3D 12 backend: an app picks it with `InitializeOptions::graphicsAPI`. Brings D3D12 Memory Allocator. |
-| `TACHYON_SDLGPU` | off | Needs `TACHYON_SDL`. Builds the SDL GPU backend (SDL3's GPU API, over Vulkan or Direct3D 12), which is on its way: it draws the UI into its OS windows; render-to-image windows, scenes and Metal come later. |
+| `TACHYON_SDLGPU` | off | Needs `TACHYON_SDL`. Builds the SDL GPU backend (SDL3's GPU API, over Vulkan or Direct3D 12): the UI in OS and render-to-image windows, and the app's scenes. Metal comes later. |
 | `TACHYON_GPU_TESTS_ON_D3D12` | off | With `TACHYON_D3D12`: runs the whole-app GPU tests (`gui_gpu_tests`) a second time, on Direct3D 12, as `D3D12.<test>`. |
+| `TACHYON_GPU_TESTS_ON_SDLGPU` | off | With `TACHYON_SDLGPU`: runs the whole-app GPU tests a second time, on SDL GPU, as `SDLGPU.<test>`. SDL picks the driver; set `SDL_GPU_DRIVER` to pick another. |
 | `TACHYON_SYSTEM_SDL` | off | Uses the host's SDL3. |
 | `TACHYON_SYSTEM_HARFBUZZ` | off | Uses the host's HarfBuzz. |
 | `TACHYON_SYSTEM_VMA` | off | Uses the host's VulkanMemoryAllocator. |
