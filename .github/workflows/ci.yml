@@ -125,11 +125,16 @@ jobs:
       - name: Build Release
         run: cmake --build build --config Release --parallel
 
-      # GPU tests need a real device and stay manual.
+      # The Vulkan GPU tests need a real device and stay manual.
       - name: Core tests (Debug)
         run: bin/Debug/gui_core_tests.exe
       - name: Core tests (Release)
         run: bin/Release/gui_core_tests.exe
+      # Direct3D 12 runs on WARP, Windows' software renderer, which needs no GPU.
+      - name: Direct3D 12 tests (Debug, WARP)
+        env:
+          TACHYON_GPU: cpu
+        run: bin/Debug/gui_d3d12_tests.exe
 
       - name: Install the package
         run: |

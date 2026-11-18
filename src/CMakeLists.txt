@@ -238,6 +238,17 @@ if(TACHYON_VULKAN)
     gui_core/graphics/vulkan/vk_window_context.h)
 endif()
 
+# The Direct3D 12 backend (TACHYON_D3D12, Windows).
+if(TACHYON_D3D12)
+  list(APPEND GUI_FILES
+    gui_core/graphics/d3d12/d3d12_common.h
+    gui_core/graphics/d3d12/d3d12_device.h
+    gui_core/graphics/d3d12/d3d12_graphics_context.cpp
+    gui_core/graphics/d3d12/d3d12_graphics_context.h
+    gui_core/graphics/d3d12/d3d12_window_context.cpp
+    gui_core/graphics/d3d12/d3d12_window_context.h)
+endif()
+
 # Create GUI static library
 # The SDL window backend and clipboard (TACHYON_SDL).
 if(TACHYON_SDL)
@@ -319,6 +330,9 @@ if(TACHYON_VULKAN)
   target_link_libraries(gui_core
     PUBLIC  vma Vulkan::Headers
     PRIVATE Vulkan::Vulkan vkbootstrap)
+endif()
+if(TACHYON_D3D12)
+  target_link_libraries(gui_core PRIVATE d3d12 dxgi)
 endif()
 # The graphics backends built in, 0 or 1 each, for code that uses one only when it's there.
 target_compile_definitions(gui_core PUBLIC

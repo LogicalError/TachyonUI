@@ -18,6 +18,7 @@
 #include <cmath>
 #include <thread>
 #include <filesystem>
+#include <format>
 #include <chrono>
 #include <fstream>
 #include <iterator>
@@ -150,6 +151,24 @@ namespace tachyon
             ReportMisuse("GUIApplication: Initialize called on an initialized app (ignored)");
             return {};
         }
+        // The graphics backend asked for, before anything is made: an API that isn't built in
+        // fails here.
+        if (!m_graphicsBackend)
+        {
+            if (options.graphicsAPI)
+            {
+                m_graphicsBackend = CreateGraphicsContext(*options.graphicsAPI);
+                if (!m_graphicsBackend)
+                {
+                    const std::string message = std::format("{} isn't built in: build with {} on",
+                        GraphicsAPIName(*options.graphicsAPI), GraphicsAPIBuildOption(*options.graphicsAPI));
+                    TACHYON_LOG_ERROR(kLogApp, "{}", message);
+                    return Error{ ErrorCode::Unsupported, message };
+                }
+            }
+            else
+                m_graphicsBackend = CreateDefaultGraphicsContext();
+        }
         if (!m_osWindowBackend)
         {
 #if TACHYON_SDL
@@ -173,17 +192,39 @@ namespace tachyon
         textSystem       = new tachyon::SkribidiTextSystem(m_allocationHooks);
         inputManager     = std::make_unique<tachyon::InputManager>();
         inputBroadcaster = tachyon::InputHandlerBroadcaster({ inputManager.get(), textSystem });
-        if (!m_graphicsBackend)
-            m_graphicsBackend = CreateDefaultGraphicsContext();
-        graphicsContext  = m_graphicsBackend.get();
-        graphicsContext->SetAllocationHooks(m_allocationHooks);
-        if (options.imageSlots > 0)
-            graphicsContext->SetImageSlotCount(options.imageSlots);
-        if (!options.gpu.empty())
-            graphicsContext->SetGpuPreference(options.gpu);
         m_imageWindows   = new tachyon::ImageWindowBackend(*m_osWindowBackend);
         windowBackend    = m_imageWindows;
-        windowBackend->SetGraphicsContext(graphicsContext);
+        // The backend's settings, and the windows made for it.
+        const auto useBackend = [this, &options]
+        {
+            graphicsContext = m_graphicsBackend.get();
+            graphicsContext->SetAllocationHooks(m_allocationHooks);
+            if (options.imageSlots > 0)
+                graphicsContext->SetImageSlotCount(options.imageSlots);
+            if (!options.gpu.empty())
+                graphicsContext->SetGpuPreference(options.gpu);
+            windowBackend->SetGraphicsContext(graphicsContext);
+        };
+        useBackend();
+        if (Result<void> graphics = graphicsContext->Initialize(windowBackend); !graphics)
+        {
+            // An API asked for whose device can't start gives way to the default one.
+            std::unique_ptr<GraphicsContext> fallback = options.graphicsAPI ? CreateDefaultGraphicsContext() : nullptr;
+            if (!fallback || fallback->GetAPI() == graphicsContext->GetAPI())
+            {
+                TACHYON_LOG_ERROR(kLogApp, "failed to initialize the graphics context: {}", graphics.GetError().message);
+                return graphics;
+            }
+            TACHYON_LOG_WARNING(kLogApp, "{} didn't start ({}); rendering with {}", GraphicsAPIName(graphicsContext->GetAPI()),
+                                graphics.GetError().message, GraphicsAPIName(fallback->GetAPI()));
+            m_graphicsBackend = std::move(fallback);
+            useBackend();
+            if (Result<void> again = graphicsContext->Initialize(windowBackend); !again)
+            {
+                TACHYON_LOG_ERROR(kLogApp, "failed to initialize the graphics context: {}", again.GetError().message);
+                return again;
+            }
+        }
         guiRenderer      = graphicsContext->guiRenderer;
         layoutEngine     = std::make_unique<tachyon::LayoutEngine>(*textSystem, guiStateManager.GetScrollManagement());
         windowManager    = std::make_unique<tachyon::OSWindowManager>(graphicsContext, windowBackend, &inputBroadcaster, styleManager, gradientManager);
@@ -191,12 +232,6 @@ namespace tachyon
         textSystem->SetFontDirectory(ResourcePath("fonts"));
         if (!options.fallbackFonts.empty())
             textSystem->SetFallbackFontDirectory(ResourcePath(options.fallbackFonts));
-
-        if (Result<void> graphics = graphicsContext->Initialize(windowBackend); !graphics)
-        {
-            TACHYON_LOG_ERROR(kLogApp, "failed to initialize the graphics context: {}", graphics.GetError().message);
-            return graphics;
-        }
 
         textAtlasManager.reset(graphicsContext->CreateTextAtlasManager());
         if (!textAtlasManager || !textAtlasManager->Initialize(graphicsContext, graphicsContext->GetImageSet()))
