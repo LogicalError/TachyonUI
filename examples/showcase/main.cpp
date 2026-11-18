@@ -2,8 +2,13 @@
 
 #include <gui_core/diagnostics/gui_logging.h>
 
+#if TACHYON_SDL
+#include <gui_core/windows/sdl/gui_window_backend_sdl.h>
+#endif
+
 #include <cstdlib>
 #include <fstream>
+#include <memory>
 #include <string_view>
 
 static constexpr tachyon::Diagnostics::LogCategory kLogShowcase = tachyon::Diagnostics::MakeLogCategory("showcase");
@@ -43,6 +48,16 @@ int main(int argc, char* argv[])
         else if (std::string_view(argv[i]) == "--capture")
             application->SetCaptureDir(argv[i + 1]);
     }
+#if TACHYON_SDL
+    // A capture drives itself with injected input: a click elsewhere on the desktop while it
+    // runs mustn't reach the menus and dialogs it opened.
+    if (application->IsCapturing())
+    {
+        tachyon::SDLWindowBackend::Options options;
+        options.physicalButtons = false;
+        application->SetWindowBackend(std::make_unique<tachyon::SDLWindowBackend>(options));
+    }
+#endif
 
     int returnCode = EXIT_FAILURE;
     try

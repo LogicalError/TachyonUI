@@ -21,8 +21,9 @@ struct VSOutput
 };
 
 [shader("vertex")]
-VSOutput vertexMain(int vertexIndex : SV_VulkanVertexID)
+VSOutput vertexMain(VertexInput vertex)
 {
+    const int vertexIndex = VertexIndex(vertex);
     Line line = LoadPrimitive<Line>(kLineSlot, vertexIndex / 4);
     float2 uv = QuadCorner(vertexIndex % 4); // the corner, from the index buffer
 

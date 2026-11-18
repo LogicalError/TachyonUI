@@ -19,8 +19,9 @@ struct VSOutput
 };
 
 [shader("vertex")]
-VSOutput vertexMain(int vertexIndex : SV_VulkanVertexID)
+VSOutput vertexMain(VertexInput vertex)
 {
+    const int vertexIndex = VertexIndex(vertex);
     Dot dot = LoadPrimitive<Dot>(kDotSlot, vertexIndex / 3);
 
     // Apply the renderer's content transform to position and size, like the line shader.

@@ -18,8 +18,9 @@ struct VSOutput
 Quad LoadQuad(int index) { return LoadPrimitive<Quad>(kTriangleSlot, index); }
 
 [shader("vertex")]
-VSOutput vertexMain(int vertexIndex : SV_VulkanVertexID)
+VSOutput vertexMain(VertexInput vertex)
 {
+    const int vertexIndex = VertexIndex(vertex);
     int  quadIndex = vertexIndex / 4;
     Quad quad      = LoadQuad(quadIndex);
     float2 uv      = QuadCorner(vertexIndex % 4); // the corner, from the index buffer

@@ -51,28 +51,35 @@ else()
   set(_tachyon_tp_standalone FALSE)
 endif()
 
-find_package(Vulkan REQUIRED)
 include(GNUInstallDirs)
 
-# ---- vkbootstrap (static lib) ----
-add_library(vkbootstrap STATIC
-  vkbootstrap/src/VkBootstrap.h
-  vkbootstrap/src/VkBootstrap.cpp
-)
-target_include_directories(vkbootstrap PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/vkbootstrap/src>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/vkbootstrap>
-)
-target_link_libraries(vkbootstrap PUBLIC Vulkan::Vulkan $<$<BOOL:UNIX>:${CMAKE_DL_LIBS}>)
-set_property(TARGET vkbootstrap PROPERTY CXX_STANDARD 20)
+# vkbootstrap and vma are the Vulkan backend's; without it they aren't built.
+if(NOT DEFINED TACHYON_VULKAN)
+  set(TACHYON_VULKAN ON)
+endif()
+if(TACHYON_VULKAN)
+  find_package(Vulkan REQUIRED)
 
-# ---- vma (header-only) ----
-if(NOT TACHYON_SYSTEM_VMA)
-  add_library(vma INTERFACE)
-  target_include_directories(vma INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/vma/include>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/vma>
+  # ---- vkbootstrap (static lib) ----
+  add_library(vkbootstrap STATIC
+    vkbootstrap/src/VkBootstrap.h
+    vkbootstrap/src/VkBootstrap.cpp
   )
+  target_include_directories(vkbootstrap PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/vkbootstrap/src>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/vkbootstrap>
+  )
+  target_link_libraries(vkbootstrap PUBLIC Vulkan::Vulkan $<$<BOOL:UNIX>:${CMAKE_DL_LIBS}>)
+  set_property(TARGET vkbootstrap PROPERTY CXX_STANDARD 20)
+
+  # ---- vma (header-only) ----
+  if(NOT TACHYON_SYSTEM_VMA)
+    add_library(vma INTERFACE)
+    target_include_directories(vma INTERFACE
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/vma/include>
+      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/vma>
+    )
+  endif()
 endif()
 
 # ---- nanosvg (header-only) ----
@@ -195,28 +202,30 @@ endforeach()
 
 # ---- Install rules (standalone mode only) ----
 if(_tachyon_tp_standalone)
-  # vma — header-only
-  if(NOT TACHYON_SYSTEM_VMA)
-    install(TARGETS vma EXPORT vmaTargets)
-    install(FILES vma/include/vk_mem_alloc.h
-      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vma)
-    install(EXPORT vmaTargets
-      FILE vmaConfig.cmake
-      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vma)
-  endif()
+  if(TACHYON_VULKAN)
+    # vma — header-only
+    if(NOT TACHYON_SYSTEM_VMA)
+      install(TARGETS vma EXPORT vmaTargets)
+      install(FILES vma/include/vk_mem_alloc.h
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vma)
+      install(EXPORT vmaTargets
+        FILE vmaConfig.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vma)
+    endif()
 
-  # vkbootstrap — static
-  install(TARGETS vkbootstrap EXPORT vkbootstrapTargets
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-  install(FILES
-      vkbootstrap/src/VkBootstrap.h
-      vkbootstrap/src/VkBootstrapDispatch.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vkbootstrap)
-  install(EXPORT vkbootstrapTargets
-    FILE vkbootstrapConfig.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vkbootstrap)
+    # vkbootstrap — static
+    install(TARGETS vkbootstrap EXPORT vkbootstrapTargets
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(FILES
+        vkbootstrap/src/VkBootstrap.h
+        vkbootstrap/src/VkBootstrapDispatch.h
+      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/vkbootstrap)
+    install(EXPORT vkbootstrapTargets
+      FILE vkbootstrapConfig.cmake
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/vkbootstrap)
+  endif()
 
   # skribidi installs its library via its own install() calls, but its
   # `if(PROJECT_IS_TOP_LEVEL)` guard skips installing the public headers

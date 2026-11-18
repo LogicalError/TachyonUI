@@ -18,7 +18,8 @@ namespace tachyon::detail
 
     /// The default themes and fonts (empty with TACHYON_EMBED_RESOURCES off).
     std::span<const EmbeddedFile> EmbeddedResourceFiles();
-    /// The Vulkan backend's compiled shaders.
+    /// The graphics backends' compiled shaders, one pair per primitive kind each: SPIR-V for
+    /// Vulkan ("box_shader.vert.spv"), DXIL for Direct3D 12 ("box_shader.vert.dxil").
     std::span<const EmbeddedFile> EmbeddedShaderFiles();
 
     /// The file whose key ends `path` at a folder boundary: "themes/styles.css" and

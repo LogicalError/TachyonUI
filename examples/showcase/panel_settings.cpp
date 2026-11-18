@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <format>
 #include <string>
 #include <string_view>
 
@@ -172,7 +173,7 @@ namespace tachyon
         Label("Version");
         Text(idManager.AllocateDynamicID("settingsAboutVersion"), TACHYON_VERSION_STRING);
         Label("Renderer");
-        Text(idManager.AllocateDynamicID("settingsAboutRenderer"), "Vulkan, SDL3");
+        Text(idManager.AllocateDynamicID("settingsAboutRenderer"), std::format("{}, SDL3", GraphicsAPIName(graphicsContext->GetAPI())));
         EndLabelGroup();
         EndVertical();
     }

@@ -34,6 +34,11 @@ namespace tachyon
         /// itself turns this off; the GUI's windows still get their events while
         /// the host pumps (SDL_PollEvent / SDL_PumpEvents).
         bool pumpEvents = true;
+        /// GetMouseButtons reads the physical mouse buttons, wherever the pointer is: while a
+        /// popup is open the app turns a press there into a click the OS never delivered.
+        /// Off, they always read as up, for a program that drives itself with injected input
+        /// (GUIApplication::Inject*), so a click elsewhere on the desktop can't reach it.
+        bool physicalButtons = true;
     };
 
     /// The default window backend, on SDL3. Starts SDL's video subsystem unless it already

@@ -53,7 +53,19 @@ namespace tachyon
     {
         None,       ///< nothing is presented (NullGraphicsContext)
         Vulkan,
+        D3D12,      ///< Direct3D 12, on Windows
     };
+
+    /// The API's name as shown to people: "Vulkan", "Direct3D 12", or "No GPU" for None.
+    constexpr std::string_view GraphicsAPIName(GraphicsAPI api)
+    {
+        switch (api)
+        {
+        case GraphicsAPI::Vulkan: return "Vulkan";
+        case GraphicsAPI::D3D12:  return "Direct3D 12";
+        default:                  return "No GPU";
+        }
+    }
 
     /// A graphics backend: the device, the window contexts that render the GUI's windows, and
     /// the images and text atlases they draw with. GUIApplication::SetGraphicsBackend sets one;

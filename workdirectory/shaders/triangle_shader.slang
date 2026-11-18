@@ -25,8 +25,9 @@ void TransformedCorners(Triangle triangle, out float2 p0, out float2 p1, out flo
 }
 
 [shader("vertex")]
-VSOutput vertexMain(int vertexIndex : SV_VulkanVertexID)
+VSOutput vertexMain(VertexInput vertex)
 {
+    const int vertexIndex = VertexIndex(vertex);
     int triangleIndex = vertexIndex / 4; // the bounding quad; the fragment shader tests the interior
     Triangle triangle = LoadPrimitive<Triangle>(kTriangleSlot, triangleIndex);
     float2 uv = QuadCorner(vertexIndex % 4); // the corner, from the index buffer

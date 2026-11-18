@@ -1,7 +1,9 @@
 #include "application.h"
 
 #include <gui_controls/controls_toolbar_dock.h>
+#if TACHYON_VULKAN
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>
+#endif
 
 //
 // View panel: thin adapter over tachyon::RenderToolbarDock. ToolbarItem lists
@@ -31,8 +33,12 @@ namespace tachyon
             // The selected shape where the gizmo has it now, this frame's drag included.
             if (sceneSelected >= 0 && sceneSelected < (int)sceneObjects.size())
                 sceneObjects[size_t(sceneSelected)].transform = scene.selection;
+#if TACHYON_VULKAN
             if (auto* vk = dynamic_cast<vulkan::VulkanGraphicsContext*>(graphicsContext))
                 sceneRenderer.Render(*vk, *static_cast<const vulkan::VulkanSceneRender*>(ctx.native), ctx, sceneObjects, sceneSelected);
+#else
+            (void)ctx;
+#endif
         };
         // A click picks the shape under it; on nothing it lets go of the selection.
         scene.onClick = [this](const Ray& ray, KeyModifier) { SelectSceneObject(PickSceneObject(sceneObjects, ray)); };

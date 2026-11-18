@@ -415,7 +415,13 @@ namespace tachyon
             const IntRect r = windowManager->GetWindowRect(windows[w].id);
             if (r.w <= 0 || r.h <= 0) continue;
             popup.assign(size_t(r.w) * size_t(r.h) * 4, 0);
-            if (!ReadWindowPixels(windows[w].id, popup)) continue;
+            if (Result<void> read = ReadWindowPixels(windows[w].id, popup); !read)
+            {
+                // The shot is saved without it, so it doesn't go unnoticed.
+                TACHYON_LOG_ERROR(kLogCapture, "{}: a window opened in it wasn't read: {}",
+                                  kCaptureShots[m_capture.shot].name, read.GetError().message);
+                continue;
+            }
             for (int y = 0; y < r.h; ++y)
             {
                 const int dy = r.y - rect.y + y;
