@@ -85,7 +85,7 @@ namespace
         if (!app.Start())
         {
             app.Cleanup();
-            GTEST_SKIP() << "no Vulkan device available";
+            GTEST_SKIP() << "no GPU device available";
         }
         app.SetRedrawMode(tachyon::RedrawMode::Always);   // a frame each pass: the test counts them
         ASSERT_TRUE(app.Run());

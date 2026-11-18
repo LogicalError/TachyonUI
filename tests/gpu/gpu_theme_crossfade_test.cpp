@@ -107,7 +107,7 @@ namespace
             if (!app.Initialize())
             {
                 app.Cleanup();
-                GTEST_SKIP() << "no Vulkan device available";
+                GTEST_SKIP() << "no GPU device available";
             }
             app.SetReducedMotion(reduced);
             app.windowID = app.idManager.CreateStaticID();
@@ -137,7 +137,7 @@ namespace
         if (!app.Initialize())
         {
             app.Cleanup();
-            GTEST_SKIP() << "no Vulkan device available";
+            GTEST_SKIP() << "no GPU device available";
         }
         app.fontScaleTo = 1.5f;
         app.windowID = app.idManager.CreateStaticID();
@@ -155,7 +155,7 @@ namespace
         if (!app.Initialize())
         {
             app.Cleanup();
-            GTEST_SKIP() << "no Vulkan device available";
+            GTEST_SKIP() << "no GPU device available";
         }
         app.accentTo = kAccentPresets[3].colors;   // orange: #F59E4B in the dark palette
         app.windowID = app.idManager.CreateStaticID();
@@ -177,7 +177,7 @@ namespace
         if (!app.Initialize())
         {
             app.Cleanup();
-            GTEST_SKIP() << "no Vulkan device available";
+            GTEST_SKIP() << "no GPU device available";
         }
         app.fontScaleTo = 1.5f;
         app.windowID = app.idManager.CreateStaticID();
@@ -194,7 +194,7 @@ namespace
         if (!app.Initialize())
         {
             app.Cleanup();
-            GTEST_SKIP() << "no Vulkan device available";
+            GTEST_SKIP() << "no GPU device available";
         }
         // The switch applies at the start of the next frame, which starts the crossfade on that
         // frame's clock, so it can't run out before the frame ends however slow it is.

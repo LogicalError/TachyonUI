@@ -91,7 +91,7 @@ namespace
         if (!app.Start())
         {
             app.Cleanup();
-            GTEST_SKIP() << "no Vulkan device available";
+            GTEST_SKIP() << "no GPU device available";
         }
         app.SetRedrawMode(RedrawMode::Always);
         ASSERT_TRUE(app.Frames(3));

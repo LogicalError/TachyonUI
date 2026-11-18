@@ -133,7 +133,7 @@ namespace
         void SetUp() override
         {
             if (!app.Start())
-                GTEST_SKIP() << "no Vulkan device available";
+                GTEST_SKIP() << "no GPU device available";
             ASSERT_TRUE(app.Frames(4));
             ASSERT_TRUE(app.Read());
         }

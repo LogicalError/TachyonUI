@@ -189,14 +189,15 @@ your `onRender` with a command buffer, the rendering already begun. You only dra
 - Under it is `GraphicsContext::RenderScene(key, window, size, clear, record)`, for a
   control of your own that shows a scene.
   - It returns the image's `ImageIndex`, to draw with `RenderQuad` or `Image`.
-  - `record` gets a `VulkanSceneRender`, in the window's frame before the UI.
+  - `record` gets a `ScenePayload`, in the window's frame before the UI; on Vulkan its
+    `As<VulkanSceneRender>()` is the recording state.
   - The image is kept for `key` while it's asked for every frame.
 
 ```cpp
 const ImageIndex scene = graphicsContext->RenderScene(myID, windowRegistry.GetCurrentWindowID(),
-    { 640, 360 }, { 0, 0, 0, 1 }, [this](const void* native) {
-        const auto& vk = *static_cast<const tachyon::vulkan::VulkanSceneRender*>(native);
-        DrawScene(vk.commandBuffer);
+    { 640, 360 }, { 0, 0, 0, 1 }, [this](const tachyon::ScenePayload& scene) {
+        if (const auto* vk = scene.As<tachyon::vulkan::VulkanSceneRender>())
+            DrawScene(vk->commandBuffer);
     });
 ```
 

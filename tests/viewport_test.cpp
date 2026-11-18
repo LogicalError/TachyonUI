@@ -26,6 +26,38 @@ namespace tachyon
 
         constexpr float2 kSize { 800, 600 };
 
+        // Two backends' recording states, as each would hand a scene's record.
+        struct SceneStateA { static constexpr GraphicsAPI kAPI = GraphicsAPI::Vulkan; int commands = 7; };
+        struct SceneStateB { static constexpr GraphicsAPI kAPI = GraphicsAPI::D3D12;  int commands = 9; };
+    }
+
+    // A scene's payload gives the recording state only as the struct of the API that made it.
+    TEST(ScenePayload, GivesTheStateOnlyAsItsOwnAPIsStruct)
+    {
+        const SceneStateA a;
+        const ScenePayload payload(a);
+        EXPECT_EQ(payload.API(), GraphicsAPI::Vulkan);
+        ASSERT_EQ(payload.As<SceneStateA>(), &a);
+        EXPECT_EQ(payload.As<SceneStateA>()->commands, 7);
+        EXPECT_EQ(payload.As<SceneStateB>(), nullptr) << "another API's struct";
+
+        const ScenePayload none;
+        EXPECT_EQ(none.API(), GraphicsAPI::None);
+        EXPECT_EQ(none.As<SceneStateA>(), nullptr);
+    }
+
+    // The viewport hands onRender the payload RenderScene's record got.
+    TEST(ScenePayload, TheViewportPassesItOn)
+    {
+        const SceneStateB b;
+        const ViewportRenderContext ctx{ .size = { 4, 3 }, .scene = ScenePayload(b) };
+        EXPECT_EQ(ctx.scene.As<SceneStateB>(), &b);
+        EXPECT_EQ(ctx.scene.As<SceneStateA>(), nullptr);
+    }
+
+    namespace
+    {
+
         ViewportCamera FrontCamera()
         {
             ViewportCamera camera;

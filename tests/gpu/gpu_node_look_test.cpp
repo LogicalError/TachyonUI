@@ -106,7 +106,7 @@ namespace
     TEST(GpuNodeLook, ANodesHeaderIsTintedWithItsColor)
     {
         NodeLookApp app;
-        if (!app.Start(NodeViewKind::Graph)) { app.Cleanup(); GTEST_SKIP() << "no Vulkan device available"; }
+        if (!app.Start(NodeViewKind::Graph)) { app.Cleanup(); GTEST_SKIP() << "no GPU device available"; }
         ASSERT_TRUE(app.Frames(4));
         ASSERT_TRUE(app.Read());
         const ElementRef node = app.elementStorage.FindElementRefByID(app.view.nodes[0].stableID);
@@ -128,7 +128,7 @@ namespace
     TEST(GpuNodeLook, AStateIsFilledAndEdgedInItsColor)
     {
         NodeLookApp app;
-        if (!app.Start(NodeViewKind::StateMachine)) { app.Cleanup(); GTEST_SKIP() << "no Vulkan device available"; }
+        if (!app.Start(NodeViewKind::StateMachine)) { app.Cleanup(); GTEST_SKIP() << "no GPU device available"; }
         ASSERT_TRUE(app.Frames(4));
         ASSERT_TRUE(app.Read());
         const ElementRef state = app.elementStorage.FindElementRefByID(app.view.nodes[0].stableID);
@@ -147,7 +147,7 @@ namespace
     TEST(GpuNodeLook, AnActiveStateIsRingedWithItsTimeUnderIt)
     {
         NodeLookApp app;
-        if (!app.Start(NodeViewKind::StateMachine)) { app.Cleanup(); GTEST_SKIP() << "no Vulkan device available"; }
+        if (!app.Start(NodeViewKind::StateMachine)) { app.Cleanup(); GTEST_SKIP() << "no GPU device available"; }
         app.view.activeState = app.view.nodes[0].stableID;
         app.view.activeStateTime = 1.24f;
         ASSERT_TRUE(app.Frames(4));
@@ -178,7 +178,7 @@ namespace
     TEST(GpuNodeLook, ANestedStateHasABoxStackedBehindIt)
     {
         NodeLookApp app;
-        if (!app.Start(NodeViewKind::StateMachine)) { app.Cleanup(); GTEST_SKIP() << "no Vulkan device available"; }
+        if (!app.Start(NodeViewKind::StateMachine)) { app.Cleanup(); GTEST_SKIP() << "no GPU device available"; }
         app.view.nodes[0].subMachine = true;
         ASSERT_TRUE(app.Frames(4));
         ASSERT_TRUE(app.Read());
@@ -197,7 +197,7 @@ namespace
     TEST(GpuNodeLook, AFrameIsFaintWithItsColorItsTitleBarStronger)
     {
         NodeLookApp app;
-        if (!app.Start(NodeViewKind::Graph)) { app.Cleanup(); GTEST_SKIP() << "no Vulkan device available"; }
+        if (!app.Start(NodeViewKind::Graph)) { app.Cleanup(); GTEST_SKIP() << "no GPU device available"; }
         ASSERT_TRUE(app.Frames(4));
         ASSERT_TRUE(app.Read());
         // The frame where it is from the node, at 100%: its title bar a row pitch tall (two grid
