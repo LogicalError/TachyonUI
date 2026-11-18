@@ -14,6 +14,9 @@
 #if TACHYON_VULKAN
 #include <gui_core/windows/sdl/gui_window_backend_sdl_vulkan.h>
 #endif
+#if TACHYON_SDLGPU
+#include <gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h>
+#endif
 
 #include <SDL3/SDL.h>
 #include <cassert>
@@ -2147,6 +2150,11 @@ namespace tachyon
         IWindowBackend::SetGraphicsContext(graphicsContext);
 #if TACHYON_VULKAN
         InstallSDLVulkanSurfaceFactory(graphicsContext);
+#endif
+#if TACHYON_SDLGPU
+        // SDL GPU claims the SDL window behind the GUI's handle, which is that window.
+        if (auto* sdlgpu = dynamic_cast<sdlgpu::SDLGPUGraphicsContext*>(graphicsContext))
+            sdlgpu->SetWindowResolver([](OSWindowHandle h) { return ToSDL(h); });
 #endif
     }
 

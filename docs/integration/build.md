@@ -44,6 +44,7 @@ Options (set before `add_subdirectory`):
 | `TACHYON_SDL` | on | Builds the SDL window backend and clipboard. Off builds without SDL. |
 | `TACHYON_VULKAN` | on | Builds the Vulkan graphics backend. Off builds without Vulkan (no Vulkan SDK needed): the app runs on the null backend and draws nothing. |
 | `TACHYON_D3D12` | off | Windows only. Builds the Direct3D 12 backend: an app picks it with `InitializeOptions::graphicsAPI`. Brings D3D12 Memory Allocator. |
+| `TACHYON_SDLGPU` | off | Needs `TACHYON_SDL`. Builds the SDL GPU backend (SDL3's GPU API, over Vulkan, Direct3D 12 or Metal), which is on its way: so far it starts its device and presents its windows, without drawing the UI. |
 | `TACHYON_GPU_TESTS_ON_D3D12` | off | With `TACHYON_D3D12`: runs the whole-app GPU tests (`gui_gpu_tests`) a second time, on Direct3D 12, as `D3D12.<test>`. |
 | `TACHYON_SYSTEM_SDL` | off | Uses the host's SDL3. |
 | `TACHYON_SYSTEM_HARFBUZZ` | off | Uses the host's HarfBuzz. |
@@ -66,9 +67,10 @@ add_subdirectory(external/TachyonUI)
 ```
 
 - Code can check which graphics backends were built in:
-  - `gui_core` defines `TACHYON_VULKAN` and `TACHYON_D3D12`, each `0` or `1`
+  - `gui_core` defines `TACHYON_VULKAN`, `TACHYON_D3D12` and `TACHYON_SDLGPU`, each `0` or `1`
   - for example, `#if TACHYON_VULKAN` around code that uses `VulkanGraphicsContext`
-  - the CMake package sets `TachyonUI_VULKAN` and `TachyonUI_D3D12` the same way
+  - the CMake package sets `TachyonUI_VULKAN`, `TachyonUI_D3D12` and `TachyonUI_SDLGPU` the
+    same way
 
 ### Choosing the graphics backend
 
@@ -77,6 +79,8 @@ With more than one backend built in, an app picks one when it starts:
 - Set `graphicsAPI` in the options you pass to `Initialize`:
   - empty, the default: Vulkan
   - `GraphicsAPI::D3D12`: Direct3D 12
+  - `GraphicsAPI::SDLGPU`: SDL3's GPU API, on the driver SDL picks (`SDLGPUGraphicsContext::SetDriver`
+    picks one: `"vulkan"`, `"direct3d12"` or `"metal"`)
   - `GraphicsAPI::None`: no GPU, the null backend, which draws nothing
 - A backend that isn't built in makes `Initialize` fail, naming the option that builds it.
   - For example, `D3D12` without `TACHYON_D3D12`: "Direct3D 12 isn't built in: build with

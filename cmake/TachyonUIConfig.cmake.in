@@ -13,8 +13,8 @@
 #                                                        GUIApplication::SetResourceRoot
 #   TACHYON_SDL_TARGET                                the SDL target the libraries link
 #                                                        (SDL3::SDL3-static when bundled)
-#   TachyonUI_VULKAN, TachyonUI_D3D12                 whether the package has that graphics
-#                                                        backend (ON / OFF)
+#   TachyonUI_VULKAN, TachyonUI_D3D12,                whether the package has that graphics
+#   TachyonUI_SDLGPU                                     backend (ON / OFF)
 #
 # The package is built with MSVC for Windows x64 and links the same toolchain
 # as its consumer; mixing C++ runtimes or standard library versions is not
@@ -25,9 +25,11 @@ include(CMakeFindDependencyMacro)
 
 # The install prefix doubles as the prefix of the bundled third-party libraries.
 list(PREPEND CMAKE_PREFIX_PATH "${PACKAGE_PREFIX_DIR}")
-# The graphics backends built in; gui_core defines TACHYON_VULKAN and TACHYON_D3D12 (0 or 1).
+# The graphics backends built in; gui_core defines TACHYON_VULKAN, TACHYON_D3D12 and
+# TACHYON_SDLGPU (0 or 1).
 set(TachyonUI_VULKAN @TACHYON_VULKAN@)
 set(TachyonUI_D3D12 @TACHYON_D3D12@)
+set(TachyonUI_SDLGPU @TACHYON_SDLGPU@)
 if(TachyonUI_VULKAN)
   find_dependency(Vulkan)
 endif()

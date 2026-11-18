@@ -15,15 +15,18 @@ namespace tachyon
         None,       ///< nothing is presented (NullGraphicsContext)
         Vulkan,
         D3D12,      ///< Direct3D 12, on Windows
+        SDLGPU,     ///< SDL3's GPU API, over Vulkan, Direct3D 12 or Metal as SDL picks
     };
 
-    /// The API's name as shown to people: "Vulkan", "Direct3D 12", or "No GPU" for None.
+    /// The API's name as shown to people: "Vulkan", "Direct3D 12", "SDL GPU", or "No GPU" for
+    /// None.
     constexpr std::string_view GraphicsAPIName(GraphicsAPI api)
     {
         switch (api)
         {
         case GraphicsAPI::Vulkan: return "Vulkan";
         case GraphicsAPI::D3D12:  return "Direct3D 12";
+        case GraphicsAPI::SDLGPU: return "SDL GPU";
         default:                  return "No GPU";
         }
     }

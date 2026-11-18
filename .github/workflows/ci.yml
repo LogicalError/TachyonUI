@@ -108,7 +108,7 @@ jobs:
       - name: Configure
         run: |
           $slangc = (Get-ChildItem -Recurse "${{ runner.temp }}/slang" -Filter slangc.exe | Select-Object -First 1).FullName
-          cmake -S . -B build -G "Visual Studio 18 2026" -A x64 "-DSLANGC=$slangc" -DTACHYON_D3D12=ON
+          cmake -S . -B build -G "Visual Studio 18 2026" -A x64 "-DSLANGC=$slangc" -DTACHYON_D3D12=ON -DTACHYON_SDLGPU=ON
       - if: steps.third-party-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6.1.0
         with:
@@ -141,6 +141,9 @@ jobs:
         env:
           TACHYON_GPU: cpu
         run: bin/Debug/gui_gpu_tests.exe --graphics=d3d12
+      # SDL GPU on each of SDL's drivers; one that finds no device here skips its tests.
+      - name: SDL GPU tests (Debug)
+        run: bin/Debug/gui_sdlgpu_tests.exe
 
       - name: Install the package
         run: |

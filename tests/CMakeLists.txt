@@ -304,3 +304,10 @@ if(TACHYON_SDL AND TACHYON_D3D12)
     gpu/d3d12_scene_test.cpp
     gpu/d3d12_external_device_test.cpp)
 endif()
+
+if(TACHYON_SDL AND TACHYON_SDLGPU)
+  # The SDL GPU backend itself, on each of SDL's drivers, its debug messages recorded.
+  tachyon_add_gpu_tests(gui_sdlgpu_tests
+    gpu/sdlgpu_test_harness.h
+    gpu/sdlgpu_device_test.cpp)
+endif()
