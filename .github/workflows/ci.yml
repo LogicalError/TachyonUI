@@ -298,7 +298,9 @@ jobs:
         env:
           LD_LIBRARY_PATH: ${{ runner.temp }}/vulkansdk/1.4.309.0/x86_64/lib
           VK_LAYER_PATH: ${{ runner.temp }}/vulkansdk/1.4.309.0/x86_64/share/vulkan/explicit_layer.d
-        run: xvfb-run -a bin/Debug/gui_gpu_tests
+        run: |
+          xvfb-run -a bin/Debug/gui_gpu_tests
+          xvfb-run -a bin/Debug/gui_vulkan_tests
 
       - name: Install the package
         if: matrix.vulkan != 'OFF'

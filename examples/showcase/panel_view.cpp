@@ -34,8 +34,9 @@ namespace tachyon
             if (sceneSelected >= 0 && sceneSelected < (int)sceneObjects.size())
                 sceneObjects[size_t(sceneSelected)].transform = scene.selection;
 #if TACHYON_VULKAN
-            if (auto* vk = dynamic_cast<vulkan::VulkanGraphicsContext*>(graphicsContext))
-                sceneRenderer.Render(*vk, *static_cast<const vulkan::VulkanSceneRender*>(ctx.native), ctx, sceneObjects, sceneSelected);
+            if (const auto* state = ctx.scene.As<vulkan::VulkanSceneRender>())
+                if (auto* vk = dynamic_cast<vulkan::VulkanGraphicsContext*>(graphicsContext))
+                    sceneRenderer.Render(*vk, *state, ctx, sceneObjects, sceneSelected);
 #else
             (void)ctx;
 #endif

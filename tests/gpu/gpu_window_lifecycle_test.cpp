@@ -179,7 +179,7 @@ TEST_F(GpuTest, ASceneImageLetGoOutlivesTheFramesThatDrewIt)
         // Drawn at a size each round: the image is made again, the old one let go.
         graphicsContext->BeginFrame();
         vk->RenderScene(scene, ctx->GetID(), tachyon::uint2{ 64u + 16u * uint32_t(round), 48 }, tachyon::color4f{ 0, 0, 0, 1 },
-                        [](const void*) {});
+                        [](const tachyon::ScenePayload&) {});
         RenderOneFrameWithDot(ctx, { 320, 240 });
         // Not asked for: it goes after a few frames, none of which draws a window.
         for (int idle = 0; idle < 8; ++idle)

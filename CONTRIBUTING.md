@@ -42,17 +42,18 @@ Build with the tests (on by default) and run them from the repository root:
 
 ```text
 bin/Debug/gui_core_tests                 unit tests, no GPU needed
-bin/Debug/gui_gpu_tests                  real-device tests, skipped without a GPU
-ctest --test-dir build -C Debug -j 16    both, one process per test, 16 at a time
+bin/Debug/gui_gpu_tests                  whole apps on a real GPU, skipped without one
+bin/Debug/gui_vulkan_tests               the Vulkan backend under its validation layers
+ctest --test-dir build -C Debug -j 16    all three, one process per test, 16 at a time
 ```
 
-* ctest with `-j` is the quickest way to run both: set it to about the number of cores you have.
+* ctest with `-j` is the quickest way to run them all: set it to about the number of cores you have.
   * For example, on an 8-core machine: `ctest --test-dir build -C Debug -j 8`.
-* The two executables run their tests one after another, in one process. Use them for a single test
+* The executables run their tests one after another, in one process. Use them for a single test
   or a group of them, with `--gtest_filter`.
   * For example: `bin/Debug/gui_core_tests --gtest_filter=NodeView*`.
 
-Please run both before opening a pull request.
+Please run all three before opening a pull request.
 
 ## License
 

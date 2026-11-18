@@ -103,7 +103,7 @@ namespace
         if (!app.Start())
         {
             app.Cleanup();
-            GTEST_SKIP() << "no Vulkan device available";
+            GTEST_SKIP() << "no GPU device available";
         }
         ASSERT_TRUE(app.Frames(4));
         auto check = [&](const char* what) {
@@ -134,7 +134,7 @@ namespace
         if (!app.Start())
         {
             app.Cleanup();
-            GTEST_SKIP() << "no Vulkan device available";
+            GTEST_SKIP() << "no GPU device available";
         }
         app.columns[2].sortAscending = [](int a, int b) { return a < b; };
         app.state.sortColumn = 2;   // the number column, sorted: its label is still drawn, at the end

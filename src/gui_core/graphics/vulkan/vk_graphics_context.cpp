@@ -302,7 +302,7 @@ void VulkanGraphicsContext::ReleaseScene(SceneTarget& scene)
 }
 
 tachyon::ImageIndex VulkanGraphicsContext::RenderScene(tachyon::ID key, tachyon::ID window, tachyon::uint2 size, tachyon::color4f clear,
-                                                       std::function<void(const void* native)> record)
+                                                       std::function<void(const tachyon::ScenePayload& scene)> record)
 {
     if (!deviceContext.initialized || size.x == 0 || size.y == 0 || vulkanImageSet == nullptr)
         return tachyon::ImageIndex::Invalid;
@@ -375,8 +375,8 @@ void VulkanGraphicsContext::RecordScenes(VkCommandBuffer cmd, tachyon::ID window
         vkCmdSetScissor(cmd, 0, 1, &scissor);
         if (request.record)
         {
-            const VulkanSceneRender native{ cmd, kSceneColorFormat, depthImageFormat, scene.extent };
-            request.record(&native);
+            const VulkanSceneRender state{ cmd, kSceneColorFormat, depthImageFormat, scene.extent };
+            request.record(tachyon::ScenePayload(state));
         }
         vkCmdEndRendering(cmd);
 

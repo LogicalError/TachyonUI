@@ -101,11 +101,11 @@ namespace tachyon
         {
             const uint2 size{ uint32_t(last.w), uint32_t(last.h) };
             image = graphicsContext->RenderScene(id, windowRegistry.GetCurrentWindowID(), size, view.background,
-                [v, size](const void* native) {
+                [v, size](const ScenePayload& payload) {
                     if (!v->onRender) return;
                     const float aspect = float(size.x) / float(size.y);
                     v->onRender(ViewportRenderContext{ .size = size, .view = v->camera.View(),
-                                                       .projection = v->camera.Projection(aspect), .native = native });
+                                                       .projection = v->camera.Projection(aspect), .scene = payload });
                 });
         }
 

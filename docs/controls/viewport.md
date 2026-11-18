@@ -37,9 +37,12 @@ Each frame the viewport calls `onRender`, with:
 | --- | --- |
 | `size` | The image's size, in pixels |
 | `view`, `projection` | The camera's matrices |
-| `native` | The backend's own recording state |
+| `scene` | The backend's own recording state |
 
-- On Vulkan, `native` is a `VulkanSceneRender` (`vk_graphics_context.h`):
+- `scene` gives that state as the struct of the API the backend renders with:
+  - `scene.As<T>()` returns it, or null when the scene is another API's
+  - for example, `scene.As<vulkan::VulkanSceneRender>()` is null on Direct3D 12
+- On Vulkan, it's a `VulkanSceneRender` (`vk_graphics_context.h`):
   - `commandBuffer`, with dynamic rendering already begun
   - `colorFormat` (`R8G8B8A8_UNORM`) and `depthFormat` (`D32_SFLOAT`), for your pipelines
   - `extent`; the viewport and scissor are already set to all of it
@@ -50,11 +53,13 @@ Each frame the viewport calls `onRender`, with:
 ```cpp
 void DrawScene(const ViewportRenderContext& ctx)
 {
-    const auto& vk = *static_cast<const tachyon::vulkan::VulkanSceneRender*>(ctx.native);
-    vkCmdBindPipeline(vk.commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+    const auto* vk = ctx.scene.As<tachyon::vulkan::VulkanSceneRender>();
+    if (vk == nullptr)
+        return;   // not Vulkan
+    vkCmdBindPipeline(vk->commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
     const float4x4 viewProjection = ctx.projection * ctx.view;
     for (const Mesh& mesh : m_meshes)
-        DrawMesh(vk.commandBuffer, viewProjection * mesh.transform, mesh);
+        DrawMesh(vk->commandBuffer, viewProjection * mesh.transform, mesh);
 }
 ```
 

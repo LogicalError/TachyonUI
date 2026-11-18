@@ -212,23 +212,40 @@ set_target_properties(gui_core_tests PROPERTIES
 )
 
 
-# GPU validation harness - real-device Vulkan tests. These boot an actual
-# VulkanGraphicsContext with the validation + synchronization-validation layers
-# recording into a sink, so backend bugs (descriptor overflow, sync hazards,
-# leaks) become test failures. Individual tests SKIP themselves when no suitable
-# device/display is present, so the target is safe to build everywhere.
-# They drive real windows through SDL.
-if(TACHYON_SDL AND TACHYON_VULKAN)
-  list(APPEND GUI_GPU_TEST_FILES
-    gpu/gpu_test_harness.h
+# Tests on a real GPU, in two programs. They drive real windows through SDL, and SKIP
+# themselves when no suitable device or display is present, so they're safe to build
+# everywhere.
+#   gui_gpu_tests: whole apps, on the default graphics backend (CreateDefaultGraphicsContext).
+#   gui_vulkan_tests: the Vulkan backend itself. These boot a VulkanGraphicsContext with the
+#     validation and synchronization-validation layers recording into a sink, so backend bugs
+#     (descriptor overflow, sync hazards, leaks) become test failures.
+
+# tachyon_add_gpu_tests(<target> <sources...>): a GPU test program.
+function(tachyon_add_gpu_tests target)
+  set(_files ${ARGN} gpu/gpu_crash_trace.cpp main.cpp)
+  add_executable(${target} ${_files})
+  source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${_files})
+  target_link_libraries(${target} PRIVATE gui_controls ${TACHYON_SDL_TARGET} GTest::gtest_main GTest::gmock)
+  # The bundled SDL is a static library; a host's SDL (TACHYON_SYSTEM_SDL) may be a DLL.
+  target_compile_definitions(${target} PRIVATE TACHYON_TEST_BUNDLED_SDL=$<NOT:$<BOOL:${TACHYON_SYSTEM_SDL}>>)
+  tachyon_apply_compile_options(${target})
+  tachyon_precompile_headers(${target} <gtest/gtest.h> <gui_controls/gui_application.h>)
+  # Same gmock C4702-at-LTCG situation as gui_core_tests above.
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /wd4702)
+  endif()
+  tachyon_copy_runtime_dlls(${target})
+  gtest_discover_tests(${target} DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 60)
+  set_target_properties(${target} PROPERTIES
+    FOLDER "Tests"
+    VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/workdirectory"
+  )
+endfunction()
+
+if(TACHYON_SDL AND (TACHYON_VULKAN OR TACHYON_D3D12))
+  tachyon_add_gpu_tests(gui_gpu_tests
+    gpu/gpu_device.h
     gpu/gpu_injected_input.h
-    gpu/gpu_descriptor_test.cpp
-    gpu/gpu_image_set_test.cpp
-    gpu/gpu_window_lifecycle_test.cpp
-    gpu/gpu_window_style_test.cpp
-    gpu/gpu_primitive_coverage_test.cpp
-    gpu/gpu_readback_smoke_test.cpp
-    gpu/gpu_external_device_test.cpp
     gpu/gpu_application_init_test.cpp
     gpu/gpu_disabled_opacity_test.cpp
     gpu/gpu_invalid_test.cpp
@@ -246,35 +263,23 @@ if(TACHYON_SDL AND TACHYON_VULKAN)
     gpu/gpu_sdl_host_event_loop_test.cpp
     gpu/gpu_sdl_single_copy_test.cpp
     gpu/gpu_zero_setup_test.cpp
-    gpu/gpu_tutorial_test.cpp
-    gpu/gpu_crash_trace.cpp
-    main.cpp
-  )
-
-  add_executable(gui_gpu_tests ${GUI_GPU_TEST_FILES})
-  source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${GUI_GPU_TEST_FILES})
+    gpu/gpu_tutorial_test.cpp)
   target_sources(gui_gpu_tests PRIVATE ${TACHYON_TUTORIAL_SOURCES})
   source_group("Tutorial" FILES ${TACHYON_TUTORIAL_SOURCES})
+endif()
 
-  # gui_controls pulls in gui_core; vma/Vulkan/SDL3 are linked PRIVATE by gui_core
-  # (a static lib), so the harness must link them directly to reach the backend.
-  target_link_libraries(gui_gpu_tests PRIVATE gui_controls vma Vulkan::Vulkan ${TACHYON_SDL_TARGET} vkbootstrap GTest::gtest_main GTest::gmock)
-  # The bundled SDL is a static library; a host's SDL (TACHYON_SYSTEM_SDL) may be a DLL.
-  target_compile_definitions(gui_gpu_tests PRIVATE TACHYON_TEST_BUNDLED_SDL=$<NOT:$<BOOL:${TACHYON_SYSTEM_SDL}>>)
-
-  tachyon_apply_compile_options(gui_gpu_tests)
-  tachyon_precompile_headers(gui_gpu_tests <gtest/gtest.h> <gui_controls/gui_application.h>)
-
-  # Same gmock C4702-at-LTCG situation as gui_core_tests above.
-  if(MSVC)
-    target_compile_options(gui_gpu_tests PRIVATE /wd4702)
-  endif()
-
-  tachyon_copy_runtime_dlls(gui_gpu_tests)
-  gtest_discover_tests(gui_gpu_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 60)
-
-  set_target_properties(gui_gpu_tests PROPERTIES
-    FOLDER "Tests"
-    VS_DEBUGGER_WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/workdirectory"
-  )
+if(TACHYON_SDL AND TACHYON_VULKAN)
+  tachyon_add_gpu_tests(gui_vulkan_tests
+    gpu/gpu_test_harness.h
+    gpu/gpu_descriptor_test.cpp
+    gpu/gpu_image_set_test.cpp
+    gpu/gpu_window_lifecycle_test.cpp
+    gpu/gpu_window_style_test.cpp
+    gpu/gpu_primitive_coverage_test.cpp
+    gpu/gpu_readback_smoke_test.cpp
+    gpu/gpu_external_device_test.cpp
+    gpu/gpu_device_loss_test.cpp)
+  # gui_core links vma, Vulkan and vk-bootstrap PRIVATE (a static library), so the harness
+  # links them itself to reach the backend.
+  target_link_libraries(gui_vulkan_tests PRIVATE vma Vulkan::Vulkan vkbootstrap)
 endif()

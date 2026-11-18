@@ -1675,8 +1675,10 @@ namespace
         const auto frame = [&](tachyon::uint2 size) {
             graphicsContext->BeginFrame();
             const tachyon::ImageIndex index = graphicsContext->RenderScene(key, ctx->GetID(), size, tachyon::color4f{ 0, 0, 1, 1 },
-                [&](const void* native) {
-                    const auto& scene = *static_cast<const tachyon::vulkan::VulkanSceneRender*>(native);
+                [&](const tachyon::ScenePayload& payload) {
+                    const auto* state = payload.As<tachyon::vulkan::VulkanSceneRender>();
+                    ASSERT_NE(state, nullptr) << "a Vulkan scene";
+                    const auto& scene = *state;
                     ++recorded;
                     lastExtent = scene.extent;
                     VkClearAttachment green{ .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .colorAttachment = 0 };

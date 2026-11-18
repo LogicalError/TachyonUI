@@ -187,6 +187,9 @@ list(APPEND GUI_FILES
   gui_core/graphics/gui_renderer.cpp
 
   gui_core/graphics/gui_rhi.h
+  gui_core/graphics/gui_graphics_api.h
+  gui_core/graphics/gui_default_graphics_context.h
+  gui_core/graphics/gui_default_graphics_context.cpp
 
   gui_core/graphics/null/gui_null_graphics_context.h
   gui_core/graphics/null/gui_null_graphics_context.cpp

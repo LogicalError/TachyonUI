@@ -9,6 +9,7 @@
 
 #include <gui_core/style/gui_style.h>
 
+#include <gui_core/graphics/gui_graphics_api.h>
 #include <gui_core/windows/gui_window_backend.h>     // OSWindowHandle (used in pure-virtual signatures)
 
 #include <functional>
@@ -46,26 +47,6 @@ namespace tachyon
         Frame,
         Application
     };
-
-    /// The graphics API a backend presents with; window backends create their
-    /// windows to match (SDL: SDL_WINDOW_VULKAN).
-    enum class GraphicsAPI : uint8_t
-    {
-        None,       ///< nothing is presented (NullGraphicsContext)
-        Vulkan,
-        D3D12,      ///< Direct3D 12, on Windows
-    };
-
-    /// The API's name as shown to people: "Vulkan", "Direct3D 12", or "No GPU" for None.
-    constexpr std::string_view GraphicsAPIName(GraphicsAPI api)
-    {
-        switch (api)
-        {
-        case GraphicsAPI::Vulkan: return "Vulkan";
-        case GraphicsAPI::D3D12:  return "Direct3D 12";
-        default:                  return "No GPU";
-        }
-    }
 
     /// A graphics backend: the device, the window contexts that render the GUI's windows, and
     /// the images and text atlases they draw with. GUIApplication::SetGraphicsBackend sets one;
@@ -162,10 +143,11 @@ namespace tachyon
         /// An image the app draws a scene into (a 3D viewport), `size` pixels with a depth
         /// buffer, kept for `key` while it's asked for every frame and made again when the size
         /// changes. `record` draws it, in `window`'s frame before the UI: it gets the backend's
-        /// recording state (Vulkan: a VulkanSceneRender), the image cleared to `clear` and the
-        /// rendering begun. Call it while the UI is built. Invalid when the backend can't.
+        /// recording state (ScenePayload; Vulkan: a VulkanSceneRender), the image cleared to
+        /// `clear` and the rendering begun. Call it while the UI is built. Invalid when the
+        /// backend can't.
         virtual ImageIndex RenderScene(ID /*key*/, ID /*window*/, uint2 /*size*/, color4f /*clear*/,
-                                       std::function<void(const void* native)> /*record*/) { return ImageIndex::Invalid; }
+                                       std::function<void(const ScenePayload& scene)> /*record*/) { return ImageIndex::Invalid; }
 
         /// Uploads the styles and gradient pages for this frame's draws, after the UI build and
         /// before the window contexts record. `elapsedTimeSecs`: the frame clock's time, for

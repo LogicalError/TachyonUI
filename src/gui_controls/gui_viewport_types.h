@@ -4,6 +4,7 @@
 // rotate and scale the selected object.
 
 #include <gui_core/gui_math3d.h>
+#include <gui_core/graphics/gui_graphics_api.h>
 #include <gui_core/input/gui_input_enums.h>
 #include <gui_core/input/gui_gesture.h>
 #include <gui_core/gui_base_types.h>
@@ -81,14 +82,15 @@ namespace tachyon
     };
 
     /// What the app's onRender gets each frame: the target's size and the camera's matrices.
-    /// The backend's own (Vulkan: VulkanViewportRender, with the command buffer and formats,
-    /// the rendering begun) is in `native`.
+    /// The backend's own recording state is in `scene`: ask for the one you draw with
+    /// (Vulkan: scene.As<vulkan::VulkanSceneRender>(), the command buffer and formats, the
+    /// rendering begun).
     struct ViewportRenderContext
     {
-        uint2       size {};        ///< pixels
-        float4x4    view;
-        float4x4    projection;
-        const void* native = nullptr;
+        uint2        size {};        ///< pixels
+        float4x4     view;
+        float4x4     projection;
+        ScenePayload scene;
     };
 
     /// A viewport: what it shows and how. Keep it from frame to frame, as a CurveView.
