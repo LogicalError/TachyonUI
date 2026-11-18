@@ -134,14 +134,16 @@ namespace tachyon
             }
             std::string_view   title      = winElement.textID != TextID::Invalid ? textSystem->GetText(winElement.textID) : "";
 
-            // Create or recycle the OS window.
+            // Create or recycle the OS window. The OS or the graphics backend may fail to make
+            // one (logged where it failed): the window then isn't shown, which is no misuse.
             [[maybe_unused]]
             auto addResult = windowManager.GetOrCreateWindow(
                                 windowEntry.id, title, winRect.rect, onGui,
                                 ElementFlagsToWindowFlags(flags), parentID, winElement.monitorIndex);
             assert(addResult == AddWindowResult::SuccessCreate ||
                    addResult == AddWindowResult::SuccessRecycle ||
-                   addResult == AddWindowResult::WindowUserClosed);
+                   addResult == AddWindowResult::WindowUserClosed ||
+                   addResult == AddWindowResult::FailedToCreateOSWindow);
 
             // A popup slides in away from what it's anchored to (below it, unless it flipped).
             if ((winElement.flags & ElementFlags::WindowIsPopup) != ElementFlags::None)

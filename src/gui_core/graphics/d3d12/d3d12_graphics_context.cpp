@@ -2,7 +2,7 @@
 
 #include <gui_core/graphics/d3d12/d3d12_device.h>
 #include <gui_core/graphics/d3d12/d3d12_rhi.h>
-#include <gui_core/graphics/d3d12/d3d12_text_atlas.h>
+#include <gui_core/graphics/gui_image_set_text_atlas.h>
 #include <gui_core/graphics/d3d12/d3d12_window_context.h>
 #include <gui_core/graphics/gui_gpu_choice.h>
 #include <gui_core/graphics/gui_primitive_renderer.h>
@@ -523,7 +523,7 @@ namespace tachyon::d3d12
     {
         if (!m_impl->device)
             return NullGraphicsContext::CreateTextAtlasManager();
-        return new D3D12TextAtlasManager();
+        return new ImageSetTextAtlasManager<D3D12ImageSet, D3D12Image>();
     }
 
     ImageSet* D3D12GraphicsContext::GetImageSet() const

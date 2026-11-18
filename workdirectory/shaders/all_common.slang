@@ -178,6 +178,59 @@ ColorStyle LoadColorStyle(int index) { return colorStyles.Load<ColorStyle>(uint(
 
 struct VertexInput { uint id : SV_VertexID; };
 int VertexIndex(VertexInput input) { return input.id + int(pc.firstVertex); }
+#elif defined(TACHYON_SDLGPU)
+// SDL GPU: each stage's resources where SDL puts them, the vertex stage's in set 0 / space0
+// (its uniforms set 1 / space1), the fragment stage's in set 2 / space2 (set 3 / space3). The
+// 16 images come first (sdf_color.slang), then the primitive and style buffers, each bound
+// whole: a primitive slot's data starts at its byte offset.
+#if defined(TACHYON_SDLGPU_FRAGMENT)
+#define SDL_RESOURCES 2
+#define SDL_RESOURCE_SPACE space2
+#define SDL_UNIFORMS 3
+#define SDL_UNIFORM_SPACE space3
+#else
+#define SDL_RESOURCES 0
+#define SDL_RESOURCE_SPACE space0
+#define SDL_UNIFORMS 1
+#define SDL_UNIFORM_SPACE space1
+#endif
+struct PushConstants
+{
+    float4 worldColumns[4];
+    float  elapsedTime;          // seconds since app start
+    uint   firstVertex;          // the draw's first vertex: SV_VertexID starts at 0
+    uint2  _pad;
+    uint4  primitiveOffsets[2];  // bytes into each slot's buffer: box, glyph, dot, line, triangle
+    uint4  imageSlots[4];        // the image slot each of the draw's 16 images is; ~0 for none
+};
+[[vk::binding(0, SDL_UNIFORMS)]] ConstantBuffer<PushConstants> pc : register(b0, SDL_UNIFORM_SPACE);
+
+[[vk::binding(16, SDL_RESOURCES)]] ByteAddressBuffer boxBuffer      : register(t16, SDL_RESOURCE_SPACE);
+[[vk::binding(17, SDL_RESOURCES)]] ByteAddressBuffer glyphBuffer    : register(t17, SDL_RESOURCE_SPACE);
+[[vk::binding(18, SDL_RESOURCES)]] ByteAddressBuffer dotBuffer      : register(t18, SDL_RESOURCE_SPACE);
+[[vk::binding(19, SDL_RESOURCES)]] ByteAddressBuffer lineBuffer     : register(t19, SDL_RESOURCE_SPACE);
+[[vk::binding(20, SDL_RESOURCES)]] ByteAddressBuffer triangleBuffer : register(t20, SDL_RESOURCE_SPACE);
+[[vk::binding(21, SDL_RESOURCES)]] ByteAddressBuffer boxStyles      : register(t21, SDL_RESOURCE_SPACE);
+[[vk::binding(22, SDL_RESOURCES)]] ByteAddressBuffer colorStyles    : register(t22, SDL_RESOURCE_SPACE);
+
+// The `index`-th primitive of type T in slot `slot`, from where the slot's data starts.
+T LoadPrimitive<T>(int slot, int index)
+{
+    const uint offset = pc.primitiveOffsets[slot >> 2][slot & 3] + uint(index) * sizeof(T);
+    switch (slot)
+    {
+    case kBoxSlot:   return boxBuffer.Load<T>(offset);
+    case kGlyphSlot: return glyphBuffer.Load<T>(offset);
+    case kDotSlot:   return dotBuffer.Load<T>(offset);
+    case kLineSlot:  return lineBuffer.Load<T>(offset);
+    default:         return triangleBuffer.Load<T>(offset);
+    }
+}
+BoxStyle   LoadBoxStyle(int index)   { return boxStyles.Load<BoxStyle>(uint(index) * sizeof(BoxStyle)); }
+ColorStyle LoadColorStyle(int index) { return colorStyles.Load<ColorStyle>(uint(index) * sizeof(ColorStyle)); }
+
+struct VertexInput { uint id : SV_VertexID; };
+int VertexIndex(VertexInput input) { return input.id + int(pc.firstVertex); }
 #else
 // Vulkan: the push constants (GPUDrawPushConstants), 128 bytes. The world matrix is its four
 // columns, as the C++ side stores it; a primitive kind's buffer is at its PrimitiveSpec::pushSlot.

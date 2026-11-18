@@ -49,6 +49,10 @@ namespace
         std::vector<std::string_view> extensions;
         if (TACHYON_VULKAN) extensions.push_back(".spv");
         if (TACHYON_D3D12)  extensions.push_back(".dxil");
+        if (TACHYON_SDLGPU) extensions.push_back(".sdl.spv");
+#if defined(_WIN32)
+        if (TACHYON_SDLGPU) extensions.push_back(".sdl.dxil");
+#endif
         if (extensions.empty()) GTEST_SKIP() << "built without a GPU backend";
         for (const PrimitiveSpec& spec : kPrimitiveSpecs)
             for (const std::string_view stage : { ".vert", ".frag" })
@@ -59,10 +63,16 @@ namespace
                 }
     }
 
-    // Direct3D 12 runs only signed DXIL: a container, "DXBC", whose 16-byte hash isn't zero.
+    // Direct3D 12 runs only signed DXIL: a container, "DXBC", whose 16-byte hash isn't zero. Both
+    // the Direct3D 12 backend and SDL GPU (on Windows) build a DXIL pair per primitive kind.
     TEST(BuiltInShaders, TheDXILIsSigned)
     {
-        if (!TACHYON_D3D12) GTEST_SKIP() << "built without Direct3D 12";
+#if defined(_WIN32)
+        const size_t backends = size_t(TACHYON_D3D12) + size_t(TACHYON_SDLGPU);
+#else
+        const size_t backends = size_t(TACHYON_D3D12);
+#endif
+        if (backends == 0) GTEST_SKIP() << "built without a backend that runs DXIL";
         size_t dxil = 0;
         for (const detail::EmbeddedFile& file : detail::EmbeddedShaderFiles())
         {
@@ -75,7 +85,7 @@ namespace
             EXPECT_TRUE(std::any_of(hash.begin(), hash.end(), [](std::byte b) { return b != std::byte{ 0 }; }))
                 << file.key << " is unsigned";
         }
-        EXPECT_EQ(dxil, std::size(kPrimitiveSpecs) * 2);
+        EXPECT_EQ(dxil, std::size(kPrimitiveSpecs) * 2 * backends);
     }
 
     TEST(BuiltInResources, OnlyAtAFolderBoundary)

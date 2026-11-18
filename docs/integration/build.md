@@ -44,7 +44,7 @@ Options (set before `add_subdirectory`):
 | `TACHYON_SDL` | on | Builds the SDL window backend and clipboard. Off builds without SDL. |
 | `TACHYON_VULKAN` | on | Builds the Vulkan graphics backend. Off builds without Vulkan (no Vulkan SDK needed): the app runs on the null backend and draws nothing. |
 | `TACHYON_D3D12` | off | Windows only. Builds the Direct3D 12 backend: an app picks it with `InitializeOptions::graphicsAPI`. Brings D3D12 Memory Allocator. |
-| `TACHYON_SDLGPU` | off | Needs `TACHYON_SDL`. Builds the SDL GPU backend (SDL3's GPU API, over Vulkan, Direct3D 12 or Metal), which is on its way: so far it starts its device and presents its windows, without drawing the UI. |
+| `TACHYON_SDLGPU` | off | Needs `TACHYON_SDL`. Builds the SDL GPU backend (SDL3's GPU API, over Vulkan or Direct3D 12), which is on its way: it draws the UI into its OS windows; render-to-image windows, scenes and Metal come later. |
 | `TACHYON_GPU_TESTS_ON_D3D12` | off | With `TACHYON_D3D12`: runs the whole-app GPU tests (`gui_gpu_tests`) a second time, on Direct3D 12, as `D3D12.<test>`. |
 | `TACHYON_SYSTEM_SDL` | off | Uses the host's SDL3. |
 | `TACHYON_SYSTEM_HARFBUZZ` | off | Uses the host's HarfBuzz. |
@@ -80,7 +80,7 @@ With more than one backend built in, an app picks one when it starts:
   - empty, the default: Vulkan
   - `GraphicsAPI::D3D12`: Direct3D 12
   - `GraphicsAPI::SDLGPU`: SDL3's GPU API, on the driver SDL picks (`SDLGPUGraphicsContext::SetDriver`
-    picks one: `"vulkan"`, `"direct3d12"` or `"metal"`)
+    picks one: `"vulkan"` or `"direct3d12"`)
   - `GraphicsAPI::None`: no GPU, the null backend, which draws nothing
 - A backend that isn't built in makes `Initialize` fail, naming the option that builds it.
   - For example, `D3D12` without `TACHYON_D3D12`: "Direct3D 12 isn't built in: build with

@@ -63,7 +63,8 @@ namespace tachyon::vulkan
 
         void DrawPrimitives(const tachyon::RHI::GpuPipeline& pipeline,
                             const tachyon::GPUDrawPushConstants& pushConstants,
-                            uint32_t primitiveCount, uint32_t firstPrimitive, tachyon::PrimitiveShape shape) override;
+                            uint32_t primitiveCount, uint32_t firstPrimitive, tachyon::PrimitiveShape shape,
+                            std::span<const std::byte> primitives) override;
         void UploadTransientBuffers(std::span<const tachyon::RHI::UploadRequest> requests,
                                     std::span<tachyon::DeviceAddress> addresses) override;
         tachyon::RHI::ResidentBufferId UploadResidentBuffers(std::span<const tachyon::RHI::UploadRequest> requests,

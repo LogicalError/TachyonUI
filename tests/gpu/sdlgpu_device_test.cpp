@@ -6,6 +6,7 @@
 #include <gui_controls/gui_application_internal.h>
 #include <gui_core/windows/gui_window_backend.h>
 
+#include <algorithm>
 #include <vector>
 
 using namespace SDLGPUTestHarness;
@@ -56,6 +57,30 @@ TEST_P(SDLGPUTest, AWindowPresentsAndReadsBackItsFrame)
     windowBackend->DestroyWindow(window);
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
 }
+
+#if defined(_WIN32)
+// A transparent window is layered on Windows: SDL GPU won't claim it, so its frame is read back
+// and shown with UpdateLayeredWindow, and what's not drawn on stays see-through.
+TEST_P(SDLGPUTest, ATransparentWindowIsLayeredAndClearWhereNothingIsDrawn)
+{
+    const tachyon::OSWindowHandle window = windowBackend->CreateWindow("sdlgpu-transparent", tachyon::IntRect{ -3000, -3000, 120, 80 },
+                                                                       tachyon::WindowFlags::Transparent, nullptr);
+    ASSERT_NE(window, nullptr);
+    tachyon::IWindowContext* context = graphics->CreateWindowContext(windowBackend->GetNativeHandle(window), window, tachyon::ID{},
+                                                                     { 120, 80 }, tachyon::WindowFlags::Transparent, {});
+    ASSERT_NE(context, nullptr);
+
+    for (int frame = 0; frame < 3; ++frame)
+        context->RenderWindowFrame(graphics, tachyon::IntRect{ 0, 0, 120, 80 }, false);
+    std::vector<uint8_t> pixels(size_t(120) * 80 * 4);
+    ASSERT_TRUE(context->ReadPixels(pixels));
+    EXPECT_TRUE(std::all_of(pixels.begin(), pixels.end(), [](uint8_t c) { return c == 0; })) << "transparent, not opaque black";
+
+    graphics->DestroyWindowContext(context);
+    windowBackend->DestroyWindow(window);
+    EXPECT_TRUE(sink.Empty()) << sink.Dump();
+}
+#endif
 
 INSTANTIATE_TEST_SUITE_P(Drivers, SDLGPUTest, ::testing::ValuesIn(kDrivers),
                          [](const ::testing::TestParamInfo<const char*>& info) { return std::string(info.param); });

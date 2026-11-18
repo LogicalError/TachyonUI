@@ -183,6 +183,9 @@ list(APPEND GUI_FILES
   gui_core/graphics/gui_primitive_renderer.cpp
 
   gui_core/graphics/gui_render_primitives.h
+  gui_core/graphics/gui_image_batcher.h
+  gui_core/graphics/gui_image_batcher.cpp
+  gui_core/graphics/gui_image_set_text_atlas.h
   gui_core/graphics/gui_pixel_snap.h
 
   gui_core/graphics/gui_renderer.h
@@ -250,8 +253,6 @@ if(TACHYON_D3D12)
     gui_core/graphics/d3d12/d3d12_graphics_context.h
     gui_core/graphics/d3d12/d3d12_rhi.cpp
     gui_core/graphics/d3d12/d3d12_rhi.h
-    gui_core/graphics/d3d12/d3d12_text_atlas.cpp
-    gui_core/graphics/d3d12/d3d12_text_atlas.h
     gui_core/graphics/d3d12/d3d12_window_context.cpp
     gui_core/graphics/d3d12/d3d12_window_context.h)
 endif()
@@ -259,9 +260,12 @@ endif()
 # The SDL GPU backend (TACHYON_SDLGPU), on SDL's own library.
 if(TACHYON_SDLGPU)
   list(APPEND GUI_FILES
+    gui_core/graphics/sdlgpu/sdlgpu_device.cpp
     gui_core/graphics/sdlgpu/sdlgpu_device.h
     gui_core/graphics/sdlgpu/sdlgpu_graphics_context.cpp
     gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h
+    gui_core/graphics/sdlgpu/sdlgpu_rhi.cpp
+    gui_core/graphics/sdlgpu/sdlgpu_rhi.h
     gui_core/graphics/sdlgpu/sdlgpu_window_context.cpp
     gui_core/graphics/sdlgpu/sdlgpu_window_context.h)
 endif()
@@ -350,6 +354,10 @@ if(TACHYON_VULKAN)
 endif()
 if(TACHYON_D3D12)
   target_link_libraries(gui_core PRIVATE d3d12 dxgi d3d12ma)
+endif()
+if(TACHYON_SDLGPU)
+  # Its Vulkan options (SDL_GPUVulkanOptions) are Vulkan's feature structs: the headers only.
+  target_link_libraries(gui_core PRIVATE Vulkan::Headers)
 endif()
 # The graphics backends built in, 0 or 1 each, for code that uses one only when it's there.
 target_compile_definitions(gui_core PUBLIC

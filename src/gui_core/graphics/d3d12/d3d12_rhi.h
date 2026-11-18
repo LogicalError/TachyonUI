@@ -32,7 +32,8 @@ namespace tachyon::d3d12
         void SetSamplerTable(D3D12_GPU_VIRTUAL_ADDRESS table) { m_samplerTable = table; }
 
         void DrawPrimitives(const RHI::GpuPipeline& pipeline, const GPUDrawPushConstants& pushConstants,
-                            uint32_t primitiveCount, uint32_t firstPrimitive, PrimitiveShape shape) override;
+                            uint32_t primitiveCount, uint32_t firstPrimitive, PrimitiveShape shape,
+                            std::span<const std::byte> primitives) override;
         void UploadTransientBuffers(std::span<const RHI::UploadRequest> requests, std::span<DeviceAddress> addresses) override;
         RHI::ResidentBufferId UploadResidentBuffers(std::span<const RHI::UploadRequest> requests,
                                                     std::span<DeviceAddress> addresses) override;
