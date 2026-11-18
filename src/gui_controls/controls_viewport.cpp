@@ -105,7 +105,8 @@ namespace tachyon
                     if (!v->onRender) return;
                     const float aspect = float(size.x) / float(size.y);
                     v->onRender(ViewportRenderContext{ .size = size, .view = v->camera.View(),
-                                                       .projection = v->camera.Projection(aspect), .scene = payload });
+                                                       .projection = ToClipSpace(v->camera.Projection(aspect), payload.API()),
+                                                       .scene = payload });
                 });
         }
 

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <utility>
 
 static constexpr tachyon::Diagnostics::LogCategory kLogD3D12 = tachyon::Diagnostics::MakeLogCategory("d3d12");
 
@@ -44,7 +45,8 @@ namespace tachyon::d3d12
     D3D12WindowContext::D3D12WindowContext(D3D12GraphicsContext& graphics, HWND window, OSWindowHandle osHandle, ID id, WindowFlags flags,
                                            OnGuiFunc onGui)
         : m_graphics(graphics), m_device(graphics.Internal()), m_window(window), m_osHandle(osHandle), m_id(id), m_flags(flags),
-          m_onGui(std::move(onGui)), m_layered(IsLayeredWindow(window))
+          m_onGui(std::move(onGui)), m_toImage((flags & WindowFlags::RenderToImage) != WindowFlags::None),
+          m_layered(!m_toImage && IsLayeredWindow(window))
     {
     }
 
@@ -63,7 +65,7 @@ namespace tachyon::d3d12
 
         const uint32_t width  = uint32_t(std::max(size.x, 1));
         const uint32_t height = uint32_t(std::max(size.y, 1));
-        if (!context->m_layered)
+        if (!context->m_layered && !context->m_toImage)
         {
             DXGI_SWAP_CHAIN_DESC1 desc{};
             desc.Width       = width;
@@ -221,18 +223,27 @@ namespace tachyon::d3d12
         Frame& frame = m_frames[m_frameIndex];
         m_device.Wait(frame.fenceValue);
 
-        // A new size: the frames in flight and their presents finish with the old buffers first.
+        // A new size. A swapchain's frames in flight and their presents finish with the old
+        // buffers first; without one, the old textures are freed once the GPU is past them.
         if (uint32_t(rect.w) != m_width || uint32_t(rect.h) != m_height)
         {
-            m_device.WaitIdle();
-            ReleaseSizedResources();
-            const UINT flags = m_device.tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
             if (m_swapchain)
+            {
+                m_device.WaitIdle();
+                ReleaseSizedResources();
+                const UINT flags = m_device.tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
                 if (HRESULT hr = m_swapchain->ResizeBuffers(kFrames, UINT(rect.w), UINT(rect.h), kDrawFormat, flags); FAILED(hr))
                 {
                     TACHYON_LOG_ERROR(kLogD3D12, "window: ResizeBuffers failed ({})", HResultText(hr));
                     return;
                 }
+            }
+            else
+            {
+                for (Frame& f : m_frames)
+                    m_device.DestroyAfterGpu(std::move(f.drawTexture), m_device.submitted + 1);
+                m_device.DestroyAfterGpu(std::move(m_depth), m_device.submitted + 1);
+            }
             if (!MakeSizedResources(uint32_t(rect.w), uint32_t(rect.h)))
                 return;
         }
@@ -240,6 +251,8 @@ namespace tachyon::d3d12
         frame.allocator->Reset();
         m_list->Reset(frame.allocator.Get(), nullptr);
         m_device.RecordPendingUploads(m_list.Get());
+        // The window's scenes first: its UI samples them.
+        m_device.RecordScenes(m_list.Get(), m_id);
 
         if (frame.drawState != D3D12_RESOURCE_STATE_RENDER_TARGET)
         {
@@ -324,6 +337,13 @@ namespace tachyon::d3d12
 
     std::optional<double> D3D12WindowContext::PresentWindowFrame()
     {
+        if (m_toImage)
+        {
+            // Nothing to show: the next frame takes the other slot.
+            if (std::exchange(m_presentPending, false))
+                m_frameIndex = (m_frameIndex + 1) % kFrames;
+            return std::nullopt;
+        }
         if (m_layered)
         {
             // Read back once the frame is drawn. A layered window doesn't redraw on the OS's

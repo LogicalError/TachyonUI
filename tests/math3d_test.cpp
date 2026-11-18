@@ -75,6 +75,19 @@ namespace tachyon
             EXPECT_NEAR(TransformPoint(ortho, { 0, 0, -11 }).z, 1.0f, 1e-5f);
         }
 
+        TEST(Math3D, AProjectionGoesToTheClipSpaceOfTheSceneAPI)
+        {
+            const float4x4 vulkan = Perspective(kQuarter, 2.0f, 1.0f, 100.0f);
+            EXPECT_EQ(ToClipSpace(vulkan, GraphicsAPI::Vulkan), vulkan) << "Vulkan's as it is";
+            const float4x4 d3d12 = ToClipSpace(vulkan, GraphicsAPI::D3D12);
+            const float3 point{ 2, 1, -5 };
+            const float3 inVulkan = TransformPoint(vulkan, point), inD3D12 = TransformPoint(d3d12, point);
+            EXPECT_GT(inD3D12.y, 0.0f) << "up is +y in Direct3D's clip space";
+            EXPECT_NEAR(inD3D12.y, -inVulkan.y, 1e-6f);
+            EXPECT_NEAR(inD3D12.x, inVulkan.x, 1e-6f) << "x as it is";
+            EXPECT_NEAR(inD3D12.z, inVulkan.z, 1e-6f) << "depth 0 to 1 in both";
+        }
+
         TEST(Math3D, RaysMeetPlanesAndLines)
         {
             const Ray down{ { 0, 5, 0 }, { 0, -1, 0 } };

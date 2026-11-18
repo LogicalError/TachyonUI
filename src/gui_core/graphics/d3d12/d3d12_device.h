@@ -12,6 +12,7 @@
 #include <D3D12MemAlloc.h>
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <span>
@@ -134,6 +135,7 @@ namespace tachyon::d3d12
         /// everything let go while frames are built; 0 for what no command list refers to.
         void DestroyAfterGpu(ComPtr<D3D12MA::Allocation> allocation, UINT64 afterValue);
         void DestroyAfterGpu(std::unique_ptr<D3D12Image> image, UINT64 afterValue);
+        void DestroyAfterGpu(ComPtr<ID3D12Resource> resource, UINT64 afterValue);
         /// Frees what the GPU is done with.
         void FlushDeletions();
 
@@ -142,6 +144,7 @@ namespace tachyon::d3d12
             UINT64                      afterValue = 0;
             ComPtr<D3D12MA::Allocation> allocation;
             std::unique_ptr<D3D12Image> image;
+            ComPtr<ID3D12Resource>      resource;
         };
         std::mutex           garbageMutex;   ///< images are let go on any thread
         std::vector<Garbage> garbage;
@@ -196,5 +199,41 @@ namespace tachyon::d3d12
 
         /// Grows the quads' index buffer to hold `quads`; false when it can't.
         bool EnsureQuadIndices(uint32_t quads);
+
+        // ---- Scenes the app draws (RenderScene) ----------------------------------------
+        static constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+        static constexpr uint64_t    kSceneKeepFrames  = 4;   ///< a scene not asked for this long goes
+
+        /// What RenderScene keeps for a key: its color texture (in the image set) and depth,
+        /// both in liveImages, and a view of each.
+        struct Scene
+        {
+            D3D12Image*                  color = nullptr;
+            D3D12Image*                  depth = nullptr;
+            ComPtr<ID3D12DescriptorHeap> rtv;
+            ComPtr<ID3D12DescriptorHeap> dsv;
+            ImageIndex                   index = ImageIndex::Invalid;
+            uint2                        extent {};
+            uint64_t                     lastFrame = 0;   ///< the frame it was last asked for
+        };
+        struct SceneRequest
+        {
+            ID      key;
+            ID      window;
+            color4f clear;
+            std::function<void(const ScenePayload& scene)> record;
+        };
+        std::unordered_map<ID, Scene> scenes;
+        std::vector<SceneRequest>     sceneRequests;
+        uint64_t                      sceneFrame = 0;
+
+        /// Records the scenes asked for in `window` this frame, before its UI.
+        void RecordScenes(ID3D12GraphicsCommandList* list, ID window);
+
+        /// A texture the GPU draws into (a scene's), in liveImages so DestroyImageAtEnd frees
+        /// it; null on failure. `clear`: its optimized clear value, or null when it's cleared to
+        /// values not known in advance.
+        D3D12Image* CreateTargetImage(uint2 size, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags, D3D12_RESOURCE_STATES state,
+                                      const D3D12_CLEAR_VALUE* clear, Sampler sampler);
     };
 }

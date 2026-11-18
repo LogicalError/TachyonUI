@@ -2,11 +2,18 @@
 
 #include <gui_core/diagnostics/gui_logging.h>
 #include <gui_core/gui_embedded_files_internal.h>
+#if TACHYON_VULKAN
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>
 #include <gui_core/graphics/vulkan/vk_pipelines.h>
+#endif
+#if TACHYON_D3D12
+#include <gui_core/graphics/d3d12/d3d12_graphics_context.h>
+#include <d3d12.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <numbers>
 #include <vector>
 
@@ -14,7 +21,8 @@ static constexpr tachyon::Diagnostics::LogCategory kLogScene = tachyon::Diagnost
 
 namespace tachyon::detail
 {
-    /// The showcase's compiled shaders (scene.vert.spv, scene.frag.spv), built in by CMake.
+    /// The showcase's compiled shaders (scene.vert.spv and scene.frag.spv with Vulkan,
+    /// scene.vert.dxil and scene.frag.dxil with Direct3D 12), built in by CMake.
     std::span<const EmbeddedFile> ShowcaseShaderFiles();
 }
 
@@ -24,13 +32,9 @@ namespace tachyon
     {
         constexpr float kPi = std::numbers::pi_v<float>;
 
-        // As scene.slang reads them.
-        struct Vertex
-        {
-            float4 position;
-            float4 normal;
-        };
+        using Vertex = SceneRenderer::Vertex;
 
+#if TACHYON_VULKAN
         struct Push
         {
             float4x4        mvp;
@@ -38,6 +42,18 @@ namespace tachyon
             float4          light;
             VkDeviceAddress vertices;
         };
+#endif
+#if TACHYON_D3D12
+        // The root constants (b0): Push's values, and the draw's first vertex.
+        struct D3D12Push
+        {
+            float4x4 mvp;
+            color4f  color;
+            float4   light;
+            uint32_t firstVertex;
+        };
+        static_assert(sizeof(D3D12Push) == 25 * 4);
+#endif
 
         void Triangle(std::vector<Vertex>& out, float3 a, float3 b, float3 c, float3 n)
         {
@@ -91,6 +107,7 @@ namespace tachyon
             }
         }
 
+#if TACHYON_VULKAN
         VkShaderModule Module(VkDevice device, const VkAllocationCallbacks* callbacks, std::string_view name)
         {
             const std::span<const std::byte> code = detail::FindEmbeddedFile(detail::ShowcaseShaderFiles(), name);
@@ -102,15 +119,12 @@ namespace tachyon
             VkShaderModule module = VK_NULL_HANDLE;
             return vkCreateShaderModule(device, &info, callbacks, &module) == VK_SUCCESS ? module : VK_NULL_HANDLE;
         }
+#endif
     }
 
-    bool SceneRenderer::Create(vulkan::VulkanGraphicsContext& vk, VkFormat colorFormat, VkFormat depthFormat)
+    std::vector<SceneRenderer::Vertex> SceneRenderer::BuildMeshes()
     {
-        vulkan::VulkanDeviceContext& dc = vk.deviceContext;
-        const VkDevice device = dc.device;
-        const VkAllocationCallbacks* callbacks = dc.AllocationCallbacks();
-
-        // The meshes, all in one buffer the shaders read by address.
+        // The meshes, all in one buffer the shaders read.
         std::vector<Vertex> vertices;
         auto add = [&](auto&& build) {
             const uint32_t first = uint32_t(vertices.size());
@@ -131,6 +145,42 @@ namespace tachyon
         });
         m_axisX = add([](std::vector<Vertex>& out) { out.push_back({ { -10, 0, 0, 1 }, {} }); out.push_back({ { 10, 0, 0, 1 }, {} }); });
         m_axisZ = add([](std::vector<Vertex>& out) { out.push_back({ { 0, 0, -10, 1 }, {} }); out.push_back({ { 0, 0, 10, 1 }, {} }); });
+        return vertices;
+    }
+
+    template <class Use, class Draw>
+    void SceneRenderer::Walk(const ViewportRenderContext& ctx, std::span<const SceneObject> objects, int selected,
+                             Use&& use, Draw&& draw) const
+    {
+        const float4x4 viewProjection = ctx.projection * ctx.view;
+        use(true);
+        draw(m_grid,  viewProjection, color4f{ 0.35f, 0.38f, 0.44f, 0.6f }, float4{});
+        draw(m_axisX, viewProjection, color4f{ 0.94f, 0.42f, 0.42f, 0.9f }, float4{});
+        draw(m_axisZ, viewProjection, color4f{ 0.42f, 0.61f, 1.00f, 0.9f }, float4{});
+
+        use(false);
+        const float3 sun = Normalize({ 0.4f, 0.8f, 0.5f });
+        for (int i = 0; i < (int)objects.size(); ++i)
+        {
+            const SceneObject& o = objects[size_t(i)];
+            // The light in the object's own space, as its normals are.
+            const quat inverse{ -o.transform.rotation.x, -o.transform.rotation.y, -o.transform.rotation.z, o.transform.rotation.w };
+            const float3 light = inverse.Rotate(sun);
+            color4f color = o.color;
+            if (i == selected)
+                color = { color.r + (1.0f - color.r) * 0.3f, color.g + (1.0f - color.g) * 0.3f, color.b + (1.0f - color.b) * 0.3f, color.a };
+            draw(m_meshes[size_t(o.mesh)], viewProjection * o.transform.Matrix(), color, float4{ light.x, light.y, light.z, 1.0f });
+        }
+    }
+
+#if TACHYON_VULKAN
+    bool SceneRenderer::CreateVulkan(vulkan::VulkanGraphicsContext& vk, VkFormat colorFormat, VkFormat depthFormat)
+    {
+        vulkan::VulkanDeviceContext& dc = vk.deviceContext;
+        const VkDevice device = dc.device;
+        const VkAllocationCallbacks* callbacks = dc.AllocationCallbacks();
+
+        const std::vector<Vertex> vertices = BuildMeshes();
         const vulkan::Buffer buffer = dc.CreateMappedStorageBuffer(vertices.data(), vertices.size() * sizeof(Vertex), m_vertices);
 
         const VkPushConstantRange range{ VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(Push) };
@@ -183,7 +233,7 @@ namespace tachyon
         if (!m_created)
         {
             m_created = true;
-            if (!Create(vk, target.colorFormat, target.depthFormat))
+            if (!CreateVulkan(vk, target.colorFormat, target.depthFormat))
             {
                 m_failed = true;
                 TACHYON_LOG_ERROR(kLogScene, "The scene's pipelines weren't made; the viewport shows its background only");
@@ -191,30 +241,155 @@ namespace tachyon
             }
         }
         const VkCommandBuffer cmd = target.commandBuffer;
-        const float4x4 viewProjection = ctx.projection * ctx.view;
-        auto draw = [&](Range range, const float4x4& model, color4f color, float4 light) {
-            const Push push{ viewProjection * model, color, light, m_vertices };
-            vkCmdPushConstants(cmd, m_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(Push), &push);
-            vkCmdDraw(cmd, range.count, 1, range.first, 0);
-        };
+        Walk(ctx, objects, selected,
+            [&](bool lines) { vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, lines ? m_lines : m_shapes); },
+            [&](Range range, const float4x4& mvp, color4f color, float4 light) {
+                const Push push{ mvp, color, light, m_vertices };
+                vkCmdPushConstants(cmd, m_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(Push), &push);
+                vkCmdDraw(cmd, range.count, 1, range.first, 0);
+            });
+    }
+#endif
 
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_lines);
-        draw(m_grid,  {}, { 0.35f, 0.38f, 0.44f, 0.6f }, {});
-        draw(m_axisX, {}, { 0.94f, 0.42f, 0.42f, 0.9f }, {});
-        draw(m_axisZ, {}, { 0.42f, 0.61f, 1.00f, 0.9f }, {});
-
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_shapes);
-        const float3 sun = Normalize({ 0.4f, 0.8f, 0.5f });
-        for (int i = 0; i < (int)objects.size(); ++i)
+#if TACHYON_D3D12
+    namespace
+    {
+        template <class T>
+        void Release(T*& object)
         {
-            const SceneObject& o = objects[size_t(i)];
-            // The light in the object's own space, as its normals are.
-            const quat inverse{ -o.transform.rotation.x, -o.transform.rotation.y, -o.transform.rotation.z, o.transform.rotation.w };
-            const float3 light = inverse.Rotate(sun);
-            color4f color = o.color;
-            if (i == selected)
-                color = { color.r + (1.0f - color.r) * 0.3f, color.g + (1.0f - color.g) * 0.3f, color.b + (1.0f - color.b) * 0.3f, color.a };
-            draw(m_meshes[size_t(o.mesh)], o.transform.Matrix(), color, { light.x, light.y, light.z, 1.0f });
+            if (object != nullptr)
+                object->Release();
+            object = nullptr;
         }
     }
+
+    bool SceneRenderer::CreateD3D12(const d3d12::D3D12SceneRender& target)
+    {
+        ID3D12Device* device = nullptr;
+        if (FAILED(target.commandList->GetDevice(IID_PPV_ARGS(&device))))
+            return false;
+        // Released at the end: what's made from the device holds it.
+        struct DeviceRef { ID3D12Device* d; ~DeviceRef() { d->Release(); } } deviceRef{ device };
+
+        // The meshes, in an upload heap the vertex shader reads (t0).
+        const std::vector<Vertex> vertices = BuildMeshes();
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_UPLOAD;
+        D3D12_RESOURCE_DESC buffer{};
+        buffer.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER;
+        buffer.Width            = vertices.size() * sizeof(Vertex);
+        buffer.Height           = 1;
+        buffer.DepthOrArraySize = 1;
+        buffer.MipLevels        = 1;
+        buffer.SampleDesc       = { 1, 0 };
+        buffer.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        if (FAILED(device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                   IID_PPV_ARGS(&m_d3dVertices))))
+            return false;
+        void* mapped = nullptr;
+        const D3D12_RANGE none{ 0, 0 };
+        if (FAILED(m_d3dVertices->Map(0, &none, &mapped)))
+            return false;
+        std::memcpy(mapped, vertices.data(), size_t(buffer.Width));
+        m_d3dVertices->Unmap(0, nullptr);
+
+        // The root constants (b0) and the vertices (t0), as scene.slang declares them.
+        D3D12_ROOT_PARAMETER parameters[2]{};
+        parameters[0].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        parameters[0].Constants.Num32BitValues = sizeof(D3D12Push) / 4;
+        parameters[0].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
+        parameters[1].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        parameters[1].ShaderVisibility         = D3D12_SHADER_VISIBILITY_VERTEX;
+        D3D12_ROOT_SIGNATURE_DESC rootDesc{};
+        rootDesc.NumParameters = 2;
+        rootDesc.pParameters   = parameters;
+        ID3DBlob* blob = nullptr;
+        const bool serialized = SUCCEEDED(D3D12SerializeRootSignature(&rootDesc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, nullptr));
+        const bool rooted = serialized && SUCCEEDED(device->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                                                                IID_PPV_ARGS(&m_d3dRoot)));
+        if (blob != nullptr)
+            blob->Release();
+        if (!rooted)
+            return false;
+
+        const std::span<const std::byte> vs = detail::FindEmbeddedFile(detail::ShowcaseShaderFiles(), "scene.vert.dxil");
+        const std::span<const std::byte> ps = detail::FindEmbeddedFile(detail::ShowcaseShaderFiles(), "scene.frag.dxil");
+        if (vs.empty() || ps.empty())
+            return false;
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
+        desc.pRootSignature = m_d3dRoot;
+        desc.VS = { vs.data(), vs.size() };
+        desc.PS = { ps.data(), ps.size() };
+        desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        desc.SampleMask = UINT_MAX;
+        desc.RasterizerState.FillMode        = D3D12_FILL_MODE_SOLID;
+        desc.RasterizerState.CullMode        = D3D12_CULL_MODE_NONE;
+        desc.RasterizerState.DepthClipEnable = TRUE;
+        desc.DepthStencilState.DepthEnable    = TRUE;
+        desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        desc.DepthStencilState.DepthFunc      = D3D12_COMPARISON_FUNC_LESS_EQUAL;
+        desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets      = 1;
+        desc.RTVFormats[0]         = target.colorFormat;
+        desc.DSVFormat             = target.depthFormat;
+        desc.SampleDesc            = { 1, 0 };
+        if (FAILED(device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&m_d3dShapes))))
+            return false;
+
+        // The grid: alpha blended, over everything.
+        D3D12_RENDER_TARGET_BLEND_DESC& blend = desc.BlendState.RenderTarget[0];
+        blend.BlendEnable    = TRUE;
+        blend.SrcBlend       = D3D12_BLEND_SRC_ALPHA;
+        blend.DestBlend      = D3D12_BLEND_INV_SRC_ALPHA;
+        blend.BlendOp        = D3D12_BLEND_OP_ADD;
+        blend.SrcBlendAlpha  = D3D12_BLEND_ONE;
+        blend.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+        blend.BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+        desc.DepthStencilState.DepthEnable    = FALSE;
+        desc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+        desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+        return SUCCEEDED(device->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&m_d3dLines)));
+    }
+
+    void SceneRenderer::Render(const d3d12::D3D12SceneRender& target, const ViewportRenderContext& ctx,
+                               std::span<const SceneObject> objects, int selected)
+    {
+        if (m_failed)
+            return;
+        if (!m_created)
+        {
+            m_created = true;
+            if (!CreateD3D12(target))
+            {
+                m_failed = true;
+                ReleaseD3D12();
+                TACHYON_LOG_ERROR(kLogScene, "The scene's pipelines weren't made; the viewport shows its background only");
+                return;
+            }
+        }
+        ID3D12GraphicsCommandList* list = target.commandList;
+        list->SetGraphicsRootSignature(m_d3dRoot);
+        list->SetGraphicsRootShaderResourceView(1, m_d3dVertices->GetGPUVirtualAddress());
+        Walk(ctx, objects, selected,
+            [&](bool lines) {
+                list->SetPipelineState(lines ? m_d3dLines : m_d3dShapes);
+                list->IASetPrimitiveTopology(lines ? D3D_PRIMITIVE_TOPOLOGY_LINELIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            },
+            [&](Range range, const float4x4& mvp, color4f color, float4 light) {
+                const D3D12Push push{ mvp, color, light, range.first };
+                list->SetGraphicsRoot32BitConstants(0, sizeof(D3D12Push) / 4, &push, 0);
+                list->DrawInstanced(range.count, 1, 0, 0);
+            });
+    }
+
+    void SceneRenderer::ReleaseD3D12()
+    {
+        Release(m_d3dLines);
+        Release(m_d3dShapes);
+        Release(m_d3dRoot);
+        Release(m_d3dVertices);
+    }
+#else
+    void SceneRenderer::ReleaseD3D12() {}
+#endif
 }

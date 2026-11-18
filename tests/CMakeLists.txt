@@ -267,6 +267,16 @@ if(TACHYON_SDL AND (TACHYON_VULKAN OR TACHYON_D3D12))
     gpu/gpu_tutorial_test.cpp)
   target_sources(gui_gpu_tests PRIVATE ${TACHYON_TUTORIAL_SOURCES})
   source_group("Tutorial" FILES ${TACHYON_TUTORIAL_SOURCES})
+
+  # The same tests again on Direct3D 12 (gui_gpu_tests --graphics=d3d12), as D3D12.<test>.
+  # Off by default: it doubles the GPU tests' time, for work on that backend and its CI job.
+  if(TACHYON_D3D12)
+    option(TACHYON_GPU_TESTS_ON_D3D12 "Run gui_gpu_tests a second time, on Direct3D 12" OFF)
+    if(TACHYON_GPU_TESTS_ON_D3D12)
+      gtest_discover_tests(gui_gpu_tests DISCOVERY_MODE PRE_TEST DISCOVERY_TIMEOUT 60
+                           TEST_PREFIX "D3D12." EXTRA_ARGS "--graphics=d3d12")
+    endif()
+  endif()
 endif()
 
 if(TACHYON_SDL AND TACHYON_VULKAN)
@@ -290,5 +300,6 @@ if(TACHYON_SDL AND TACHYON_D3D12)
   tachyon_add_gpu_tests(gui_d3d12_tests
     gpu/d3d12_test_harness.h
     gpu/d3d12_device_test.cpp
-    gpu/d3d12_draw_test.cpp)
+    gpu/d3d12_draw_test.cpp
+    gpu/d3d12_scene_test.cpp)
 endif()

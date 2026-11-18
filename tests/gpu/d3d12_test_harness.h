@@ -11,6 +11,7 @@
 
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace D3D12TestHarness
@@ -20,8 +21,12 @@ namespace D3D12TestHarness
     {
         std::mutex               mutex;
         std::vector<std::string> messages;
+        /// Messages containing one of these aren't recorded: for a test whose own Direct3D
+        /// calls (an app's, not the backend's) draw a known message.
+        std::vector<std::string> ignored;
 
         void Clear() { std::lock_guard lock(mutex); messages.clear(); }
+        void Ignore(std::string text) { std::lock_guard lock(mutex); ignored.push_back(std::move(text)); }
         bool Empty() { std::lock_guard lock(mutex); return messages.empty(); }
         std::string Dump()
         {
@@ -38,6 +43,9 @@ namespace D3D12TestHarness
                 return;
             auto* sink = static_cast<DebugSink*>(user);
             std::lock_guard lock(sink->mutex);
+            for (const std::string& ignore : sink->ignored)
+                if (std::string_view(message).find(ignore) != std::string_view::npos)
+                    return;
             sink->messages.emplace_back(std::string(severity == tachyon::d3d12::DebugSeverity::Error ? "[error] " : "[warning] ") + message);
         }
     };

@@ -9,6 +9,7 @@
 #include <gui_core/diagnostics/gui_logging.h>
 #include <gui_core/style/gui_gradient_manager.h>
 #include <gui_core/style/gui_style_manager.h>
+#include <gui_core/windows/gui_window_flags.h>
 
 #include <algorithm>
 #include <cassert>
@@ -82,6 +83,18 @@ namespace tachyon::d3d12
                 to[2] = stored.sourceBytes > 2 ? from[2] : 0;
                 to[3] = 255;
             }
+        }
+
+        // Lets go of a scene's textures and image slot.
+        void ReleaseScene(D3D12GraphicsContext& graphics, D3D12GraphicsContext::Impl::Scene& scene)
+        {
+            if (scene.index != ImageIndex::Invalid)
+                graphics.UnregisterImage(scene.index);
+            if (scene.color != nullptr)
+                graphics.DestroyImageAtEnd(scene.color, DeviceScope::Frame);
+            if (scene.depth != nullptr)
+                graphics.DestroyImageAtEnd(scene.depth, DeviceScope::Frame);
+            scene = {};
         }
 
         // The debug layer's messages, to the test's callback or the log.
@@ -252,7 +265,10 @@ namespace tachyon::d3d12
         Impl& d = *m_impl;
         d.WaitIdle();
 
-        // What's left of the GPU memory, before the allocator and the device go.
+        // What's left of the GPU memory, before the allocator and the device go. Scenes' textures
+        // are among the live images.
+        d.sceneRequests.clear();
+        d.scenes.clear();
         {
             std::lock_guard lock(d.uploadMutex);
             d.imageUploads.clear();
@@ -318,8 +334,66 @@ namespace tachyon::d3d12
 
     void D3D12GraphicsContext::BeginFrame()
     {
-        m_impl->FlushDeletions();
+        Impl& d = *m_impl;
+        d.FlushDeletions();
         NullGraphicsContext::BeginFrame();
+
+        // Last frame's scenes are recorded; the ones no longer asked for go.
+        d.sceneRequests.clear();
+        ++d.sceneFrame;
+        for (auto it = d.scenes.begin(); it != d.scenes.end();)
+        {
+            if (d.sceneFrame - it->second.lastFrame > Impl::kSceneKeepFrames)
+            {
+                ReleaseScene(*this, it->second);
+                it = d.scenes.erase(it);
+            }
+            else
+                ++it;
+        }
+    }
+
+    ImageIndex D3D12GraphicsContext::RenderScene(ID key, ID window, uint2 size, color4f clear,
+                                                 std::function<void(const ScenePayload& scene)> record)
+    {
+        Impl& d = *m_impl;
+        if (!d.device || size.x == 0 || size.y == 0)
+            return ImageIndex::Invalid;
+        MarkContentChanged();   // its pixels are drawn again, its image slot the same
+        Impl::Scene& scene = d.scenes[key];
+        scene.lastFrame = d.sceneFrame;
+        if (scene.color == nullptr || scene.extent != size)
+        {
+            // Made again at the new size; the old textures go once the frames using them are done.
+            ReleaseScene(*this, scene);
+            scene.lastFrame = d.sceneFrame;
+            // Cleared to the app's clear color each frame, and depth to 1: their optimized clears.
+            D3D12_CLEAR_VALUE colorClear{};
+            colorClear.Format = Impl::kSceneColorFormat;
+            std::memcpy(colorClear.Color, &clear, sizeof(colorClear.Color));
+            D3D12_CLEAR_VALUE depthClear{};
+            depthClear.Format             = kDepthFormat;
+            depthClear.DepthStencil.Depth = 1.0f;
+            scene.color = d.CreateTargetImage(size, Impl::kSceneColorFormat, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+                                              D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+                                              &colorClear, Sampler::LinearClampToEdge);
+            scene.depth = d.CreateTargetImage(size, kDepthFormat, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL | D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE,
+                                              D3D12_RESOURCE_STATE_DEPTH_WRITE, &depthClear, Sampler::NearestRepeat);
+            const D3D12_DESCRIPTOR_HEAP_DESC rtvDesc{ D3D12_DESCRIPTOR_HEAP_TYPE_RTV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0 };
+            const D3D12_DESCRIPTOR_HEAP_DESC dsvDesc{ D3D12_DESCRIPTOR_HEAP_TYPE_DSV, 1, D3D12_DESCRIPTOR_HEAP_FLAG_NONE, 0 };
+            if (scene.color == nullptr || scene.depth == nullptr || FAILED(d.device->CreateDescriptorHeap(&rtvDesc, IID_PPV_ARGS(&scene.rtv)))
+                || FAILED(d.device->CreateDescriptorHeap(&dsvDesc, IID_PPV_ARGS(&scene.dsv))))
+            {
+                ReleaseScene(*this, scene);
+                return ImageIndex::Invalid;
+            }
+            d.device->CreateRenderTargetView(scene.color->Resource(), nullptr, scene.rtv->GetCPUDescriptorHandleForHeapStart());
+            d.device->CreateDepthStencilView(scene.depth->Resource(), nullptr, scene.dsv->GetCPUDescriptorHandleForHeapStart());
+            scene.extent = size;
+            scene.index  = RegisterImage(scene.color);
+        }
+        d.sceneRequests.push_back({ key, window, clear, std::move(record) });
+        return scene.index;
     }
 
     Image* D3D12GraphicsContext::CreateImage(void* data, uint2 size, ImageFormat format, Sampler sampler, bool)
@@ -488,7 +562,8 @@ namespace tachyon::d3d12
     IWindowContext* D3D12GraphicsContext::CreateWindowContext(void* nativeWindowHandle, OSWindowHandle osHandle, ID id, int2 size,
                                                               WindowFlags windowFlags, OnGuiFunc onGui)
     {
-        if (nativeWindowHandle == nullptr || !m_impl->device)
+        const bool toImage = (windowFlags & WindowFlags::RenderToImage) != WindowFlags::None;
+        if (!m_impl->device || (nativeWindowHandle == nullptr && !toImage))
             return NullGraphicsContext::CreateWindowContext(nativeWindowHandle, osHandle, id, size, windowFlags, std::move(onGui));
         return D3D12WindowContext::Create(*this, static_cast<HWND>(nativeWindowHandle), osHandle, id, size, windowFlags, std::move(onGui));
     }

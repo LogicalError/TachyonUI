@@ -114,7 +114,7 @@ namespace tachyon::d3d12
         if (!allocation)
             return;
         std::lock_guard lock(garbageMutex);
-        garbage.push_back({ afterValue, std::move(allocation), nullptr });
+        garbage.push_back({ afterValue, std::move(allocation), nullptr, nullptr });
     }
 
     void D3D12GraphicsContext::Impl::DestroyAfterGpu(std::unique_ptr<D3D12Image> image, UINT64 afterValue)
@@ -122,7 +122,15 @@ namespace tachyon::d3d12
         if (!image)
             return;
         std::lock_guard lock(garbageMutex);
-        garbage.push_back({ afterValue, nullptr, std::move(image) });
+        garbage.push_back({ afterValue, nullptr, std::move(image), nullptr });
+    }
+
+    void D3D12GraphicsContext::Impl::DestroyAfterGpu(ComPtr<ID3D12Resource> resource, UINT64 afterValue)
+    {
+        if (!resource)
+            return;
+        std::lock_guard lock(garbageMutex);
+        garbage.push_back({ afterValue, nullptr, nullptr, std::move(resource) });
     }
 
     void D3D12GraphicsContext::Impl::FlushDeletions()
@@ -251,6 +259,72 @@ namespace tachyon::d3d12
         quadIndices  = std::move(buffer);
         quadCapacity = capacity;
         return true;
+    }
+
+    // ---- Scenes ---------------------------------------------------------------------------
+
+    D3D12Image* D3D12GraphicsContext::Impl::CreateTargetImage(uint2 size, DXGI_FORMAT format, D3D12_RESOURCE_FLAGS flags,
+                                                              D3D12_RESOURCE_STATES state, const D3D12_CLEAR_VALUE* clear, Sampler sampler)
+    {
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width            = size.x;
+        desc.Height           = size.y;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels        = 1;
+        desc.Format           = format;
+        desc.SampleDesc       = { 1, 0 };
+        desc.Flags            = flags;
+        auto image = std::make_unique<D3D12Image>();
+        image->format  = format;
+        image->sampler = sampler;
+        image->size    = size;
+        D3D12MA::ALLOCATION_DESC alloc{};
+        alloc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+        if (HRESULT hr = allocator->CreateResource(&alloc, &desc, state, clear, &image->allocation, IID_NULL, nullptr); FAILED(hr))
+        {
+            TACHYON_LOG_ERROR(kLogD3D12, "a target of {}x{} failed ({})", size.x, size.y, HResultText(hr));
+            return nullptr;
+        }
+        std::lock_guard lock(uploadMutex);
+        liveImages.insert(image.get());
+        return image.release();
+    }
+
+    void D3D12GraphicsContext::Impl::RecordScenes(ID3D12GraphicsCommandList* list, ID window)
+    {
+        constexpr D3D12_RESOURCE_STATES sampled = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        for (const SceneRequest& request : sceneRequests)
+        {
+            if (request.window != window)
+                continue;
+            const auto it = scenes.find(request.key);
+            if (it == scenes.end() || it->second.color == nullptr)
+                continue;
+            const Scene& scene = it->second;
+
+            const D3D12_RESOURCE_BARRIER toTarget = Transition(scene.color->Resource(), sampled, D3D12_RESOURCE_STATE_RENDER_TARGET);
+            list->ResourceBarrier(1, &toTarget);
+            const D3D12_CPU_DESCRIPTOR_HANDLE rtv = scene.rtv->GetCPUDescriptorHandleForHeapStart();
+            const D3D12_CPU_DESCRIPTOR_HANDLE dsv = scene.dsv->GetCPUDescriptorHandleForHeapStart();
+            const float clear[4] = { request.clear.r, request.clear.g, request.clear.b, request.clear.a };
+            list->ClearRenderTargetView(rtv, clear, 0, nullptr);
+            list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+            list->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+            const D3D12_VIEWPORT viewport{ 0.0f, 0.0f, float(scene.extent.x), float(scene.extent.y), 0.0f, 1.0f };
+            const D3D12_RECT     scissor{ 0, 0, LONG(scene.extent.x), LONG(scene.extent.y) };
+            list->RSSetViewports(1, &viewport);
+            list->RSSetScissorRects(1, &scissor);
+            if (request.record)
+            {
+                const D3D12SceneRender state{ list, kSceneColorFormat, kDepthFormat, scene.extent, rtv.ptr, dsv.ptr };
+                request.record(ScenePayload(state));
+            }
+
+            // Ready for the UI's shaders in this frame.
+            const D3D12_RESOURCE_BARRIER toSampled = Transition(scene.color->Resource(), D3D12_RESOURCE_STATE_RENDER_TARGET, sampled);
+            list->ResourceBarrier(1, &toSampled);
+        }
     }
 
     // ---- The image set -------------------------------------------------------------------

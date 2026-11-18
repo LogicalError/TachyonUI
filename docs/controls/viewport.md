@@ -36,7 +36,7 @@ Each frame the viewport calls `onRender`, with:
 | Field | What it is |
 | --- | --- |
 | `size` | The image's size, in pixels |
-| `view`, `projection` | The camera's matrices |
+| `view`, `projection` | The camera's matrices; the projection is to your API's clip space |
 | `scene` | The backend's own recording state |
 
 - `scene` gives that state as the struct of the API the backend renders with:
@@ -46,8 +46,17 @@ Each frame the viewport calls `onRender`, with:
   - `commandBuffer`, with dynamic rendering already begun
   - `colorFormat` (`R8G8B8A8_UNORM`) and `depthFormat` (`D32_SFLOAT`), for your pipelines
   - `extent`; the viewport and scissor are already set to all of it
+- On Direct3D 12, it's a `D3D12SceneRender` (`d3d12_graphics_context.h`):
+  - `commandList`, with the scene's color and depth textures set as its render targets
+  - `colorFormat` (`DXGI_FORMAT_R8G8B8A8_UNORM`) and `depthFormat` (`DXGI_FORMAT_D32_FLOAT`),
+    for your pipeline states
+  - `extent`; the viewport and scissor are already set to all of it
+  - `renderTargetView` and `depthStencilView`: the targets' views, to clear part of them or
+    set them again after drawing elsewhere
+  - Set your own root signature, pipeline state and descriptor heaps; the UI sets its own
+    again after. Leave the textures in the states they're in.
 - The color is cleared to `view.background` and the depth to 1. Bind your pipeline and draw;
-  leave the rendering open.
+  on Vulkan, leave the rendering open.
 - The layouts, the synchronization and showing the image are the library's.
 
 ```cpp
@@ -69,7 +78,7 @@ void DrawScene(const ViewportRenderContext& ctx)
   cached panel.
 - Without a GPU backend (the headless test app), `onRender` isn't called. The view shows
   `background`.
-- The showcase's Viewport panel draws a few shapes on a grid this way:
+- The showcase's Viewport panel draws a few shapes on a grid this way, with either API:
   `examples/showcase/scene_renderer.cpp`.
 
 ### The matrices
@@ -82,7 +91,10 @@ void DrawScene(const ViewportRenderContext& ctx)
   - In Slang, read them as four `float4` rows and take a `dot` with each.
     - For example, the showcase's `examples/showcase/shaders/scene.slang`.
 - Right-handed, y up.
-- Clip space is Vulkan's: y down, depth from 0 (near) to 1 (far).
+- `Perspective` and `Orthographic` project to Vulkan's clip space: y down, depth from 0 (near)
+  to 1 (far).
+  - `ToClipSpace(projection, api)` makes it Direct3D's, which has y up.
+  - `ctx.projection` is already in your API's clip space.
 
 ## The camera
 

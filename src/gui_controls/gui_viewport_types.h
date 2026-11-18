@@ -81,10 +81,12 @@ namespace tachyon
         Center            ///< the middle: move in the view's plane, or scale all three ways
     };
 
-    /// What the app's onRender gets each frame: the target's size and the camera's matrices.
-    /// The backend's own recording state is in `scene`: ask for the one you draw with
-    /// (Vulkan: scene.As<vulkan::VulkanSceneRender>(), the command buffer and formats, the
-    /// rendering begun).
+    /// What the app's onRender gets each frame: the target's size and the camera's matrices,
+    /// the projection to the clip space of the scene's API (ToClipSpace). The backend's own
+    /// recording state is in `scene`: ask for the one you draw with (Vulkan:
+    /// scene.As<vulkan::VulkanSceneRender>(), the command buffer and formats, the rendering
+    /// begun; Direct3D 12: scene.As<d3d12::D3D12SceneRender>(), the command list with the
+    /// targets set).
     struct ViewportRenderContext
     {
         uint2        size {};        ///< pixels

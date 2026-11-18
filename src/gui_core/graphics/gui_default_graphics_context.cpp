@@ -1,4 +1,5 @@
 #include <gui_core/graphics/gui_default_graphics_context.h>
+#include <gui_core/graphics/gui_default_graphics_context_internal.h>
 
 #include <gui_core/graphics/null/gui_null_graphics_context.h>
 #if TACHYON_VULKAN
@@ -29,9 +30,22 @@ namespace tachyon
         }
     }
 
+    namespace
+    {
+        std::optional<GraphicsAPI> g_defaultOverride;
+    }
+
     std::unique_ptr<GraphicsContext> CreateDefaultGraphicsContext()
     {
-        return CreateGraphicsContext(TACHYON_VULKAN ? GraphicsAPI::Vulkan : GraphicsAPI::None);
+        return CreateGraphicsContext(g_defaultOverride.value_or(TACHYON_VULKAN ? GraphicsAPI::Vulkan : GraphicsAPI::None));
+    }
+
+    bool SetDefaultGraphicsAPIOverride(std::optional<GraphicsAPI> api)
+    {
+        if (api && !CreateGraphicsContext(*api))
+            return false;
+        g_defaultOverride = api;
+        return true;
     }
 
     std::string_view GraphicsAPIBuildOption(GraphicsAPI api)

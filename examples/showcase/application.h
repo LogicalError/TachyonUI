@@ -5,7 +5,7 @@
 #include <gui_core/input/gui_pointer_drag.h>
 
 #include "scene.h"
-#if TACHYON_VULKAN
+#if TACHYON_VULKAN || TACHYON_D3D12
 #include "scene_renderer.h"
 #endif
 
@@ -240,7 +240,7 @@ namespace tachyon
         std::vector<SceneObject> sceneObjects;
         int              sceneSelected = -1;
         ViewportView     scene;
-#if TACHYON_VULKAN
+#if TACHYON_VULKAN || TACHYON_D3D12
         SceneRenderer    sceneRenderer;
 #endif
         // The sketch pad: strokes drawn with the pen (or the mouse), wider where it pressed harder.
