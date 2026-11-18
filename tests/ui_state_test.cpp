@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "mock_window_backend.h"
 
 #include <gui_controls/gui_dock_node.h>
 #include <gui_core/gui_json.h>
@@ -375,7 +376,7 @@ namespace
         }
         void SetMonitors(std::vector<MonitorInfo> monitors)
         {
-            ON_CALL(app.mockBackend, GetMonitors()).WillByDefault(::testing::Return(monitors));
+            ON_CALL(app.MockBackend(), GetMonitors()).WillByDefault(::testing::Return(monitors));
             app.windowManager->RefreshMonitors();
         }
         static MonitorInfo Monitor(IntRect rect, bool primary)
@@ -432,10 +433,10 @@ namespace
         using ::testing::_;
         SetMonitors({ Monitor({ 0, 0, 1920, 1080 }, true), Monitor({ 1920, 0, 2560, 1440 }, false) });
         // An OS window, 800x600 at (2100, 150): on the second monitor.
-        ON_CALL(app.mockBackend, CreateWindow(_, ::testing::A<IntRect>(), _, _))
+        ON_CALL(app.MockBackend(), CreateWindow(_, ::testing::A<IntRect>(), _, _))
             .WillByDefault([](std::string_view, IntRect, WindowFlags, OSWindowHandle) { return reinterpret_cast<OSWindowHandle>(uintptr_t(0x100)); });
-        ON_CALL(app.mockBackend, IsWindow(_)).WillByDefault(::testing::Return(true));
-        ON_CALL(app.mockBackend, GetWindowRect(_)).WillByDefault(::testing::Return(IntRect{ 2100, 150, 800, 600 }));
+        ON_CALL(app.MockBackend(), IsWindow(_)).WillByDefault(::testing::Return(true));
+        ON_CALL(app.MockBackend(), GetWindowRect(_)).WillByDefault(::testing::Return(IntRect{ 2100, 150, 800, 600 }));
         app.Frame([&] { (void)app.windowManager->GetOrCreateWindow(windowID, "Main", IntRect{ 2100, 150, 800, 600 }, nullptr); });
         ASSERT_NE(app.windowManager->GetWindowHandle(windowID), nullptr);
 
@@ -569,10 +570,10 @@ namespace
     {
         using ::testing::_;
         SetMonitors({ Monitor({ 0, 0, 1920, 1080 }, true), Monitor({ 1920, 0, 2560, 1440 }, false) });
-        ON_CALL(app.mockBackend, CreateWindow(_, ::testing::A<IntRect>(), _, _))
+        ON_CALL(app.MockBackend(), CreateWindow(_, ::testing::A<IntRect>(), _, _))
             .WillByDefault([](std::string_view, IntRect, WindowFlags, OSWindowHandle) { return reinterpret_cast<OSWindowHandle>(uintptr_t(0x100)); });
-        ON_CALL(app.mockBackend, IsWindow(_)).WillByDefault(::testing::Return(true));
-        ON_CALL(app.mockBackend, GetWindowRect(_)).WillByDefault(::testing::Return(IntRect{ 2100, 150, 800, 600 }));
+        ON_CALL(app.MockBackend(), IsWindow(_)).WillByDefault(::testing::Return(true));
+        ON_CALL(app.MockBackend(), GetWindowRect(_)).WillByDefault(::testing::Return(IntRect{ 2100, 150, 800, 600 }));
         const ID documentWindow = app.idManager.CreateStaticID();
         app.Frame([&] { (void)app.windowManager->GetOrCreateWindow(documentWindow, "Docs", IntRect{ 2100, 150, 800, 600 }, nullptr); });
         DocumentSet set;

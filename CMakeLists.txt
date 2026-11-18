@@ -5,6 +5,11 @@ cmake_minimum_required(VERSION 3.22)
 if(POLICY CMP0156)
   cmake_policy(SET CMP0156 NEW)
 endif()
+# Visual Studio runs independent custom commands (each shader's compile) in parallel instead of
+# one after another. CMake 3.27 and newer.
+if(POLICY CMP0147)
+  cmake_policy(SET CMP0147 NEW)
+endif()
 
 set(TACHYON_VERSION 0.1.0)
 project(TachyonUI VERSION ${TACHYON_VERSION} LANGUAGES CXX)

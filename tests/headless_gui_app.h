@@ -29,12 +29,10 @@
 //     widgets become its children.
 
 #include <gtest/gtest.h>
-#include <gmock/gmock.h>
 
 #include <gui_controls/gui_application_internal.h>
 
 #include "gui_text_system_stub.h"
-#include "mock_window_backend.h"
 
 #include <functional>
 #include <memory>
@@ -42,6 +40,10 @@
 
 namespace GUITest
 {
+
+// The mocked window backend (mock_window_backend.h): only the tests that set its calls include
+// it, so the rest don't compile gmock's machinery for each of its methods.
+class MockWindowBackend;
 
 class HeadlessGUIApp : public tachyon::GUIApplicationInternals
 {
@@ -167,12 +169,14 @@ public:
     std::string_view TextOf(tachyon::ID id) const;
     tachyon::ID      RootWindowID() const { return m_rootWindowID; }
 
-    // Mock backend & owned systems - exposed so tests can tune monitor
-    // configuration or read recorded events.
-    ::testing::NiceMock<MockWindowBackend> mockBackend{};
-    tachyon::StubTextSystem                    ownedTextSystem{};
+    // The mocked window backend (a NiceMock), for a test that sets its calls; include
+    // mock_window_backend.h to use it.
+    MockWindowBackend&      MockBackend() { return *m_mockBackend; }
+    tachyon::StubTextSystem ownedTextSystem{};
 
 private:
+    std::unique_ptr<MockWindowBackend> m_mockBackend;   // made in the constructor
+
     tachyon::ID     m_rootWindowID       = tachyon::ID::Invalid();
     bool        m_rootWindowOpen     = false;
     tachyon::int2   m_mousePos           { 0, 0 }; // last injected mouse position

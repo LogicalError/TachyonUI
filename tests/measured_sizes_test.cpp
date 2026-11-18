@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "mock_window_backend.h"
 
 #include <gui_core/style/gui_style_manager.h>
 
@@ -72,7 +73,7 @@ namespace
     TEST(MeasuredSizesTest, ACursorGhostClearsTheOsCursor)
     {
         HeadlessGUIApp large;
-        ON_CALL(large.mockBackend, GetCursorSize()).WillByDefault(Return(64));
+        ON_CALL(large.MockBackend(), GetCursorSize()).WillByDefault(Return(64));
         ASSERT_TRUE(large.Initialize());
         EXPECT_EQ(large.CursorGhostOffset(), (int2{ 28, 28 })) << "14 px for a 32 px cursor, doubled";
         large.Cleanup();

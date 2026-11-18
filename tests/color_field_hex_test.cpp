@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "mock_window_backend.h"
 
 #include <gui_controls/controls_color_internal.h>
 #include <gui_controls/gui_application_internal.h>
@@ -316,7 +317,7 @@ namespace
     {
         using ::testing::_;
         using ::testing::Return;
-        ON_CALL(app.mockBackend, ReadScreenPixel(_)).WillByDefault(Return(std::optional<color4b>(color4b{ 255, 0, 0, 255 })));
+        ON_CALL(app.MockBackend(), ReadScreenPixel(_)).WillByDefault(Return(std::optional<color4b>(color4b{ 255, 0, 0, 255 })));
         Open();
         const ID eyedropper = FindByStyle(app.theme.dialogSquareButtonStyleRef);
         ASSERT_NE(eyedropper, ID::Invalid()) << "shown where the screen can be read";
