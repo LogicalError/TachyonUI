@@ -43,6 +43,8 @@ EndWindow();
 
 - When the GUI runs on your device (see [Using your own Vulkan device](vulkan-device.md)),
   each frame of the window can be copied into an image of yours:
+  - on Vulkan only, so far
+  - on Direct3D 12 a render-to-image window draws too, and `ReadWindowPixels` reads it back
 
 ```cpp
 vk->SetWindowImageTarget(windowID, hostImage, VkExtent2D{ 400, 300 });

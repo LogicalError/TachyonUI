@@ -6,6 +6,9 @@
 #include <gui_controls/gui_node_view_helpers.h> // ApplyNodeViewEdit (node-view undo)
 #include <gui_controls/gui_view_state.h>
 #include <gui_core/gui_json.h>
+#if TACHYON_D3D12
+#include <gui_core/graphics/d3d12/d3d12_graphics_context.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -213,6 +216,15 @@ namespace tachyon
                 idManager.ReleaseStaticID(floating.item.id);
         }
         ReleaseToolbarDockState(toolbars.dockState, *this);
+#if TACHYON_D3D12
+        // The scene renderer's Direct3D 12 objects, once the GPU is done with them (Vulkan's go
+        // with the backend's own).
+        if (auto* d3d12 = dynamic_cast<d3d12::D3D12GraphicsContext*>(graphicsContext))
+        {
+            d3d12->WaitIdle();
+            sceneRenderer.ReleaseD3D12();
+        }
+#endif
         // Their thumbnails and icons go before the text system.
         for (const std::weak_ptr<FilesPanel>& weak : m_filesPanels)
             if (const std::shared_ptr<FilesPanel> panel = weak.lock())

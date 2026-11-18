@@ -1,6 +1,7 @@
-// The showcase's 3D scene: a mesh's vertices read from a buffer by address, moved by the
-// object's matrix to the screen, in flat colors lit from one side with some light everywhere;
-// the ground grid unlit.
+// The showcase's 3D scene: a mesh's vertices read from a buffer, moved by the object's matrix to
+// the screen, in flat colors lit from one side with some light everywhere; the ground grid
+// unlit. Vulkan reads the buffer by address from the push constants; Direct3D 12 (TACHYON_D3D12)
+// gets the same values as root constants (b0) and the buffer as a root view (t0).
 
 struct Vertex
 {
@@ -8,6 +9,21 @@ struct Vertex
     float4 normal;     // xyz, in the object's own space
 };
 
+#if defined(TACHYON_D3D12)
+// The matrix is its four rows, as TachyonUI stores it (row-major).
+struct Push
+{
+    float4 mvpRows[4];
+    float4 color;
+    float4 light;         // xyz: toward the light, in the object's space; w 0: unlit
+    uint   firstVertex;   // the draw's first vertex: SV_VertexID starts at 0
+};
+ConstantBuffer<Push>     push     : register(b0);
+StructuredBuffer<Vertex> vertices : register(t0);
+
+struct VertexInput { uint id : SV_VertexID; };
+Vertex ReadVertex(VertexInput input) { return vertices[input.id + push.firstVertex]; }
+#else
 // The matrix is its four rows, as TachyonUI stores it (row-major).
 struct Push
 {
@@ -18,6 +34,10 @@ struct Push
 };
 [[vk::push_constant]] ConstantBuffer<Push> push;
 
+struct VertexInput { int id : SV_VulkanVertexID; };
+Vertex ReadVertex(VertexInput input) { return push.vertices[input.id]; }
+#endif
+
 struct VSOutput
 {
     float4 position : SV_Position;
@@ -25,9 +45,9 @@ struct VSOutput
 };
 
 [shader("vertex")]
-VSOutput vertexMain(int vertexIndex : SV_VulkanVertexID)
+VSOutput vertexMain(VertexInput input)
 {
-    Vertex vertex = push.vertices[vertexIndex];
+    Vertex vertex = ReadVertex(input);
     float4 p = float4(vertex.position.xyz, 1.0);
 
     VSOutput output;

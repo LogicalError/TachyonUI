@@ -8,6 +8,7 @@
 // from -1 to 1 with y down, depth from 0 (near) to 1 (far).
 
 #include <gui_core/gui_base_types.h>
+#include <gui_core/graphics/gui_graphics_api.h>
 
 #include <algorithm>
 #include <cmath>
@@ -117,6 +118,15 @@ namespace tachyon
         const float f = 1.0f / std::tan(fovY * 0.5f);
         const float range = farZ / (nearZ - farZ);
         return { { f / aspect, 0, 0, 0 }, { 0, -f, 0, 0 }, { 0, 0, range, nearZ * range }, { 0, 0, -1, 0 } };
+    }
+
+    /// A projection to Vulkan's clip space (Perspective, Orthographic) made one to `api`'s:
+    /// Direct3D's has y up, so its y row is negated; depth runs 0 to 1 in both.
+    inline float4x4 ToClipSpace(float4x4 projection, GraphicsAPI api)
+    {
+        if (api == GraphicsAPI::D3D12)
+            projection.r1 = float4{ -projection.r1.x, -projection.r1.y, -projection.r1.z, -projection.r1.w };
+        return projection;
     }
 
     /// An orthographic projection to Vulkan's clip space, `height` world units high.

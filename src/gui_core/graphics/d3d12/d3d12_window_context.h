@@ -3,7 +3,8 @@
 // Inside the Direct3D 12 backend: an OS window's rendering. Each frame draws into a texture of
 // the frame slot's and copies it to the swapchain's buffer, as the Vulkan backend does, so the
 // last frame can be read back after it's presented. A layered window (a transparent one on
-// Windows) has no swapchain: its frame is read back and shown with UpdateLayeredWindow.
+// Windows) has no swapchain: its frame is read back and shown with UpdateLayeredWindow. A
+// render-to-image window has no OS window at all: its frames are only read back.
 
 #include <gui_core/graphics/d3d12/d3d12_device.h>
 #include <gui_core/graphics/d3d12/d3d12_rhi.h>
@@ -20,7 +21,8 @@ namespace tachyon::d3d12
     class D3D12WindowContext final : public IWindowContext
     {
     public:
-        /// Null, with the reason logged, when the swapchain can't be made.
+        /// `window` is null for a render-to-image window. Null, with the reason logged, when the
+        /// swapchain can't be made.
         static D3D12WindowContext* Create(D3D12GraphicsContext& graphics, HWND window, OSWindowHandle osHandle, ID id,
                                           int2 size, WindowFlags flags, OnGuiFunc onGui);
         ~D3D12WindowContext() override;
@@ -55,8 +57,8 @@ namespace tachyon::d3d12
         bool MakeSizedResources(uint32_t width, uint32_t height);
         void ReleaseSizedResources();
         void Draw(Frame& frame, D3D12_CPU_DESCRIPTOR_HANDLE rtv);
-        /// A layered window's frame starts transparent; a swapchain's opaque black.
-        float ClearAlpha() const { return m_layered ? 0.0f : 1.0f; }
+        /// A layered or render-to-image window's frame starts transparent; a swapchain's opaque black.
+        float ClearAlpha() const { return m_layered || m_toImage ? 0.0f : 1.0f; }
 
         D3D12GraphicsContext&       m_graphics;
         D3D12GraphicsContext::Impl& m_device;
@@ -66,6 +68,9 @@ namespace tachyon::d3d12
         WindowFlags                 m_flags;
         OnGuiFunc                   m_onGui;
 
+        /// Render-to-image (WindowFlags::RenderToImage): no OS window; its frames are read back
+        /// (ReadPixels).
+        bool                              m_toImage = false;
         /// Layered: no swapchain; each frame is read back into `m_layeredPixels` and shown.
         bool                              m_layered = false;
         std::vector<uint8_t>              m_layeredPixels;

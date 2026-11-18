@@ -4,6 +4,9 @@
 #if TACHYON_VULKAN
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>
 #endif
+#if TACHYON_D3D12
+#include <gui_core/graphics/d3d12/d3d12_graphics_context.h>
+#endif
 
 //
 // View panel: thin adapter over tachyon::RenderToolbarDock. ToolbarItem lists
@@ -37,9 +40,12 @@ namespace tachyon
             if (const auto* state = ctx.scene.As<vulkan::VulkanSceneRender>())
                 if (auto* vk = dynamic_cast<vulkan::VulkanGraphicsContext*>(graphicsContext))
                     sceneRenderer.Render(*vk, *state, ctx, sceneObjects, sceneSelected);
-#else
-            (void)ctx;
 #endif
+#if TACHYON_D3D12
+            if (const auto* state = ctx.scene.As<d3d12::D3D12SceneRender>())
+                sceneRenderer.Render(*state, ctx, sceneObjects, sceneSelected);
+#endif
+            (void)ctx;
         };
         // A click picks the shape under it; on nothing it lets go of the selection.
         scene.onClick = [this](const Ray& ray, KeyModifier) { SelectSceneObject(PickSceneObject(sceneObjects, ray)); };

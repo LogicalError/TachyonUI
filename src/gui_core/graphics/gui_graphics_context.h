@@ -143,7 +143,8 @@ namespace tachyon
         /// An image the app draws a scene into (a 3D viewport), `size` pixels with a depth
         /// buffer, kept for `key` while it's asked for every frame and made again when the size
         /// changes. `record` draws it, in `window`'s frame before the UI: it gets the backend's
-        /// recording state (ScenePayload; Vulkan: a VulkanSceneRender), the image cleared to
+        /// recording state (ScenePayload; Vulkan: a VulkanSceneRender, Direct3D 12: a
+        /// D3D12SceneRender), the image cleared to
         /// `clear` and the rendering begun. Call it while the UI is built. Invalid when the
         /// backend can't.
         virtual ImageIndex RenderScene(ID /*key*/, ID /*window*/, uint2 /*size*/, color4f /*clear*/,

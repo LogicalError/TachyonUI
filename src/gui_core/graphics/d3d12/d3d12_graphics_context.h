@@ -1,18 +1,41 @@
 #pragma once
 
-// The Direct3D 12 graphics backend, on Windows (TACHYON_D3D12). It's being built (#248): it
-// draws the UI into its OS windows. Render-to-image windows are still the null backend's
-// stand-in (so their images stay empty), as is drawing a 3D scene.
+// The Direct3D 12 graphics backend, on Windows (TACHYON_D3D12): the UI in OS, layered and
+// render-to-image windows, and the app's scenes (RenderScene).
 
 #include <gui_core/graphics/null/gui_null_graphics_context.h>
 
+#include <dxgiformat.h>
+
 #include <memory>
 #include <string>
+
+struct ID3D12GraphicsCommandList;
 
 namespace tachyon::d3d12
 {
     /// @addtogroup graphics
     /// @{
+
+    /// What GraphicsContext::RenderScene's `record` gets on Direct3D 12 (ScenePayload::As): the
+    /// window frame's command list with the scene's color and depth textures set as its render
+    /// targets (color cleared to the scene's clear color, depth to 1), and the viewport and
+    /// scissor set to all of it. Draw with your own root signature, pipeline and descriptor
+    /// heaps; the UI sets its own again after. The textures are in the RENDER_TARGET and
+    /// DEPTH_WRITE states: leave them so.
+    struct D3D12SceneRender
+    {
+        static constexpr GraphicsAPI kAPI = GraphicsAPI::D3D12;
+
+        ID3D12GraphicsCommandList* commandList = nullptr;
+        DXGI_FORMAT                colorFormat = DXGI_FORMAT_UNKNOWN;
+        DXGI_FORMAT                depthFormat = DXGI_FORMAT_UNKNOWN;
+        uint2                      extent {};
+        /// The views the targets are set with, as D3D12_CPU_DESCRIPTOR_HANDLE::ptr: to clear
+        /// part of them, or set them again after drawing elsewhere.
+        size_t                     renderTargetView = 0;
+        size_t                     depthStencilView = 0;
+    };
 
     /// How serious a debug-layer message is.
     enum class DebugSeverity : uint8_t { Info, Warning, Error };
@@ -58,7 +81,8 @@ namespace tachyon::d3d12
 
         TextAtlasManager* CreateTextAtlasManager() override;
 
-        /// An OS window gets a swapchain; a render-to-image window, for now, the null stand-in.
+        /// An OS window gets a swapchain, a layered (transparent) one none: its frames are read
+        /// back and shown with UpdateLayeredWindow. A render-to-image window's are read back.
         IWindowContext* CreateWindowContext(void* nativeWindowHandle, OSWindowHandle osHandle, ID id, int2 size,
                                             WindowFlags windowFlags, OnGuiFunc onGui) override;
         void            DestroyWindowContext(IWindowContext* context) override;
@@ -71,6 +95,11 @@ namespace tachyon::d3d12
         void PrepareFrame(StyleManager& styleManager, GradientManager& gradientManager, float elapsedTimeSecs) override;
         /// PrepareFrame again with its last arguments: a live resize's redraw changes styles.
         void RePrepareFrame();
+
+        /// The scene's color texture (R8G8B8A8_UNORM, sampled with Sampler::LinearClampToEdge)
+        /// and depth (D32_FLOAT), drawn by `record` in `window`'s next frame before its UI.
+        ImageIndex RenderScene(ID key, ID window, uint2 size, color4f clear,
+                               std::function<void(const ScenePayload& scene)> record) override;
 
         /// Waits until the GPU has done all work submitted so far.
         void WaitIdle();
