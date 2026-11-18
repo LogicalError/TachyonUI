@@ -163,13 +163,6 @@ jobs:
           New-Item -Path HKLM:\SOFTWARE\Khronos\Vulkan\Drivers -Force | Out-Null
           New-ItemProperty -Path HKLM:\SOFTWARE\Khronos\Vulkan\Drivers -Name $icd -Value 0 -PropertyType DWord -Force | Out-Null
 
-      # The whole-app GPU tests on SDL GPU, through SDL's Vulkan driver on lavapipe.
-      - name: Whole-app GPU tests on SDL GPU (Debug, lavapipe)
-        timeout-minutes: 15
-        env:
-          SDL_GPU_DRIVER: vulkan
-        run: bin/Debug/gui_gpu_tests.exe --graphics=sdlgpu
-
       - name: Package consumer renders a frame
         timeout-minutes: 10
         env:

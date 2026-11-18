@@ -38,7 +38,7 @@ namespace tachyon
     private:
         struct Fade;
         std::unordered_map<uint32_t, std::unique_ptr<Fade>> m_fades;
-        uint32_t m_next = 1;
+        [[maybe_unused]] uint32_t m_next = 1;   ///< the next stand-in's id; used on Windows only
     };
 
     /// @}
