@@ -10,6 +10,7 @@
 
 #include <gui_core/graphics/gui_render_primitives.h>
 
+#include <cstddef>
 #include <span>
 
 namespace tachyon::RHI
@@ -64,10 +65,13 @@ namespace tachyon::RHI
 
         /// Binds the pipeline and the GUI image set, pushes the constants and draws
         /// `primitiveCount` primitives starting at `firstPrimitive`, each as `shape` says;
-        /// the vertex shader builds the vertices from the primitive.
+        /// the vertex shader builds the vertices from the primitive. `primitives` are those
+        /// primitives as the CPU wrote them, for a backend that binds only the images a draw
+        /// reads (ImageBatcher); the others don't need them.
         virtual void DrawPrimitives(const GpuPipeline& pipeline,
                                     const GPUDrawPushConstants& pushConstants,
-                                    uint32_t primitiveCount, uint32_t firstPrimitive, PrimitiveShape shape) = 0;
+                                    uint32_t primitiveCount, uint32_t firstPrimitive, PrimitiveShape shape,
+                                    std::span<const std::byte> primitives) = 0;
 
         /// Copies a batch of transient data into storage that remains valid until
         /// this command list's frame fence signals. One device address is

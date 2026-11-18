@@ -1,6 +1,6 @@
 # Compiles the Slang shaders under workdirectory/shaders for each graphics backend built in, to
 # ${PROJECT_BINARY_DIR}/shaders (SHADER_BINARY_FILES), which gui_core compiles in: SPIR-V
-# (.spv) for Vulkan, DXIL (.dxil) for Direct3D 12. Creates the `tachyon_shaders` custom target
+# (.spv) for Vulkan, DXIL (.dxil) for Direct3D 12, both again for SDL GPU (.sdl.spv, .sdl.dxil). Creates the `tachyon_shaders` custom target
 # that gui_core depends on; inside another project also `tachyon_resources`, which copies the
 # optional resources (themes, fonts, icons) into the build tree.
 
@@ -10,6 +10,12 @@ if(TACHYON_VULKAN)
 endif()
 if(TACHYON_D3D12)
   list(APPEND TACHYON_SHADER_TARGETS dxil)
+endif()
+if(TACHYON_SDLGPU)
+  list(APPEND TACHYON_SHADER_TARGETS sdl-spirv)
+  if(WIN32)
+    list(APPEND TACHYON_SHADER_TARGETS sdl-dxil)
+  endif()
 endif()
 
 if(TACHYON_SHADER_TARGETS)
@@ -31,13 +37,18 @@ if(TACHYON_SHADER_TARGETS)
   endif()
 endif()
 
-# tachyon_compile_slang(<module.slang> <output dir> <list var> <spirv|dxil> [DEPENDS <include>...])
+# tachyon_compile_slang(<module.slang> <output dir> <list var> <spirv|dxil|sdl-spirv|sdl-dxil>
+#                       [DEPENDS <include>...])
 # Compiles the module's vertexMain and fragmentMain for a backend, to <output dir>/<name>.vert.spv
-# and <name>.frag.spv (or .dxil), and appends both to <list var>.
+# and <name>.frag.spv (.dxil, .sdl.spv, .sdl.dxil), and appends both to <list var>.
 function(tachyon_compile_slang SOURCE OUTPUT_DIR LIST_VAR SHADER_TARGET)
   cmake_parse_arguments(PARSE_ARGV 4 ARG "" "" "DEPENDS")
   if(SHADER_TARGET STREQUAL "spirv")
     set(_extension spv)
+  elseif(SHADER_TARGET STREQUAL "sdl-spirv")
+    set(_extension sdl.spv)
+  elseif(SHADER_TARGET STREQUAL "sdl-dxil")
+    set(_extension sdl.dxil)
   else()
     set(_extension ${SHADER_TARGET})
   endif()

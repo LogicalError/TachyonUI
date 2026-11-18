@@ -27,14 +27,19 @@ namespace
         return uploads;
     }
 
-    // Draws one same-kind pass; kinds share push-constant slots, so it writes its own address.
-    void DrawPass(const PrimitiveRenderPass& pass, const std::array<DeviceAddress, kPrimitiveKindCount>& addresses,
+    // Draws one same-kind pass of `source`; kinds share push-constant slots, so it writes its
+    // own address.
+    void DrawPass(const PrimitiveRenderPass& pass, const PrimitiveRenderTarget& source,
+                  const std::array<DeviceAddress, kPrimitiveKindCount>& addresses,
                   RHI::RenderCommandList& cmdList, const PipelineSet& pipelines, GPUDrawPushConstants& push_constants)
     {
         const auto& spec = kPrimitiveSpecs[size_t(pass.kind)];
         push_constants.primitiveAddresses[spec.pushSlot] = addresses[size_t(pass.kind)];
+        const auto& cpu = source.streams[size_t(pass.kind)].cpu;
+        const std::span<const std::byte> primitives(cpu.data() + size_t(pass.firstPrimitive) * spec.stride,
+                                                    size_t(pass.primitiveCount) * spec.stride);
         cmdList.DrawPrimitives(pipelines[size_t(pass.kind)], push_constants,
-                               uint32_t(pass.primitiveCount), uint32_t(pass.firstPrimitive), spec.shape);
+                               uint32_t(pass.primitiveCount), uint32_t(pass.firstPrimitive), spec.shape, primitives);
     }
 
     // Moves everything drawn with `world` by `delta` window pixels and `orders` draw orders.
@@ -94,7 +99,7 @@ void PrimitiveRenderer::Render(tachyon::ID id, RHI::RenderCommandList& cmdList,
             if (pass.replay < 0)
             {
                 if (draws(pass))
-                    DrawPass(pass, addresses, cmdList, pipelines, push_constants);
+                    DrawPass(pass, target, addresses, cmdList, pipelines, push_constants);
                 continue;
             }
             ResolvedReplay& replay = replays[size_t(pass.replay)];
@@ -102,7 +107,7 @@ void PrimitiveRenderer::Render(tachyon::ID id, RHI::RenderCommandList& cmdList,
                 continue;
             for (const auto& capturePass : replay.passes->renderPasses)
                 if (draws(capturePass))
-                    DrawPass(capturePass, replay.addresses, cmdList, pipelines, replay.push);
+                    DrawPass(capturePass, *replay.passes, replay.addresses, cmdList, pipelines, replay.push);
         }
     }
 }
@@ -155,7 +160,7 @@ size_t PrimitiveRenderTarget::Render(RHI::RenderCommandList& cmdList, const Pipe
     for (const bool occluders : { true, false })
         for (const auto& pass : renderPasses)
             if (pass.replay < 0 && kPrimitiveSpecs[size_t(pass.kind)].depthOnly == occluders)
-                DrawPass(pass, addresses, cmdList, pipelines, push_constants);
+                DrawPass(pass, *this, addresses, cmdList, pipelines, push_constants);
     return bytes;
 }
 

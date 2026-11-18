@@ -1,8 +1,8 @@
 #pragma once
 
-// The SDL GPU graphics backend (TACHYON_SDLGPU): SDL3's GPU API, which renders with Vulkan,
-// Direct3D 12 or Metal, whichever SDL picks. It's on its way: so far it starts its device and
-// presents its windows, without drawing the UI.
+// The SDL GPU graphics backend (TACHYON_SDLGPU): SDL3's GPU API, which renders with Vulkan or
+// Direct3D 12, whichever SDL picks (Metal isn't built yet). It draws the UI into its OS windows;
+// render-to-image windows and the app's scenes are on their way.
 
 #include <gui_core/graphics/null/gui_null_graphics_context.h>
 
@@ -50,10 +50,31 @@ namespace tachyon::sdlgpu
         void             SetDebugConfig(const DebugConfig& config);
         void             SetWindowResolver(WindowResolver resolver);
 
-        /// Makes the device, on a driver that takes the shaders the GUI has. Fails when SDL finds
-        /// none.
+        /// 4096 by default. Call before Initialize.
+        void             SetImageSlotCount(uint32_t slots) override;
+        uint32_t         GetImageSlotCount() const override;
+
+        /// Makes the device, on a driver that takes the shaders the GUI has (SPIR-V, DXIL) and,
+        /// on Vulkan, has the 16-bit types they use. Fails when SDL finds none.
         Result<void> Initialize(IWindowBackend* windowBackend) override;
         void         Cleanup() override;
+
+        /// R8G8B8 is widened to R8G8B8A8, and R8 and R8G8 in sRGB too (SDL GPU has no such
+        /// formats). `mipmapped` makes the base level only, as the samplers read no other. The
+        /// pixels go to the GPU with the next window frame.
+        Image* CreateImage(void* data, uint2 size, ImageFormat format, Sampler sampler, bool mipmapped = false) override;
+        void   DestroyImageAtEnd(Image* img, DeviceScope scope, const std::source_location& loc = std::source_location::current()) override;
+        TextAtlasManager* CreateTextAtlasManager() override;
+
+        ImageSet*  GetImageSet() const override;
+        ImageIndex RegisterImage(Image* image) override;
+        void       UnregisterImage(ImageIndex index) override;
+
+        /// The gradient pages into the image set, the styles uploaded where they changed, and
+        /// the images each style reads, for cutting draws (ImageBatcher).
+        void PrepareFrame(StyleManager& styleManager, GradientManager& gradientManager, float elapsedTimeSecs) override;
+        /// PrepareFrame again with its last arguments: a live resize's redraw changes styles.
+        void RePrepareFrame();
 
         /// An OS window is claimed for the device: SDL makes its swapchain. A render-to-image
         /// window, for now, gets the null stand-in.

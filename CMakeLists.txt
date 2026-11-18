@@ -72,12 +72,12 @@ else()
 endif()
 # SDL3's GPU API, over Vulkan, Direct3D 12 or Metal. It's on its way: so far it starts its
 # device and presents its windows, without drawing the UI. It needs SDL (TACHYON_SDL).
-option(TACHYON_SDLGPU "Build the SDL GPU graphics backend (so far its device and windows only)" OFF)
+option(TACHYON_SDLGPU "Build the SDL GPU graphics backend (draws into OS windows; no render-to-image or scenes yet)" OFF)
 if(TACHYON_SDLGPU AND NOT TACHYON_SDL)
   message(FATAL_ERROR "TACHYON_SDLGPU needs TACHYON_SDL")
 endif()
 
-if(TACHYON_VULKAN)
+if(TACHYON_VULKAN OR TACHYON_SDLGPU)
   find_package(Vulkan REQUIRED)
 endif()
 

@@ -887,9 +887,11 @@ namespace tachyon
         // Transparent windows on Windows can't use Vulkan surfaces (they need WS_EX_LAYERED)
         // We'll render offscreen and use UpdateLayeredWindow instead
 #ifndef _WIN32
-        // On non-Windows platforms, we can use Vulkan surfaces with transparency
+        // On non-Windows platforms, we can use Vulkan surfaces with transparency. SDL GPU
+        // claims no transparent window, so there the window is opaque.
         sd_window_flags |= api_flags;
-        if (isTransparent) sd_window_flags |= SDL_WINDOW_TRANSPARENT;
+        const bool sdlGpu = m_graphicsContext != nullptr && m_graphicsContext->GetAPI() == GraphicsAPI::SDLGPU;
+        if (isTransparent && !sdlGpu) sd_window_flags |= SDL_WINDOW_TRANSPARENT;
 #else
         // On Windows, only create Vulkan surface for non-transparent windows
         if (isTransparent)

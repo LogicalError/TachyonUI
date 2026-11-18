@@ -9,26 +9,100 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
+#include <cstdint>
+#include <cstdlib>
+#include <filesystem>
+#include <format>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <vector>
 
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace SDLGPUTestHarness
 {
     // SDL GPU's warnings and errors. SDL may log from other threads, hence the mutex.
+    // SDL's Vulkan driver turns the validation layer on without a messenger of its own, so the
+    // layer would only print to stdout: the sink sends the layer's log to a file of its own and
+    // counts what lands there too. Make the sink before the device, as the layer reads where to
+    // log when its instance starts.
     struct DebugSink
     {
         std::mutex               mutex;
         std::vector<std::string> messages;
+        std::filesystem::path    layerLog;
 
-        bool Empty() { std::lock_guard lock(mutex); return messages.empty(); }
+        DebugSink()
+        {
+            static std::atomic<uint32_t> next{ 0 };
+            layerLog = std::filesystem::temp_directory_path() /
+                       std::format("tachyon_sdlgpu_layer_{}_{}.log", CurrentProcessId(), next++);
+            std::error_code ignored;
+            std::filesystem::remove(layerLog, ignored);
+            SetEnv("VK_KHRONOS_VALIDATION_LOG_FILENAME", layerLog.string().c_str());
+        }
+        ~DebugSink()
+        {
+            SetEnv("VK_KHRONOS_VALIDATION_LOG_FILENAME", "");
+            std::error_code ignored;
+            std::filesystem::remove(layerLog, ignored);
+        }
+        DebugSink(const DebugSink&)            = delete;
+        DebugSink& operator=(const DebugSink&) = delete;
+
+        bool Empty() { return All().empty(); }
         std::string Dump()
         {
-            std::lock_guard lock(mutex);
             std::string out;
-            for (const std::string& m : messages)
+            for (const std::string& m : All())
                 out += "  " + m + "\n";
             return out;
+        }
+
+        // SDL's messages, then each of the layer's: a message starts with "Validation" and runs
+        // to the next one.
+        std::vector<std::string> All()
+        {
+            std::vector<std::string> all;
+            {
+                std::lock_guard lock(mutex);
+                all = messages;
+            }
+            std::ifstream file(layerLog);
+            for (std::string line; std::getline(file, line);)
+            {
+                if (line.starts_with("Validation"))
+                    all.push_back("[layer] " + line);
+                else if (!line.empty() && !all.empty() && all.back().starts_with("[layer] "))
+                    all.back() += " " + line;
+            }
+            return all;
+        }
+
+        static uint32_t CurrentProcessId()
+        {
+#if defined(_WIN32)
+            return static_cast<uint32_t>(_getpid());
+#else
+            return static_cast<uint32_t>(getpid());
+#endif
+        }
+        static void SetEnv(const char* name, const char* value)
+        {
+#if defined(_WIN32)
+            _putenv_s(name, value);
+#else
+            if (value[0] == '\0')
+                unsetenv(name);
+            else
+                setenv(name, value, 1);
+#endif
         }
 
         static void Record(tachyon::sdlgpu::DebugSeverity severity, const char* message, void* user)

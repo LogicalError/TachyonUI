@@ -180,7 +180,8 @@ namespace tachyon::d3d12
     }
 
     void D3D12CommandList::DrawPrimitives(const RHI::GpuPipeline& pipeline, const GPUDrawPushConstants& pushConstants,
-                                          uint32_t primitiveCount, uint32_t firstPrimitive, PrimitiveShape shape)
+                                          uint32_t primitiveCount, uint32_t firstPrimitive, PrimitiveShape shape,
+                                          std::span<const std::byte>)
     {
         if (primitiveCount == 0 || !pipeline.IsValid())
             return;

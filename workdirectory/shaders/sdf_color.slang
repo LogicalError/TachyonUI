@@ -36,6 +36,68 @@ float4 SampleImage(uint index, float2 uv)
     return image.SampleLevel(nearestRepeat, uv, 0);
 }
 float4 FetchImage(uint index, int2 texel) { return Image(index).Load(int3(texel, 0)); }
+#elif defined(TACHYON_SDLGPU)
+// SDL GPU binds 16 images a draw, each its own binding (set or space as all_common.slang says),
+// with its own sampler: the draw's images, whose image slots pc.imageSlots holds. An image
+// reached by slot is looked for among them; one that isn't there reads as nothing.
+#if defined(TACHYON_SDLGPU_SPIRV)
+// SPIR-V: a combined image sampler at binding <n>.
+typealias SDLImage = Sampler2D;
+#define SDL_IMAGE(n) [[vk::binding(n, SDL_RESOURCES)]] Sampler2D image##n;
+#define SDL_GET_IMAGE(n) image##n
+#else
+// DXIL: the texture at t<n>, its sampler at s<n>, used as one.
+struct SDLImage
+{
+    Texture2D    texture;
+    SamplerState sampler;
+
+    float4 SampleLevel(float2 uv, float level) { return texture.SampleLevel(sampler, uv, level); }
+    float4 Load(int3 texel) { return texture.Load(texel); }
+    void   GetDimensions(out uint width, out uint height) { texture.GetDimensions(width, height); }
+};
+#define SDL_IMAGE(n) \
+    Texture2D    imageTexture##n : register(t##n, SDL_RESOURCE_SPACE); \
+    SamplerState imageSampler##n : register(s##n, SDL_RESOURCE_SPACE);
+#define SDL_GET_IMAGE(n) SDLImage(imageTexture##n, imageSampler##n)
+#endif
+SDL_IMAGE(0)  SDL_IMAGE(1)  SDL_IMAGE(2)  SDL_IMAGE(3)  SDL_IMAGE(4)  SDL_IMAGE(5)  SDL_IMAGE(6)  SDL_IMAGE(7)
+SDL_IMAGE(8)  SDL_IMAGE(9)  SDL_IMAGE(10) SDL_IMAGE(11) SDL_IMAGE(12) SDL_IMAGE(13) SDL_IMAGE(14) SDL_IMAGE(15)
+
+// Which of the draw's images is `index`, or -1.
+int BoundImage(uint index)
+{
+    [unroll]
+    for (int i = 0; i < 16; ++i)
+        if (pc.imageSlots[i >> 2][i & 3] == index)
+            return i;
+    return -1;
+}
+
+// `expression` on image `i` of the draw (`image`): a case for each, as the images can't be
+// indexed.
+#define SDL_IMAGE_CASE(n, expression) case n: { SDLImage image = SDL_GET_IMAGE(n); return expression; }
+#define SDL_ON_IMAGE(i, expression, otherwise) \
+    switch (i) \
+    { \
+    SDL_IMAGE_CASE(0, expression)  SDL_IMAGE_CASE(1, expression)  SDL_IMAGE_CASE(2, expression)  SDL_IMAGE_CASE(3, expression) \
+    SDL_IMAGE_CASE(4, expression)  SDL_IMAGE_CASE(5, expression)  SDL_IMAGE_CASE(6, expression)  SDL_IMAGE_CASE(7, expression) \
+    SDL_IMAGE_CASE(8, expression)  SDL_IMAGE_CASE(9, expression)  SDL_IMAGE_CASE(10, expression) SDL_IMAGE_CASE(11, expression) \
+    SDL_IMAGE_CASE(12, expression) SDL_IMAGE_CASE(13, expression) SDL_IMAGE_CASE(14, expression) SDL_IMAGE_CASE(15, expression) \
+    default: return otherwise; \
+    }
+
+float2 SizeOf(SDLImage image)
+{
+    uint width, height;
+    image.GetDimensions(width, height);
+    return float2(width, height);
+}
+
+float2 ImageSize(uint index) { SDL_ON_IMAGE(BoundImage(index), SizeOf(image), float2(1, 1)) }
+// The base level, as on the other APIs.
+float4 SampleImage(uint index, float2 uv) { SDL_ON_IMAGE(BoundImage(index), image.SampleLevel(uv, 0), float4(0, 0, 0, 0)) }
+float4 FetchImage(uint index, int2 texel) { SDL_ON_IMAGE(BoundImage(index), image.Load(int3(texel, 0)), float4(0, 0, 0, 0)) }
 #else
 // Every registered image, by its ImageIndex (set 0, binding 0), with its own sampler.
 [[vk::binding(0, 0)]] Sampler2D allTextures[];

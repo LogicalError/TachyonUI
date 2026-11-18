@@ -186,7 +186,8 @@ void VulkanRenderDevice::DestroySharedLayout()
 
 void VulkanRenderCommandList::DrawPrimitives(const tachyon::RHI::GpuPipeline& pipeline,
                                              const tachyon::GPUDrawPushConstants& pushConstants,
-                                             uint32_t primitiveCount, uint32_t firstPrimitive, tachyon::PrimitiveShape shape)
+                                             uint32_t primitiveCount, uint32_t firstPrimitive, tachyon::PrimitiveShape shape,
+                                             std::span<const std::byte>)
 {
     const auto vkPipeline = reinterpret_cast<VkPipeline>(pipeline.pipeline);
     const auto vkLayout   = reinterpret_cast<VkPipelineLayout>(pipeline.layout);
