@@ -44,7 +44,7 @@ namespace tachyon
         IconID Read(const std::string& key, bool isFolder, bool open);
 
         ITextSystem&                            m_textSystem;
-        uint32_t                                m_pixels;
+        [[maybe_unused]] uint32_t               m_pixels;  ///< the shell icons' size; read on Windows only
         std::unordered_map<std::string, IconID> m_icons;   ///< by extension; "/" and "/open" for folders
     };
 

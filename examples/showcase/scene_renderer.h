@@ -90,18 +90,18 @@ namespace tachyon
 #endif
 #if TACHYON_D3D12
         bool CreateD3D12(const d3d12::D3D12SceneRender& target);
-#endif
         ID3D12RootSignature* m_d3dRoot     = nullptr;
         ID3D12PipelineState* m_d3dShapes   = nullptr;
         ID3D12PipelineState* m_d3dLines    = nullptr;
         ID3D12Resource*      m_d3dVertices = nullptr;   ///< in an upload heap, read as t0
+#endif
 
 #if TACHYON_SDLGPU
         bool CreateSDLGPU(const sdlgpu::SDLGPUSceneRender& target);
-#endif
         SDL_GPUDevice*           m_sdlDevice   = nullptr;
         SDL_GPUGraphicsPipeline* m_sdlShapes   = nullptr;
         SDL_GPUGraphicsPipeline* m_sdlLines    = nullptr;
         SDL_GPUBuffer*           m_sdlVertices = nullptr;   ///< the vertex stage's storage buffer
+#endif
     };
 }

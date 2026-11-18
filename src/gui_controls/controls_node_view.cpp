@@ -1775,7 +1775,7 @@ namespace tachyon
                     Element gripElement
                     {
                         .id = gripID,
-                        .eventHandler = [this, &view, canvasID, frameID, gripID, edges, press, restore, finish,
+                        .eventHandler = [this, &view, canvasID, gripID, edges, press, restore, finish,
                                          frameGrid, snap, minWidth, minHeight](ElementEvent&& event) -> bool
                         {
                             FrameDrag& drag = view.frameDrag;
