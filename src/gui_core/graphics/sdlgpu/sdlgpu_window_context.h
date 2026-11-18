@@ -7,7 +7,8 @@
 // wants them outside the render pass.
 // A layered window (a transparent one, on Windows) isn't claimed, as SDL GPU makes no swapchain
 // for a transparent window: its frame is cleared see-through, read back, and shown with
-// UpdateLayeredWindow.
+// UpdateLayeredWindow. A render-to-image window has no OS window at all: its frames are only
+// read back. The window's scenes (RenderScene) are recorded after the copies, before its UI.
 
 #include <gui_core/gui_base_types.h>
 #include <gui_core/graphics/sdlgpu/sdlgpu_device.h>
@@ -23,7 +24,8 @@ namespace tachyon::sdlgpu
     {
     public:
         /// Null, with the reason logged, when the window can't be claimed. `nativeWindow` is the
-        /// OS's window (an HWND on Windows), which says whether it's layered.
+        /// OS's window (an HWND on Windows), which says whether it's layered. `window` and
+        /// `nativeWindow` are null for a render-to-image window.
         static SDLGPUWindowContext* Create(SDLGPUGraphicsContext& graphics, SDL_Window* window, void* nativeWindow,
                                            OSWindowHandle osHandle, ID id, int2 size, WindowFlags flags, OnGuiFunc onGui);
         ~SDLGPUWindowContext() override;
@@ -58,6 +60,7 @@ namespace tachyon::sdlgpu
         WindowFlags                  m_flags;
         OnGuiFunc                    m_onGui;
         void*                        m_nativeWindow;
+        bool                         m_toImage;   ///< WindowFlags::RenderToImage: no OS window, frames read back
         bool                         m_layered;
         bool                         m_claimed = false;
 
@@ -70,7 +73,13 @@ namespace tachyon::sdlgpu
         SDL_GPUTexture*       m_drawTexture = nullptr;    ///< what a frame draws into (kDrawFormat)
         SDL_GPUTexture*       m_depthTexture = nullptr;
         uint32_t              m_width = 0, m_height = 0;
-        SDL_GPUFence*         m_lastFence = nullptr;      ///< the last frame's submit
+        /// The submitted frames' fences, oldest first. A fence acquired from a submit is the
+        /// command buffer's only hold on it: released before it signals, SDL reuses it and takes
+        /// work still in flight for done. So each is released once it has signaled.
+        std::vector<SDL_GPUFence*> m_fences;
+        static constexpr size_t    kFramesInFlight = 2;
+        /// Releases the fences that have signaled.
+        void ReleaseSignaledFences();
         bool                  m_drawn = false;            ///< a frame was drawn at this size
         std::optional<double> m_acquireSeconds;           ///< for PresentWindowFrame
 

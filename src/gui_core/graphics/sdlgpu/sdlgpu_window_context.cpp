@@ -36,7 +36,9 @@ namespace tachyon::sdlgpu
     SDLGPUWindowContext::SDLGPUWindowContext(SDLGPUGraphicsContext& graphics, SDL_Window* window, void* nativeWindow,
                                              OSWindowHandle osHandle, ID id, WindowFlags flags, OnGuiFunc onGui)
         : m_graphics(graphics), m_device(graphics.Internal()), m_window(window), m_osHandle(osHandle), m_id(id), m_flags(flags),
-          m_onGui(std::move(onGui)), m_nativeWindow(nativeWindow), m_layered(IsLayeredWindow(nativeWindow))
+          m_onGui(std::move(onGui)), m_nativeWindow(nativeWindow),
+          m_toImage((flags & WindowFlags::RenderToImage) != WindowFlags::None),
+          m_layered(!m_toImage && IsLayeredWindow(nativeWindow))
     {
     }
 
@@ -45,7 +47,7 @@ namespace tachyon::sdlgpu
     {
         auto* context = new SDLGPUWindowContext(graphics, window, nativeWindow, osHandle, id, flags, std::move(onGui));
         SDLGPUGraphicsContext::Impl& d = context->m_device;
-        if (!context->m_layered)
+        if (!context->m_layered && !context->m_toImage)
         {
             if (!SDL_ClaimWindowForGPUDevice(d.device, window))
             {
@@ -67,10 +69,11 @@ namespace tachyon::sdlgpu
     SDLGPUWindowContext::~SDLGPUWindowContext()
     {
         SDL_GPUDevice* device = m_device.device;
-        if (m_lastFence != nullptr)
+        if (!m_fences.empty())
         {
-            SDL_WaitForGPUFences(device, true, &m_lastFence, 1);
-            SDL_ReleaseGPUFence(device, m_lastFence);
+            SDL_WaitForGPUFences(device, true, m_fences.data(), uint32_t(m_fences.size()));
+            for (SDL_GPUFence* fence : m_fences)
+                SDL_ReleaseGPUFence(device, fence);
         }
         // SDL frees these once the GPU is done with them.
         for (SDL_GPUTexture* texture : { m_drawTexture, m_depthTexture })
@@ -221,11 +224,14 @@ namespace tachyon::sdlgpu
         }
         SDL_EndGPUCopyPass(copy);
 
-        // The frame's drawing, on opaque black, or see-through for a layered window. Cycled, so a
-        // frame in flight keeps the textures it drew into.
+        // The window's scenes next: its UI samples them.
+        m_device.RecordScenes(cmd, m_id);
+
+        // The frame's drawing, on opaque black, or see-through for a layered or render-to-image
+        // window. Cycled, so a frame in flight keeps the textures it drew into.
         SDL_GPUColorTargetInfo color{};
         color.texture     = m_drawTexture;
-        color.clear_color = SDL_FColor{ 0.0f, 0.0f, 0.0f, m_layered ? 0.0f : 1.0f };
+        color.clear_color = SDL_FColor{ 0.0f, 0.0f, 0.0f, m_layered || m_toImage ? 0.0f : 1.0f };
         color.load_op     = SDL_GPU_LOADOP_CLEAR;
         color.store_op    = SDL_GPU_STOREOP_STORE;
         color.cycle       = true;
@@ -267,11 +273,28 @@ namespace tachyon::sdlgpu
             SDL_BlitGPUTexture(cmd, &blit);
         }
 
-        if (m_lastFence != nullptr)
-            SDL_ReleaseGPUFence(device, m_lastFence);
-        m_lastFence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
-        m_drawn          = m_lastFence != nullptr;
+        ReleaseSignaledFences();
+        // At most kFramesInFlight frames queued, as SDL keeps a swapchain's: a window without
+        // one (layered, render-to-image) waits here instead of queuing without end.
+        if (m_fences.size() >= kFramesInFlight)
+        {
+            SDL_WaitForGPUFences(device, true, &m_fences.front(), 1);
+            ReleaseSignaledFences();
+        }
+        SDL_GPUFence* fence = SDL_SubmitGPUCommandBufferAndAcquireFence(cmd);
+        if (fence != nullptr)
+            m_fences.push_back(fence);
+        m_drawn          = fence != nullptr;
         m_layeredPending = m_layered && m_drawn;
+    }
+
+    void SDLGPUWindowContext::ReleaseSignaledFences()
+    {
+        // Signaled in submit order: the first one not yet signaled ends the run.
+        size_t done = 0;
+        while (done < m_fences.size() && SDL_QueryGPUFence(m_device.device, m_fences[done]))
+            SDL_ReleaseGPUFence(m_device.device, m_fences[done++]);
+        m_fences.erase(m_fences.begin(), m_fences.begin() + ptrdiff_t(done));
     }
 
     std::optional<double> SDLGPUWindowContext::PresentWindowFrame()

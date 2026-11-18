@@ -10,11 +10,16 @@
 #include <gui_core/graphics/d3d12/d3d12_graphics_context.h>
 #include <d3d12.h>
 #endif
+#if TACHYON_SDLGPU
+#include <gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h>
+#include <SDL3/SDL_gpu.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <numbers>
+#include <string>
 #include <vector>
 
 static constexpr tachyon::Diagnostics::LogCategory kLogScene = tachyon::Diagnostics::MakeLogCategory("showcase");
@@ -22,7 +27,8 @@ static constexpr tachyon::Diagnostics::LogCategory kLogScene = tachyon::Diagnost
 namespace tachyon::detail
 {
     /// The showcase's compiled shaders (scene.vert.spv and scene.frag.spv with Vulkan,
-    /// scene.vert.dxil and scene.frag.dxil with Direct3D 12), built in by CMake.
+    /// scene.vert.dxil and scene.frag.dxil with Direct3D 12, scene.*.sdl.spv and scene.*.sdl.dxil
+    /// with SDL GPU), built in by CMake.
     std::span<const EmbeddedFile> ShowcaseShaderFiles();
 }
 
@@ -43,16 +49,17 @@ namespace tachyon
             VkDeviceAddress vertices;
         };
 #endif
-#if TACHYON_D3D12
-        // The root constants (b0): Push's values, and the draw's first vertex.
-        struct D3D12Push
+#if TACHYON_D3D12 || TACHYON_SDLGPU
+        // Direct3D 12's root constants (b0), SDL GPU's uniforms: Push's values, and the draw's
+        // first vertex.
+        struct FirstVertexPush
         {
             float4x4 mvp;
             color4f  color;
             float4   light;
             uint32_t firstVertex;
         };
-        static_assert(sizeof(D3D12Push) == 25 * 4);
+        static_assert(sizeof(FirstVertexPush) == 25 * 4);
 #endif
 
         void Triangle(std::vector<Vertex>& out, float3 a, float3 b, float3 c, float3 n)
@@ -296,7 +303,7 @@ namespace tachyon
         // The root constants (b0) and the vertices (t0), as scene.slang declares them.
         D3D12_ROOT_PARAMETER parameters[2]{};
         parameters[0].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        parameters[0].Constants.Num32BitValues = sizeof(D3D12Push) / 4;
+        parameters[0].Constants.Num32BitValues = sizeof(FirstVertexPush) / 4;
         parameters[0].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
         parameters[1].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_SRV;
         parameters[1].ShaderVisibility         = D3D12_SHADER_VISIBILITY_VERTEX;
@@ -376,8 +383,8 @@ namespace tachyon
                 list->IASetPrimitiveTopology(lines ? D3D_PRIMITIVE_TOPOLOGY_LINELIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
             },
             [&](Range range, const float4x4& mvp, color4f color, float4 light) {
-                const D3D12Push push{ mvp, color, light, range.first };
-                list->SetGraphicsRoot32BitConstants(0, sizeof(D3D12Push) / 4, &push, 0);
+                const FirstVertexPush push{ mvp, color, light, range.first };
+                list->SetGraphicsRoot32BitConstants(0, sizeof(FirstVertexPush) / 4, &push, 0);
                 list->DrawInstanced(range.count, 1, 0, 0);
             });
     }
@@ -391,5 +398,150 @@ namespace tachyon
     }
 #else
     void SceneRenderer::ReleaseD3D12() {}
+#endif
+
+#if TACHYON_SDLGPU
+    namespace
+    {
+        SDL_GPUShader* SDLShader(SDL_GPUDevice* device, SDL_GPUShaderStage stage)
+        {
+            const bool spirv  = (SDL_GetGPUShaderFormats(device) & SDL_GPU_SHADERFORMAT_SPIRV) != 0;
+            const bool vertex = stage == SDL_GPU_SHADERSTAGE_VERTEX;
+            const std::string name = std::string("scene") + (vertex ? ".vert" : ".frag") + (spirv ? ".sdl.spv" : ".sdl.dxil");
+            const std::span<const std::byte> code = detail::FindEmbeddedFile(detail::ShowcaseShaderFiles(), name);
+            if (code.empty())
+                return nullptr;
+            SDL_GPUShaderCreateInfo info{};
+            info.code_size           = code.size();
+            info.code                = reinterpret_cast<const Uint8*>(code.data());
+            // Slang names SPIR-V's entry point main, and keeps DXIL's.
+            info.entrypoint          = spirv ? "main" : vertex ? "vertexMain" : "fragmentMain";
+            info.format              = spirv ? SDL_GPU_SHADERFORMAT_SPIRV : SDL_GPU_SHADERFORMAT_DXIL;
+            info.stage               = stage;
+            info.num_storage_buffers = vertex ? 1 : 0;   // the vertices
+            info.num_uniform_buffers = 1;
+            return SDL_CreateGPUShader(device, &info);
+        }
+    }
+
+    bool SceneRenderer::CreateSDLGPU(const sdlgpu::SDLGPUSceneRender& target)
+    {
+        SDL_GPUDevice* device = target.device;
+        m_sdlDevice = device;
+
+        // The meshes, copied into the vertex stage's storage buffer in a copy pass of the
+        // scene's command buffer; the transfer buffer goes once that copy is done.
+        const std::vector<Vertex> vertices = BuildMeshes();
+        const uint32_t bytes = uint32_t(vertices.size() * sizeof(Vertex));
+        const SDL_GPUBufferCreateInfo bufferInfo{ SDL_GPU_BUFFERUSAGE_GRAPHICS_STORAGE_READ, bytes, 0 };
+        m_sdlVertices = SDL_CreateGPUBuffer(device, &bufferInfo);
+        const SDL_GPUTransferBufferCreateInfo uploadInfo{ SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, bytes, 0 };
+        SDL_GPUTransferBuffer* upload = m_sdlVertices != nullptr ? SDL_CreateGPUTransferBuffer(device, &uploadInfo) : nullptr;
+        void* mapped = upload != nullptr ? SDL_MapGPUTransferBuffer(device, upload, false) : nullptr;
+        if (mapped == nullptr)
+        {
+            if (upload != nullptr)
+                SDL_ReleaseGPUTransferBuffer(device, upload);
+            return false;
+        }
+        std::memcpy(mapped, vertices.data(), bytes);
+        SDL_UnmapGPUTransferBuffer(device, upload);
+        SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(target.commandBuffer);
+        const SDL_GPUTransferBufferLocation from{ upload, 0 };
+        const SDL_GPUBufferRegion to{ m_sdlVertices, 0, bytes };
+        SDL_UploadToGPUBuffer(copy, &from, &to, false);
+        SDL_EndGPUCopyPass(copy);
+        SDL_ReleaseGPUTransferBuffer(device, upload);
+
+        SDL_GPUShader* vert = SDLShader(device, SDL_GPU_SHADERSTAGE_VERTEX);
+        SDL_GPUShader* frag = SDLShader(device, SDL_GPU_SHADERSTAGE_FRAGMENT);
+        if (vert != nullptr && frag != nullptr)
+        {
+            SDL_GPUColorTargetDescription color{};
+            color.format = target.colorFormat;
+            SDL_GPUGraphicsPipelineCreateInfo info{};
+            info.vertex_shader                           = vert;
+            info.fragment_shader                         = frag;
+            info.primitive_type                          = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+            info.rasterizer_state.fill_mode              = SDL_GPU_FILLMODE_FILL;
+            info.rasterizer_state.cull_mode              = SDL_GPU_CULLMODE_NONE;
+            info.rasterizer_state.front_face             = SDL_GPU_FRONTFACE_COUNTER_CLOCKWISE;
+            info.depth_stencil_state.enable_depth_test   = true;
+            info.depth_stencil_state.enable_depth_write  = true;
+            info.depth_stencil_state.compare_op          = SDL_GPU_COMPAREOP_LESS_OR_EQUAL;
+            info.target_info.color_target_descriptions   = &color;
+            info.target_info.num_color_targets           = 1;
+            info.target_info.depth_stencil_format        = target.depthFormat;
+            info.target_info.has_depth_stencil_target    = true;
+            m_sdlShapes = SDL_CreateGPUGraphicsPipeline(device, &info);
+
+            // The grid: alpha blended, over everything.
+            color.blend_state.enable_blend          = true;
+            color.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+            color.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            color.blend_state.color_blend_op        = SDL_GPU_BLENDOP_ADD;
+            color.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+            color.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+            color.blend_state.alpha_blend_op        = SDL_GPU_BLENDOP_ADD;
+            info.primitive_type                         = SDL_GPU_PRIMITIVETYPE_LINELIST;
+            info.depth_stencil_state.enable_depth_test  = false;
+            info.depth_stencil_state.enable_depth_write = false;
+            m_sdlLines = SDL_CreateGPUGraphicsPipeline(device, &info);
+        }
+        if (vert != nullptr)
+            SDL_ReleaseGPUShader(device, vert);
+        if (frag != nullptr)
+            SDL_ReleaseGPUShader(device, frag);
+        return m_sdlShapes != nullptr && m_sdlLines != nullptr;
+    }
+
+    void SceneRenderer::Render(const sdlgpu::SDLGPUSceneRender& target, const ViewportRenderContext& ctx,
+                               std::span<const SceneObject> objects, int selected)
+    {
+        if (m_failed)
+            return;
+        if (!m_created)
+        {
+            m_created = true;
+            if (!CreateSDLGPU(target))
+            {
+                m_failed = true;
+                ReleaseSDLGPU();
+                TACHYON_LOG_ERROR(kLogScene, "The scene's pipelines weren't made; the viewport shows its background only");
+                return;
+            }
+        }
+        SDL_GPUCommandBuffer* cmd = target.commandBuffer;
+        SDL_GPURenderPass* pass = SDL_BeginGPURenderPass(cmd, &target.colorTarget, 1, &target.depthTarget);
+        SDL_BindGPUVertexStorageBuffers(pass, 0, &m_sdlVertices, 1);
+        Walk(ctx, objects, selected,
+            [&](bool lines) { SDL_BindGPUGraphicsPipeline(pass, lines ? m_sdlLines : m_sdlShapes); },
+            [&](Range range, const float4x4& mvp, color4f color, float4 light) {
+                const FirstVertexPush push{ mvp, color, light, range.first };
+                SDL_PushGPUVertexUniformData(cmd, 0, &push, sizeof(push));
+                SDL_PushGPUFragmentUniformData(cmd, 0, &push, sizeof(push));
+                SDL_DrawGPUPrimitives(pass, range.count, 1, 0, 0);
+            });
+        SDL_EndGPURenderPass(pass);
+    }
+
+    void SceneRenderer::ReleaseSDLGPU()
+    {
+        if (m_sdlDevice != nullptr)
+        {
+            if (m_sdlShapes != nullptr)
+                SDL_ReleaseGPUGraphicsPipeline(m_sdlDevice, m_sdlShapes);
+            if (m_sdlLines != nullptr)
+                SDL_ReleaseGPUGraphicsPipeline(m_sdlDevice, m_sdlLines);
+            if (m_sdlVertices != nullptr)
+                SDL_ReleaseGPUBuffer(m_sdlDevice, m_sdlVertices);
+        }
+        m_sdlDevice   = nullptr;
+        m_sdlShapes   = nullptr;
+        m_sdlLines    = nullptr;
+        m_sdlVertices = nullptr;
+    }
+#else
+    void SceneRenderer::ReleaseSDLGPU() {}
 #endif
 }

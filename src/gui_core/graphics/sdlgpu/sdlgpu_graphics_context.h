@@ -1,10 +1,12 @@
 #pragma once
 
 // The SDL GPU graphics backend (TACHYON_SDLGPU): SDL3's GPU API, which renders with Vulkan or
-// Direct3D 12, whichever SDL picks (Metal isn't built yet). It draws the UI into its OS windows;
-// render-to-image windows and the app's scenes are on their way.
+// Direct3D 12, whichever SDL picks (Metal isn't built yet): the UI in OS, layered and
+// render-to-image windows, and the app's scenes (RenderScene).
 
 #include <gui_core/graphics/null/gui_null_graphics_context.h>
+
+#include <SDL3/SDL_gpu.h>
 
 #include <memory>
 #include <string>
@@ -15,6 +17,27 @@ namespace tachyon::sdlgpu
 {
     /// @addtogroup graphics
     /// @{
+
+    /// What GraphicsContext::RenderScene's `record` gets on SDL GPU (ScenePayload::As): the
+    /// window frame's command buffer, outside any pass, and the scene's color and depth
+    /// textures, cleared already (color to the scene's clear color, depth to 1). Record copy
+    /// passes and render passes into it; `colorTarget` and `depthTarget` begin a render pass on
+    /// the textures that keeps what's there (SDL_BeginGPURenderPass(commandBuffer, &colorTarget,
+    /// 1, &depthTarget)). End every pass you begin; the UI's passes follow in the same buffer.
+    struct SDLGPUSceneRender
+    {
+        static constexpr GraphicsAPI kAPI = GraphicsAPI::SDLGPU;
+
+        SDL_GPUDevice*                device = nullptr;
+        SDL_GPUCommandBuffer*         commandBuffer = nullptr;
+        SDL_GPUTexture*               colorTexture = nullptr;
+        SDL_GPUTexture*               depthTexture = nullptr;
+        SDL_GPUTextureFormat          colorFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
+        SDL_GPUTextureFormat          depthFormat = SDL_GPU_TEXTUREFORMAT_INVALID;
+        uint2                         extent {};
+        SDL_GPUColorTargetInfo        colorTarget {};
+        SDL_GPUDepthStencilTargetInfo depthTarget {};
+    };
 
     /// How serious a message from SDL GPU's debug mode is.
     enum class DebugSeverity : uint8_t { Info, Warning, Error };
@@ -76,11 +99,19 @@ namespace tachyon::sdlgpu
         /// PrepareFrame again with its last arguments: a live resize's redraw changes styles.
         void RePrepareFrame();
 
-        /// An OS window is claimed for the device: SDL makes its swapchain. A render-to-image
-        /// window, for now, gets the null stand-in.
+        /// An OS window is claimed for the device: SDL makes its swapchain. A layered one
+        /// (transparent, on Windows) isn't: its frames are read back and shown with
+        /// UpdateLayeredWindow. A render-to-image window's frames are read back.
         IWindowContext* CreateWindowContext(void* nativeWindowHandle, OSWindowHandle osHandle, ID id, int2 size,
                                             WindowFlags windowFlags, OnGuiFunc onGui) override;
         void            DestroyWindowContext(IWindowContext* context) override;
+
+        /// Lets go of the scenes no longer asked for.
+        void BeginFrame() override;
+        /// The scene's color texture (R8G8B8A8_UNORM, sampled with Sampler::LinearClampToEdge)
+        /// and depth (D32_FLOAT), drawn by `record` in `window`'s next frame before its UI.
+        ImageIndex RenderScene(ID key, ID window, uint2 size, color4f clear,
+                               std::function<void(const ScenePayload& scene)> record) override;
 
         /// Waits until the GPU has done all work submitted so far.
         void WaitIdle();

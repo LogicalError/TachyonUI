@@ -4,11 +4,16 @@
 // with SDL GPU's debug messages recorded, so a test can assert that a code path makes none.
 // Tests are SKIPPED when SDL finds no device for the driver.
 
+#include <gui_core/graphics/gui_renderer.h>
 #include <gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h>
+#include <gui_core/style/gui_gradient_manager.h>
+#include <gui_core/style/gui_style_manager.h>
+#include <gui_core/windows/gui_window_flags.h>
 #include <gui_core/windows/sdl/gui_window_backend_sdl.h>
 
 #include <gtest/gtest.h>
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <cstdlib>
@@ -146,6 +151,64 @@ namespace SDLGPUTestHarness
             graphics = nullptr;
             delete windowBackend;
             windowBackend = nullptr;
+        }
+    };
+
+    // A render-to-image window on the device, with the styles a frame draws with.
+    class SDLGPUImageWindowTest : public SDLGPUTest
+    {
+    protected:
+        static constexpr tachyon::int2    kSize{ 320, 240 };
+        static constexpr tachyon::IntRect kFullClip{ 0, 0, kSize.x, kSize.y };
+
+        tachyon::GradientManager gradientManager{ 256 };
+        tachyon::StyleManager    styleManager{ gradientManager };
+        tachyon::IWindowContext* window = nullptr;
+        std::vector<uint8_t>     pixels = std::vector<uint8_t>(size_t(kSize.x) * kSize.y * 4);
+
+        void SetUp() override
+        {
+            SDLGPUTest::SetUp();
+            if (IsSkipped() || HasFatalFailure())
+                return;
+            // With no styles PrepareFrame would have nothing to upload.
+            styleManager.Register(tachyon::Style{});
+            tachyon::ID id;
+            id.value.dynamicParts.mode      = tachyon::IDMode::Static;
+            id.value.dynamicParts.hashValue = 0x1A6E;
+            window = graphics->CreateWindowContext(nullptr, nullptr, id, kSize, tachyon::WindowFlags::RenderToImage, {});
+            ASSERT_NE(window, nullptr);
+        }
+
+        void TearDown() override
+        {
+            if (window != nullptr)
+                graphics->DestroyWindowContext(window);
+            window = nullptr;
+            if (graphics != nullptr)
+                gradientManager.ReleaseAll(graphics);
+            SDLGPUTest::TearDown();
+        }
+
+        // One frame of what `emit` draws, read back into `pixels`.
+        template <class Emit>
+        void RenderFrame(Emit&& emit)
+        {
+            graphics->PrepareFrame(styleManager, gradientManager, 0.0f);
+            tachyon::GUIRenderer* r = graphics->guiRenderer;
+            if (r->BeginWindow(window->GetID()))
+            {
+                emit(r);
+                r->EndWindow();
+            }
+            window->RenderWindowFrame(graphics, kFullClip, false);
+            ASSERT_TRUE(window->ReadPixels(pixels));
+        }
+
+        std::array<int, 4> Rgba(int x, int y) const   // the frame is BGRA8
+        {
+            const uint8_t* p = pixels.data() + (size_t(y) * kSize.x + size_t(x)) * 4;
+            return { p[2], p[1], p[0], p[3] };
         }
     };
 

@@ -55,6 +55,14 @@ Each frame the viewport calls `onRender`, with:
     set them again after drawing elsewhere
   - Set your own root signature, pipeline state and descriptor heaps; the UI sets its own
     again after. Leave the textures in the states they're in.
+- On SDL GPU, it's an `SDLGPUSceneRender` (`sdlgpu_graphics_context.h`):
+  - `device`, and `commandBuffer` with no pass open, so you can copy (upload) before you draw
+  - `colorTexture` and `depthTexture`, with `colorFormat` (`R8G8B8A8_UNORM`) and `depthFormat`
+    (`D32_FLOAT`) for your pipelines
+  - `extent`, the textures' size
+  - `colorTarget` and `depthTarget`: begin your render pass with them, and it keeps the clear
+    - for example, `SDL_BeginGPURenderPass(s->commandBuffer, &s->colorTarget, 1, &s->depthTarget)`
+  - End every pass you begin; the UI's passes follow in the same command buffer.
 - The color is cleared to `view.background` and the depth to 1. Bind your pipeline and draw;
   on Vulkan, leave the rendering open.
 - The layouts, the synchronization and showing the image are the library's.
@@ -78,7 +86,7 @@ void DrawScene(const ViewportRenderContext& ctx)
   cached panel.
 - Without a GPU backend (the headless test app), `onRender` isn't called. The view shows
   `background`.
-- The showcase's Viewport panel draws a few shapes on a grid this way, with either API:
+- The showcase's Viewport panel draws a few shapes on a grid this way, with any of the APIs:
   `examples/showcase/scene_renderer.cpp`.
 
 ### The matrices
@@ -93,7 +101,7 @@ void DrawScene(const ViewportRenderContext& ctx)
 - Right-handed, y up.
 - `Perspective` and `Orthographic` project to Vulkan's clip space: y down, depth from 0 (near)
   to 1 (far).
-  - `ToClipSpace(projection, api)` makes it Direct3D's, which has y up.
+  - `ToClipSpace(projection, api)` makes it Direct3D's or SDL GPU's, which have y up.
   - `ctx.projection` is already in your API's clip space.
 
 ## The camera

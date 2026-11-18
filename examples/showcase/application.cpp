@@ -225,6 +225,10 @@ namespace tachyon
             sceneRenderer.ReleaseD3D12();
         }
 #endif
+#if TACHYON_SDLGPU
+        // SDL GPU's go once the GPU is done with them, before the device does.
+        sceneRenderer.ReleaseSDLGPU();
+#endif
         // Their thumbnails and icons go before the text system.
         for (const std::weak_ptr<FilesPanel>& weak : m_filesPanels)
             if (const std::shared_ptr<FilesPanel> panel = weak.lock())

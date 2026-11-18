@@ -7,6 +7,9 @@
 #if TACHYON_D3D12
 #include <gui_core/graphics/d3d12/d3d12_graphics_context.h>
 #endif
+#if TACHYON_SDLGPU
+#include <gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h>
+#endif
 
 //
 // View panel: thin adapter over tachyon::RenderToolbarDock. ToolbarItem lists
@@ -43,6 +46,10 @@ namespace tachyon
 #endif
 #if TACHYON_D3D12
             if (const auto* state = ctx.scene.As<d3d12::D3D12SceneRender>())
+                sceneRenderer.Render(*state, ctx, sceneObjects, sceneSelected);
+#endif
+#if TACHYON_SDLGPU
+            if (const auto* state = ctx.scene.As<sdlgpu::SDLGPUSceneRender>())
                 sceneRenderer.Render(*state, ctx, sceneObjects, sceneSelected);
 #endif
             (void)ctx;

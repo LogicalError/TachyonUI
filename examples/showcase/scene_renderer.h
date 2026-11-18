@@ -1,8 +1,8 @@
 #pragma once
 
 // Draws the showcase's 3D scene (scene.h) into a Viewport's image, as an app's own renderer
-// would: with Vulkan or Direct3D 12, whichever the scene's recording state is. Built with
-// either backend.
+// would: with Vulkan, Direct3D 12 or SDL GPU, whichever the scene's recording state is. Built
+// with any of the backends.
 
 #include "scene.h"
 
@@ -16,11 +16,15 @@
 struct ID3D12RootSignature;
 struct ID3D12PipelineState;
 struct ID3D12Resource;
+struct SDL_GPUDevice;
+struct SDL_GPUGraphicsPipeline;
+struct SDL_GPUBuffer;
 
 namespace tachyon
 {
     namespace vulkan { class VulkanGraphicsContext; struct VulkanSceneRender; }
     namespace d3d12 { struct D3D12SceneRender; }
+    namespace sdlgpu { struct SDLGPUSceneRender; }
 
     class SceneRenderer
     {
@@ -28,7 +32,7 @@ namespace tachyon
         SceneRenderer() = default;
         SceneRenderer(const SceneRenderer&) = delete;
         SceneRenderer& operator=(const SceneRenderer&) = delete;
-        ~SceneRenderer() { ReleaseD3D12(); }
+        ~SceneRenderer() { ReleaseD3D12(); ReleaseSDLGPU(); }
 
 #if TACHYON_VULKAN
         /// Draws the grid and `objects` into the viewport's image; `selected` lighter. Makes
@@ -42,9 +46,18 @@ namespace tachyon
         void Render(const d3d12::D3D12SceneRender& target, const ViewportRenderContext& ctx,
                     std::span<const SceneObject> objects, int selected);
 #endif
+#if TACHYON_SDLGPU
+        /// As above on SDL GPU, on the scene's device: its upload in a copy pass of the scene's
+        /// command buffer the first time, then a render pass. Its objects stay until ReleaseSDLGPU.
+        void Render(const sdlgpu::SDLGPUSceneRender& target, const ViewportRenderContext& ctx,
+                    std::span<const SceneObject> objects, int selected);
+#endif
         /// Lets go of the Direct3D 12 objects. Call once the GPU is done with them, before the
         /// graphics backend is cleaned up.
         void ReleaseD3D12();
+        /// Lets go of the SDL GPU objects (SDL frees them once the GPU is done with them). Call
+        /// before the graphics backend is cleaned up.
+        void ReleaseSDLGPU();
 
         /// A mesh's vertex, as scene.slang reads it.
         struct Vertex
@@ -82,5 +95,13 @@ namespace tachyon
         ID3D12PipelineState* m_d3dShapes   = nullptr;
         ID3D12PipelineState* m_d3dLines    = nullptr;
         ID3D12Resource*      m_d3dVertices = nullptr;   ///< in an upload heap, read as t0
+
+#if TACHYON_SDLGPU
+        bool CreateSDLGPU(const sdlgpu::SDLGPUSceneRender& target);
+#endif
+        SDL_GPUDevice*           m_sdlDevice   = nullptr;
+        SDL_GPUGraphicsPipeline* m_sdlShapes   = nullptr;
+        SDL_GPUGraphicsPipeline* m_sdlLines    = nullptr;
+        SDL_GPUBuffer*           m_sdlVertices = nullptr;   ///< the vertex stage's storage buffer
     };
 }

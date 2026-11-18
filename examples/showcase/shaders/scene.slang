@@ -1,7 +1,8 @@
 // The showcase's 3D scene: a mesh's vertices read from a buffer, moved by the object's matrix to
 // the screen, in flat colors lit from one side with some light everywhere; the ground grid
 // unlit. Vulkan reads the buffer by address from the push constants; Direct3D 12 (TACHYON_D3D12)
-// gets the same values as root constants (b0) and the buffer as a root view (t0).
+// gets the same values as root constants (b0) and the buffer as a root view (t0); SDL GPU
+// (TACHYON_SDLGPU) as uniforms and a storage buffer.
 
 struct Vertex
 {
@@ -20,6 +21,29 @@ struct Push
 };
 ConstantBuffer<Push>     push     : register(b0);
 StructuredBuffer<Vertex> vertices : register(t0);
+
+struct VertexInput { uint id : SV_VertexID; };
+Vertex ReadVertex(VertexInput input) { return vertices[input.id + push.firstVertex]; }
+#elif defined(TACHYON_SDLGPU)
+// SDL GPU: the same values as uniforms, where SDL puts each stage's (set 1 / space1 for the
+// vertex stage, set 3 / space3 for the fragment stage), and the buffer as the vertex stage's
+// storage buffer (set 0 / t0, space0).
+#if defined(TACHYON_SDLGPU_FRAGMENT)
+#define SCENE_UNIFORMS 3
+#define SCENE_UNIFORM_SPACE space3
+#else
+#define SCENE_UNIFORMS 1
+#define SCENE_UNIFORM_SPACE space1
+#endif
+struct Push
+{
+    float4 mvpRows[4];
+    float4 color;
+    float4 light;         // xyz: toward the light, in the object's space; w 0: unlit
+    uint   firstVertex;   // the draw's first vertex: SV_VertexID starts at 0
+};
+[[vk::binding(0, SCENE_UNIFORMS)]] ConstantBuffer<Push> push : register(b0, SCENE_UNIFORM_SPACE);
+[[vk::binding(0, 0)]] StructuredBuffer<Vertex> vertices : register(t0, space0);
 
 struct VertexInput { uint id : SV_VertexID; };
 Vertex ReadVertex(VertexInput input) { return vertices[input.id + push.firstVertex]; }

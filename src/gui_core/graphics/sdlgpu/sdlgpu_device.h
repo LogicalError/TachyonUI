@@ -17,6 +17,7 @@
 #include <SDL3/SDL_log.h>
 
 #include <array>
+#include <functional>
 #include <mutex>
 #include <span>
 #include <string>
@@ -171,5 +172,37 @@ namespace tachyon::sdlgpu
         float                   elapsedTime = 0.0f;
         StyleManager*           lastStyles = nullptr;   ///< PrepareFrame's, for a live resize's redraw
         GradientManager*        lastGradients = nullptr;
+
+        // ---- Scenes the app draws (RenderScene) ----------------------------------------
+        static constexpr SDL_GPUTextureFormat kSceneColorFormat = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+        static constexpr uint64_t             kSceneKeepFrames  = 4;   ///< a scene not asked for this long goes
+
+        /// What RenderScene keeps for a key: its color texture (in the image set) and depth,
+        /// both in liveImages.
+        struct Scene
+        {
+            SDLGPUImage* color = nullptr;
+            SDLGPUImage* depth = nullptr;
+            ImageIndex   index = ImageIndex::Invalid;
+            uint2        extent {};
+            uint64_t     lastFrame = 0;   ///< the frame it was last asked for
+        };
+        struct SceneRequest
+        {
+            ID      key;
+            ID      window;
+            color4f clear;
+            std::function<void(const ScenePayload& scene)> record;
+        };
+        std::unordered_map<ID, Scene> scenes;
+        std::vector<SceneRequest>     sceneRequests;
+        uint64_t                      sceneFrame = 0;
+
+        /// Clears and records the scenes asked for in `window` this frame, before its UI's
+        /// render pass and outside any pass.
+        void RecordScenes(SDL_GPUCommandBuffer* cmd, ID window);
+        /// A texture the GPU draws into (a scene's), in liveImages so DestroyImageAtEnd frees
+        /// it; null on failure.
+        SDLGPUImage* CreateTargetImage(uint2 size, SDL_GPUTextureFormat format, SDL_GPUTextureUsageFlags usage, Sampler sampler);
     };
 }
