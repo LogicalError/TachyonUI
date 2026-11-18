@@ -18,6 +18,7 @@
 
 #include <array>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <span>
 #include <string>
@@ -94,6 +95,7 @@ namespace tachyon::sdlgpu
         uint32_t       imageSlots = 4096;
 
         SDL_GPUDevice*      device = nullptr;
+        SDL_GPUDevice*      externalDevice = nullptr;   ///< the host's (SetExternalDevice): not destroyed at Cleanup
         SDL_GPUShaderFormat shaderFormat = SDL_GPU_SHADERFORMAT_INVALID;   ///< the one the GUI's shaders are taken in
         std::string         driver;         ///< the one in use
         std::string         deviceName;
@@ -204,5 +206,15 @@ namespace tachyon::sdlgpu
         /// A texture the GPU draws into (a scene's), in liveImages so DestroyImageAtEnd frees
         /// it; null on failure.
         SDLGPUImage* CreateTargetImage(uint2 size, SDL_GPUTextureFormat format, SDL_GPUTextureUsageFlags usage, Sampler sampler);
+
+        // ---- A host's textures (RegisterExternalImage, SetWindowImageTarget) -----------
+        /// By image slot index: the host's texture, which the GUI never releases.
+        std::unordered_map<uint32_t, std::unique_ptr<SDLGPUImage>> externalImages;
+        struct ImageTarget
+        {
+            SDL_GPUTexture* texture = nullptr;
+            uint2           size {};
+        };
+        std::unordered_map<ID, ImageTarget> imageTargets;
     };
 }

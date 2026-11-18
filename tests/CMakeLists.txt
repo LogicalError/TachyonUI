@@ -322,5 +322,6 @@ if(TACHYON_SDL AND TACHYON_SDLGPU)
     gpu/sdlgpu_test_harness.h
     gpu/sdlgpu_device_test.cpp
     gpu/sdlgpu_draw_test.cpp
-    gpu/sdlgpu_scene_test.cpp)
+    gpu/sdlgpu_scene_test.cpp
+    gpu/sdlgpu_external_device_test.cpp)
 endif()

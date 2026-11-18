@@ -248,6 +248,20 @@ namespace tachyon::sdlgpu
         commands.Replay(cmd, pass);
         SDL_EndGPURenderPass(pass);
 
+        // A render-to-image window's frame into the host's texture (SetWindowImageTarget), the
+        // part they share.
+        if (const auto target = m_device.imageTargets.find(m_id); m_toImage && target != m_device.imageTargets.end())
+        {
+            SDL_GPUCopyPass* toHost = SDL_BeginGPUCopyPass(cmd);
+            SDL_GPUTextureLocation from{};
+            from.texture = m_drawTexture;
+            SDL_GPUTextureLocation to{};
+            to.texture = target->second.texture;
+            SDL_CopyGPUTextureToTexture(toHost, &from, &to, std::min(m_width, target->second.size.x),
+                                        std::min(m_height, target->second.size.y), 1, false);
+            SDL_EndGPUCopyPass(toHost);
+        }
+
         // Into the swapchain's image, which the submit presents. None while the window is hidden,
         // nor for a layered window, which PresentWindowFrame reads back.
         const auto start = std::chrono::steady_clock::now();

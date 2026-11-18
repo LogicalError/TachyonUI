@@ -160,6 +160,69 @@ namespace tachyon::sdlgpu
         return m_impl->imageSlots;
     }
 
+    void SDLGPUGraphicsContext::ApplyDeviceRequirements(SDL_PropertiesID props)
+    {
+        // On Vulkan, what the shaders use that SDL's device doesn't enable by itself: the 16-bit
+        // types, and the draw parameters SV_VertexID is built from (VertexIndex - BaseVertex).
+        // SDL reads them when the device is made; they live as long as the program.
+        struct Vulkan
+        {
+            VkPhysicalDeviceVulkan12Features features12{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
+            VkPhysicalDeviceVulkan11Features features11{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
+            VkPhysicalDeviceFeatures         features10{};
+            SDL_GPUVulkanOptions             options{};
+
+            Vulkan()
+            {
+                features12.shaderFloat16                      = VK_TRUE;
+                features11.pNext                              = &features12;
+                features11.shaderDrawParameters               = VK_TRUE;
+                features11.storageBuffer16BitAccess           = VK_TRUE;
+                features11.uniformAndStorageBuffer16BitAccess = VK_TRUE;
+                features10.shaderInt16                        = VK_TRUE;
+                options.vulkan_api_version                 = VK_API_VERSION_1_2;
+                options.feature_list                       = &features11;
+                options.vulkan_10_physical_device_features = &features10;
+            }
+        };
+        static Vulkan vulkan;
+        SDL_SetPointerProperty(props, SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, &vulkan.options);
+        // The shader formats the GUI's shaders are built in.
+        SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
+#if defined(_WIN32)
+        SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
+#endif
+    }
+
+    bool SDLGPUGraphicsContext::CheckDeviceSupport(SDL_GPUDevice* device, std::string* problems)
+    {
+        std::string found;
+        if (device == nullptr)
+            found += "no device\n";
+        else
+        {
+            const SDL_GPUShaderFormat formats = SDL_GetGPUShaderFormats(device);
+#if defined(_WIN32)
+            constexpr SDL_GPUShaderFormat built = SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL;
+            constexpr const char* builtNames = "SPIR-V or DXIL";
+#else
+            constexpr SDL_GPUShaderFormat built = SDL_GPU_SHADERFORMAT_SPIRV;
+            constexpr const char* builtNames = "SPIR-V";
+#endif
+            if ((formats & built) == 0)
+                found += std::format("its driver ({}) takes none of the shader formats the GUI's shaders are built in ({})\n",
+                                     SDL_GetGPUDeviceDriver(device), builtNames);
+        }
+        if (problems != nullptr)
+            *problems = found;
+        return found.empty();
+    }
+
+    void SDLGPUGraphicsContext::SetExternalDevice(SDL_GPUDevice* device)
+    {
+        m_impl->externalDevice = device;
+    }
+
     Result<void> SDLGPUGraphicsContext::Initialize(IWindowBackend* windowBackend)
     {
         if (Result<void> base = NullGraphicsContext::Initialize(windowBackend); !base)
@@ -180,43 +243,32 @@ namespace tachyon::sdlgpu
             d.logHooked = true;
         }
 
-        // Debug mode (the driver's validation): for a test's callback, and in debug builds.
+        if (d.externalDevice != nullptr)
+        {
+            // The host's: checked, not made.
+            if (std::string problems; !CheckDeviceSupport(d.externalDevice, &problems))
+                return fail(ErrorCode::Unsupported, std::format("SDL GPU: the host's device can't run the GUI:\n{}", problems));
+            d.device = d.externalDevice;
+        }
+        else
+        {
+            // Debug mode (the driver's validation): for a test's callback, and in debug builds.
 #if defined(NDEBUG)
-        const bool debugMode = d.debug.callback != nullptr;
+            const bool debugMode = d.debug.callback != nullptr;
 #else
-        const bool debugMode = true;
+            const bool debugMode = true;
 #endif
-        // On Vulkan, what the shaders use that SDL's device doesn't enable by itself: the 16-bit
-        // types, and the draw parameters SV_VertexID is built from (VertexIndex - BaseVertex).
-        VkPhysicalDeviceVulkan12Features features12{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
-        features12.shaderFloat16 = VK_TRUE;
-        VkPhysicalDeviceVulkan11Features features11{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
-        features11.pNext                              = &features12;
-        features11.shaderDrawParameters               = VK_TRUE;
-        features11.storageBuffer16BitAccess           = VK_TRUE;
-        features11.uniformAndStorageBuffer16BitAccess = VK_TRUE;
-        VkPhysicalDeviceFeatures features10{};
-        features10.shaderInt16 = VK_TRUE;
-        SDL_GPUVulkanOptions vulkan{};
-        vulkan.vulkan_api_version                 = VK_API_VERSION_1_2;
-        vulkan.feature_list                       = &features11;
-        vulkan.vulkan_10_physical_device_features = &features10;
-
-        const SDL_PropertiesID props = SDL_CreateProperties();
-        SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, debugMode);
-        SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, d.lowPower);
-        if (!d.driverAsked.empty())
-            SDL_SetStringProperty(props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, d.driverAsked.c_str());
-        SDL_SetPointerProperty(props, SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER, &vulkan);
-        // The shader formats the GUI's shaders are built in.
-        SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_SPIRV_BOOLEAN, true);
-#if defined(_WIN32)
-        SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
-#endif
-        d.device = SDL_CreateGPUDeviceWithProperties(props);
-        SDL_DestroyProperties(props);
-        if (d.device == nullptr)
-            return fail(ErrorCode::Unsupported, std::format("SDL GPU: no device ({})", SDL_GetError()));
+            const SDL_PropertiesID props = SDL_CreateProperties();
+            ApplyDeviceRequirements(props);
+            SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_DEBUGMODE_BOOLEAN, debugMode);
+            SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_PREFERLOWPOWER_BOOLEAN, d.lowPower);
+            if (!d.driverAsked.empty())
+                SDL_SetStringProperty(props, SDL_PROP_GPU_DEVICE_CREATE_NAME_STRING, d.driverAsked.c_str());
+            d.device = SDL_CreateGPUDeviceWithProperties(props);
+            SDL_DestroyProperties(props);
+            if (d.device == nullptr)
+                return fail(ErrorCode::Unsupported, std::format("SDL GPU: no device ({})", SDL_GetError()));
+        }
 
         d.driver = SDL_GetGPUDeviceDriver(d.device);
         const char* name = SDL_GetStringProperty(SDL_GetGPUDeviceProperties(d.device), SDL_PROP_GPU_DEVICE_NAME_STRING, nullptr);
@@ -287,9 +339,13 @@ namespace tachyon::sdlgpu
             if (d.blankImage != nullptr)
                 SDL_ReleaseGPUTexture(d.device, d.blankImage);
             d.blankImage = nullptr;
-            SDL_DestroyGPUDevice(d.device);
+            // The host's device stays: SDL frees what was released with its next work.
+            if (d.device != d.externalDevice)
+                SDL_DestroyGPUDevice(d.device);
             d.device = nullptr;
         }
+        d.externalImages.clear();
+        d.imageTargets.clear();
         d.buffers = { nullptr };
         d.freeBuffers.clear();
         d.imageSet.Clear();
@@ -394,6 +450,41 @@ namespace tachyon::sdlgpu
     {
         MarkContentChanged();
         GetImageSet()->Remove(index);
+        // A host's texture: the frames in flight bound the texture itself, not this.
+        m_impl->externalImages.erase(uint32_t(index));
+    }
+
+    ImageIndex SDLGPUGraphicsContext::RegisterExternalImage(SDL_GPUTexture* texture, Sampler sampler)
+    {
+        Impl& d = *m_impl;
+        if (d.device == nullptr || texture == nullptr)
+            return ImageIndex::Invalid;
+        const ImageIndex index = d.imageSet.ReserveIndex();
+        if (index != ImageIndex::Invalid)
+            UpdateExternalImage(index, texture, sampler);
+        return index;
+    }
+
+    void SDLGPUGraphicsContext::UpdateExternalImage(ImageIndex index, SDL_GPUTexture* texture, Sampler sampler)
+    {
+        Impl& d = *m_impl;
+        if (d.device == nullptr || index == ImageIndex::Invalid || texture == nullptr)
+            return;
+        std::unique_ptr<SDLGPUImage>& image = d.externalImages[uint32_t(index)];
+        if (!image)
+            image = std::make_unique<SDLGPUImage>();
+        image->texture = texture;
+        image->sampler = sampler;
+        d.imageSet.SetImage(index, image.get());
+        MarkContentChanged();
+    }
+
+    void SDLGPUGraphicsContext::SetWindowImageTarget(ID window, SDL_GPUTexture* texture, uint2 size)
+    {
+        if (texture == nullptr || size.x == 0 || size.y == 0)
+            m_impl->imageTargets.erase(window);
+        else
+            m_impl->imageTargets[window] = { texture, size };
     }
 
     void SDLGPUGraphicsContext::PrepareFrame(StyleManager& styleManager, GradientManager& gradientManager, float elapsedTimeSecs)

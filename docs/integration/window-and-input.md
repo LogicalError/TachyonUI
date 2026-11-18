@@ -191,4 +191,4 @@ options.hooks = &hooks;   // the same AllocationHooks you give SetAllocationHook
 
 ---
 
-[Previous: Using your own Direct3D 12 device](d3d12-device.md) | [Integration](../integration.md) | [Next: Your own loop](frame-loop.md)
+[Previous: Using your own SDL GPU device](sdlgpu-device.md) | [Integration](../integration.md) | [Next: Your own loop](frame-loop.md)

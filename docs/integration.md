@@ -23,6 +23,7 @@ TachyonUI running inside it.
 | [Adding the library to a build](integration/build.md) | Subproject or installed package; CMake options; resources. |
 | [Using your own Vulkan device](integration/vulkan-device.md) | Device requirements, handing it over, showing your own image. |
 | [Using your own Direct3D 12 device](integration/d3d12-device.md) | The same, on Direct3D 12. |
+| [Using your own SDL GPU device](integration/sdlgpu-device.md) | The same, on SDL3's GPU API. |
 | [Your own window and input](integration/window-and-input.md) | Writing a window backend; images on the clipboard; running SDL's event loop yourself. |
 | [Your own loop](integration/frame-loop.md) | Per-frame calls; errors and device loss. |
 | [Rendering the UI into a host image](integration/render-to-image.md) | Windows without an OS window: copy to your image, read pixels, inject input. |
@@ -33,6 +34,7 @@ TachyonUI running inside it.
 \subpage md_docs_2integration_2build
 \subpage md_docs_2integration_2vulkan-device
 \subpage md_docs_2integration_2d3d12-device
+\subpage md_docs_2integration_2sdlgpu-device
 \subpage md_docs_2integration_2window-and-input
 \subpage md_docs_2integration_2frame-loop
 \subpage md_docs_2integration_2render-to-image
