@@ -1,15 +1,98 @@
 #pragma once
 
-// Inside the Direct3D 12 backend: the device and its queue, shared by the graphics context
-// and its window contexts.
+// Inside the Direct3D 12 backend: the device and what its graphics context and window contexts
+// share. The queue's one fence counts every submit, the way the Vulkan backend's timeline does:
+// a frame slot waits on it, and what's let go waits for it before it's freed.
 
 #include <gui_core/graphics/d3d12/d3d12_common.h>
 #include <gui_core/graphics/d3d12/d3d12_graphics_context.h>
+#include <gui_core/graphics/gui_image.h>
+#include <gui_core/graphics/gui_rhi.h>
 
+#include <D3D12MemAlloc.h>
+
+#include <array>
+#include <memory>
+#include <mutex>
+#include <span>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+namespace tachyon
+{
+    class StyleManager;
+    class GradientManager;
+}
 
 namespace tachyon::d3d12
 {
+    /// A buffer in one of D3D12MA's heaps. An upload-heap buffer stays mapped (`mapped`).
+    struct Buffer
+    {
+        ComPtr<D3D12MA::Allocation> allocation;
+        void*                       mapped  = nullptr;
+        D3D12_GPU_VIRTUAL_ADDRESS   address = 0;
+        UINT64                      size    = 0;
+
+        ID3D12Resource* Resource() const { return allocation ? allocation->GetResource() : nullptr; }
+        explicit operator bool() const { return allocation != nullptr; }
+    };
+
+    /// An image (GraphicsContext::CreateImage): a texture sampled by the shaders.
+    class D3D12Image final : public Image
+    {
+    public:
+        ComPtr<D3D12MA::Allocation> allocation;
+        DXGI_FORMAT                 format  = DXGI_FORMAT_UNKNOWN;
+        Sampler                     sampler = Sampler::NearestRepeat;
+        uint2                       size {};
+
+        ID3D12Resource* Resource() const { return allocation ? allocation->GetResource() : nullptr; }
+    };
+
+    /// The static sampler (s0, s1, s2) the shaders sample an image with: its row in the
+    /// per-image table at t7.
+    uint32_t SamplerSlot(Sampler sampler);
+
+    /// The images the shaders sample, by ImageIndex (1-based; the shaders' slot is one less).
+    /// Their views are kept in a heap the CPU writes; each window frame copies the slots in use
+    /// into its own shader-visible heap, so a slot pointed elsewhere never changes what a frame
+    /// in flight reads.
+    class D3D12ImageSet final : public ImageSet
+    {
+    public:
+        bool Create(ID3D12Device* device, uint32_t capacity);
+
+        void       Clear() override;
+        ImageIndex Add(Image* image) override;
+        void       Remove(ImageIndex index) override;
+        /// A slot with no image yet, for one that comes later (a text atlas page).
+        ImageIndex ReserveIndex();
+        /// Points the slot at another image.
+        void       SetImage(ImageIndex index, D3D12Image* image);
+
+        uint32_t Capacity() const { return m_capacity; }
+        /// One past the highest slot handed out: what a frame copies.
+        uint32_t SlotsInUse() const { return uint32_t(m_images.size()); }
+        D3D12_CPU_DESCRIPTOR_HANDLE CpuStart() const { return m_heap->GetCPUDescriptorHandleForHeapStart(); }
+        /// Each slot's static sampler, as t7 holds them.
+        const std::vector<uint32_t>& SamplerSlots() const { return m_samplers; }
+
+    private:
+        ImageIndex Allocate();
+        void       WriteSlot(uint32_t slot);
+
+        ID3D12Device*                m_device = nullptr;
+        ComPtr<ID3D12DescriptorHeap> m_heap;
+        UINT                         m_descriptorSize = 0;
+        uint32_t                     m_capacity = 0;
+        std::vector<D3D12Image*>     m_images;     ///< by slot; null for an empty one
+        std::vector<uint32_t>        m_samplers;   ///< by slot
+        std::vector<uint32_t>        m_free;       ///< slots handed back
+    };
+
     struct D3D12GraphicsContext::Impl
     {
         DebugConfig debug;
@@ -17,23 +100,101 @@ namespace tachyon::d3d12
         std::string deviceName;
         bool        debugLayer = false;   ///< the debug layer is on: its messages go to `debug`
         bool        tearing    = false;   ///< presenting without vsync is allowed (variable refresh)
+        uint32_t    imageSlots = 4096;    ///< asked for with SetImageSlotCount
 
         ComPtr<IDXGIFactory6>      factory;
         ComPtr<IDXGIAdapter1>      adapter;
         ComPtr<ID3D12Device>       device;
         ComPtr<ID3D12CommandQueue> queue;
+        ComPtr<D3D12MA::Allocator> allocator;   ///< GPU memory: buffers and textures in its heaps
         ComPtr<ID3D12InfoQueue1>   infoQueue;
         DWORD                      messageCallback = 0;
 
-        /// WaitIdle's: a value signalled after all work submitted so far.
-        ComPtr<ID3D12Fence> idleFence;
-        UINT64              idleValue = 0;
-        HANDLE              idleEvent = nullptr;
+        /// Every submit signals the next value: `submitted` is the last one signalled.
+        ComPtr<ID3D12Fence> submitFence;
+        UINT64              submitted = 0;
+        HANDLE              waitEvent = nullptr;
 
-        /// Signals `fence` to `value` on the queue once the work submitted so far is done.
-        void Signal(ID3D12Fence* fence, UINT64 value) { queue->Signal(fence, value); }
-        /// Waits on the CPU until `fence` reaches `value`.
-        void Wait(ID3D12Fence* fence, UINT64 value);
-        void WaitIdle();
+        /// Runs `list` and signals the fence's next value, which it returns.
+        UINT64 Submit(ID3D12CommandList* list);
+        /// Waits on the CPU until the fence reaches `value`.
+        void   Wait(UINT64 value);
+        /// Waits until everything submitted so far is done, presents included.
+        void   WaitIdle();
+        UINT64 Completed() const { return submitFence ? submitFence->GetCompletedValue() : 0; }
+
+        // ---- Memory -------------------------------------------------------------------
+        /// A buffer the CPU writes and the GPU reads, mapped. Empty on failure.
+        Buffer CreateUploadBuffer(UINT64 size);
+        /// A buffer in GPU memory, made ready for a copy into it.
+        Buffer CreateGpuBuffer(UINT64 size);
+
+        /// What's let go is freed once the GPU is past `afterValue`: the next submit
+        /// (`submitted + 1`) for anything a window frame being recorded may use, which is
+        /// everything let go while frames are built; 0 for what no command list refers to.
+        void DestroyAfterGpu(ComPtr<D3D12MA::Allocation> allocation, UINT64 afterValue);
+        void DestroyAfterGpu(std::unique_ptr<D3D12Image> image, UINT64 afterValue);
+        /// Frees what the GPU is done with.
+        void FlushDeletions();
+
+        struct Garbage
+        {
+            UINT64                      afterValue = 0;
+            ComPtr<D3D12MA::Allocation> allocation;
+            std::unique_ptr<D3D12Image> image;
+        };
+        std::mutex           garbageMutex;   ///< images are let go on any thread
+        std::vector<Garbage> garbage;
+
+        // ---- Uploads, recorded at the start of the next window frame -----------------
+        struct ImageUpload
+        {
+            D3D12Image*                        image = nullptr;
+            Buffer                             staging;
+            D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint {};
+        };
+        std::mutex               uploadMutex;   ///< images are made on any thread
+        std::vector<ImageUpload> imageUploads;
+
+        /// Records the queued image and resident-buffer copies into `list`.
+        void RecordPendingUploads(ID3D12GraphicsCommandList* list);
+
+        // ---- Resident buffers (RHI::UploadResidentBuffers) ----------------------------
+        struct Resident
+        {
+            Buffer gpu;
+            Buffer staging;   ///< filled at once; copied into `gpu` by RecordPendingUploads
+            bool   ready = false;
+        };
+        std::unordered_map<RHI::ResidentBufferId, Resident> residents;
+        RHI::ResidentBufferId nextResident = 1;
+
+        RHI::ResidentBufferId CreateResidentBuffer(std::span<const RHI::UploadRequest> requests,
+                                                   std::span<DeviceAddress> addresses);
+        RHI::ResidentState    ResidentState(RHI::ResidentBufferId id) const;
+        void                  ReleaseResident(RHI::ResidentBufferId id);
+
+        // ---- Images ------------------------------------------------------------------------
+        /// Every image made and not let go for a frame (DeviceScope::Frame): those handed over
+        /// for the application's lifetime too. Cleanup frees what's left.
+        std::unordered_set<D3D12Image*> liveImages;
+
+        // ---- What every frame draws with ------------------------------------------------
+        D3D12ImageSet                imageSet;
+        Buffer                       boxStyles;     ///< the box styles, uploaded again when they change
+        Buffer                       colorStyles;   ///< the color styles, with their gradient pages' slots
+        std::vector<ImageIndex>      gradientPages; ///< each gradient page's index in the image set
+        StyleManager*                lastStyles    = nullptr;   ///< PrepareFrame's, for a live resize's redraw
+        GradientManager*             lastGradients = nullptr;
+        float                        lastTime      = 0.0f;
+        ComPtr<ID3D12RootSignature>  rootSignature;
+        std::vector<ComPtr<ID3D12PipelineState>> pipelineStates;   ///< by PrimitiveKind
+        std::array<RHI::GpuPipeline, kPrimitiveKindCount> pipelines {};
+        Buffer                       quadIndices;   ///< p * 4 + { 0, 1, 3, 0, 3, 2 } for each quad p
+        uint32_t                     quadCapacity = 0;
+        GPUDrawPushConstants         pushConstants {};   ///< the styles' addresses and the time, from PrepareFrame
+
+        /// Grows the quads' index buffer to hold `quads`; false when it can't.
+        bool EnsureQuadIndices(uint32_t quads);
     };
 }

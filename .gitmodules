@@ -37,3 +37,6 @@
 	path = third_party/budouxc
 	url = https://github.com/memononen/budouxc.git
 	shallow = true
+[submodule "third_party/D3D12MemoryAllocator"]
+	path = third_party/D3D12MemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator.git

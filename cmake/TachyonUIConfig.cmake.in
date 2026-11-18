@@ -51,6 +51,9 @@ if(TachyonUI_VULKAN)
   endif()
   find_dependency(vkbootstrap CONFIG)
 endif()
+if(TachyonUI_D3D12)
+  find_dependency(d3d12ma CONFIG)
+endif()
 find_dependency(nanosvg CONFIG)
 
 # The libraries link skribidi under its short name.

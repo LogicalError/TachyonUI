@@ -5,7 +5,10 @@
 // the static samplers it uses (0 nearest repeat, 1 linear repeat, 2 linear clamp to edge), one
 // uint per image.
 ByteAddressBuffer imageSamplers : register(t7);
-SamplerState      samplers[3]   : register(s0);
+// Static samplers, so three of them by name: an array of static samplers can't be indexed.
+SamplerState      nearestRepeat : register(s0);
+SamplerState      linearRepeat  : register(s1);
+SamplerState      linearClamp   : register(s2);
 
 Texture2D Image(uint index)
 {
@@ -20,10 +23,17 @@ float2 ImageSize(uint index)
     return float2(width, height);
 }
 
+// The base level: images have no other (as on Vulkan, whose samplers read level 0 alone), and
+// it needs no derivatives in the branches.
 float4 SampleImage(uint index, float2 uv)
 {
-    const uint sampler = imageSamplers.Load(index * 4);
-    return Image(index).Sample(samplers[NonUniformResourceIndex(sampler)], uv);
+    const Texture2D image   = Image(index);
+    const uint      sampler = imageSamplers.Load(index * 4);
+    if (sampler == 1)
+        return image.SampleLevel(linearRepeat, uv, 0);
+    if (sampler == 2)
+        return image.SampleLevel(linearClamp, uv, 0);
+    return image.SampleLevel(nearestRepeat, uv, 0);
 }
 float4 FetchImage(uint index, int2 texel) { return Image(index).Load(int3(texel, 0)); }
 #else

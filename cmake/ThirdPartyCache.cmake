@@ -50,7 +50,7 @@ endif()
 # nanosvg: the copy in third_party/nanosvg is altered, so a change to it reaches the cache.
 file(SHA1 "${PROJECT_SOURCE_DIR}/third_party/nanosvg/nanosvg.h" _tachyon_nanosvg_hash)
 set(_tachyon_tp_signature
-  "vulkan=${TACHYON_VULKAN};sdl=${TACHYON_SDL};system-sdl=${TACHYON_SYSTEM_SDL};system-harfbuzz=${TACHYON_SYSTEM_HARFBUZZ};system-vma=${TACHYON_SYSTEM_VMA};vcpkg-msbuild=off;sdl-link=static;library-alloc=1;nanosvg=${_tachyon_nanosvg_hash}")
+  "vulkan=${TACHYON_VULKAN};d3d12=${TACHYON_D3D12};sdl=${TACHYON_SDL};system-sdl=${TACHYON_SYSTEM_SDL};system-harfbuzz=${TACHYON_SYSTEM_HARFBUZZ};system-vma=${TACHYON_SYSTEM_VMA};vcpkg-msbuild=off;sdl-link=static;library-alloc=1;nanosvg=${_tachyon_nanosvg_hash}")
 
 function(_tachyon_build_third_party_config cfg)
   set(stamp "${TACHYON_TP_INSTALL}/.stamp-${cfg}")
@@ -101,6 +101,7 @@ function(_tachyon_build_third_party_config cfg)
       "-DCMAKE_INSTALL_PREFIX=${TACHYON_TP_INSTALL}"
       "-DTACHYON_BUILD_TESTS=${TACHYON_BUILD_TESTS}"
       "-DTACHYON_VULKAN=${TACHYON_VULKAN}"
+      "-DTACHYON_D3D12=${TACHYON_D3D12}"
       "-DTACHYON_SDL=${TACHYON_SDL}"
       "-DTACHYON_SYSTEM_SDL=${TACHYON_SYSTEM_SDL}"
       "-DTACHYON_SYSTEM_HARFBUZZ=${TACHYON_SYSTEM_HARFBUZZ}"
@@ -187,6 +188,9 @@ if(TACHYON_VULKAN)
     find_package(vma CONFIG REQUIRED)
   endif()
   find_package(vkbootstrap CONFIG REQUIRED)
+endif()
+if(TACHYON_D3D12)
+  find_package(d3d12ma CONFIG REQUIRED)
 endif()
 find_package(nanosvg CONFIG REQUIRED)
 if(TACHYON_BUILD_TESTS)
