@@ -98,7 +98,7 @@ jobs:
         if: steps.shader-cache.outputs.cache-hit == 'true'
         run: Get-ChildItem build/shaders | ForEach-Object { $_.LastWriteTime = Get-Date }
 
-      # Direct3D 12's shaders (DXIL) are built and checked here, before its backend exists.
+      # Direct3D 12's shaders (DXIL) are built and checked here, with its backend.
       # D3D12 runs only signed DXIL: the Windows SDK's DXC and validator sign it, should
       # slangc's own DXC not.
       - name: DXC for the DXIL shaders
@@ -135,6 +135,12 @@ jobs:
         env:
           TACHYON_GPU: cpu
         run: bin/Debug/gui_d3d12_tests.exe
+      # The whole-app GPU tests, on Direct3D 12 as the Vulkan ones can't run here.
+      - name: Whole-app GPU tests on Direct3D 12 (Debug, WARP)
+        timeout-minutes: 15
+        env:
+          TACHYON_GPU: cpu
+        run: bin/Debug/gui_gpu_tests.exe --graphics=d3d12
 
       - name: Install the package
         run: |

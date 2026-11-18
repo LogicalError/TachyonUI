@@ -279,7 +279,11 @@ namespace tachyon::d3d12
             m_list->ResourceBarrier(1, &toPresent);
         }
         else
+        {
             m_list->ResourceBarrier(1, &toSource);
+            if (const auto target = m_device.imageTargets.find(m_id); m_toImage && target != m_device.imageTargets.end())
+                CopyToTarget(frame, target->second);
+        }
         frame.drawState = D3D12_RESOURCE_STATE_COPY_SOURCE;
 
         m_list->Close();
@@ -333,6 +337,26 @@ namespace tachyon::d3d12
         static_assert(sizeof(m) == sizeof(push.worldMatrix));
         std::memcpy(&push.worldMatrix, m, sizeof(m));
         static_cast<PrimitiveRenderer*>(m_graphics.guiRenderer)->Render(m_id, cmdList, m_device.pipelines, push);
+    }
+
+    void D3D12WindowContext::CopyToTarget(Frame& frame, ID3D12Resource* target)
+    {
+        // The part both have: a texture of another size isn't scaled.
+        const D3D12_RESOURCE_DESC desc = target->GetDesc();
+        const D3D12_BOX box{ 0, 0, 0, std::min(m_width, UINT(desc.Width)), std::min(m_height, desc.Height), 1 };
+        D3D12_TEXTURE_COPY_LOCATION to{};
+        to.pResource        = target;
+        to.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        to.SubresourceIndex = 0;
+        D3D12_TEXTURE_COPY_LOCATION from{};
+        from.pResource        = frame.drawTexture.Get();
+        from.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        from.SubresourceIndex = 0;
+        const D3D12_RESOURCE_BARRIER toCopy = Transition(target, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_COPY_DEST);
+        m_list->ResourceBarrier(1, &toCopy);
+        m_list->CopyTextureRegion(&to, 0, 0, 0, &from, &box);
+        const D3D12_RESOURCE_BARRIER toRead = Transition(target, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+        m_list->ResourceBarrier(1, &toRead);
     }
 
     std::optional<double> D3D12WindowContext::PresentWindowFrame()

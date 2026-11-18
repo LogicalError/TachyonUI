@@ -51,6 +51,10 @@ namespace tachyon::d3d12
 
     UINT64 D3D12GraphicsContext::Impl::Submit(ID3D12CommandList* list)
     {
+        // The queue runs in order: what comes after the first submit waits too.
+        for (const auto& [fence, value] : frameWaits)
+            queue->Wait(fence.Get(), value);
+        frameWaits.clear();
         queue->ExecuteCommandLists(1, &list);
         queue->Signal(submitFence.Get(), ++submitted);
         return submitted;
