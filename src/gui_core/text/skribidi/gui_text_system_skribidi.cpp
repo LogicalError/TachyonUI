@@ -35,6 +35,23 @@ namespace tachyon
 	namespace
 	{
 		constexpr Diagnostics::LogCategory kLogText = Diagnostics::MakeLogCategory("text");
+
+		// Whether wrapping may break `entry`'s text anywhere. Plain text of only letters,
+		// digits and . % : _ is one unbreakable word in word wrap (Unicode line breaking
+		// joins these), so it's as narrow as it is wide. Anything else may break.
+		bool CanBreak(const RegisteredText& entry)
+		{
+			if (entry.isRichText || entry.textWrapping != TextWrap::Wrap)
+				return true;
+			for (const char c : entry.text)
+			{
+				const bool joined = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+				                 || c == '.' || c == '%' || c == ':' || c == '_';
+				if (!joined)
+					return true;
+			}
+			return false;
+		}
 	}
 
 	SkribidiTextSystem::SkribidiTextSystem(const AllocationHooks& hooks)
@@ -127,9 +144,13 @@ namespace tachyon
 		// panel that is briefly not rebuilt (retained cache) doesn't reshape on wake.
 		constexpr uint32_t kEvictAfterFrames = 120;
 		auto* ctx = m_skribidiContext;
+		// Swept every few frames: each sweep reads every entry and both maps, and a text
+		// lasting a few frames past its time costs nothing.
+		constexpr uint32_t kSweepEveryFrames = 8;
+		if (ctx->frameNumber % kSweepEveryFrames != 0)
+			return;
 
-		static thread_local std::vector<TextID> evicted;
-		evicted.clear();
+		bool evicted = false;
 		for (size_t i = 0; i < ctx->m_registry.size(); ++i)
 		{
 			RegisteredText& entry = ctx->m_registry[i];
@@ -143,12 +164,13 @@ namespace tachyon
 			ctx->ResetLayout(&entry);
 			entry = RegisteredText{};
 			ctx->m_freeTextSlots.push_back(uint32_t(i));
-			evicted.push_back(id);
+			evicted = true;
 		}
-		if (evicted.empty())
+		if (!evicted)
 			return;
 
-		auto isEvicted = [](TextID id) { return std::find(evicted.begin(), evicted.end(), id) != evicted.end(); };
+		// An evicted text's slot is free (and not taken again before this returns).
+		auto isEvicted = [ctx](TextID id) { return ctx->GetRegisteredText(id) == nullptr; };
 		std::erase_if(m_textKeyToIdMap,       [&](const auto& kv) { return isEvicted(kv.second); });
 		std::erase_if(m_elementIdToTextIdMap, [&](const auto& kv) { return isEvicted(kv.second); });
 	}
@@ -191,6 +213,7 @@ namespace tachyon
 			}
 
 			skb_image_atlas_compact(m_skribidiContext->atlas);
+			m_skribidiContext->ForgetGlyphQuads();
 
 			m_skribidiContext->textAtlasManager->SyncTextureIndices();
 		}
@@ -508,13 +531,14 @@ namespace tachyon
 		if (skb_image_atlas_rasterize_missing_items(ctx.atlas, ctx.temp_alloc, ctx.rasterizer))
 			ctx.atlas_dirty = true;
 		ClearCache();
-		std::erase_if(ctx.atlasRecords, [&](const auto& entry) { return &entry.second != ctx.atlasRecorder; });
+		std::erase_if(ctx.atlasRecords, [&](const auto& entry) { return &entry.second.touches != ctx.atlasRecorder; });
 		if (ctx.atlasRecorder)
 			ctx.atlasRecorder->clear();
 		ctx.atlasRecorderKeys.clear();
 
 		skb_font_collection_destroy(ctx.font_collection);
 		ctx.font_collection = skb_font_collection_create();
+		ctx.ForgetGlyphQuads();
 		ctx.m_fontFallback.attempts.clear();
 		if (!skribidi_load_fonts(ctx.font_collection, ctx.m_fontFallback))
 			TACHYON_LOG_ERROR(kLogText, "could not reload the default fonts");
@@ -679,12 +703,7 @@ namespace tachyon
 
 		if (entry->iconId != IconID::Invalid)
 		{
-			auto iconMeasurement = GetIconMeasurement(entry->iconId);
-			if (entry->iconSize > 0)
-			{
-				iconMeasurement.width  = entry->iconSize;
-				iconMeasurement.height = entry->iconSize;
-			}
+			const IconMeasurement iconMeasurement = SideIconMeasurement(entry);
             switch (entry->iconSide)
             {
                 case IconSide::None: break;
@@ -737,8 +756,9 @@ namespace tachyon
 		skb_layout_destroy(layout);
 
 		// Min-content: wrapping text laid out as narrow as it goes (one word, or one
-		// character for word-char, per line). Text that doesn't wrap is one line either way.
-		if (entry->textWrapping != TextWrap::NoWrap && entry->baseMeasurement.maxWidth > 0)
+		// character for word-char, per line). Text that doesn't wrap is one line either way,
+		// and so is one word that can't break (a number, say).
+		if (entry->textWrapping != TextWrap::NoWrap && entry->baseMeasurement.maxWidth > 0 && CanBreak(*entry))
 		{
 			skb_layout_t* narrow = m_skribidiContext->CreateLayout(entry, 1.0f, 16384.0f);
 			entry->baseMeasurement.minWidth = std::min(entry->baseMeasurement.maxWidth,
@@ -754,7 +774,7 @@ namespace tachyon
 
 		//TACHYON_PROFILE_SCOPE("UpdateWrapMeasurementWhenNecessary");
 		[[maybe_unused]]
-		auto layout = (skb_layout_t*)UpdateLayoutWhenNecessary(entry, (float)wrapContext.maxWidth);
+		auto layout = (skb_layout_t*)UpdateLayoutWhenNecessary(entry, float(LayoutWidth(entry, wrapContext.maxWidth)));
 		if (entry->wrapMeasurement.IsEmpty())
 		{
 			entry->wrapMeasurement = MeasureTextInternal(entry, entry->wrap_layout);
@@ -782,9 +802,29 @@ namespace tachyon
 
 		entry->wrap_width = width;
 		entry->wrap_layout = m_skribidiContext->CreateLayout(entry, width, 16384);
+		entry->glyphCache.valid = false;
 
 		assert(entry->wrap_layout);
 		return entry->wrap_layout;
+	}
+
+	IconMeasurement SkribidiTextSystem::SideIconMeasurement(const RegisteredText* entry) const
+	{
+		if (entry->iconId == IconID::Invalid)
+			return {};
+		IconMeasurement icon = GetIconMeasurement(entry->iconId);
+		if (entry->iconSize > 0)
+		{
+			icon.width  = entry->iconSize;
+			icon.height = entry->iconSize;
+		}
+		return icon;
+	}
+
+	int32_t SkribidiTextSystem::LayoutWidth(const RegisteredText* entry, int32_t width) const
+	{
+		const bool hasIcon = entry->iconId != IconID::Invalid;
+		return IconAwareLayoutMaxWidth(width, SideIconMeasurement(entry), entry->iconSide, entry->iconTextGap, hasIcon);
 	}
 
 
@@ -967,6 +1007,90 @@ namespace tachyon
 		ctx->view.cy = prev_y;
 	}
 
+	void SkribidiTextSystem::BuildGlyphCache(RegisteredText* entry, const skb_layout_t* layout, float pixelScale)
+	{
+		SkribidiContext* ctx = m_skribidiContext;
+		RegisteredText::GlyphCache& cache = entry->glyphCache;
+		cache.glyphs.clear();
+		cache.textures.clear();
+		bool reusable = ctx->atlasRecorder == nullptr;
+
+		const skb_layout_run_t*    runs      = skb_layout_get_layout_runs(layout);
+		const int32_t              runCount  = skb_layout_get_layout_runs_count(layout);
+		const skb_glyph_t*         glyphs    = skb_layout_get_glyphs(layout);
+		const skb_layout_params_t* params    = skb_layout_get_params(layout);
+		constexpr skb_rasterize_alpha_mode_t mode = SKB_RASTERIZE_ALPHA_SDF;
+		// The atlas pads each glyph's distance field; most of that padding is cut off the quad.
+		constexpr float kTrim = float(SkribidiContext::kSdfPadding - 1) - SkribidiContext::kGlyphMargin;
+
+		for (int32_t ri = 0; ri < runCount; ri++)
+		{
+			const skb_layout_run_t* run = &runs[ri];
+			const uint32_t paintState = (run->content_id != 0 && run->content_id == entry->hoveredContentId)
+				? SKB_PAINT_STATE_HOVER : SKB_PAINT_STATE_DEFAULT;
+			const skb_attribute_paint_t paint = skb_attributes_get_paint(SKB_PAINT_TEXT, paintState,
+				skb_layout_get_layout_run_attributes(layout, run), params->attribute_collection);
+			// A run with its own colour (a link, or ContentRun::color) renders in that colour,
+			// registered on demand: its index isn't kept.
+			VisualColorStyleIndex runColor = entry->textColorIndex;
+			if (paint.paint_tag == SKB_PAINT_TEXT && paint.color.a != 0)
+			{
+				const color4b c{ paint.color.r, paint.color.g, paint.color.b, paint.color.a };
+				runColor = ctx->styleManager->RegisterColorStyle(ColorStyle::Create(c), ImageIndex::Invalid);
+				reusable = false;
+			}
+			for (int32_t gi = run->glyph_range.start; gi < run->glyph_range.end; gi++)
+			{
+				const skb_glyph_t& glyph = glyphs[gi];
+				const skb_quad_t quad = ctx->GetGlyphQuad(glyph.offset_x, glyph.offset_y, pixelScale,
+					params->font_collection, run->font_handle, glyph.gid, run->font_size, paint.color, mode);
+				if (quad.flags & SKB_QUAD_IS_EMPTY)
+					continue;
+				const uint32_t texID = (uint32_t)skb_image_atlas_get_texture_user_data(ctx->atlas, quad.texture_idx);
+				if (texID == 0)
+				{
+					TACHYON_LOG_ERROR(kLogText, "a glyph's atlas texture has no image");
+					reusable = false;
+					continue;
+				}
+				ImageIndex image = ImageIndex::Invalid;
+				for (const auto& [id, index] : cache.textures)
+					if (id == texID)
+						image = index;
+				if (image == ImageIndex::Invalid)
+				{
+					image = ctx->textAtlasManager->GetImageIndex((TextureIndex)texID);
+					cache.textures.emplace_back(texID, image);
+				}
+
+				skb_rect2_t geom = quad.geom, uv = quad.texture;
+				if (uv.width > 2.0f * kTrim && uv.height > 2.0f * kTrim)
+				{
+					const float trimX = kTrim * geom.width / uv.width;
+					const float trimY = kTrim * geom.height / uv.height;
+					geom = { geom.x + trimX, geom.y + trimY, geom.width - 2.0f * trimX, geom.height - 2.0f * trimY };
+					uv   = { uv.x + kTrim, uv.y + kTrim, uv.width - 2.0f * kTrim, uv.height - 2.0f * kTrim };
+				}
+				cache.glyphs.push_back(GUIRenderer::GlyphInstance
+				{
+					.pos   = { geom.x, geom.y }, .size = { geom.width, geom.height },
+					.uvMin = { uv.x, uv.y }, .uvMax = { uv.x + uv.width, uv.y + uv.height },
+					.scale = 1.f / quad.scale,
+					.bpp   = uint16_t(skb_image_atlas_get_texture(ctx->atlas, quad.texture_idx)->bpp),
+					.mode  = uint16_t(mode),
+					.textureIndex = image,
+					.color = (quad.flags & SKB_QUAD_IS_COLOR) ? VisualColorStyleIndex::Invalid : runColor,
+				});
+			}
+		}
+
+		cache.valid      = reusable;
+		cache.epoch      = ctx->glyphQuadEpoch;
+		cache.pixelScale = pixelScale;
+		cache.hovered    = entry->hoveredContentId;
+		cache.color      = entry->textColorIndex;
+	}
+
 	void SkribidiTextSystem::RenderText(RegisteredText* entry, IntRect rect, IntRect innerRectScreen, IntRect clipRect, float pixelScale)
 	{
 		entry->innerRect = innerRectScreen;
@@ -974,16 +1098,8 @@ namespace tachyon
 		// A Left/Right icon takes its width out of the layout, so text-align: end
 		// doesn't draw text under the icon. Same math as ComputeIconTextPlacement.
 		const bool hasIcon = (entry->iconId != IconID::Invalid);
-		IconMeasurement iconMeasurement = hasIcon ? GetIconMeasurement(entry->iconId)
-		                                          : IconMeasurement{};
-		if (hasIcon && entry->iconSize > 0)
-		{
-			iconMeasurement.width  = entry->iconSize;
-			iconMeasurement.height = entry->iconSize;
-		}
-		const int32_t layoutMaxWidth = IconAwareLayoutMaxWidth(
-			rect.size.x, iconMeasurement, entry->iconSide, entry->iconTextGap, hasIcon);
-		auto layout = (skb_layout_t*)UpdateLayoutWhenNecessary(entry, float(layoutMaxWidth));
+		const IconMeasurement iconMeasurement = SideIconMeasurement(entry);
+		auto layout = (skb_layout_t*)UpdateLayoutWhenNecessary(entry, float(LayoutWidth(entry, rect.size.x)));
 		if (layout == nullptr) return;
 
 
@@ -1039,6 +1155,9 @@ namespace tachyon
 		const skb_decoration_t*		decorations			= skb_layout_get_decorations(layout);
 
 		skb_rasterize_alpha_mode_t mode = SKB_RASTERIZE_ALPHA_SDF;
+		bool hasIconRun = false;
+		for (int32_t ri = 0; ri < layout_runs_count; ri++)
+			hasIconRun = hasIconRun || layout_runs[ri].type == SKB_CONTENT_RUN_ICON;
 
 		// The renderer takes colour-style indices, so a run's own colour (e.g. a link)
 		// is registered on demand; RegisterColorStyle dedups.
@@ -1110,10 +1229,24 @@ namespace tachyon
 					clipRect);
 			}
 
-			for (int32_t ri = 0; ri < layout_runs_count; ri++)
+			// The glyphs themselves, at once, when there's no shadow to draw them as and no
+			// inline icon among them; from the cache while it holds.
+			if (ctx->shadow.IsNone() && !hasIconRun)
+			{
+				RegisteredText::GlyphCache& cache = entry->glyphCache;
+				bool reuse = cache.valid && cache.epoch == ctx->glyphQuadEpoch && cache.pixelScale == pixelScale
+					&& cache.hovered == entry->hoveredContentId && cache.color == entry->textColorIndex
+					&& ctx->atlasRecorder == nullptr;   // a recording notes each atlas lookup
+				for (const auto& [texID, image] : cache.textures)
+					reuse = reuse && ctx->textAtlasManager->GetImageIndex((TextureIndex)texID) == image;
+				if (!reuse)
+					BuildGlyphCache(entry, layout, pixelScale);
+				ctx->guiRenderer->RenderGlyphs(cache.glyphs, float2{ textView.cx, textView.cy }, clipRect);
+			}
+			else for (int32_t ri = 0; ri < layout_runs_count; ri++)
 			{
 				const skb_layout_run_t* run = &layout_runs[ri];
-			
+
 				if (run->type == SKB_CONTENT_RUN_ICON)
 				{
 					if (const auto* pixels = ctx->GetPixelIcon(run->icon_handle))

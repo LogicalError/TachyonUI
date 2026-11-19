@@ -12,9 +12,9 @@
 #include <gui_core/input/gui_input_handler_func.h>
 
 #include <gui_core/gui_id.h>
+#include <gui_core/gui_id_map.h>
 #include <gui_core/gui_base_types.h>
 
-#include <unordered_map>
 
 namespace tachyon
 {
@@ -506,8 +506,8 @@ namespace tachyon
         ElementDataStore* m_elementDataStore = nullptr;
 
         /// Add keeps it current; MoveChild marks it stale and the next lookup rebuilds it.
-        mutable std::unordered_map<ID, ElementRef> m_idIndex;
-        mutable bool                               m_idIndexStale = false;
+        mutable IDMap<ElementRef> m_idIndex;
+        mutable bool              m_idIndexStale = false;
         void IndexElement(ID id, ElementRef ref) const;
     };
 

@@ -512,6 +512,44 @@ namespace tachyon
         EXPECT_FALSE(sm.IsBoxBackgroundOpaque(base + int(ElementState::Hover))) << "cleared with the styles";
     }
 
+    // A box draws nothing with no visible background and no visible border: its primitive can go.
+    TEST(StyleManagerTest, ABoxWithNothingVisibleIsBlank)
+    {
+        GradientManager gm(16);
+        StyleManager    sm(gm);
+        auto blank = [&](const ColorStyle& background, uint16_t borderWidth = 0, const ColorStyle& border = {}, uint16_t variable = 0) {
+            Style s{};
+            s.borderWidths = BoxEdges(borderWidth);
+            for (StyleState& st : s.states)
+            {
+                st.backgroundColor = background;
+                st.backgroundColor.variable = variable;
+                st.SetBorderColor(border);
+            }
+            const StyleRef ref = sm.Register(s, StyleUnits::Pixels);
+            return sm.IsBoxBlank(GUIRenderer::StyleIndex(ref.visualBoxStyleIndex, ElementState::None));
+        };
+        const ColorStyle clear = ColorStyle::Create(color4b{ 10, 20, 30, 0 });
+        const ColorStyle red   = ColorStyle::Create(color4b{ 255, 0, 0, 255 });
+        EXPECT_TRUE (blank(ColorStyle{})) << "no background, no border";
+        EXPECT_TRUE (blank(clear));
+        EXPECT_FALSE(blank(ColorStyle::Create(color4b{ 10, 20, 30, 1 })));
+        EXPECT_TRUE (blank(clear, 0, red)) << "a border color without a width";
+        EXPECT_TRUE (blank(clear, 2, clear)) << "a transparent border";
+        EXPECT_FALSE(blank(clear, 2, red));
+        EXPECT_FALSE(blank(ColorStyle::Create(color4b{ 0, 0, 0, 0 }, color4b{ 0, 0, 0, 255 }, ColorType::LinearGradient)));
+        EXPECT_FALSE(blank(ColorStyle::Create(color4b{ 0, 0, 0, 0 }, color4b{ 0, 0, 0, 0 }, ColorType::StretchedTexture)));
+        EXPECT_FALSE(blank(clear, 0, {}, 1)) << "a theme variable's color can change";
+        EXPECT_FALSE(sm.IsBoxBlank(1000000)) << "out of range";
+
+        // Per state: blank but while hovered.
+        Style s{};
+        s.states[ElementState::Hover].backgroundColor = red;
+        const StyleRef ref = sm.Register(s);
+        EXPECT_TRUE (sm.IsBoxBlank(GUIRenderer::StyleIndex(ref.visualBoxStyleIndex, ElementState::None)));
+        EXPECT_FALSE(sm.IsBoxBlank(GUIRenderer::StyleIndex(ref.visualBoxStyleIndex, ElementState::Hover)));
+    }
+
     // text-shadow goes with the state's text style, at the UI scale, its color registered.
     TEST(StyleManagerTest, TextShadowsAreScaledPerState)
     {

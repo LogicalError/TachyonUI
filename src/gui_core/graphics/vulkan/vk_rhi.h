@@ -77,6 +77,13 @@ namespace tachyon::vulkan
         VkCommandBuffer      cmd;
         VkDescriptorSet      imageSet;
         FrameData&           frame;
+
+        // What this list last bound in `cmd`: a draw records only the state that differs.
+        VkPipeline                   boundPipeline    = VK_NULL_HANDLE;
+        VkPipelineLayout             boundLayout      = VK_NULL_HANDLE;
+        VkBuffer                     boundQuadIndices = VK_NULL_HANDLE;
+        bool                         pushed           = false;
+        tachyon::GPUDrawPushConstants lastPush {};
     };
     /// @}
 }

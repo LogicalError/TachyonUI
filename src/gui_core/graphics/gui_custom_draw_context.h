@@ -154,6 +154,8 @@ namespace tachyon
 
         /// A filled, anti-aliased dot centered on `pos`; `size` is its diameter.
         void RenderDot(float2 pos, float size, color4f color) const;
+        /// RenderDot at each of `positions`, alike: a grid's dots at once.
+        void RenderDots(std::span<const float2> positions, float size, color4f color) const;
 
         /// A filled triangle; see GUIRenderer::RenderTriangle for `hardEdges`.
         void RenderTriangle(float2 p0, float2 p1, float2 p2,

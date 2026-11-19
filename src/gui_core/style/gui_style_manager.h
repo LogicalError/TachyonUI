@@ -127,6 +127,10 @@ namespace tachyon
         /// Whether the box style's background, by its flat GPU index, hides what's under it:
         /// a color or gradient with every stop opaque (not a texture).
         bool                         IsBoxBackgroundOpaque(uint32_t gpuStyleIndex) const noexcept;
+        /// Whether a box in the style, by its flat GPU index, draws nothing: its background and
+        /// every bordered edge's color are transparent, and none is a theme variable's (which
+        /// can change) or a texture. Its shadows are drawn apart and don't count.
+        bool                         IsBoxBlank(uint32_t gpuStyleIndex) const noexcept;
         ///@}
 
         /// Number of registered (deduplicated) styles in each pool.
@@ -241,6 +245,7 @@ namespace tachyon
         std::deque<LayoutStyle>       m_layoutStyles;
         std::vector<VisualBoxStyle>   m_visualBoxStyles;
         std::vector<bool>             m_opaqueBoxBackgrounds; ///< parallel to m_visualBoxStyles
+        std::vector<bool>             m_blankBoxes;           ///< parallel to m_visualBoxStyles
         std::vector<VisualTextStyle>  m_visualTextStyles;
         std::vector<VisualColorStyle> m_visualColorStyles;
         std::vector<VisualShadowStyle> m_visualShadowStyles; ///< few: searched linearly at registration

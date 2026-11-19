@@ -94,6 +94,11 @@ namespace tachyon
         // quits, instead of the usual windows (capture.cpp).
         void SetCaptureDir(std::string folder) { m_captureDir = std::move(folder); }
         bool IsCapturing() const { return !m_captureDir.empty(); }
+        // --bench: draws every frame with the profiler on, and after `frames` of them (past a
+        // warm-up) prints each profiled scope's mean time per frame and the GPU's (Vulkan); then
+        // again with the draw cache off, every scope rebuilt each frame; then quits.
+        void SetBenchFrames(int frames) { m_bench.frames = frames; }
+        bool IsBenching() const { return m_bench.frames > 0; }
 
         // ---- Toolbar model (used by the View panel) -----------------------------
         struct ToolbarLayoutModel
@@ -151,6 +156,17 @@ namespace tachyon
         StyleRef viewportBusyBarStyleRef, viewportBusyPillStyleRef, viewportBusyTextStyleRef;
         // The Files panel's import: its block in the toolbar, and the tile of the file coming in.
         StyleRef filesImportTileStyleRef, filesImportWellStyleRef, filesImportNameStyleRef;
+        // The Files panel's item styles, one per icon tint: registered again only when the
+        // styles are rebuilt (StyleManager::Generation), the tint or the icon size changes.
+        struct FileItemStyle
+        {
+            uint32_t generation = 0;
+            color4f  tint {};
+            uint16_t iconSize   = 0;
+            StyleRef style {};
+            bool     made       = false;
+        };
+        FileItemStyle fileItemStyles[3];
         // The hierarchy: "streaming" at the end of a row, and a row still loading.
         StyleRef hierarchyStreamingStyleRef, hierarchySkeletonRowStyleRef;
         int32_t  viewportBusyWidth = 0;         // the viewport's width last frame: its busy bar's
@@ -962,6 +978,27 @@ namespace tachyon
         std::filesystem::path    m_filesRoot;     // --files
         std::string              m_startTheme;    // --theme
         std::string              m_captureDir;    // --capture
+        // --bench: the frames to measure, the frames seen, and each scope's summed times.
+        struct BenchState
+        {
+            struct Scope
+            {
+                std::string name;
+                int32_t     depth = 0;
+                bool        isWait = false;
+                double      totalMs = 0.0, selfMs = 0.0;
+                int64_t     calls = 0;
+            };
+            int                                  frames = 0;
+            int                                  seen = 0;      // frames seen in this phase
+            int                                  phase = 0;     // 0: the draw cache on, 1: off
+            double                               gpuMs = 0.0;   // summed over the windows and frames
+            int                                  gpuFrames = 0;
+            std::vector<uint64_t>                order;    // the scopes' keys, as first seen depth-first
+            std::unordered_map<uint64_t, Scope>  scopes;
+        } m_bench;
+        // Called each frame while --bench runs; prints the means and quits at the end.
+        void RunBench();
         // Where --capture is: the theme and the shot it's on, and frames since the shot began.
         struct CaptureState
         {

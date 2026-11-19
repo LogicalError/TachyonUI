@@ -11,9 +11,13 @@
 #include <gui_core/graphics/gui_render_primitives.h>
 #include <gui_core/graphics/gui_rhi.h>
 
+#include <algorithm>
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <span>
 #include <type_traits>
 #include <unordered_map>
@@ -77,8 +81,9 @@ namespace tachyon
         /// each primitive starts with the same header (transform0, transform1, clipMin, clipMax).
         void AppendCaptured(const PrimitiveRenderTarget& src, tachyon::int2 delta);
         /// Closes the open pass and adds a pass that draws cached scope `scope`, moved by `delta`;
-        /// it takes `primitiveCount` draw orders.
-        void AddReplay(tachyon::ID scope, tachyon::int2 delta, uint32_t primitiveCount);
+        /// `captured` is what the scope drew: it gives the draw orders the replay takes and
+        /// where on screen it draws.
+        void AddReplay(tachyon::ID scope, tachyon::int2 delta, const PrimitiveRenderTarget& captured);
 
     public:
         /// Uploads the streams and draws the passes; replay passes are left to the caller
@@ -95,9 +100,14 @@ namespace tachyon
             RenderBox(rect, clipRect, tachyon::StyleBlend::Between(fromStyleIndex, toStyleIndex, blendT), colorStyleIndex, textureIndex, snappedPx);
         }
         void RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int bpp, int mode, tachyon::VisualColorStyleIndex textColorIndex, tachyon::IntRect clipRect, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, float shadowBlur = -1.0f);
+        /// RenderGlyph for each of `glyphs`, moved by `offset`: one pass placement for them all,
+        /// over the box they cover together.
+        void RenderGlyphs(std::span<const GUIRenderer::GlyphInstance> glyphs, tachyon::float2 offset, tachyon::IntRect clipRect);
         void RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachyon::int2 p2, tachyon::int2 p3, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle);
         void RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle);
         void RenderDot(tachyon::float2 pos, tachyon::IntRect clipRect, float size, tachyon::color4f color);
+        /// RenderDot at each of `positions`: one pass placement for them all.
+        void RenderDots(std::span<const tachyon::float2> positions, tachyon::IntRect clipRect, float size, tachyon::color4f color);
         void RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, TriangleEdges hardEdges = TriangleEdges::None);
         void RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius = 0.0f, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, const tachyon::UVRect& uv = {}, const tachyon::ImageDisplay& display = {});
         void RenderShadow(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, int blur);
@@ -107,19 +117,108 @@ namespace tachyon
         uint32_t nextOrder = 0;
 
     private:
-        /// Closes an open pass of a different kind, then appends `primitive` to its kind's stream.
+        /// Screen pixels [x0, x1) x [y0, y1); none when either is empty.
+        struct ScreenBox
+        {
+            int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+
+            bool Empty() const { return x1 <= x0 || y1 <= y0; }
+            bool Overlaps(const ScreenBox& o) const
+            {
+                return !Empty() && !o.Empty() && x0 < o.x1 && o.x0 < x1 && y0 < o.y1 && o.y0 < y1;
+            }
+            /// Both boxes' pixels and those between; an empty one adds none.
+            ScreenBox Cover(const ScreenBox& o) const
+            {
+                if (Empty()) return o;
+                if (o.Empty()) return *this;
+                return { std::min(x0, o.x0), std::min(y0, o.y0), std::max(x1, o.x1), std::max(y1, o.y1) };
+            }
+            ScreenBox Within(tachyon::IntRect clip) const
+            {
+                return { std::max(x0, clip.x), std::max(y0, clip.y), std::min(x1, clip.x + clip.w), std::min(y1, clip.y + clip.h) };
+            }
+            /// Moved `delta` pixels; an edge at or past +-`limit` stays there.
+            ScreenBox Moved(tachyon::int2 delta, int32_t limit) const
+            {
+                auto move = [limit](int32_t v, int32_t d)
+                {
+                    return v <= -limit || v >= limit ? v : int32_t(std::clamp<int64_t>(int64_t(v) + d, -limit, limit));
+                };
+                return { move(x0, delta.x), move(y0, delta.y), move(x1, delta.x), move(y1, delta.y) };
+            }
+        };
+        /// Every pass's bounds together: where this target draws.
+        ScreenBox Covered() const;
+
+        /// Where each of renderPasses' passes draws on screen (its primitives' bounds); a
+        /// replay or an appended capture covers everything.
+        std::vector<ScreenBox> passBounds;
+        ScreenBox openBounds {};   ///< the open pass's
+        /// Each kind's last pass in renderPasses, -1 when none: its primitives end its stream.
+        std::array<int, kPrimitiveKindCount> lastPass = MakeNoPasses();
+        static constexpr std::array<int, kPrimitiveKindCount> MakeNoPasses()
+        {
+            std::array<int, kPrimitiveKindCount> none {};
+            none.fill(-1);
+            return none;
+        }
+
+        /// Puts the next `count` primitives of `kind` (appended at its stream's end) in a pass: the open
+        /// one when it's of that kind; else the kind's last pass when nothing drawn since
+        /// overlaps `bounds` (drawn earlier, it blends over and under the same things); else a
+        /// new one.
+        void PlaceInPass(PrimitiveKind kind, ScreenBox bounds, int count = 1);
+        /// The screen pixels a primitive spanning [min, max] in local coordinates can touch:
+        /// its corners through the transform, `margin` pixels further, within `clipRect`.
+        ScreenBox Bounds(tachyon::float2 min, tachyon::float2 max, float margin, tachyon::IntRect clipRect) const
+        {
+            const tachyon::float3x2& t = currentTransform;
+            float x0, x1, y0, y1;
+            if (t.r0.y == 0.0f && t.r1.x == 0.0f)
+            {
+                // No rotation or shear (nearly always): each axis on its own.
+                const float ax = t.r0.x * min.x + t.r0.z, bx = t.r0.x * max.x + t.r0.z;
+                const float ay = t.r1.y * min.y + t.r1.z, by = t.r1.y * max.y + t.r1.z;
+                x0 = std::min(ax, bx); x1 = std::max(ax, bx);
+                y0 = std::min(ay, by); y1 = std::max(ay, by);
+            }
+            else
+            {
+                const float cx[4] = { min.x, max.x, min.x, max.x }, cy[4] = { min.y, min.y, max.y, max.y };
+                x0 = y0 = INFINITY;
+                x1 = y1 = -INFINITY;
+                for (int i = 0; i < 4; ++i)
+                {
+                    const float x = t.r0.x * cx[i] + t.r0.y * cy[i] + t.r0.z, y = t.r1.x * cx[i] + t.r1.y * cy[i] + t.r1.z;
+                    x0 = std::min(x0, x); x1 = std::max(x1, x);
+                    y0 = std::min(y0, y); y1 = std::max(y1, y);
+                }
+            }
+            // Far past the screen counts as the screen's edge, so the ints don't overflow; a
+            // NaN lands on the edge too, by the clamp's comparisons.
+            static constexpr float kFar = float(1 << 28);
+            auto px = [](float v) { return int32_t(std::clamp(v, -kFar, kFar)); };
+            const ScreenBox box{ px(std::floor(x0 - margin)), px(std::floor(y0 - margin)),
+                                 px(std::ceil(x1 + margin)), px(std::ceil(y1 + margin)) };
+            return box.Within(clipRect);
+        }
+
+        /// Appends `primitive`, which can touch `bounds` on screen, to its kind's stream, in a
+        /// pass (PlaceInPass).
         template <typename T>
-        void Append(PrimitiveKind kind, const T& primitive)
+        void Append(PrimitiveKind kind, const T& primitive, ScreenBox bounds)
         {
             static_assert(std::is_trivially_copyable_v<T>);
             assert(sizeof(T) == kPrimitiveSpecs[size_t(kind)].stride);
-            StartRenderPass(kind);
+            PlaceInPass(kind, bounds);
             auto& cpu = streams[size_t(kind)].cpu;
             T ordered = primitive;
             ordered.transform0.w = float(nextOrder++);
             ordered.transform1.w = 1.0f - currentOpacity;   // transparency: 0 is opaque
-            const auto bytes = std::as_bytes(std::span{ &ordered, 1 });
-            cpu.insert(cpu.end(), bytes.begin(), bytes.end());
+            const size_t at = cpu.size();
+            cpu.resize(at + sizeof(T));
+            std::memcpy(cpu.data() + at, &ordered, sizeof(T));
         }
     };
 
@@ -137,9 +236,11 @@ namespace tachyon
         using GUIRenderer::RenderBox;
         void RenderBox(tachyon::IntRect rect, tachyon::IntRect clipRect, const tachyon::StyleBlend& styles, tachyon::VisualColorStyleIndex colorStyleIndex = {}, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, tachyon::IntRect snappedPx = {}) override;
         void RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int bpp, int mode, tachyon::VisualColorStyleIndex textColorIndex, tachyon::IntRect clipRect, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, float shadowBlur = -1.0f) override;
+        void RenderGlyphs(std::span<const GlyphInstance> glyphs, tachyon::float2 offset, tachyon::IntRect clipRect) override;
         void RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachyon::int2 p2, tachyon::int2 p3, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle) override;
         void RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle) override;
         void RenderDot(tachyon::float2 pos, tachyon::IntRect clipRect, float size, tachyon::color4f color) override;
+        void RenderDots(std::span<const tachyon::float2> positions, tachyon::IntRect clipRect, float size, tachyon::color4f color) override;
         void RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, TriangleEdges hardEdges = TriangleEdges::None) override;
         void RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius = 0.0f, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, const tachyon::UVRect& uv = {}, const tachyon::ImageDisplay& display = {}) override;
         void RenderShadow(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, int blur) override;

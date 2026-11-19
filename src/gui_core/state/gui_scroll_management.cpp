@@ -17,54 +17,46 @@ namespace tachyon
 
     void ScrollManagement::EndFrame(IDManager& idManager)
     {
-        if (m_scrollOffsetHandlesByID.empty())
+        if (m_scrollOffsetHandlesByID.Size() == 0)
             return;
 
-        for (auto it = m_scrollOffsetHandlesByID.begin(); it != m_scrollOffsetHandlesByID.end();)
+        auto shouldKeep = [&](ID id, ScrollOffsetHandle handle)
         {
-            const ID id = it->first;
-            const ScrollOffsetHandle handle = it->second;
             const ScrollOffsetEntry& entry = m_scrollOffsets[(uint32_t)handle];
+            if (!entry.inUse)
+                return false;
+            if (id.GetMode() == IDMode::Static)
+                return idManager.IsStaticIDValid(id);
+            return entry.lastSeenFrame == m_frameIndex;
+        };
 
-            bool shouldKeep = false;
-            if (entry.inUse)
-            {
-                if (id.GetMode() == IDMode::Static)
-                {
-                    shouldKeep = idManager.IsStaticIDValid(id);
-                }
-                else if (entry.lastSeenFrame == m_frameIndex)
-                {
-                    shouldKeep = true;
-                }
-            }
+        // Most frames keep them all: sweep only when one goes.
+        bool anyGoes = false;
+        m_scrollOffsetHandlesByID.ForEach([&](ID id, ScrollOffsetHandle handle) { anyGoes = anyGoes || !shouldKeep(id, handle); });
+        if (!anyGoes)
+            return;
 
-            if (shouldKeep)
-            {
-                ++it;
-                continue;
-            }
-
-            it = m_scrollOffsetHandlesByID.erase(it);
+        m_scrollOffsetHandlesByID.EraseIf([&](ID id, ScrollOffsetHandle handle)
+        {
+            if (shouldKeep(id, handle))
+                return false;
             if ((uint32_t)handle < m_scrollOffsets.size())
             {
-                ScrollOffsetEntry& releasedEntry = m_scrollOffsets[(uint32_t)handle];
-                releasedEntry = ScrollOffsetEntry{};
+                m_scrollOffsets[(uint32_t)handle] = ScrollOffsetEntry{};
                 m_scrollOffsetFreeList.push_back(handle);
             }
-        }
+            return true;
+        });
     }
 
     ScrollOffsetHandle ScrollManagement::GetOrCreateScrollOffsetHandle(ID id)
     {
         assert(id != ID::Invalid() && "GetOrCreateScrollOffsetHandle called with invalid ID");
 
-        auto it = m_scrollOffsetHandlesByID.find(id);
-        if (it != m_scrollOffsetHandlesByID.end())
+        if (const ScrollOffsetHandle* found = m_scrollOffsetHandlesByID.Find(id))
         {
-            ScrollOffsetEntry& entry = m_scrollOffsets[(uint32_t)it->second];
-            entry.lastSeenFrame = m_frameIndex;
-            return it->second;
+            m_scrollOffsets[(uint32_t)*found].lastSeenFrame = m_frameIndex;
+            return *found;
         }
 
         // Index 0 is a sentinel so handle 0 == ScrollOffsetHandle::Invalid.
@@ -96,18 +88,16 @@ namespace tachyon
             });
         }
 
-        m_scrollOffsetHandlesByID.emplace(id, handle);
+        m_scrollOffsetHandlesByID.TryEmplace(id, handle);
         return handle;
     }
 
     ScrollOffsetHandle ScrollManagement::GetScrollOffsetHandle(ID id)
     {
-        auto it = m_scrollOffsetHandlesByID.find(id);
-        if (it != m_scrollOffsetHandlesByID.end())
+        if (const ScrollOffsetHandle* found = m_scrollOffsetHandlesByID.Find(id))
         {
-            ScrollOffsetEntry& entry = m_scrollOffsets[(uint32_t)it->second];
-            entry.lastSeenFrame = m_frameIndex;
-            return it->second;
+            m_scrollOffsets[(uint32_t)*found].lastSeenFrame = m_frameIndex;
+            return *found;
         }
 
         return ScrollOffsetHandle::Invalid;

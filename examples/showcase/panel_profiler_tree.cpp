@@ -9,11 +9,13 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <cstdio>
 #include <iterator>
 #include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -225,10 +227,17 @@ namespace tachyon
             r.pctFrame = (frameMs > 0.0) ? 100.0 * s.totalMs / frameMs : 0.0;
             r.isWait   = s.isWait;
 
-            std::snprintf(buf, sizeof(buf), "%.3f",  s.totalMs);   r.totalStr = buf;
-            std::snprintf(buf, sizeof(buf), "%.3f",  s.selfMs);    r.selfStr  = buf;
-            std::snprintf(buf, sizeof(buf), "%.1f%%", r.pctFrame); r.pctStr  = buf;
-            std::snprintf(buf, sizeof(buf), "%d",    s.callCount); r.callsStr = buf;
+            // to_chars: every row's numbers are formatted each frame, and printf's locale
+            // handling costs several times more.
+            auto fixed = [&buf](double v, int digits, std::string_view suffix = {}) {
+                char* end = std::to_chars(buf, buf + sizeof(buf) - suffix.size(), v, std::chars_format::fixed, digits).ptr;
+                end = std::copy(suffix.begin(), suffix.end(), end);
+                return std::string(buf, end);
+            };
+            r.totalStr = fixed(s.totalMs, 3);
+            r.selfStr  = fixed(s.selfMs, 3);
+            r.pctStr   = fixed(r.pctFrame, 1, "%");
+            r.callsStr = std::string(buf, std::to_chars(buf, buf + sizeof(buf), s.callCount).ptr);
 
             // Open state lives in the persistent map; TreeCell gets a pointer into
             // it, so a toggle fired during input survives the rebuild.

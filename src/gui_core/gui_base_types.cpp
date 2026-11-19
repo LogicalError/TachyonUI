@@ -131,34 +131,6 @@ namespace tachyon
         return IntRect { .x = x1, .y = y1, .w = x2 - x1, .h = y2 - y1 };
     }
 
-    IntRect IntRect::Intersection(IntRect a, IntRect b)
-    {
-        int32_t a_x1 = a.x, a_x2 = a.x + std::max(0, a.w);
-        int32_t a_y1 = a.y, a_y2 = a.y + std::max(0, a.h);
-        int32_t b_x1 = b.x, b_x2 = b.x + std::max(0, b.w);
-        int32_t b_y1 = b.y, b_y2 = b.y + std::max(0, b.h);
-
-		a.x = std::max(a_x1, b_x1);
-		a.y = std::max(a_y1, b_y1);
-		a.w = std::max(0, std::min(a_x2, b_x2) - a.x);
-		a.h = std::max(0, std::min(a_y2, b_y2) - a.y);
-        return a;
-    }
-
-    IntRect IntRect::Union(IntRect a, IntRect b)
-    {
-        int32_t a_x1 = a.x, a_x2 = a.x + std::max(0, a.w);
-        int32_t a_y1 = a.y, a_y2 = a.y + std::max(0, a.h);
-        int32_t b_x1 = b.x, b_x2 = b.x + std::max(0, b.w);
-        int32_t b_y1 = b.y, b_y2 = b.y + std::max(0, b.h);
-
-		a.x = std::min(a_x1, b_x1);
-		a.y = std::min(a_y1, b_y1);
-		a.w = std::max(0, std::max(a_x2, b_x2) - a.x);
-		a.h = std::max(0, std::max(a_y2, b_y2) - a.y);
-        return a;
-    }
-
     // Apply a 2D affine transform and return the axis-aligned bounding rect of the result
     IntRect IntRect::Transform(IntRect parentRect, const float3x2& m) const
     {

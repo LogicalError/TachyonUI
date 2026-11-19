@@ -1019,6 +1019,16 @@ namespace tachyon
         return IntRect{ rectLayout.x + inset, rectLayout.y + inset, rectLayout.w - 2 * inset, rectLayout.h - 2 * inset };
     }
 
+    bool GUIApplication::IsBoxBlank(const Element& element, const TransitionState& ts) const
+    {
+        if (element.colorStyleIndex != VisualColorStyleIndex::Invalid || element.backgroundImage != ImageIndex::Invalid)
+            return false;
+        for (int i = 0; i < ts.styles.count; ++i)
+            if (ts.styles.weights[size_t(i)] > 0.0f && !styleManager.IsBoxBlank(ts.styles.styles[size_t(i)]))
+                return false;
+        return true;
+    }
+
     void GUIApplication::RenderBoxShadows(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, bool ring)
     {
         // Each layer mixed over the states as their colors are: each into what the ones before
@@ -1354,15 +1364,15 @@ namespace tachyon
                 IntRect       childClipRectScreen  = anyClip
                                                      ? parentState.clipRectScreen.Intersection(transformRectToScreen(innerRectLayout))
                                                      : parentState.clipRectScreen;
-                float3x2 childContentTransformAccum  = parentState.contentTransformAccum * childElementRect.contentTransform;
+                const bool ownTransform = !childElementRect.contentTransform.IsIdentity();
+                float3x2 childContentTransformAccum  = ownTransform ? parentState.contentTransformAccum * childElementRect.contentTransform
+                                                                    : parentState.contentTransformAccum;
                 depthStates[depth].clipRectScreen        = childClipRectScreen;
                 depthStates[depth].contentTransformAccum = childContentTransformAccum;
                 // The pivot is sticky through identity-transform descendants, so an ancestor's
                 // transform (e.g. node-view pan/zoom) applies consistently to nested content.
-                depthStates[depth].transformPivotLayout  = childElementRect.contentTransform.IsIdentity()
-                                                            ? parentState.transformPivotLayout
-                                                            : innerRectLayout.position;
-                depthStates[depth].hasTransform          = !childContentTransformAccum.IsIdentity();
+                depthStates[depth].transformPivotLayout  = ownTransform ? innerRectLayout.position : parentState.transformPivotLayout;
+                depthStates[depth].hasTransform          = ownTransform ? !childContentTransformAccum.IsIdentity() : parentState.hasTransform;
 
                 // Opacity multiplies down the tree. A disabled control fades as a whole: its
                 // topmost disabled element takes --disabled-opacity, unless its style sets one.
@@ -1444,8 +1454,10 @@ namespace tachyon
                             if (const IntRect covered = OpaqueInterior(rectLayout, ts); covered.w > 0 && covered.h > 0)
                                 guiRenderer->RenderOccluder(covered, parentClipRectScreen);
                         // rect is LAYOUT space (mapped by SetTransform), the scissor is SCREEN space.
-                        guiRenderer->RenderBox(rectLayout, parentClipRectScreen, ts.styles,
-                                               childElement.colorStyleIndex, childElement.backgroundImage, elementSnappedRect);
+                        // A box that draws nothing (most layout containers) isn't sent.
+                        if (!IsBoxBlank(childElement, ts))
+                            guiRenderer->RenderBox(rectLayout, parentClipRectScreen, ts.styles,
+                                                   childElement.colorStyleIndex, childElement.backgroundImage, elementSnappedRect);
                         // An inset focus ring: an outline over the box, under its content; a second
                         // one under the first (a line inside an accent edge).
                         if (ring)

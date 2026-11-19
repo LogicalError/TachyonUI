@@ -134,6 +134,11 @@ namespace tachyon
         m_renderer->RenderDot(pos, m_clipRect, size, color);
     }
 
+    void CustomDrawContext::RenderDots(std::span<const float2> positions, float size, color4f color) const
+    {
+        m_renderer->RenderDots(positions, m_clipRect, size, color);
+    }
+
     void CustomDrawContext::RenderTriangle(float2 p0, float2 p1, float2 p2,
                                            VisualColorStyleIndex colorStyleIndex,
                                            ImageIndex textureIndex, TriangleEdges hardEdges) const

@@ -3173,6 +3173,9 @@ namespace tachyon
         /// borders and corners, a little in from where it snaps to pixels. Empty when the
         /// background isn't opaque.
         IntRect OpaqueInterior(IntRect rectLayout, const TransitionState& ts) const;
+        /// Whether `element`'s box, drawn with `ts`, draws nothing (StyleManager::IsBoxBlank),
+        /// with no color or image of its own.
+        bool IsBoxBlank(const Element& element, const TransitionState& ts) const;
         void OnFrame();
         Result<void> RecoverDevice();
 

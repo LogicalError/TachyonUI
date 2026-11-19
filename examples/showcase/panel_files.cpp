@@ -750,15 +750,23 @@ namespace tachyon
 
         // Grid items: 34 px icons, the showcase's own tinted by their kind (folders keep
         // their color, and the OS's icons and thumbnails are pictures in their own colors).
+        // Registering bakes every state of the style, so it's done again only when one of what
+        // it's made from changes.
         auto itemStyleFor = [this](IconID icon) -> StyleRef {
-            const char* color = (icon == showcase.fileModelIcon) ? "--text-link"
-                              : (icon == showcase.fileImageIcon) ? "--ok"
-                              :                                "--text-2";
-            Style def = styleManager.ToPixels(theme.gridViewItemBaseStyle);
-            def.iconSize = static_cast<uint16_t>(styleManager.Px(kFileIconSize));
-            for (auto& st : def.states)
-                st.iconColor = ColorStyle::Create(theme.GetColor(color));
-            return styleManager.Register(def, StyleUnits::Pixels);   // Register dedupes, so per frame is cheap
+            const int kind = (icon == showcase.fileModelIcon) ? 0 : (icon == showcase.fileImageIcon) ? 1 : 2;
+            static constexpr const char* kTints[] = { "--text-link", "--ok", "--text-2" };
+            const color4f  tint     = theme.GetColor(kTints[kind]);
+            const uint16_t iconSize = static_cast<uint16_t>(styleManager.Px(kFileIconSize));
+            FileItemStyle& cached = fileItemStyles[kind];
+            if (!cached.made || cached.generation != styleManager.Generation() || !(cached.tint == tint) || cached.iconSize != iconSize)
+            {
+                Style def = styleManager.ToPixels(theme.gridViewItemBaseStyle);
+                def.iconSize = iconSize;
+                for (auto& st : def.states)
+                    st.iconColor = ColorStyle::Create(tint);
+                cached = { styleManager.Generation(), tint, iconSize, styleManager.Register(def, StyleUnits::Pixels), true };
+            }
+            return cached.style;
         };
 
         // Only the visible rows are built, so the count can run into the thousands.

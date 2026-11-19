@@ -191,15 +191,48 @@ void VulkanRenderCommandList::DrawPrimitives(const tachyon::RHI::GpuPipeline& pi
 {
     const auto vkPipeline = reinterpret_cast<VkPipeline>(pipeline.pipeline);
     const auto vkLayout   = reinterpret_cast<VkPipelineLayout>(pipeline.layout);
+    if (vkPipeline != boundPipeline)
+    {
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkPipeline);
+        boundPipeline = vkPipeline;
+    }
+    // Pipelines sharing a layout keep the bound set and push constants across a pipeline
+    // change; a different layout starts both again.
+    if (vkLayout != boundLayout)
+    {
+        vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkLayout, 0, 1, &imageSet, 0, nullptr);
+        boundLayout = vkLayout;
+        pushed = false;
+    }
 
-    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkPipeline);
-    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkLayout, 0, 1, &imageSet, 0, nullptr);
-    vkCmdPushConstants(cmd, vkLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                       0, sizeof(tachyon::GPUDrawPushConstants), &pushConstants);
+    // Push only the bytes that differ from the last push (often one primitive address).
+    constexpr uint32_t kWords = sizeof(tachyon::GPUDrawPushConstants) / 4;
+    uint32_t first = 0, end = kWords;
+    if (pushed)
+    {
+        uint32_t newWords[kWords], oldWords[kWords];
+        std::memcpy(newWords, &pushConstants, sizeof(newWords));
+        std::memcpy(oldWords, &lastPush, sizeof(oldWords));
+        while (first < kWords && newWords[first] == oldWords[first]) ++first;
+        while (end > first && newWords[end - 1] == oldWords[end - 1]) --end;
+    }
+    if (first < end)
+    {
+        vkCmdPushConstants(cmd, vkLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                           first * 4, (end - first) * 4, reinterpret_cast<const std::byte*>(&pushConstants) + first * 4);
+        lastPush = pushConstants;
+        pushed = true;
+    }
+
     if (shape == tachyon::PrimitiveShape::Quad)
     {
         // Four vertices a primitive, two triangles from them: the offset picks the pass's first.
-        vkCmdBindIndexBuffer(cmd, dc.renderContext.QuadIndices(dc, primitiveCount), 0, VK_INDEX_TYPE_UINT32);
+        const VkBuffer indices = dc.renderContext.QuadIndices(dc, primitiveCount);
+        if (indices != boundQuadIndices)
+        {
+            vkCmdBindIndexBuffer(cmd, indices, 0, VK_INDEX_TYPE_UINT32);
+            boundQuadIndices = indices;
+        }
         vkCmdDrawIndexed(cmd, primitiveCount * 6, 1, 0, int32_t(firstPrimitive * 4), 0);
     }
     else

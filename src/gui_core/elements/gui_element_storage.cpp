@@ -591,7 +591,7 @@ namespace tachyon
         m_addedBeforeWindow = ElementRef::Invalid();
         m_addedIDBeforeWindow = ID::Invalid();
         m_childrenBegunBeforeWindow = false;
-        m_idIndex.clear();
+        m_idIndex.Clear();
         m_idIndexStale = false;
     }
 
@@ -616,15 +616,14 @@ namespace tachyon
     void ElementStorage::IndexElement(ID id, ElementRef ref) const
     {
         if (id == ID::Invalid()) return;
-        auto [it, inserted] = m_idIndex.try_emplace(id, ref);
+        auto [held, inserted] = m_idIndex.TryEmplace(id, ref);
         if (inserted) return;
         if ((GetElementUnsafe(ref).flags & ElementFlags::SharesID) == ElementFlags::None)
             Diagnostics::ReportMisuse(Diagnostics::MakeLogCategory("elements"),
                 "ElementStorage: two elements share an ID this frame (the first is kept for input and state)");
         // Duplicate ID: keep the shallowest, then earliest, element.
-        const ElementRef& held = it->second;
-        if (ref.depth < held.depth || (ref.depth == held.depth && ref.index < held.index))
-            it->second = ref;
+        if (ref.depth < held->depth || (ref.depth == held->depth && ref.index < held->index))
+            *held = ref;
     }
 
     ElementRef ElementStorage::FindElementRefByID(ID id) const
@@ -633,15 +632,15 @@ namespace tachyon
 
         if (m_idIndexStale)
         {
-            m_idIndex.clear();
+            m_idIndex.Clear();
             for (uint32_t d = 0; d < m_usedDepthCount; ++d)
                 for (uint32_t i = 0; i < m_depths[d].Size(); ++i)
                     IndexElement(m_depths[d].elements[i].id, ElementRef{ d, i });
             m_idIndexStale = false;
         }
 
-        const auto it = m_idIndex.find(id);
-        return it == m_idIndex.end() ? ElementRef::Invalid() : it->second;
+        const ElementRef* found = m_idIndex.Find(id);
+        return found == nullptr ? ElementRef::Invalid() : *found;
     }
 
 }//namespace tachyon

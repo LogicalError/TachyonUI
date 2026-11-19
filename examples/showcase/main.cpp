@@ -6,6 +6,7 @@
 #include <gui_core/windows/sdl/gui_window_backend_sdl.h>
 #endif
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
@@ -33,6 +34,8 @@ int main(int argc, char* argv[])
     //                   the workdirectory without it.
     // --capture <folder>: saves every panel, in the dark and the light theme, as
     //                     <folder>/<theme>/<Panel>.png, and quits.
+    // --bench <frames>: draws every frame with the profiler on, prints each scope's mean
+    //                   time per frame over <frames> frames, and quits.
     // --graphics <api>: render with vulkan, d3d12, sdlgpu or none (no GPU); the default backend
     //                   without it.
     tachyon::GUIApplication::InitializeOptions initializeOptions;
@@ -50,6 +53,8 @@ int main(int argc, char* argv[])
             application->SetFilesRoot(argv[i + 1]);
         else if (std::string_view(argv[i]) == "--capture")
             application->SetCaptureDir(argv[i + 1]);
+        else if (std::string_view(argv[i]) == "--bench")
+            application->SetBenchFrames(std::max(1, std::atoi(argv[i + 1])));
         else if (std::string_view(argv[i]) == "--graphics")
         {
             const std::string_view api = argv[i + 1];
@@ -76,9 +81,19 @@ int main(int argc, char* argv[])
     {
         if (application->Initialize(initializeOptions))
         {
-            const tachyon::Result<void> runResult = application->Run();
-            // A capture leaves the saved layout and theme as they were.
-            if (!application->IsCapturing())
+            // A bench drives the frames itself, back to back: Run would pace them to the display,
+            // and the CPU would idle between them at a clock that varies run to run.
+            tachyon::Result<void> runResult;
+            if (application->IsBenching())
+            {
+                while (runResult && application->UpdateFrame())
+                    if ((runResult = application->RecordFrame()))
+                        application->PresentFrame();
+            }
+            else
+                runResult = application->Run();
+            // A capture or a bench leaves the saved layout and theme as they were.
+            if (!application->IsCapturing() && !application->IsBenching())
                 if (std::ofstream file(application->ResourceFile(tachyon::kUIStateFile), std::ios::binary); file)
                     file << application->SaveUIState();
             application->Cleanup();

@@ -125,6 +125,12 @@ namespace tachyon
         virtual void RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const LineStyle& lineStyle) = 0;
 
         virtual void RenderDot(tachyon::float2 pos, tachyon::IntRect clipRect, float size, tachyon::color4f color) = 0;
+        /// RenderDot at each of `positions`, in order, all alike.
+        virtual void RenderDots(std::span<const tachyon::float2> positions, tachyon::IntRect clipRect, float size, tachyon::color4f color)
+        {
+            for (const tachyon::float2& pos : positions)
+                RenderDot(pos, clipRect, size, color);
+        }
         /// A filled triangle. `hardEdges` end without a soft edge, for edges it shares with
         /// another triangle of the same shape.
         virtual void RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, TriangleEdges hardEdges = TriangleEdges::None) = 0;
@@ -145,6 +151,23 @@ namespace tachyon
         /// alone (a color glyph's too), blurred by that many pixels (Gaussian,
         /// sigma = blur / 2, as CSS) as far as the atlas' distance field reaches.
         virtual void RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int bpp, int mode, VisualColorStyleIndex textColorIndex, tachyon::IntRect clipRect, tachyon::ImageIndex textureIndex = tachyon::ImageIndex::Invalid, float shadowBlur = -1.0f) = 0;
+
+        /// One glyph of RenderGlyphs: RenderGlyph's arguments, its position relative.
+        struct GlyphInstance
+        {
+            tachyon::float2       pos, size, uvMin, uvMax;
+            float                 scale = 0.0f;
+            uint16_t              bpp = 0, mode = 0;
+            tachyon::ImageIndex   textureIndex = tachyon::ImageIndex::Invalid;
+            VisualColorStyleIndex color {};
+        };
+        /// RenderGlyph for each of `glyphs`, moved by `offset`, in order: a text's glyphs at once.
+        virtual void RenderGlyphs(std::span<const GlyphInstance> glyphs, tachyon::float2 offset, tachyon::IntRect clipRect)
+        {
+            for (const GlyphInstance& g : glyphs)
+                RenderGlyph(tachyon::float2{ g.pos.x + offset.x, g.pos.y + offset.y }, g.size, g.uvMin, g.uvMax, g.scale,
+                            g.bpp, g.mode, g.color, clipRect, g.textureIndex);
+        }
 
         /// Convex polygon, fan-triangulated from points[0]; needs at least 3 points.
         void RenderFilledPolygon(std::span<const tachyon::float2> points, tachyon::IntRect clipRect,
