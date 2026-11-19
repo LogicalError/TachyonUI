@@ -114,6 +114,10 @@ namespace tachyon
         const std::vector<ID>& GetPropagatedFocusedIDs() const { return m_propagatedFocusedIDs; }
         void SetPropagatedHoverIDs(std::vector<ID> v)   { m_propagatedHoverIDs   = std::move(v); }
         void SetPropagatedFocusedIDs(std::vector<ID> v) { m_propagatedFocusedIDs = std::move(v); }
+        /// To refill in place each frame, keeping the room.
+        std::vector<ID>& PropagatedHoverIDs()   { return m_propagatedHoverIDs; }
+        std::vector<ID>& PropagatedFocusedIDs() { return m_propagatedFocusedIDs; }
+        std::vector<ID>& FocusAncestorIDs()     { return m_focusAncestorIDs; }
 
         /// Whether the focus is `id` or inside it, as the elements were nested last frame
         /// (like the other states, it trails the build by a frame).

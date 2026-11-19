@@ -316,6 +316,12 @@ namespace tachyon::sdlgpu
                     SDL_ReleaseGPUTransferBuffer(d.device, copy.staging);
                 d.textureCopies.clear();
                 d.bufferCopies.clear();
+                for (SDLGPUImage* image : d.releasedImages)
+                {
+                    SDL_ReleaseGPUTexture(d.device, image->texture);
+                    delete image;
+                }
+                d.releasedImages.clear();
                 for (SDLGPUImage* image : d.liveImages)
                 {
                     SDL_ReleaseGPUTexture(d.device, image->texture);
@@ -420,10 +426,10 @@ namespace tachyon::sdlgpu
                 SDL_ReleaseGPUTransferBuffer(d.device, copy.staging);
                 return true;
             });
+            // Freed on the frame's thread (RecordCopies): a copy it took before this may
+            // still be recording into it.
+            d.releasedImages.push_back(image);
         }
-        // SDL frees it once the frames that drew with it are done.
-        SDL_ReleaseGPUTexture(d.device, image->texture);
-        delete image;
     }
 
     TextAtlasManager* SDLGPUGraphicsContext::CreateTextAtlasManager()

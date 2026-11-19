@@ -753,6 +753,23 @@ namespace tachyon
     // Application API
     // ---------------------------------------------------------------------------
 
+    // Drops tabs naming a panel the layout no longer has (an app erased it): each tab's
+    // index must stay its panel's index in panelIds, which Close and selection go by.
+    static void DropMissingPanels(DockNode* node, const DockingLayout& layout)
+    {
+        if (node == nullptr)
+            return;
+        if (!node->isLeaf)
+        {
+            DropMissingPanels(node->first.get(), layout);
+            DropMissingPanels(node->second.get(), layout);
+            return;
+        }
+        for (int i = int(node->panelIds.size()); i-- > 0; )
+            if (!layout.panels.contains(node->panelIds[size_t(i)]))
+                CloseLeafTab(*node, i);
+    }
+
     bool GUIApplication::BeginDockingContainer(ID id, DockingLayout* layout, StyleRef style, LayoutOverride&& constraints)
     {
         m_dockingState = {};
@@ -776,6 +793,7 @@ namespace tachyon
 
         if (!layout) return true;
 
+        DropMissingPanels(layout->root.get(), *layout);
         CollapseEmptyLeaves(layout->root, &idManager);
         AssignMissingNodeIDs(layout->root.get(), idManager);
 
@@ -1192,7 +1210,7 @@ namespace tachyon
             if (!layout) continue;
             walk(walk, layout->root.get(), layout);
         }
-        // Don't clear m_dockingLayoutsThisFrame here: onDragOut runs during input dispatch
-        // after this and needs it. BeginDockingFrame clears it.
+        // m_dockingLayoutsThisFrame stays: onDragOut, run during input dispatch, reads it.
+        // BeginDockingFrame clears it.
     }
 }

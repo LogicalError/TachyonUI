@@ -36,6 +36,51 @@ namespace
         }
     };
 
+    // Elements nested deeper than the renderer keeps on the stack: drawn, the deepest too.
+    class DeepNestingApp : public tachyon::GUIApplicationInternals
+    {
+    public:
+        static constexpr int kDepth = 100;
+        tachyon::ID windowID = tachyon::ID::Invalid();
+        tachyon::ID buttonID = tachyon::ID::Invalid();
+        int         frame    = 0;
+
+        void OnGUI() override
+        {
+            if (BeginWindow(windowID, "Deep", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(240, 120),
+                            tachyon::ElementFlags::WindowRenderToImage))
+            {
+                for (int d = 0; d < kDepth; ++d)
+                    BeginVertical(tachyon::LayoutOverride{}.FlexGrow(1));
+                Button(buttonID, "Deep inside", [] {});
+                for (int d = 0; d < kDepth; ++d)
+                    EndVertical();
+            }
+            EndWindow();
+            if (++frame >= 3)
+                applicationQuit = true;
+        }
+    };
+
+    TEST(GpuZeroSetup, ElementsNestedDeeperThanSixtyFourLevelsDraw)
+    {
+        if (!GpuDeviceAvailable())
+            GTEST_SKIP() << "no GPU device available";
+
+        DeepNestingApp app;
+        const tachyon::Result<void> initialized = app.Initialize();
+        ASSERT_TRUE(initialized) << initialized.GetError().message;
+        app.windowID = app.idManager.CreateStaticID();
+        app.buttonID = app.idManager.CreateStaticID();
+        app.SetRedrawMode(tachyon::RedrawMode::Always);
+        const bool ran = bool(app.Run());
+        EXPECT_GT(app.elementStorage.NumberOfDepthLevels(), 100u);
+        const tachyon::ElementRef button = app.elementStorage.FindElementRefByID(app.buttonID);
+        EXPECT_TRUE(button.IsValid());
+        app.Cleanup();
+        EXPECT_TRUE(ran);
+    }
+
     TEST(GpuZeroSetup, AnAppWithNoResourceFilesInitializesAndDraws)
     {
         if (!GpuDeviceAvailable())

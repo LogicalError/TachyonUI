@@ -960,6 +960,29 @@ namespace tachyon
             EXPECT_EQ(pinsDrawn(), 2) << "hovered";
         }
 
+        // A node removed in the same OnGUI, after the view was built: the size the layout
+        // notes goes to the node that was measured, not to its old index.
+        TEST_F(NodeViewControlTest, ANodeRemovedAfterTheViewIsBuiltDoesNotTakeAnotherNodesSize)
+        {
+            app.runPostLayoutCallbacks = true;
+            view.nodes[0].title = "A node with a much longer title than B";
+            Settle();
+            const tachyon::int2 sizeB = app.GetElementRect(nodeB).size;
+            ASSERT_NE(app.GetElementRect(nodeA).size, sizeB);
+
+            view.nodes[1].lastSize = {};
+            app.Frame([&] {
+                app.BeginRootWindow({ 1920, 1080 }, ElementFlags::None, app.theme.mainWindowStyleRef);
+                app.RenderNodeView(view);
+                app.EndRootWindow();
+                const int first[] = { 0 };
+                ApplyNodeViewEdit(view, RemoveNodesEdit(view, first));
+            });
+            ASSERT_EQ(view.nodes.size(), 1u);
+            EXPECT_EQ(view.nodes[0].stableID, nodeB);
+            EXPECT_EQ(view.nodes[0].lastSize, sizeB);
+        }
+
         // After a frame the view knows where its canvas is, for the conversions.
         TEST_F(NodeViewControlTest, TheViewNotesWhereItsCanvasIs)
         {

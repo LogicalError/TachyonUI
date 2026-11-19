@@ -259,6 +259,9 @@ namespace tachyon
             std::unique_ptr<TreeRowMap>    treeRowInfo;               ///< populated by TreeCell()
             /// VirtualTreeView: last frame's visible -> flat rows.
             std::vector<int>               treeVisibleIdx;
+            /// VirtualTreeView: last frame's visible rows' own IDs (TreeViewRow::id), which the
+            /// selection follows when rows are inserted, removed or moved.
+            std::vector<tachyon::ID>       treeVisibleRowIDs;
             std::unique_ptr<CellLookupMap> cellLookup;                ///< populated in cell mode
 
             // Per-table gesture state, so tables don't share click detection
@@ -282,6 +285,9 @@ namespace tachyon
             /// Header cell refs of the current frame, by column. Column-reorder handlers read these
             /// when they run, after the caller's column array may be gone.
             std::vector<tachyon::ElementRef>                                headerRefs;
+            /// Each column's widest content of the current frame, for the sizers' double-click
+            /// fit, which also runs after the caller's column array may be gone.
+            std::vector<int32_t>                                            maxContentWidths;
         } internal;
 
         // ---- Accessors ----------------------------------------------

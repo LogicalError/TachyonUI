@@ -13,7 +13,9 @@ bool tachyon::vulkan::VulkanTextAtlasManager::Initialize(tachyon::GraphicsContex
 	this->graphicsContext = static_cast<tachyon::vulkan::VulkanGraphicsContext*>(inGraphicsContext);
 	this->imageSet        = static_cast<tachyon::vulkan::VulkanImageSet*>(inImageSet);
 
-	graphicsContext->deviceContext.mainDeletionQueue.
+	// At shutdown only: a lost device remakes the pages as live images, and SyncTextureIndices
+	// points the slots at them again.
+	graphicsContext->deviceContext.shutdownQueue.
 		push_function([this]()
 		{
 			for (size_t f = 0; f < fontTextures.size(); f++)
@@ -161,6 +163,12 @@ void tachyon::vulkan::VulkanTextAtlasManager::SyncTextureIndices()
 		if (fontTexture.imageIndex == tachyon::ImageIndex::Invalid)
 		{
 			fontTexture.imageIndex = imageSet->ReserveIndex();
+		}
+		// From the image as it is now: one remade on a new device has new handles.
+		if (const auto* image = static_cast<const tachyon::vulkan::VulkanImage*>(fontTexture.image))
+		{
+			fontTexture.descriptorInfo.sampler   = image->imageSampler;
+			fontTexture.descriptorInfo.imageView = image->imageView;
 		}
 		imageSet->SetDescriptor(fontTexture.imageIndex, fontTexture.descriptorInfo);
 	}

@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "misuse_reports.h"
 
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_id_manager.h>
@@ -194,6 +195,75 @@ namespace tachyon
                 << "Double-click should snap the column to its content width.";
             EXPECT_GE(state.columnWidths[0], 200)
                 << "Snap target should approach the 240px cell content width.";
+        }
+
+        // More cells in a row than the table has columns, or a cell before any row: reported
+        // and left out, not written past the table's columns.
+        TEST_F(TableCellsTest, ExtraCellsAreReportedAndLeftOut)
+        {
+            tachyon::TableState state{};
+            GUITest::MisuseReports misuse;
+            auto build = [&] {
+                app.BeginRootWindow();
+                if (app.BeginTable(tableID, kColumns, state, LayoutOverride{}.Size(400, 200)))
+                {
+                    app.Cell("before any row");
+                    app.BeginRow();
+                    app.Cell("a"); app.Cell("b"); app.Cell("c");
+                    app.Cell("one too many");
+                    app.EndRow();
+                    app.EndTable();
+                }
+                app.EndRootWindow();
+            };
+            app.Frame(build);
+            app.Frame(build);
+            EXPECT_TRUE(misuse.Contains("more cells in a row")) << misuse.All();
+            EXPECT_TRUE(misuse.Contains("before BeginRow")) << misuse.All();
+            EXPECT_EQ(app.CountByText("one too many"), 0);
+            EXPECT_EQ(app.CountByText("b"), 1);
+        }
+
+        // The double-click runs after OnGUI returns, when a column array on the caller's stack
+        // is gone: the snap must not read it.
+        TEST_F(TableCellsTest, SizerDoubleClickDoesNotReadTheCallersColumnsAfterTheFrame)
+        {
+            tachyon::TableState state{};
+            tachyon::VirtualTableColumn cols[3] = {
+                { { .header = "A", .initialWidth = 80, .minWidth = 40, .maxWidth = 600,
+                    .sizing = tachyon::ColumnSizing::Resizable } },
+                { { .header = "B", .initialWidth = 100, .minWidth = 40, .maxWidth = 400 } },
+                { { .header = "C", .initialWidth = 100, .minWidth = 40, .maxWidth = 400 } },
+            };
+            auto build = [&] {
+                app.BeginRootWindow();
+                if (app.BeginTable(tableID, cols, state, LayoutOverride{}.Size(500, 200)))
+                {
+                    app.BeginRow();
+                    app.Cell("very_long_thirty_char_cell_xyz");
+                    app.Cell("b"); app.Cell("c");
+                    app.EndRow();
+                    app.EndTable();
+                }
+                app.EndRootWindow();
+                // Stands in for the array going out of scope: its memory is reused.
+                for (auto& col : cols)
+                    col.internal.maxContentWidth = -100000;
+            };
+            app.Frame(build);
+            app.Frame(build);
+
+            const auto sizerRect = app.GetElementRect(cols[0].internal.sizerID);
+            const auto bodyRect  = app.GetElementRect(state.internal.bodyID);
+            const int2 hit{ sizerRect.x + sizerRect.w / 2, bodyRect.y + bodyRect.h / 2 };
+            app.InjectMouseMove(hit);
+            app.InjectMouseDown(hit);
+            app.InjectMouseUp(hit);
+            app.InjectMouseDown(hit);
+            app.InjectMouseUp(hit);
+            app.Frame(build);
+
+            EXPECT_GE(state.columnWidths[0], 200);
         }
 
         // ---------------------------------------------------------------------

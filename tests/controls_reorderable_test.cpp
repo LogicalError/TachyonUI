@@ -29,6 +29,8 @@ namespace tachyon
 
             std::optional<std::pair<int, int>> lastReorder;
             int reorderCalls = 0;
+            bool nested = false;   // each row holds a reorderable list of its own
+            int innerReorders = 0;
 
             void SetUp() override
             {
@@ -56,6 +58,21 @@ namespace tachyon
                         app.BeginReorderableItem(itemIDs[i],
                                                  tachyon::LayoutOverride{}.Size(280, 50));
                         app.EmitDragHandle();
+                        if (nested)
+                        {
+                            [[maybe_unused]] const bool pushed = app.idManager.PushParent(itemIDs[i]);
+                            if (app.BeginReorderableGroup(app.idManager.AllocateDynamicID("inner"), ReorderDirection::Horizontal,
+                                                          [this](int, int) { innerReorders++; }, tachyon::LayoutOverride{}.Size(100, 40)))
+                            {
+                                for (int k = 0; k < 2; k++)
+                                {
+                                    app.BeginReorderableItem(app.idManager.AllocateDynamicID("inner_item"), tachyon::LayoutOverride{}.Size(40, 40));
+                                    app.EndReorderableItem();
+                                }
+                                app.EndReorderableGroup();
+                            }
+                            if (pushed) (void)app.idManager.PopParent();
+                        }
                         app.EndReorderableItem();
                     }
                     app.EndReorderableGroup();
@@ -153,6 +170,21 @@ namespace tachyon
             ASSERT_EQ(reorderCalls, 1);
             EXPECT_EQ(lastReorder->first, 0);
             EXPECT_EQ(lastReorder->second, 1);
+        }
+
+        // A list inside each row (a list of lists): the outer rows still drag as before.
+        TEST_F(ReorderableTest, AListInsideARowLeavesTheOuterListWhole)
+        {
+            nested = true;
+            app.Frame([&] { EmitGroup(); });
+            app.Frame([&] { EmitGroup(); });
+            const auto row1 = ItemRect(itemIDs[1]);
+            DragItemTo(itemIDs[0], row1.y + row1.h * 3 / 4);
+
+            ASSERT_EQ(reorderCalls, 1);
+            EXPECT_EQ(lastReorder->first, 0);
+            EXPECT_EQ(lastReorder->second, 1);
+            EXPECT_EQ(innerReorders, 0);
         }
 
         TEST_F(ReorderableTest, DragUpwardReordersToEarlierSlot)

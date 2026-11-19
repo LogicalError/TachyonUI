@@ -198,6 +198,11 @@ namespace tachyon::d3d12
         return m_impl->deviceName;
     }
 
+    bool D3D12GraphicsContext::DeviceLost() const
+    {
+        return m_impl->removed.load(std::memory_order_relaxed);
+    }
+
     void D3D12GraphicsContext::SetGpuPreference(std::string_view preference)
     {
         m_impl->gpuPreference = std::string(preference);

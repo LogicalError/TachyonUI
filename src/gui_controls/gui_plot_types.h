@@ -66,7 +66,7 @@ namespace tachyon
     {
         std::vector<PlotSeries> series;
         float xMin = 0.0f, xMax = 1.0f;
-        /// The y range; with fitY, yMax follows the largest value shown.
+        /// The y range; with fitY, it runs from yMin out to the values shown (below it too).
         float yMin = 0.0f, yMax = 1.0f;
         bool  fitY = true;
         PlotScale yScale = PlotScale::Linear;

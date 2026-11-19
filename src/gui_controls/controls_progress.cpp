@@ -211,8 +211,9 @@ namespace tachyon
         }
 
         // Exactly as wide as it was, not grown or shrunk by the room around it.
-        if (const auto width = m_busyButtonWidths.find(id); width != m_busyButtonWidths.end() && !constraints.HasFixedWidth())
-            constraints.Width(Pixels{ width->second }).FlexGrow(0).FlexShrink(0);
+        m_busyButtonWidths.Touch(id);   // kept while it's busy
+        if (const int32_t* width = m_busyButtonWidths.Find(id); width != nullptr && !constraints.HasFixedWidth())
+            constraints.Width(Pixels{ *width }).FlexGrow(0).FlexShrink(0);
         const IconID           icon = theme.SpinnerIcon(guiStateManager.Interaction().GetFrameTime());
         const std::string_view text = busyText.empty() ? content.text : busyText;
         ShowContentTooltip(id, content);

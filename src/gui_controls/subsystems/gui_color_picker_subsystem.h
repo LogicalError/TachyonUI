@@ -26,6 +26,9 @@ namespace tachyon
         tachyon::ID triggerID = tachyon::ID::Invalid(); ///< swatch that opened the picker
         tachyon::ID windowID  = tachyon::ID::Invalid(); ///< popup window ID
         float h = 0, s = 0, v = 0, a = 1;       ///< working HSV+A copy
+        /// The hue in the active space (HSL's, Lab's or Oklab's angle), 0-1. Kept apart: a
+        /// grey has none, and the strip and square still need one to work with.
+        float spaceHue = 0;
         tachyon::color4f originalColor {};           ///< color when picker was opened
         bool  allowHDR      = false;                 ///< the opening field accepts HDR colors
         float hdrBrightness = 1.0f;                  ///< HDR multiplier; > 1 brightens past 1

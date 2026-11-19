@@ -174,7 +174,7 @@ namespace tachyon
                 [&triggerRects, menuID](tachyon::PostLayoutContext& ctx)
                 {
                     const tachyon::IntRect r = ctx.ElementRect();
-                    if (r.w > 0 && r.h > 0) triggerRects.insert_or_assign(menuID, r);
+                    if (r.w > 0 && r.h > 0) triggerRects[menuID] = r;
                 });
         }
     }
@@ -259,21 +259,21 @@ namespace tachyon
 
     WindowHitArea GUIApplication::TitleBarHitTest(ID windowID, int2 screenPos) const
     {
-        const auto it = m_titleBars.find(windowID);
-        if (it == m_titleBars.end())
+        const TitleBarInfo* bar = m_titleBars.Find(windowID);
+        if (bar == nullptr)
             return WindowHitArea::Client;
-        const ElementRef barRef = elementStorage.FindElementRefByID(it->second.barID);
+        const ElementRef barRef = elementStorage.FindElementRefByID(bar->barID);
         if (!barRef.IsValid() || !elementStorage.GetElementRectUnsafe(barRef).rect.Contains(screenPos))
             return WindowHitArea::Client;
 
         const ID hit = elementStorage.GetElementIDAt(windowRegistry.GetWindowRef(windowID), screenPos);
-        if (hit == it->second.maximizeID)
+        if (hit == bar->maximizeID)
             return WindowHitArea::MaximizeButton;
         // The bar itself, and anything in it that takes no input (spacers, the title).
         const ElementRef hitRef = elementStorage.FindElementRefByID(hit);
-        if (hit == it->second.barID || !hitRef.IsValid())
+        if (hit == bar->barID || !hitRef.IsValid())
             return WindowHitArea::Caption;
-        if (std::find(it->second.captions.begin(), it->second.captions.end(), hit) != it->second.captions.end())
+        if (std::find(bar->captions.begin(), bar->captions.end(), hit) != bar->captions.end())
             return WindowHitArea::Caption;
         const Element& element = elementStorage.GetElementUnsafe(hitRef);
         const bool interactive = element.eventHandler || (element.flags & ElementFlags::IsControl) != ElementFlags::None;
@@ -502,7 +502,7 @@ namespace tachyon
                             [&windowRects, menuID](tachyon::PostLayoutContext& ctx)
                             {
                                 const tachyon::IntRect r = ctx.ElementRect();
-                                if (r.w > 0 && r.h > 0) windowRects.insert_or_assign(menuID, r);
+                                if (r.w > 0 && r.h > 0) windowRects[menuID] = r;
                             });
                     }
                 }

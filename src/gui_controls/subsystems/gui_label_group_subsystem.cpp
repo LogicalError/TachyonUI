@@ -45,8 +45,14 @@ namespace tachyon
     {
         // No per-frame reset here (it's in OnPreConstruct): a group may be entered several
         // times per frame (e.g. once per row), and a reset would drop an earlier hover.
-        auto [it, inserted] = m_states.try_emplace(id, State{ .labelWidth = defaultWidth, .minWidth = minWidth, .maxWidth = maxWidth, .resizable = resizable });
+        const auto it = m_states.try_emplace(id, State{ .labelWidth = defaultWidth, .defaultWidth = defaultWidth,
+                                                        .minWidth = minWidth, .maxWidth = maxWidth, .resizable = resizable }).first;
         it->second.resizable = resizable;
+        if (it->second.lastUsedFrame != m_frame)
+        {
+            it->second.lastUsedFrame = m_frame;
+            m_used.push_back(&it->second);
+        }
         m_stack.push_back({ &it->second, m_elementStorage.GetCurrentNestingDepth() });
     }
 
@@ -60,21 +66,25 @@ namespace tachyon
         m_stack.pop_back();
     }
 
+    // Only the groups begun last frame hold anything this frame's build resets.
     void LabelGroupSubsystem::OnPreConstruct()
     {
-        for (auto& [id, gs] : m_states)
+        ++m_frame;
+        for (State* gs : m_used)
         {
-            gs.anyLabelHovered = false;
-            gs.labelTextIDs.clear();
-            gs.labelRefs.clear();
-            gs.maxLabelWidthThisFrame = 0;
+            gs->anyLabelHovered = false;
+            gs->labelTextIDs.clear();
+            gs->labelRefs.clear();
+            gs->maxLabelWidthThisFrame = 0;
         }
+        m_used.clear();
     }
 
     void LabelGroupSubsystem::OnPostConstruct()
     {
-        for (auto& [id, gs] : m_states)
+        for (State* used : m_used)
         {
+            State& gs = *used;
             // If no label in the group was hovered this frame and we're not
             // dragging the edge, the mouse has left the group - clear edge state.
             if (!gs.anyLabelHovered && !gs.edgeDrag.IsHeld())
@@ -93,6 +103,13 @@ namespace tachyon
             Diagnostics::ReportMisuse(kLogApp, "LabelGroupSubsystem: unbalanced BeginGroup/EndGroup at end of frame (closed)");
             m_stack.clear();
         }
+        // A group long gone goes, unless its width was dragged: that the user keeps.
+        if (m_frame % 64 == 0)
+            std::erase_if(m_states, [this](const auto& entry) {
+                const State& gs = entry.second;
+                const bool userSized = gs.resizable && gs.labelWidth != gs.defaultWidth;   // auto-fit ones keep nothing
+                return m_frame - gs.lastUsedFrame > kForgetAfterFrames && !userSized && !gs.edgeDrag.IsHeld();
+            });
     }
 
     void LabelGroupSubsystem::AddDragger(tachyon::ElementRef labelRef)

@@ -759,6 +759,28 @@ namespace tachyon
             EXPECT_EQ(edits.size(), 4u);
         }
 
+        // A clip in a locked group can't be moved or trimmed, as a key there can't.
+        TEST_F(TimelineEditorTest, AClipInALockedGroupStays)
+        {
+            view.tracks[3].expanded = true;   // Light, holding the sound now
+            view.tracks[5].depth = 1;
+            view.tracks[3].locked = true;
+            Settle();
+            Drag(LanesPoint(3.0f, 5), LanesPoint(4.0f, 5));
+            EXPECT_FLOAT_EQ(Clip(view).start, 0.5f);
+            EXPECT_TRUE(edits.empty());
+        }
+
+        // A clip already shorter than a frame: trimming its start can't make it shorter still.
+        TEST_F(TimelineEditorTest, AClipShorterThanAFrameDoesNotTrimShorter)
+        {
+            view.tracks[5].clip->length = 0.02f;
+            Settle();
+            Drag(LanesPoint(0.5f, 4), LanesPoint(1.5f, 4));
+            EXPECT_FLOAT_EQ(Clip(view).start, 0.5f);
+            EXPECT_FLOAT_EQ(Clip(view).length, 0.02f);
+        }
+
         // What part of the clip is under the pointer, for its hover look.
         TEST_F(TimelineEditorTest, TheClipsPartsShowHover)
         {

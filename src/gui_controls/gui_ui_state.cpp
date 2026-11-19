@@ -76,8 +76,9 @@ namespace tachyon
         }
 
         // A saved dock tree applied to a layout: panels by key, the ones it hasn't to its
-        // first leaf. False when it can't be read; the layout stays.
-        bool ApplyDockTree(DockingLayout& layout, std::string_view tree)
+        // first leaf. False when it can't be read; the layout stays. The old tree's node and
+        // tab-bar IDs go back to `idManager`.
+        bool ApplyDockTree(DockingLayout& layout, std::string_view tree, IDManager& idManager)
         {
             std::unique_ptr<DockNode> root = ParseDockTree(tree, [&layout](std::string_view panelKey) -> std::optional<ID> {
                 for (const auto& [id, panel] : layout.panels)
@@ -91,6 +92,7 @@ namespace tachyon
             if (DockNode* leaf = FirstLeaf(root.get()))
                 for (const ID id : UnplacedPanels(*root, all))
                     leaf->panelIds.push_back(id);
+            ReleaseDockTreeIDs(layout.root.get(), &idManager);
             layout.root = std::move(root);
             return true;
         }
@@ -220,7 +222,7 @@ namespace tachyon
 
     bool GUIApplication::RestoreDocumentLayout(Document& document, const SavedDocument& saved)
     {
-        if (saved.layout.empty() || !ApplyDockTree(document.layout, saved.layout))
+        if (saved.layout.empty() || !ApplyDockTree(document.layout, saved.layout, idManager))
             return false;
         ApplyPanelStates(document.layout, saved.panelStates);
         return true;
@@ -463,7 +465,7 @@ namespace tachyon
         for (const auto& [key, layout] : m_persistDocks)
         {
             if (const JsonValue* tree = section("docking", key))
-                (void)ApplyDockTree(*layout, tree->Write());
+                (void)ApplyDockTree(*layout, tree->Write(), idManager);
             ApplyPanelStates(*layout, PanelStatesOf(section("panelStates", key)));
         }
 

@@ -169,8 +169,6 @@ namespace tachyon
 
         auto* ctx = m_skribidiContext;
 
-        Update();
-
         float prev_x = ctx->view.cx;
         float prev_y = ctx->view.cy;
 
@@ -458,7 +456,8 @@ namespace tachyon
         // Only while the editor holds the committed text: then the next change is the first
         // of an edit, and this is the selection its undo gives back.
         const RegisteredText* entry = ctx->GetRegisteredText(ctx->editing_text_id);
-        if (entry == nullptr || EditorText(ctx->editor) != entry->text)
+        if (entry == nullptr || size_t(skb_editor_get_text_utf8_count(ctx->editor)) != entry->text.size() ||
+            EditorText(ctx->editor) != entry->text)
             return;
         ctx->edit_selection_element = ActiveElementID();
         ctx->edit_selection_before  = EditorSelection(ctx->editor);

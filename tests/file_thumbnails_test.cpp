@@ -117,6 +117,7 @@ namespace tachyon
         EXPECT_EQ(size.height, 16);
         EXPECT_EQ(thumbnails.Get("C:/cat.jpg", kMonday, 32), cat);
         EXPECT_EQ(shell.Reads("cat.jpg"), 1u) << "read once";
+        std::lock_guard lock(shell.mutex);   // the reader thread writes it
         ASSERT_EQ(shell.threads.size(), 1u);
         EXPECT_NE(shell.threads[0], std::this_thread::get_id());
     }

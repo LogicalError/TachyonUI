@@ -545,6 +545,8 @@ namespace tachyon
         }
 
         auto& level = menuManager.GetOrCreateNextLevel(idManager);
+        // Its own popup window: the level's may be the last dropdown's, still holding its frame.
+        level.windowID = menuManager.PopupWindowFor(contextMenuWindowID, idManager);
 
         // Where it was right-clicked or OpenContextMenu said, else below the target element.
         LayoutOverride pos = contextMenuScreenPos

@@ -43,7 +43,7 @@ namespace tachyon::Diagnostics
     protected:
         ProfilerCollector& c = MainThreadCollector();
         void SetUp()    override { SetProfilingEnabled(true); Reset(c); }
-        void TearDown() override { SetProfilingEnabled(true); Reset(c); }
+        void TearDown() override { SetProfilingEnabled(true); Reset(c); SetSmoothingWindow(c, 250'000'000); }
     };
 
     TEST_F(ProfilerTest, NestedScopesFormParentChild)
@@ -201,7 +201,9 @@ namespace tachyon::Diagnostics
         using namespace std::chrono_literals;
 
         // Run frames (each doing measurable work in a nested scope) until the
-        // averaging window flushes and durations become non-zero.
+        // averaging window flushes and durations become non-zero; a short window, so
+        // that's a few frames, not a quarter second of them.
+        SetSmoothingWindow(c, 2'000'000);
         for (int i = 0; i < 2000 && LastFrameTotalMs(c) == 0.0; ++i)
         {
             BeginFrame(c);
@@ -222,6 +224,34 @@ namespace tachyon::Diagnostics
         EXPECT_GT(inner->totalMs, 0.0);
         EXPECT_GE(outer->totalMs, inner->totalMs);   // parent encloses child
         EXPECT_GE(inner->selfMs, outer->selfMs);     // the leaf holds the cost
+    }
+
+    // Between window flushes the samples keep their smoothed values, but each frame's own
+    // call counts and times are there at once.
+    TEST_F(ProfilerTest, EachFramesOwnValuesAreThereEveryFrame)
+    {
+        for (int calls : { 1, 3, 2 })
+        {
+            BeginFrame(c);
+            for (int i = 0; i < calls; ++i)
+            {
+                EnterScope(c, H("Work"), "Work");
+                ExitScope(c);
+            }
+            EndFrame(c);
+            const ProfileSample* work = Find(LastFrameSamples(c), "Work");
+            ASSERT_NE(work, nullptr);
+            EXPECT_EQ(work->callCount, calls);
+            EXPECT_GE(work->frameTotalMs, 0.0);
+            EXPECT_GE(work->frameTotalMs, work->frameSelfMs);
+        }
+        // A scope seen for the first time joins the samples in the same frame.
+        BeginFrame(c);
+        EnterScope(c, H("Later"), "Later");
+        ExitScope(c);
+        EndFrame(c);
+        EXPECT_NE(Find(LastFrameSamples(c), "Later"), nullptr);
+        EXPECT_EQ(Find(LastFrameSamples(c), "Work")->callCount, 0);
     }
 
     // Call-path keys must not cancel out: A->A and A->B->A are distinct paths.

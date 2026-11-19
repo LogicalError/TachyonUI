@@ -220,6 +220,9 @@ namespace tachyon
         {
             std::sort(wires.begin(), wires.end());   // input order: same target node, by property
             const int srcNode = int(pair >> 32), tgtNode = int(uint32_t(pair));
+            // An endpoint naming a node that is gone draws no wire.
+            if (srcNode < 0 || size_t(srcNode) >= view.nodes.size() || size_t(tgtNode) >= view.nodes.size())
+                continue;
             const bool up = view.nodes[size_t(tgtNode)].pos.y < view.nodes[size_t(srcNode)].pos.y;
             const int32_t first = (int32_t(wires.size()) - 1) / 2;
             for (size_t i = 0; i < wires.size(); ++i)

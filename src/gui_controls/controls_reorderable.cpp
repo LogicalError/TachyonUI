@@ -53,7 +53,7 @@ namespace tachyon
         std::function<void(int, tachyon::int2)> onDragOut,
         std::function<void(int, tachyon::int2)> dragVisualizer)
     {
-        m_reorderable->Construction() = {};
+        m_reorderable->BeginConstruction();
         m_reorderable->Construction().groupID = id;
         m_reorderable->Construction().direction = direction;
         m_reorderable->Construction().isWrapped = isWrapped;
@@ -598,7 +598,7 @@ namespace tachyon
                 follow = {};
         }
 
-        m_reorderable->Construction() = {};
+        m_reorderable->EndConstruction();
     }
 
     // ---------------------------------------------------------------------------

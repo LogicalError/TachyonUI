@@ -12,6 +12,7 @@
 #include <D3D12MemAlloc.h>
 
 #include <array>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -116,7 +117,13 @@ namespace tachyon::d3d12
 
         /// Every submit signals the next value: `submitted` is the last one signalled.
         ComPtr<ID3D12Fence> submitFence;
-        UINT64              submitted = 0;
+        /// Atomic: DestroyImageAtEnd, on any thread, reads it.
+        std::atomic<UINT64> submitted = 0;
+        /// The device was removed (a Present, a resize or the debug layer said so): told once,
+        /// with the reason, and the GUI is told through DeviceLost.
+        std::atomic<bool>   removed = false;
+        /// Notes a failed call: logged, and when it says the device is gone, `removed` is set.
+        void   NoteFailure(HRESULT hr, const char* what);
         HANDLE              waitEvent = nullptr;
 
         /// What the next submit waits for on the queue (AddFrameWait), a fence once each.

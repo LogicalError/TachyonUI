@@ -77,7 +77,9 @@ namespace tachyon
                 windows.push_back({ window->windowID, &window->documents });
             return windows;
         });
-        if (std::ifstream file(ResourceFile(kUIStateFile), std::ios::binary); file)
+        // A bench runs the layout and theme it starts with, not the last session's: runs
+        // and machines compare.
+        if (std::ifstream file(ResourceFile(kUIStateFile), std::ios::binary); file && !IsBenching())
         {
             showcase.savedUIState.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
             if (Result<void> restored = RestoreUIState(showcase.savedUIState); !restored)
@@ -2425,7 +2427,8 @@ namespace tachyon
             ++b.gpuFrames;
         }
 #endif
-        // The last finished frame's scopes (windowed averages, so a mean of them is the mean).
+        // The last finished frame's scopes, that frame's own times (not the profiler's
+        // windowed averages, which would carry the warm-up into the first frames measured).
         for (const Diagnostics::ProfileSample& s : Diagnostics::LastFrameSamples(Diagnostics::MainThreadCollector()))
         {
             auto [it, added] = b.scopes.try_emplace(s.key);
@@ -2436,8 +2439,8 @@ namespace tachyon
                 it->second.isWait = s.isWait;
                 b.order.push_back(s.key);
             }
-            it->second.totalMs += s.totalMs;
-            it->second.selfMs  += s.selfMs;
+            it->second.totalMs += s.frameTotalMs;
+            it->second.selfMs  += s.frameSelfMs;
             it->second.calls   += s.callCount;
         }
         if (b.seen < kWarmup + b.frames)
@@ -2461,8 +2464,10 @@ namespace tachyon
             std::printf("BENCH %8.3f total %8.3f self %7.1f calls  %*s%s%s\n", s.totalMs / n, s.selfMs / n, double(s.calls) / n,
                         s.depth * 2, "", s.name.c_str(), s.isWait ? "  (wait)" : "");
         }
-        std::printf("BENCH CPU work %.3f ms per frame; GPU %.3f ms per frame\n", (frame - waits) / n,
-                    b.gpuFrames > 0 ? b.gpuMs / b.gpuFrames : 0.0);
+        if (b.gpuFrames > 0)
+            std::printf("BENCH CPU work %.3f ms per frame; GPU %.3f ms per frame\n", (frame - waits) / n, b.gpuMs / b.gpuFrames);
+        else   // only the Vulkan backend times the GPU
+            std::printf("BENCH CPU work %.3f ms per frame; GPU n/a\n", (frame - waits) / n);
         std::fflush(stdout);
 
         // The next phase, or the end.

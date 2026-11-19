@@ -92,9 +92,15 @@ namespace std
     template<>
     struct hash<tachyon::ID>
     {
+        /// Mixed: an ID's low bits are its mode and a range's index sits under its parent's
+        /// hash, while the standard containers pick a bucket from the low bits alone.
         inline size_t operator()(const tachyon::ID& id) const noexcept
         {
-            return static_cast<size_t>(id.value.integer);
+            uint64_t x = id.value.integer;
+            x ^= x >> 32;
+            x *= 0x9E3779B97F4A7C15ull;
+            x ^= x >> 29;
+            return static_cast<size_t>(x);
         }
     };
 }

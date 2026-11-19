@@ -324,6 +324,34 @@ namespace tachyon
                 windowRegistry.MoveSubtreeToEnd(stack);
         });
         m_frame.OnPostConstruct([this](FrameContext& ctx) { DrawScrims(ctx.elapsedTimeSecs); });
+        m_frame.OnEndFrame([this](FrameContext&) { PruneStaleControlState(); });
+    }
+
+    void GUIApplication::PruneStaleControlState()
+    {
+        m_menuRects->EndFrame();
+        m_sliderFieldTrack->EndFrame();
+        m_panelContentIDs.EndFrame();
+        m_busyButtonWidths.EndFrame();
+        m_titleBars.EndFrame();
+
+        // A popup window of state that went is closed now and its ID given back later, once
+        // the window is gone (an ID handed out again meanwhile would find it).
+        for (size_t i = m_retiredWindows.size(); i-- > 0; )
+            if (--m_retiredWindows[i].framesLeft == 0)
+            {
+                idManager.ReleaseStaticID(m_retiredWindows[i].id);
+                m_retiredWindows[i] = m_retiredWindows.back();
+                m_retiredWindows.pop_back();
+            }
+        auto retire = [this](ID windowID) {
+            if (windowID == ID::Invalid())
+                return;
+            (void)windowManager->RequestClose(windowID);
+            m_retiredWindows.push_back({ windowID, 4 });
+        };
+        m_tasksPopovers.EndFrame([&](ID, TasksPopover& popover) { retire(popover.windowID); return true; });
+        m_autocomplete.EndFrame([&](ID, AutocompleteState& state) { retire(state.listWindowID); return true; });
     }
 
     void GUIApplication::ReportMisuse(const char* message) { Diagnostics::ReportMisuse(kLogApp, message); }
@@ -395,6 +423,13 @@ namespace tachyon
                 menuManager.currentDepth = -1;
             }
         });
+    }
+
+    GUIApplication::~GUIApplication()
+    {
+        // This class's Cleanup: a derived one's members are gone by now.
+        if (m_initialized || graphicsContext != nullptr || windowManager != nullptr)
+            GUIApplication::Cleanup();
     }
 
     void GUIApplication::Cleanup()
@@ -1108,16 +1143,21 @@ namespace tachyon
     {
         // Hover and Focused cover the leaf plus its PropagatesDescendantState ancestors, so
         // moving within such an ancestor doesn't start one again.
+        // Filled in place every frame: the buffers keep their room.
         auto& interaction = guiStateManager.Interaction();
-        std::vector<ID> hoverProp   = CollectPropagatedAncestors(elementStorage, interaction.GetHoveredID());
-        std::vector<ID> focusedProp = CollectPropagatedAncestors(elementStorage, interaction.GetFocusedID());
-        auto withLeaf = [](std::vector<ID> v, ID leaf) {
-            if (leaf != ID::Invalid()) v.push_back(leaf);
-            return v;
+        std::vector<ID>& hoverProp   = interaction.PropagatedHoverIDs();
+        std::vector<ID>& focusedProp = interaction.PropagatedFocusedIDs();
+        CollectPropagatedAncestors(elementStorage, interaction.GetHoveredID(), hoverProp);
+        CollectPropagatedAncestors(elementStorage, interaction.GetFocusedID(), focusedProp);
+        auto withLeaf = [](std::vector<ID>& out, const std::vector<ID>& ancestors, ID leaf) {
+            out.assign(ancestors.begin(), ancestors.end());
+            if (leaf != ID::Invalid()) out.push_back(leaf);
         };
-        std::vector<ID> hover   = withLeaf(hoverProp,   interaction.GetHoveredID());
-        std::vector<ID> focused = withLeaf(focusedProp, interaction.GetFocusedID());
-        const ID        active  = interaction.GetActiveID();
+        std::vector<ID>& hover   = m_transitionsNow.hover;
+        std::vector<ID>& focused = m_transitionsNow.focused;
+        withLeaf(hover,   hoverProp,   interaction.GetHoveredID());
+        withLeaf(focused, focusedProp, interaction.GetFocusedID());
+        const ID active = interaction.GetActiveID();
 
         // Against what the last call saw, not what the frame began with: the focus also moves
         // while the UI is built (a menu item hovered takes it) and in handlers.
@@ -1141,13 +1181,14 @@ namespace tachyon
             change(m_transitionsSeen.active, false);
             change(active, true);
         }
-        m_transitionsSeen = { hover, focused, active };
-
-        interaction.SetPropagatedHoverIDs(std::move(hoverProp));
-        interaction.SetPropagatedFocusedIDs(std::move(focusedProp));
+        // What was seen goes back as next frame's buffers.
+        m_transitionsSeen.hover.swap(hover);
+        m_transitionsSeen.focused.swap(focused);
+        m_transitionsSeen.active = active;
 
         // Everything holding the focus, for IsFocusWithin.
-        std::vector<ID> holders;
+        std::vector<ID>& holders = interaction.FocusAncestorIDs();
+        holders.clear();
         if (const ID focusedID = interaction.GetFocusedID(); focusedID != ID::Invalid())
             for (ElementRef ref = elementStorage.FindElementRefByID(focusedID); ref.IsValid(); )
             {
@@ -1155,7 +1196,6 @@ namespace tachyon
                 if (const Element* el = ref.IsValid() ? elementStorage.GetElementPtr(ref) : nullptr)
                     holders.push_back(el->id);
             }
-        interaction.SetFocusAncestorIDs(std::move(holders));
     }
 
     void GUIApplication::OnRender(float elapsedTimeSecs)
@@ -1174,10 +1214,17 @@ namespace tachyon
             bool     disabled             = false;  // the element is disabled
             bool     invalid              = false;  // the element is invalid
         };
-        constexpr uint32_t kMaxRenderDepth = 64;
-        RenderDepthState depthStates[kMaxRenderDepth]{};
-
-
+        // On the stack for the usual nesting; a deeper tree (popups in deep panels nest
+        // further) gets room on the heap.
+        constexpr uint32_t kStackRenderDepth = 64;
+        RenderDepthState stackDepthStates[kStackRenderDepth]{};
+        std::vector<RenderDepthState> heapDepthStates;
+        RenderDepthState* depthStates = stackDepthStates;
+        if (const uint32_t depthCount = elementStorage.NumberOfDepthLevels(); depthCount > kStackRenderDepth)
+        {
+            heapDepthStates.resize(depthCount);
+            depthStates = heapDepthStates.data();
+        }
 
         for (auto& windowEntry : windowRegistry.Windows())
         {
@@ -1213,7 +1260,6 @@ namespace tachyon
 
             // Windows reset ancestor transforms, so LAYOUT == SCREEN space at window depth.
             const uint32_t windowDepth = windowRef.depth;
-            assert(windowDepth < kMaxRenderDepth && "Window hierarchy too deep for render state array");
             depthStates[windowDepth].clipRectScreen        = windowClipRect;
             depthStates[windowDepth].contentTransformAccum = windowElementRect.contentTransform;
             depthStates[windowDepth].transformPivotLayout  = windowElementRect.innerRect.position - offset;
@@ -1285,7 +1331,7 @@ namespace tachyon
                 fireAfterDraws(i, 0);
                 const ElementRef childRef  = node.ref;
                 const uint32_t   depth     = childRef.depth;
-                assert(depth > 0 && depth < kMaxRenderDepth);
+                assert(depth > 0);
 
                 auto& childElementRect = elementStorage.GetElementRectUnsafe(childRef);
                 auto  layoutStyle      = childElementRect.layoutStyle;
@@ -1969,19 +2015,25 @@ namespace tachyon
     std::vector<ID> GUIApplication::CollectPropagatedAncestors(const ElementStorage& storage, ID leafID)
     {
         std::vector<ID> result;
-        if (leafID == ID::Invalid()) return result;
+        CollectPropagatedAncestors(storage, leafID, result);
+        return result;
+    }
+
+    void GUIApplication::CollectPropagatedAncestors(const ElementStorage& storage, ID leafID, std::vector<ID>& out)
+    {
+        out.clear();
+        if (leafID == ID::Invalid()) return;
         ElementRef ref = storage.FindElementRefByID(leafID);
-        if (!ref.IsValid()) return result;
+        if (!ref.IsValid()) return;
         ref = storage.GetParentRef(ref);
         while (ref.IsValid())
         {
             const Element* el = storage.GetElementPtr(ref);
             if (!el) break;
             if ((el->flags & ElementFlags::PropagatesDescendantState) != ElementFlags::None)
-                result.push_back(el->id);
+                out.push_back(el->id);
             ref = storage.GetParentRef(ref);
         }
-        return result;
     }
 
     void GUIApplication::NoteTargetAncestors(int2 mousePos)

@@ -852,6 +852,23 @@ namespace tachyon
             return true;
         }
 
+        // Byte sequences shaped like UTF-8 that still aren't: overlong forms, UTF-16 surrogates
+        // and values past U+10FFFF.
+        TEST(Utf8, OverlongSurrogateAndOutOfRangeFormsAreInvalid)
+        {
+            EXPECT_FALSE(IsValidUtf8("\xC0\xAF"));             // '/' in two bytes
+            EXPECT_FALSE(IsValidUtf8("\xE0\x80\xAF"));         // and in three
+            EXPECT_FALSE(IsValidUtf8("\xF0\x80\x80\xAF"));     // and in four
+            EXPECT_FALSE(IsValidUtf8("\xED\xA0\x80"));         // U+D800
+            EXPECT_FALSE(IsValidUtf8("\xF4\x90\x80\x80"));     // U+110000
+            EXPECT_TRUE (IsValidUtf8("\xF4\x8F\xBF\xBF"));     // U+10FFFF
+            EXPECT_TRUE (IsValidUtf8("\xE2\x82\xAC"));         // the euro sign
+            EXPECT_TRUE (IsValidUtf8(ToValidUtf8("\xED\xA0\x80 x")));
+            std::string out;
+            AppendUtf8(out, 0xD800);
+            EXPECT_EQ(out, "\xEF\xBF\xBD") << "a surrogate isn't encoded";
+        }
+
         // Pasted bytes that aren't UTF-8: the field keeps valid text, the good part included,
         // and each bad byte shows as U+FFFD.
         TEST_F(SkribidiEditorTest, PastingInvalidUtf8KeepsTheTextValid)

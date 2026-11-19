@@ -5,6 +5,7 @@
 
 #include <gui_core/diagnostics/gui_logging.h>
 
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -23,9 +24,10 @@ namespace GUITest
         MisuseReports(const MisuseReports&) = delete;
         MisuseReports& operator=(const MisuseReports&) = delete;
 
-        size_t Count() const { return m_messages.size(); }
+        size_t Count() const { std::lock_guard lock(m_mutex); return m_messages.size(); }
         bool   Contains(std::string_view text) const
         {
+            std::lock_guard lock(m_mutex);
             for (const std::string& message : m_messages)
                 if (message.find(text) != std::string::npos)
                     return true;
@@ -33,12 +35,13 @@ namespace GUITest
         }
         std::string All() const
         {
+            std::lock_guard lock(m_mutex);
             std::string all;
             for (const std::string& message : m_messages)
                 all += message + "\n";
             return all;
         }
-        void Clear() { m_messages.clear(); tachyon::Diagnostics::ResetMisuseReports(); }
+        void Clear() { { std::lock_guard lock(m_mutex); m_messages.clear(); } tachyon::Diagnostics::ResetMisuseReports(); }
 
     private:
         static void Sink(const tachyon::Diagnostics::LogRecord& record, void* context)
@@ -47,9 +50,12 @@ namespace GUITest
                 return;
             char text[512];
             const size_t length = tachyon::Diagnostics::FormatLogMessage(record, text);
-            static_cast<MisuseReports*>(context)->m_messages.emplace_back(text, length);
+            auto* self = static_cast<MisuseReports*>(context);
+            std::lock_guard lock(self->m_mutex);   // a worker thread may log too
+            self->m_messages.emplace_back(text, length);
         }
 
+        mutable std::mutex       m_mutex;
         std::vector<std::string> m_messages;
     };
 }

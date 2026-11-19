@@ -46,6 +46,7 @@
 #include <gui_core/layout/gui_layout_engine.h>
 
 #include <gui_core/elements/gui_element_storage.h>
+#include <gui_core/gui_recent_id_map.h>
 
 #include <gui_core/graphics/gui_custom_draw_context.h>
 
@@ -358,6 +359,9 @@ namespace tachyon
         /// Moves a docked panel into its own window at a screen position, as tearing its tab
         /// off does; the window's Dock button returns it. False if the layout hasn't the panel.
         bool FloatPanel(DockingLayout& layout, ID panelID, int2 screenPos);
+        /// Before an app destroys `layout`: closes the windows of the panels torn off it (they
+        /// would dock back into it) and stops saving it.
+        void ForgetDockingLayout(DockingLayout& layout);
 
         /// Closes the window for good: its panels are disabled and destroyed.
         void CloseFloatingDockWindow(size_t index);
@@ -386,7 +390,9 @@ namespace tachyon
         /// @name Setup and resources
         ///@{
 
-                virtual ~GUIApplication() = default;
+        /// Cleans up when Cleanup wasn't called (an early return, a failed test), so the
+        /// device, windows and contexts don't outlive the application.
+        virtual ~GUIApplication();
 
         /// See GUIApplicationInitializeOptions.
         using InitializeOptions = GUIApplicationInitializeOptions;
@@ -2963,7 +2969,7 @@ namespace tachyon
         struct ColorSwatchLook SwatchLook() const;
 
         /// Panel id -> its dock content (cached scope) id, for InvalidatePanel.
-        std::unordered_map<tachyon::ID, tachyon::ID>       m_panelContentIDs;
+        RecentIDMap<tachyon::ID>                           m_panelContentIDs;
 
         /// Save-stack for nested BeginToolbar/EndToolbar.
         std::vector<const ControlStyles*> controlStylesStack;
@@ -2987,14 +2993,14 @@ namespace tachyon
         // Filled by ListItem when dragDrop is on; valid in end-of-frame handlers via FindListItemIndex().
         std::unordered_map<tachyon::ID, int> m_listItemIndexByID;
         /// A BusyButton's width while it wasn't busy, kept while it is.
-        std::unordered_map<tachyon::ID, int32_t> m_busyButtonWidths;
+        RecentIDMap<int32_t> m_busyButtonWidths;
         /// A BackgroundTasks pill's popover: its window, and whether it's open.
         struct TasksPopover
         {
             tachyon::ID windowID = tachyon::ID::Invalid();
             bool        open     = false;
         };
-        std::unordered_map<tachyon::ID, TasksPopover> m_tasksPopovers;
+        RecentIDMap<TasksPopover> m_tasksPopovers;
         /// A task's bar: the fill by its state, sliding while running with no value known.
         void TaskBar(ID id, const ProgressTask& task, StyleRef trackStyle, LayoutOverride&& constraints);
         /// A step's 16px glyph for `state`.
@@ -3160,6 +3166,7 @@ namespace tachyon
             ID              active = ID::Invalid();
         };
         TransitionsSeen m_transitionsSeen;
+        TransitionsSeen m_transitionsNow;   ///< FireStateTransitions' buffers, kept for their room
         /// The box style's CSS shadows (and the focus ring when `ring`), blended as the box is.
         void RenderBoxShadows(IntRect rectLayout, IntRect clipRectScreen, const TransitionState& ts, bool ring);
         /// One shadow layer around a box with corner `radius`; nothing for one hidden under it.
@@ -3314,6 +3321,8 @@ namespace tachyon
         void        InvalidateCachedScopesForInput(ID overID);
         /// The PropagatesDescendantState ancestors of `leafID`'s element, innermost first.
         static std::vector<ID> CollectPropagatedAncestors(const ElementStorage& storage, ID leafID);
+        /// The same into `out`, reusing its room.
+        static void CollectPropagatedAncestors(const ElementStorage& storage, ID leafID, std::vector<ID>& out);
         /// Before construction: a tooltip or context menu on an element that takes its parts'
         /// states (PropagatesDescendantState) is for those parts too. Also notes the target's
         /// text cut short (FindCutShortText), with the pointer at `mousePos`.
@@ -3355,7 +3364,7 @@ namespace tachyon
 
         /// Each window's title bar, from its last BeginTitleBar / EndTitleBar.
         struct TitleBarInfo { ID barID = ID::Invalid(); ID maximizeID = ID::Invalid(); std::vector<ID> captions; };
-        std::unordered_map<ID, TitleBarInfo> m_titleBars;
+        RecentIDMap<TitleBarInfo> m_titleBars;
         std::vector<ID> m_titleBarStack;    ///< bar IDs between BeginTitleBar and EndTitleBar
         std::vector<ID> m_titleBarCaptions; ///< controls in the open title bar whose background drags the window
         std::unordered_set<ID> m_closeRequests;   ///< ConfirmClose windows whose title-bar close was clicked
@@ -3375,7 +3384,13 @@ namespace tachyon
             bool    picked       = false;   ///< a suggestion went into the value since the last call
             int32_t width        = 0;       ///< the field's width last frame, for the list's
         };
-        std::unordered_map<ID, AutocompleteState> m_autocomplete;
+        RecentIDMap<AutocompleteState> m_autocomplete;
+        /// Popup windows of state that went (RecentIDMap): closed, their static IDs released a
+        /// few frames later, once the windows are gone.
+        struct RetiredWindow { ID id = ID::Invalid(); uint32_t framesLeft = 0; };
+        std::vector<RetiredWindow> m_retiredWindows;
+        /// Once per frame: drops the per-ID state of controls no longer built.
+        void PruneStaleControlState();
 
         /// A popup that isn't a menu (the command search's list) and closes on a press outside
         /// its elements: they take no focus, so the press may not move it away from them.

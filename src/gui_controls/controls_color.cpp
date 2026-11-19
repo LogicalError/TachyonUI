@@ -176,9 +176,13 @@ namespace tachyon
             SetVerticalGradient(sm, idx, SampledGradient(std::forward<Fn>(sampleFn), numStops));
         }
 
+        // Under this a color has no hue to speak of (a grey): the space's own is kept instead.
+        constexpr float kHuelessChroma = 1e-4f;
+
         // Rebuilds h/s/v from a hue position on the strip, keeping the space's other axes.
-        void ApplyStripHue(ColorSpace space, float hue01, float& h, float& s, float& v)
+        void ApplyStripHue(ColorSpace space, float hue01, float& h, float& s, float& v, float& spaceHue)
         {
+            spaceHue = std::clamp(hue01, 0.0f, 1.0f);   // for a grey, the hue it gets once it has color
             switch (space)
             {
                 default:
@@ -212,7 +216,7 @@ namespace tachyon
         }
 
         // Rebuilds h/s/v from a point on the square (sx right, sy down), keeping the hue.
-        void ApplySquare(ColorSpace space, float sx, float sy, float& h, float& s, float& v)
+        void ApplySquare(ColorSpace space, float sx, float sy, float& h, float& s, float& v, float spaceHue)
         {
             sx = std::clamp(sx, 0.0f, 1.0f);
             sy = std::clamp(sy, 0.0f, 1.0f);
@@ -227,6 +231,8 @@ namespace tachyon
                     auto [cr, cg, cb] = ColorConvert::HSVtoRGB(h, s, v);
                     float oldH, oldS, oldL;
                     ColorConvert::RGBtoHSL(cr, cg, cb, oldH, oldS, oldL);
+                    if (oldS < kHuelessChroma)
+                        oldH = spaceHue;
                     auto [nr, ng, nb] = ColorConvert::HSLtoRGB(oldH, sx, 1.0f - sy);
                     ColorConvert::RGBtoHSV(nr, ng, nb, h, s, v);
                     break;
@@ -238,7 +244,7 @@ namespace tachyon
                     float L, a, b;
                     if (space == ColorSpace::Lab) ColorConvert::RGBtoLab(cr, cg, cb, L, a, b);
                     else                          ColorConvert::RGBtoOklab(cr, cg, cb, L, a, b);
-                    const float angle = std::atan2(b, a);
+                    const float angle = std::sqrt(a * a + b * b) < kHuelessChroma ? spaceHue * 2.0f * kPi : std::atan2(b, a);
                     auto [nr, ng, nb] = (space == ColorSpace::Lab)
                         ? ColorConvert::LabToRGB((1.0f - sy) * 100.0f, sx * 128.0f * std::cos(angle), sx * 128.0f * std::sin(angle))
                         : ColorConvert::OklabToRGB(1.0f - sy, sx * 0.4f * std::cos(angle), sx * 0.4f * std::sin(angle));
@@ -281,7 +287,8 @@ namespace tachyon
                     break;
                 case ColorSpace::HSL:
                 {
-                    auto [r, g, b] = ColorConvert::HSLtoRGB(std::clamp(cp.comp[0], 0.f, 1.f), std::clamp(cp.comp[1], 0.f, 1.f), std::clamp(cp.comp[2], 0.f, 1.f));
+                    cp.spaceHue = std::clamp(cp.comp[0], 0.f, 1.f);
+                    auto [r, g, b] = ColorConvert::HSLtoRGB(cp.spaceHue, std::clamp(cp.comp[1], 0.f, 1.f), std::clamp(cp.comp[2], 0.f, 1.f));
                     ColorConvert::RGBtoHSV(r, g, b, cp.h, cp.s, cp.v);
                     break;
                 }
@@ -320,6 +327,7 @@ namespace tachyon
             {
                 float hh, ss, ll;
                 ColorConvert::RGBtoHSL(curR, curG, curB, hh, ss, ll);
+                if (ss < kHuelessChroma) hh = cp.spaceHue; else cp.spaceHue = hh;
                 stripHue = hh; squareX = ss; squareY = ll;
                 break;
             }
@@ -329,9 +337,10 @@ namespace tachyon
                 float L, a, b;
                 if (cp.activeSpace == ColorSpace::Lab) ColorConvert::RGBtoLab(curR, curG, curB, L, a, b);
                 else                                   ColorConvert::RGBtoOklab(curR, curG, curB, L, a, b);
+                const float chroma = std::sqrt(a * a + b * b);
                 stripHue = std::atan2(b, a) / (2.0f * kPi);
                 if (stripHue < 0) stripHue += 1.0f;
-                const float chroma = std::sqrt(a * a + b * b);
+                if (chroma < kHuelessChroma) stripHue = cp.spaceHue; else cp.spaceHue = stripHue;
                 squareX = std::clamp(chroma / (cp.activeSpace == ColorSpace::Lab ? 128.0f : 0.4f), 0.0f, 1.0f);
                 squareY = std::clamp(cp.activeSpace == ColorSpace::Lab ? L / 100.0f : L, 0.0f, 1.0f);
                 break;
@@ -410,8 +419,8 @@ namespace tachyon
                         fy = std::clamp(fy, 0.0f, 1.0f);
                         switch (target)
                         {
-                            case ColorPickerState::DragTarget::Square: ApplySquare(cp.activeSpace, std::clamp(fx, 0.0f, 1.0f), fy, cp.h, cp.s, cp.v); break;
-                            case ColorPickerState::DragTarget::Hue:    ApplyStripHue(cp.activeSpace, fy, cp.h, cp.s, cp.v);  break;
+                            case ColorPickerState::DragTarget::Square: ApplySquare(cp.activeSpace, std::clamp(fx, 0.0f, 1.0f), fy, cp.h, cp.s, cp.v, cp.spaceHue); break;
+                            case ColorPickerState::DragTarget::Hue:    ApplyStripHue(cp.activeSpace, fy, cp.h, cp.s, cp.v, cp.spaceHue);  break;
                             case ColorPickerState::DragTarget::Alpha:  cp.a = 1.0f - fy; break;
                             default: break;
                         }
@@ -603,6 +612,7 @@ namespace tachyon
                 {
                     float hh, ss, ll;
                     ColorConvert::RGBtoHSL(curR, curG, curB, hh, ss, ll);
+                    if (ss < kHuelessChroma) hh = cp.spaceHue;   // a grey's H slider stays where it was put
                     cp.comp[0] = hh; cp.comp[1] = ss; cp.comp[2] = ll;
                     labels[0] = "H"; labels[1] = "S"; labels[2] = "L";
                     scales[0] = cp.byteRange ? 360.0f : 1.0f; scales[1] = scales[2] = percent;

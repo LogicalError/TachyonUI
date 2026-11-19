@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include <gui_core/gui_id.h>
+#include <gui_core/gui_recent_id_map.h>
 #include <gui_core/gui_base_types.h>
 #include <gui_core/input/gui_gesture.h>
 #include <gui_core/style/gui_style_text.h>   // IconID
@@ -47,18 +48,23 @@ namespace tachyon
     class SliderFieldTrackSubsystem
     {
     public:
-        /// 0 until the slider has drawn once.
-        int GetWidth(tachyon::ID id) const
+        /// 0 until the slider has drawn once. Asked while the slider is built, which keeps
+        /// its width (a cached panel doesn't draw it again).
+        int GetWidth(tachyon::ID id)
         {
-            auto it = m_widths.find(id);
-            return (it != m_widths.end()) ? it->second : 0;
+            m_widths.Touch(id);
+            const int* width = m_widths.Find(id);
+            return width ? *width : 0;
         }
 
         /// For the custom-draw lambdas to write into.
-        std::unordered_map<tachyon::ID, int>& Widths() { return m_widths; }
+        RecentIDMap<int>& Widths() { return m_widths; }
+
+        /// Once per frame: the widths of sliders no longer shown go after a while.
+        void EndFrame() { m_widths.EndFrame(); }
 
     private:
-        std::unordered_map<tachyon::ID, int> m_widths;
+        RecentIDMap<int> m_widths;
     };
 
     /// Set when a dock tab drag starts, so any target leaf can emit a phantom tab during
@@ -114,25 +120,22 @@ namespace tachyon
     {
     public:
         /// Last frame's rect of menu trigger `id`; nullptr if absent.
-        const tachyon::IntRect* FindTriggerRect(tachyon::ID id) const
-        {
-            auto it = m_triggerRects.find(id);
-            return (it == m_triggerRects.end()) ? nullptr : &it->second;
-        }
+        const tachyon::IntRect* FindTriggerRect(tachyon::ID id) const { return m_triggerRects.Find(id); }
         /// Last frame's rect of menu popup window `id`; nullptr if absent.
-        const tachyon::IntRect* FindWindowRect(tachyon::ID id) const
-        {
-            auto it = m_windowRects.find(id);
-            return (it == m_windowRects.end()) ? nullptr : &it->second;
-        }
+        const tachyon::IntRect* FindWindowRect(tachyon::ID id) const { return m_windowRects.Find(id); }
 
         /// For the AddPostLayout lambdas to write into.
-        std::unordered_map<tachyon::ID, tachyon::IntRect>& TriggerRects() { return m_triggerRects; }
-        std::unordered_map<tachyon::ID, tachyon::IntRect>& WindowRects()  { return m_windowRects; }
+        RecentIDMap<tachyon::IntRect>& TriggerRects() { return m_triggerRects; }
+        RecentIDMap<tachyon::IntRect>& WindowRects()  { return m_windowRects; }
+
+        /// Once per frame: the rects of menus no longer built go after a while.
+        void EndFrame() { m_triggerRects.EndFrame(); m_windowRects.EndFrame(); }
+
+        size_t Size() const { return m_triggerRects.Size() + m_windowRects.Size(); }
 
     private:
-        std::unordered_map<tachyon::ID, tachyon::IntRect> m_triggerRects;
-        std::unordered_map<tachyon::ID, tachyon::IntRect> m_windowRects;
+        RecentIDMap<tachyon::IntRect> m_triggerRects;
+        RecentIDMap<tachyon::IntRect> m_windowRects;
     };
     /// @}
 }

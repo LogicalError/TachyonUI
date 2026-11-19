@@ -37,6 +37,9 @@ namespace tachyon::Diagnostics
     /// Discards all nodes and history; cached scope sites re-resolve.
     void Reset(ProfilerCollector& collector);
 
+    /// How long the smoothed durations average over: 250 ms by default, as the FPS readout.
+    void SetSmoothingWindow(ProfilerCollector& collector, int64_t nanoseconds);
+
     /// Per-call-site descriptor, `static` at each TACHYON_PROFILE_SCOPE site. The cached* fields
     /// skip the node lookup when hit from the same call path; Reset invalidates them.
     /// Single-threaded.
@@ -97,6 +100,9 @@ namespace tachyon::Diagnostics
         double      selfMs    = 0.0;
         double      minMs     = 0.0;
         double      maxMs     = 0.0;
+        /// This frame alone, not smoothed: for measuring a fixed run of frames.
+        double      frameTotalMs = 0.0;
+        double      frameSelfMs  = 0.0;
         bool        isWait    = false;
     };
 

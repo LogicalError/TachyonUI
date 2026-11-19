@@ -134,6 +134,9 @@ namespace tachyon
     ///     BeginDockingContainer(dockID, &layout, LayoutOverride::Auto());
     ///     EndDockingContainer();
     ///     EmitFloatingDockWindows();
+    ///
+    /// Panels torn off it float in windows that dock back into it: before destroying a layout
+    /// while the app runs on, call ForgetDockingLayout (CloseDocument does for a document's).
     struct DockingLayout {
         std::unique_ptr<tachyon::DockNode>     root;    ///< the dock tree; leaves hold panel tabs
         std::unordered_map<tachyon::ID, Panel> panels;  ///< every panel of this layout, by ID

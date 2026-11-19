@@ -153,6 +153,7 @@ list(APPEND GUI_CORE_TEST_FILES
   node_view_wire_route_test.cpp
   headless_gui_app.h
   misuse_reports.h
+  scoped_temp_dir.h
   skribidi_test_fixture.h
   headless_gui_app.cpp
   mock_window_backend.h
@@ -181,6 +182,10 @@ target_sources(gui_core_tests PRIVATE ${TACHYON_TUTORIAL_SOURCES})
 source_group("Tutorial" FILES ${TACHYON_TUTORIAL_SOURCES})
 # resource_path_case_test.cpp checks the paths the source names against workdirectory/.
 target_compile_definitions(gui_core_tests PRIVATE "TACHYON_SOURCE_DIR=\"${PROJECT_SOURCE_DIR}\"")
+# frame_alloc_bench.cpp counts every allocation by replacing operator new for the whole
+# executable: built in only when asked for.
+option(TACHYON_FRAME_ALLOC_BENCH "Build the per-frame allocation bench into gui_core_tests" OFF)
+target_compile_definitions(gui_core_tests PRIVATE TACHYON_FRAME_ALLOC_BENCH=$<BOOL:${TACHYON_FRAME_ALLOC_BENCH}>)
 
 # gui_controls gives us the widget layer (GUIApplication, BeginTable, etc.)
 # that integration tests drive through the headless harness. It transitively

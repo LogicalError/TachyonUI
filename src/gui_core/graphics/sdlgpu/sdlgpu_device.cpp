@@ -78,12 +78,14 @@ namespace tachyon::sdlgpu
 
     void SDLGPUGraphicsContext::Impl::RecordCopies(SDL_GPUCopyPass* pass)
     {
-        std::vector<TextureCopy> textures;
-        std::vector<BufferCopy>  copied;
+        std::vector<TextureCopy>  textures;
+        std::vector<BufferCopy>   copied;
+        std::vector<SDLGPUImage*> released;
         {
             std::lock_guard lock(copyMutex);
             textures.swap(textureCopies);
             copied.swap(bufferCopies);
+            released.swap(releasedImages);
         }
         for (const TextureCopy& copy : textures)
         {
@@ -104,9 +106,21 @@ namespace tachyon::sdlgpu
             SDL_ReleaseGPUTransferBuffer(device, copy.staging);
         }
         // The resident buffers copied now: draws from here on read them.
-        for (auto& [id, resident] : residents)
-            if (!resident.ready)
-                resident.ready = std::any_of(copied.begin(), copied.end(), [&](const BufferCopy& c) { return c.buffer == resident.buffer; });
+        if (!copied.empty())
+        {
+            std::unordered_set<SDL_GPUBuffer*> copiedBuffers;
+            for (const BufferCopy& copy : copied)
+                copiedBuffers.insert(copy.buffer);
+            for (auto& [id, resident] : residents)
+                if (!resident.ready && copiedBuffers.contains(resident.buffer))
+                    resident.ready = true;
+        }
+        // Let go of after their last copy was recorded: SDL frees each once the GPU is done.
+        for (SDLGPUImage* image : released)
+        {
+            SDL_ReleaseGPUTexture(device, image->texture);
+            delete image;
+        }
     }
 
     // ---- Resident buffers ----------------------------------------------------------------

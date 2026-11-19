@@ -156,7 +156,8 @@ namespace tachyon
         StyleRef childIdx = styleManager.Register(CreateBasicStyle(0, 0, 0));
 
         EXPECT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
-            EXPECT_EQ(storage.Add(Element{ .styleRef = rootIdx }, LayoutOverride::FixedSize(300, 200)), ElementStorageResult::Success);
+            const auto root = storage.Add(Element{ .styleRef = rootIdx }, LayoutOverride::FixedSize(300, 200));
+            EXPECT_EQ(root.status, ElementStorageResult::Success);
             EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
                 EXPECT_EQ(storage.Add(Element{ .styleRef = hiddenIdx }, LayoutOverride::FixedSize(100, 100)), ElementStorageResult::Success);
                 EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
@@ -166,7 +167,7 @@ namespace tachyon
         EXPECT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
 
         layoutEngine.Layout(*osWindowManager, storage); // must not assert/abort
-        SUCCEED();
+        EXPECT_EQ(storage.GetElementRectUnsafe(root.ref).rect.size, (int2{ 300, 200 })) << "and the rest is laid out";
     }
 
     TEST_F(LayoutFlexTest, ParentMarginsNotAddedToTotalSize)
@@ -538,6 +539,28 @@ namespace tachyon
         const ElementRect &root = storage.GetElementRectUnsafe(rootRef);
         EXPECT_EQ(root.rect.w, 200);
         EXPECT_EQ(root.rect.h, 60);
+    }
+
+    // Only the height fixed: the width takes every column the items wrap into.
+    TEST_F(LayoutFlexTest, ColumnWrapWithAutoWidthIsAsWideAsItsColumns)
+    {
+        Style colStyle;
+        colStyle.layoutData.flex.direction = FlexDirection::Column;
+        colStyle.layoutData.flex.wrap = FlexWrap::Wrap;
+        colStyle.layoutData.flex.gap = 5;
+        StyleRef colStyleIdx = styleManager.Register(colStyle);
+
+        EXPECT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        ElementRef rootRef = storage.Add(Element{.styleRef = colStyleIdx}, LayoutOverride{}.Height(Pixels{ 60 })).ref;
+        EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        for (int i = 0; i < 5; i++)
+            EXPECT_EQ(storage.Add(Element{.styleRef = defaultStyleIndex}, LayoutOverride::FixedSize(30, 20)).status, ElementStorageResult::Success);
+        EXPECT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        EXPECT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        layoutEngine.Layout(*osWindowManager, storage);
+
+        EXPECT_EQ(storage.GetElementRectUnsafe(rootRef).rect.w, 30 + 5 + 30 + 5 + 30) << "two items a column: three columns";
     }
 
     TEST_F(LayoutFlexTest, RowReverse_PositionsChildrenFromRight)

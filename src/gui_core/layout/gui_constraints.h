@@ -47,8 +47,8 @@ namespace tachyon
         /// True when an explicit size is set.
         constexpr bool HasFixed() const { return value != kAuto; }
 
-        /// Clamps `s` to [min, max].
-        constexpr int32_t Clamp(int32_t s) const { return std::clamp(s, min, max); }
+        /// Clamps `s` to [min, max]. As in CSS, min wins when it is above max.
+        constexpr int32_t Clamp(int32_t s) const { return std::max(min, std::min(s, max)); }
 
         /// The explicit size if set, else `s` clamped to [min, max].
         constexpr int32_t Apply(int32_t s) const { return HasFixed() ? value : Clamp(s); }

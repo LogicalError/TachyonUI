@@ -1465,7 +1465,8 @@ namespace tachyon
                 for (int p = 0; p < (int)props.size(); ++p)
                 {
                     const auto& source = props[size_t(p)].input;
-                    if (!source || !source->valid() || source->nodeIdx >= nodeCount) continue;
+                    if (!source || !source->valid() || source->nodeIdx >= nodeCount ||
+                        size_t(source->propIdx) >= view.nodes[size_t(source->nodeIdx)].properties.size()) continue;
                     const int from = nodeHiddenBy[size_t(source->nodeIdx)];
                     if (inside >= 0 && from != inside)
                         portsIn[size_t(inside)].push_back({ n, p });
@@ -2223,9 +2224,20 @@ namespace tachyon
 
             // Cache the node's laid-out size for marquee hit-testing.
             VERIFY(elementStorage.AddPostLayout(outerRes.ref,
-                [&view, n](tachyon::PostLayoutContext& ctx)
+                [&view, n, stableID = node.stableID](tachyon::PostLayoutContext& ctx)
                 {
-                    view.nodes[n].lastSize = ctx.ElementRect().size;
+                    // The app may change view.nodes after this build and before layout.
+                    NodeModel* target = size_t(n) < view.nodes.size() && view.nodes[size_t(n)].stableID == stableID
+                        ? &view.nodes[size_t(n)] : nullptr;
+                    if (!target)
+                    {
+                        auto it = std::find_if(view.nodes.begin(), view.nodes.end(),
+                                               [&](const NodeModel& m) { return m.stableID == stableID; });
+                        if (it == view.nodes.end())
+                            return;
+                        target = &*it;
+                    }
+                    target->lastSize = ctx.ElementRect().size;
                 }));
             VERIFY(elementStorage.BeginChildren());
 
@@ -2719,6 +2731,8 @@ namespace tachyon
                         if (tgtInIdx < 0 || tgtInIdx >= (int)tgtRefs.size()) continue;
 
                         if (!srcRefs[srcOutIdx].IsValid() || !tgtRefs[tgtInIdx].IsValid()) continue;
+                        // The app may change view.nodes between the build and this draw.
+                        if (size_t(src.propIdx) >= view.nodes[size_t(src.nodeIdx)].properties.size()) continue;
 
                         // Per-wire lane overrides are stored in node.pos
                         // (border-box) space; shift into this draw's CONTENT-box

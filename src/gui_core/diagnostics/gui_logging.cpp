@@ -230,30 +230,35 @@ namespace tachyon::Diagnostics
         }
 
         Logger& logger = GetLogger();
-        std::lock_guard dispatch(logger.dispatch);
         {
-            std::lock_guard ring(logger.ring);
-            record.sequence = ++logger.sequence;
-            logger.records[(record.sequence - 1) % kLogRingCapacity] = record;
+            std::lock_guard dispatch(logger.dispatch);
+            {
+                std::lock_guard ring(logger.ring);
+                record.sequence = ++logger.sequence;
+                logger.records[(record.sequence - 1) % kLogRingCapacity] = record;
+            }
+            if (t_sinkDepth == 0)
+            {
+                // A sink may add or remove sinks: go by the list as it was, and skip one removed
+                // meanwhile.
+                Sink sinks[kMaxLogSinks];
+                const int sinkCount = logger.sinkCount;
+                std::copy_n(logger.sinks, sinkCount, sinks);
+                struct InSinks
+                {
+                    InSinks()  { ++t_sinkDepth; }
+                    ~InSinks() { --t_sinkDepth; }   // a sink that throws doesn't leave the thread inside
+                } inSinks;
+                for (int i = 0; i < sinkCount; ++i)
+                    if (IsSinkRegistered(logger, sinks[i]))
+                        sinks[i].fn(record, sinks[i].context);
+            }
         }
+        // Outside the lock: with a debugger attached, OutputDebugString takes milliseconds, and
+        // other threads' logging shouldn't wait on it. Lines from threads may interleave out of
+        // sequence; the ring keeps the order.
         if (g_consoleOutput.load(std::memory_order_relaxed))
             WriteToConsole(record);
-        if (t_sinkDepth > 0)
-            return;
-
-        // A sink may add or remove sinks: go by the list as it was, and skip one removed
-        // meanwhile.
-        Sink sinks[kMaxLogSinks];
-        const int sinkCount = logger.sinkCount;
-        std::copy_n(logger.sinks, sinkCount, sinks);
-        struct InSinks
-        {
-            InSinks()  { ++t_sinkDepth; }
-            ~InSinks() { --t_sinkDepth; }   // a sink that throws doesn't leave the thread inside
-        } inSinks;
-        for (int i = 0; i < sinkCount; ++i)
-            if (IsSinkRegistered(logger, sinks[i]))
-                sinks[i].fn(record, sinks[i].context);
     }
 
     uint64_t LatestLogSequence()

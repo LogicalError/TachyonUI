@@ -839,72 +839,44 @@ namespace tachyon
         /// The content box of a border-box rect: `borderBox` minus border and padding.
         IntRect GetPaddingBoxContentRect(const IntRect& borderBox) const
         {
-            int16_t left   = borderWidths.left   + padding.left;
-            int16_t right  = borderWidths.right  + padding.right;
-            int16_t top    = borderWidths.top    + padding.top;
-            int16_t bottom = borderWidths.bottom + padding.bottom;
-
-            int16_t w = std::max<int16_t>(0, static_cast<uint16_t>(borderBox.w - static_cast<uint32_t>(left + right)));
-            int16_t h = std::max<int16_t>(0, static_cast<uint16_t>(borderBox.h - static_cast<uint32_t>(top + bottom)));
-
-            return IntRect
-            {
-                int16_t(borderBox.x + left),
-                int16_t(borderBox.y + top),
-                w, h
-            };
+            return Inset(borderBox,
+                         int32_t(borderWidths.left)   + padding.left,
+                         int32_t(borderWidths.top)    + padding.top,
+                         int32_t(borderWidths.right)  + padding.right,
+                         int32_t(borderWidths.bottom) + padding.bottom);
         }
 
         /// The content box of a margin-box rect: `outer` minus margin, border and padding.
         IntRect GetContentRect(const IntRect& outer) const
         {
-            int16_t left   = margin.left   + borderWidths.left   + padding.left;
-            int16_t right  = margin.right  + borderWidths.right  + padding.right;
-            int16_t top    = margin.top    + borderWidths.top    + padding.top;
-            int16_t bottom = margin.bottom + borderWidths.bottom + padding.bottom;
-
-            int16_t w = std::max<int16_t>(0, static_cast<int16_t>(outer.w - static_cast<int32_t>(left + right)));
-            int16_t h = std::max<int16_t>(0, static_cast<int16_t>(outer.h - static_cast<int32_t>(top + bottom)));
-
-            return IntRect
-            { 
-                int16_t(outer.x + left), 
-                int16_t(outer.y + top), 
-                w, h 
-            };
+            return Inset(outer,
+                         int32_t(margin.left)   + borderWidths.left   + padding.left,
+                         int32_t(margin.top)    + borderWidths.top    + padding.top,
+                         int32_t(margin.right)  + borderWidths.right  + padding.right,
+                         int32_t(margin.bottom) + borderWidths.bottom + padding.bottom);
         }
 
         /// The border box of a margin-box rect: `outer` minus margin.
         IntRect GetBorderRect(const IntRect& outer) const
         {
-            int16_t w = std::max<int16_t>(0, static_cast<int16_t>(outer.w - margin.Horizontal()));
-            int16_t h = std::max<int16_t>(0, static_cast<int16_t>(outer.h - margin.Vertical()));
-
-            return IntRect
-            { 
-                int16_t(outer.x + margin.left), 
-                int16_t(outer.y + margin.top), 
-                w, h 
-            };
+            return Inset(outer, margin.left, margin.top, margin.right, margin.bottom);
         }
 
         /// The padding box of a margin-box rect: `outer` minus margin and border.
         IntRect GetPaddingRect(const IntRect& outer) const
         {
-            int16_t l = margin.left   + borderWidths.left;
-            int16_t r = margin.right  + borderWidths.right;
-            int16_t t = margin.top    + borderWidths.top;
-            int16_t b = margin.bottom + borderWidths.bottom;
+            return Inset(outer,
+                         int32_t(margin.left)   + borderWidths.left,
+                         int32_t(margin.top)    + borderWidths.top,
+                         int32_t(margin.right)  + borderWidths.right,
+                         int32_t(margin.bottom) + borderWidths.bottom);
+        }
 
-            int16_t w = std::max<int16_t>(0, static_cast<int16_t>(outer.w - static_cast<int32_t>(l + r)));
-            int16_t h = std::max<int16_t>(0, static_cast<int16_t>(outer.h - static_cast<int32_t>(t + b)));
-
-            return IntRect
-            { 
-                int16_t(outer.x + l), 
-                int16_t(outer.y + t), 
-                w, h 
-            };
+        /// `r` shrunk by the given edges, never below an empty size. In 32 bits: rects reach
+        /// past 32767 pixels (a long list's content).
+        static constexpr IntRect Inset(const IntRect& r, int32_t left, int32_t top, int32_t right, int32_t bottom)
+        {
+            return IntRect{ r.x + left, r.y + top, std::max(0, r.w - (left + right)), std::max(0, r.h - (top + bottom)) };
         }
 
         /// Horizontal padding plus border widths, in pixels.

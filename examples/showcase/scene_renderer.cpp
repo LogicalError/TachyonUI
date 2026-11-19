@@ -195,12 +195,23 @@ namespace tachyon
         layoutInfo.pushConstantRangeCount = 1;
         layoutInfo.pPushConstantRanges = &range;
         if (vkCreatePipelineLayout(device, &layoutInfo, callbacks, &m_layout) != VK_SUCCESS)
+        {
+            dc.DestroyBuffer(buffer);
             return false;
+        }
 
         const VkShaderModule vert = Module(device, callbacks, "scene.vert.spv");
         const VkShaderModule frag = Module(device, callbacks, "scene.frag.spv");
         if (vert == VK_NULL_HANDLE || frag == VK_NULL_HANDLE)
+        {
+            // What was made goes: nothing else would free it.
+            if (vert != VK_NULL_HANDLE) vkDestroyShaderModule(device, vert, callbacks);
+            if (frag != VK_NULL_HANDLE) vkDestroyShaderModule(device, frag, callbacks);
+            vkDestroyPipelineLayout(device, m_layout, callbacks);
+            m_layout = VK_NULL_HANDLE;
+            dc.DestroyBuffer(buffer);
             return false;
+        }
         PipelineBuilder builder;
         builder._pipelineLayout = m_layout;
         builder.set_shaders(vert, frag);
@@ -223,11 +234,14 @@ namespace tachyon
         // Gone with the app's other GPU objects, once nothing draws with them.
         VkPipelineLayout layout = m_layout;
         VkPipeline shapes = m_shapes, lines = m_lines;
-        dc.GetDeletionQueue(DeviceScope::Application).push_function([&dc, device, callbacks, layout, shapes, lines, buffer] {
+        m_vkObjectsLive = std::make_shared<bool>(true);
+        dc.GetDeletionQueue(DeviceScope::Application).push_function([&dc, device, callbacks, layout, shapes, lines, buffer,
+                                                                     live = m_vkObjectsLive] {
             vkDestroyPipeline(device, shapes, callbacks);
             vkDestroyPipeline(device, lines, callbacks);
             vkDestroyPipelineLayout(device, layout, callbacks);
             dc.DestroyBuffer(buffer);
+            *live = false;
         });
         return m_shapes != VK_NULL_HANDLE && m_lines != VK_NULL_HANDLE;
     }
@@ -237,6 +251,8 @@ namespace tachyon
     {
         if (m_failed)
             return;
+        if (m_created && m_vkObjectsLive && !*m_vkObjectsLive)
+            m_created = false;   // the device was remade: the pipelines are made again on it
         if (!m_created)
         {
             m_created = true;

@@ -231,8 +231,8 @@ VkDescriptorPool DescriptorAllocatorGrowable::create_pool(VkDevice device, uint3
 	    .pPoolSizes = poolSizes.data()
     };
 
-	VkDescriptorPool newPool;
-	vkCreateDescriptorPool(device, &pool_info, callbacks, &newPool);
+	VkDescriptorPool newPool = VK_NULL_HANDLE;
+	TACHYON_VK_CHECK(vkCreateDescriptorPool(device, &pool_info, callbacks, &newPool));   // a failure leaves it null
     return newPool;
 }
 

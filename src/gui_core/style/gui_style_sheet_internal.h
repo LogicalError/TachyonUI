@@ -1132,6 +1132,12 @@ private:
                     Error("Undefined variable '" + varName + "'");
                     return false;
                 }
+                // A length (--gap: 4px) isn't a color: an error, not transparent.
+                if (!it->second.hasColor)
+                {
+                    Error("Variable '" + varName + "' is not a color");
+                    return false;
+                }
                 out = it->second.color;
                 return true;
             }
@@ -1227,6 +1233,11 @@ private:
                 if (it == m_result.customProperties.end())
                 {
                     Error("Undefined variable '" + varName + "'");
+                    return false;
+                }
+                if (!it->second.hasColor)
+                {
+                    Error("Variable '" + varName + "' is not a color");
                     return false;
                 }
                 d.color4bVal    = it->second.color;

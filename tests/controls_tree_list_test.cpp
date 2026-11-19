@@ -146,6 +146,31 @@ namespace tachyon
             EXPECT_EQ(state.selectedRowID, RowIDAt(4));
         }
 
+        // Rows removed or moved above the selection: it stays on its row (by the row's own ID).
+        TEST_F(VirtualTreeViewTest, SelectionFollowsItsRowWhenRowsAboveChange)
+        {
+            BuildFlatTree(/*n*/3, /*children*/0);
+            RenderFrame();
+            const ID third = rows[2].id;
+            state.selectedRowID = RowIDAt(2);
+
+            rows.erase(rows.begin());
+            app.RebuildTreeViewIndex(rows);
+            RenderFrame();
+            EXPECT_EQ(state.selectedRowID, RowIDAt(1)) << "the row moved up one";
+            ASSERT_EQ(rows[1].id, third);
+
+            std::swap(rows[0], rows[1]);   // same positions shown, other rows in them
+            app.RebuildTreeViewIndex(rows);
+            RenderFrame();
+            EXPECT_EQ(state.selectedRowID, RowIDAt(0));
+
+            rows.erase(rows.begin());      // the selected row itself
+            app.RebuildTreeViewIndex(rows);
+            RenderFrame();
+            EXPECT_EQ(state.selectedRowID, ID::Invalid());
+        }
+
         TEST_F(VirtualTreeViewTest, CollapsingHidesSelectionOntoTheBranch)
         {
             BuildFlatTree(/*n*/2, /*children*/2, /*open*/true);

@@ -695,10 +695,8 @@ namespace tachyon
         if (window.state != WindowState::Alive && window.state != WindowState::Hidden)
             return RequestCloseResult::WindowAlreadyClosed;
 
-        // Show hidden windows before closing so the OS window is visible for cleanup
-        if (window.state == WindowState::Hidden)
-            windowBackendManager->SetWindowVisible(window.GetWindowHandle(), true);
-
+        // A hidden window closes hidden: shown now, it would sit on screen with nothing drawing
+        // it until the backend destroys it.
         window.state = WindowState::Closing;
 
         // Apply child policy using child count to prevent infinite loop
@@ -951,23 +949,14 @@ namespace tachyon
     
     ID OSWindowManager::GetTopModalWindow() const
     {
-        ID topModalID = ID::Invalid();
-        
-        // Iterate in creation order and remember the last alive modal window.
-        for (const auto &window : windows)
-        {
-            if (window.state != WindowState::Alive)
-            {
-                continue;
-            }
-            
-            if ((window.flags & WindowFlags::Modal) != WindowFlags::None)
-            {
-                topModalID = window.id;
-            }
-        }
-        
-        return topModalID;
+        // The alive modal made last. Not the last in the list: RemoveWindow fills a gap with
+        // the list's last window, so the list isn't in creation order.
+        const Window* top = nullptr;
+        for (const auto& window : windows)
+            if (window.state == WindowState::Alive && (window.flags & WindowFlags::Modal) != WindowFlags::None
+                && (top == nullptr || window.sequence > top->sequence))
+                top = &window;
+        return top ? top->id : ID::Invalid();
     }
 
 } // namespace tachyon

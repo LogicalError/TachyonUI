@@ -61,7 +61,10 @@ namespace tachyon
         const bool readOnly = m_skribidiContext->active_read_only;
 
         const ITextValidator* validator = m_skribidiContext->active_validator;
-        if (!readOnly && action != KeyAction::KeyUp)
+        // Keys that only move the caret or select can't start an edit: no need to look.
+        const bool movesOnly = key == KeyCode::Left || key == KeyCode::Right || key == KeyCode::Up || key == KeyCode::Down ||
+                               key == KeyCode::Home || key == KeyCode::End || key == KeyCode::PageUp || key == KeyCode::PageDown;
+        if (!readOnly && action != KeyAction::KeyUp && !(movesOnly && action == KeyAction::KeyDown))
             NoteSelectionBeforeEdit();
 
         if (action == KeyAction::KeyChar)
@@ -120,6 +123,9 @@ namespace tachyon
             if ((modifiers & KeyModifier::Option) != KeyModifier::None) skb_modifiers |= SKB_MOD_OPTION;
             if ((modifiers & KeyModifier::Command) != KeyModifier::None) skb_modifiers |= SKB_MOD_COMMAND;
 
+            // Copy, paste, undo and the rest: Control, or Command on macOS.
+            const bool shortcut = (skb_modifiers & (SKB_MOD_CONTROL | SKB_MOD_COMMAND)) != 0;
+
             // Map keys
             switch (key)
             {
@@ -151,21 +157,21 @@ namespace tachyon
                         selection.start.affinity == selection.end.affinity)
                     {
                         int32_t textOffset = skb_editor_get_text_offset_from_text_position(m_skribidiContext->editor, selection.start);
-                        int32_t textLength = skb_editor_get_text_utf8_count(m_skribidiContext->editor);
+                        int32_t textLength = skb_editor_get_text_utf32_count(m_skribidiContext->editor);   // offsets count codepoints
                         if (textOffset >= textLength) return;
                     }
                     break;
                 }
                 case tachyon::KeyCode::KeyV:
                     if (readOnly) return;
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         if (m_skribidiContext->clipboard != nullptr)
                             Paste(m_skribidiContext->clipboard->Get());
                     }
                     return;
                 case tachyon::KeyCode::KeyC:
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         std::string copiedText = Copy();
                         if (!copiedText.empty() && m_skribidiContext->clipboard != nullptr)
@@ -176,7 +182,7 @@ namespace tachyon
                     return;
                 case tachyon::KeyCode::KeyX:
                     if (readOnly) return;
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         std::string cutText = Cut();
                         if (!cutText.empty() && m_skribidiContext->clipboard != nullptr)
@@ -186,7 +192,7 @@ namespace tachyon
                     }
                     return;
                 case tachyon::KeyCode::KeyA:
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         skb_editor_select_all(m_skribidiContext->editor);
                         EnsureCursorVisible(ActiveElementID());
@@ -195,7 +201,7 @@ namespace tachyon
                 case tachyon::KeyCode::KeyZ:
                 case tachyon::KeyCode::KeyY:
                     if (readOnly) return;
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         // The field's own typing first; past that, the app's history (e.g. a
                         // text move between fields).

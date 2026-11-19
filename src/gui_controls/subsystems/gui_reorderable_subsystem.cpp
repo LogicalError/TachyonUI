@@ -30,6 +30,7 @@ namespace tachyon
             Diagnostics::ReportMisuse(Diagnostics::MakeLogCategory("app"),
                 "ReorderableSubsystem: unbalanced BeginReorderableGroup/End at end of frame (closed)");
             m_construction = {};
+            m_outerConstructions.clear();
         }
     }
 }

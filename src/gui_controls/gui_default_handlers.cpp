@@ -26,7 +26,7 @@ namespace tachyon
             {
                 case KeyCode::KeyA: case KeyCode::KeyC:
                     return true;
-                case KeyCode::KeyV: case KeyCode::KeyX: case KeyCode::KeyZ:
+                case KeyCode::KeyV: case KeyCode::KeyX: case KeyCode::KeyZ: case KeyCode::KeyY:
                 case KeyCode::Backspace: case KeyCode::Delete:
                     return !readOnly;
                 default:

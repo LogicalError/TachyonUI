@@ -1115,6 +1115,18 @@ namespace tachyon
         EXPECT_TRUE(s.HasErrors() || s.styles.empty() || s.GetStyle("a") != nullptr);
     }
 
+    // A variable that holds a length, used as a color: an error, not a transparent color.
+    TEST(StyleSheet, ALengthVariableIsNotAColor)
+    {
+        auto s = ParseStyleSheet(":root { --gap: 4px; --ink: #102030; } .a { background-color: var(--gap); } .b { color: var(--ink); }");
+        ASSERT_TRUE(s.HasErrors());
+        bool named = false;
+        for (const ParseError& e : s.errors)
+            named = named || e.message.find("--gap") != std::string::npos;
+        EXPECT_TRUE(named);
+        EXPECT_NE(s.GetStyle("b"), nullptr) << "a color variable still works";
+    }
+
     TEST(StyleSheet, ErrorsHaveLineNumbers)
     {
         auto s = ParseStyleSheet("\n\n.a { bad-prop: 1; }");

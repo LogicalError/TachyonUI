@@ -244,8 +244,9 @@ namespace tachyon
         /// deque: element rects hold LayoutStyle pointers across mid-frame registrations.
         std::deque<LayoutStyle>       m_layoutStyles;
         std::vector<VisualBoxStyle>   m_visualBoxStyles;
-        std::vector<bool>             m_opaqueBoxBackgrounds; ///< parallel to m_visualBoxStyles
-        std::vector<bool>             m_blankBoxes;           ///< parallel to m_visualBoxStyles
+        /// Parallel to m_visualBoxStyles: kBoxOpaqueBackground and kBoxBlank, read per element.
+        std::vector<uint8_t>          m_boxFlags;
+        static constexpr uint8_t      kBoxOpaqueBackground = 1, kBoxBlank = 2;
         std::vector<VisualTextStyle>  m_visualTextStyles;
         std::vector<VisualColorStyle> m_visualColorStyles;
         std::vector<VisualShadowStyle> m_visualShadowStyles; ///< few: searched linearly at registration

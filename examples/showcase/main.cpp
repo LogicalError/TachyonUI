@@ -54,7 +54,12 @@ int main(int argc, char* argv[])
         else if (std::string_view(argv[i]) == "--capture")
             application->SetCaptureDir(argv[i + 1]);
         else if (std::string_view(argv[i]) == "--bench")
-            application->SetBenchFrames(std::max(1, std::atoi(argv[i + 1])));
+        {
+            const int frames = std::atoi(argv[i + 1]);
+            if (frames <= 0)
+                TACHYON_LOG_WARNING(kLogShowcase, "--bench {}: not a number of frames (1 frame)", argv[i + 1]);
+            application->SetBenchFrames(std::max(1, frames));
+        }
         else if (std::string_view(argv[i]) == "--graphics")
         {
             const std::string_view api = argv[i + 1];

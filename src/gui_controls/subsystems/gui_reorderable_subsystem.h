@@ -92,8 +92,26 @@ namespace tachyon
         ReorderableConstructionState& Construction() { return m_construction; }   ///< the group being built
         ReorderableFocusFollow&       FocusFollow()  { return m_focusFollow; }    ///< after a keyboard move
 
+        /// A group begins inside another (a list in a list's item): the outer one is set
+        /// aside until the inner one ends.
+        void BeginConstruction()
+        {
+            m_outerConstructions.push_back(std::move(m_construction));
+            m_construction = {};
+        }
+        void EndConstruction()
+        {
+            if (m_outerConstructions.empty())
+            {
+                m_construction = {};
+                return;
+            }
+            m_construction = std::move(m_outerConstructions.back());
+            m_outerConstructions.pop_back();
+        }
+
         /// True iff every BeginReorderableGroup was matched by EndReorderableGroup.
-        bool IsBalanced() const { return m_construction.groupID == tachyon::ID::Invalid(); }
+        bool IsBalanced() const { return m_construction.groupID == tachyon::ID::Invalid() && m_outerConstructions.empty(); }
 
     private:
         void OnPreConstruct(FrameContext& ctx);
@@ -101,6 +119,7 @@ namespace tachyon
 
         ReorderableDragState         m_drag{};
         ReorderableConstructionState m_construction{};
+        std::vector<ReorderableConstructionState> m_outerConstructions;   ///< groups this one is inside
         ReorderableFocusFollow       m_focusFollow{};
     };
     /// @}

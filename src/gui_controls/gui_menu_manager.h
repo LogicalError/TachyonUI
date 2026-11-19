@@ -76,10 +76,20 @@ namespace tachyon
         /// the icon column on its first frame.
         std::unordered_map<ID, bool> menuItemsHaveIcons;
 
-        /// Each menu's own popup window (per trigger ID), so switching menus never
-        /// shows another menu's last frame while the new one renders.
-        std::unordered_map<ID, ID> popupWindowIDs;
-        /// The popup window ID of `triggerID`'s menu, created on first use.
+        /// The popup windows of the menus used last, one per trigger, so switching between
+        /// them never shows another menu's last frame while the new one renders. At most
+        /// kMaxPopupWindows: the one used longest ago is handed to the next new trigger
+        /// (each is an OS window with a swapchain; a list of dropdowns mustn't keep one each).
+        static constexpr size_t kMaxPopupWindows = 8;
+        struct PopupWindow
+        {
+            ID       triggerID = ID::Invalid();
+            ID       windowID  = ID::Invalid();
+            uint64_t lastUse   = 0;
+        };
+        std::vector<PopupWindow> popupWindows;
+        uint64_t                 popupWindowUses = 0;
+        /// The popup window ID of `triggerID`'s menu.
         ID PopupWindowFor(ID triggerID, IDManager& idManager);
 
         bool              buildingMenuBar = false;   ///< true while a menu bar is being built

@@ -619,6 +619,31 @@ namespace tachyon
         app.idManager.ReleaseStaticID(buttonID);
     }
 
+    // A closed floating toolbar whose onDockBack leaves its entry: the entry is dropped, so
+    // the frame ends instead of coming back to the closed window forever.
+    TEST_F(ToolbarDockTest, AClosedFloatingToolbarIsDroppedWhenDockBackKeepsIt)
+    {
+        std::vector<FloatingToolbarItem> floating;
+        const ID windowID = app.idManager.CreateStaticID();
+        FloatingToolbarItem fw;
+        fw.windowID      = windowID;
+        fw.spawnPosition = { 300, 200 };
+        fw.item.id       = app.idManager.CreateStaticID();
+        fw.item.renderBody = [] {};
+        floating.push_back(std::move(fw));
+        int dockedBack = 0;
+        FloatingToolbarOptions options;
+        options.onDockBack = [&](ID, ToolbarSide) { ++dockedBack; };   // keeps the entry
+
+        app.Frame([&] { app.EmitFloatingToolbarWindows(floating, &options); });
+        (void)app.windowManager->RequestUserClose(windowID);
+        app.Frame([&] { app.EmitFloatingToolbarWindows(floating, &options); });
+        app.Frame([&] { app.EmitFloatingToolbarWindows(floating, &options); });
+
+        EXPECT_EQ(dockedBack, 1);
+        EXPECT_TRUE(floating.empty());
+    }
+
     // Dragging a floating toolbar's thumb moves its window; Escape ends the drag. (Headless
     // windows have no rect, so where the window goes isn't seen here.)
     TEST_F(ToolbarDockTest, EscapeEndsAFloatingToolbarDrag)

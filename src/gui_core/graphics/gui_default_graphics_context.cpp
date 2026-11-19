@@ -40,6 +40,18 @@ namespace tachyon
     namespace
     {
         std::optional<GraphicsAPI> g_defaultOverride;
+
+        constexpr bool GraphicsAPIBuilt(GraphicsAPI api)
+        {
+            switch (api)
+            {
+            case GraphicsAPI::None:   return true;
+            case GraphicsAPI::Vulkan: return TACHYON_VULKAN != 0;
+            case GraphicsAPI::D3D12:  return TACHYON_D3D12 != 0;
+            case GraphicsAPI::SDLGPU: return TACHYON_SDLGPU != 0;
+            default:                  return false;
+            }
+        }
     }
 
     std::unique_ptr<GraphicsContext> CreateDefaultGraphicsContext()
@@ -49,7 +61,8 @@ namespace tachyon
 
     bool SetDefaultGraphicsAPIOverride(std::optional<GraphicsAPI> api)
     {
-        if (api && !CreateGraphicsContext(*api))
+        // Whether the build has the API, without making a context to find out.
+        if (api && !GraphicsAPIBuilt(*api))
             return false;
         g_defaultOverride = api;
         return true;

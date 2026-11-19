@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "scoped_temp_dir.h"
 #include "mock_window_backend.h"
 
 #include <filesystem>
@@ -106,7 +107,8 @@ namespace tachyon
     // its own or the library's, by name.
     TEST(ThemeTest, StyleFilesAddClassesFoundByName)
     {
-        const auto extra = std::filesystem::temp_directory_path() / "tachyon_theme_test.css";
+        const GUITest::ScopedTempDir temp("tachyon-theme-test");
+        const auto extra = temp / "extra.css";
         {
             std::ofstream out(extra);
             out << ".app-panel { padding: 7px; }" << std::endl;
@@ -122,6 +124,5 @@ namespace tachyon
         EXPECT_EQ(app.styleManager.GetLayoutStyle(own.layoutStyleIndex)->padding.top, 7);
         EXPECT_NE(app.theme.GetStyle("button").layoutStyleIndex, LayoutStyleIndex::Invalid);
         EXPECT_EQ(app.theme.GetStyle("no-such-class").layoutStyleIndex, LayoutStyleIndex::Invalid);
-        std::filesystem::remove(extra);
     }
 }

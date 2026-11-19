@@ -807,7 +807,10 @@ namespace tachyon
                 const Geometry g{ ViewRangeOf(*v), float(inner.x), float(inner.w) };
                 const int2 at = event.LocalCursor(es);
                 const int row = (at.y - event.rect->rect.y) / std::max(1, rowHeight);
-                const int track = row >= 0 && row < (int)rows.size() ? rows[size_t(row)] : -1;
+                // The rows are this frame's; the app may have removed tracks since (from a menu).
+                int track = row >= 0 && row < (int)rows.size() ? rows[size_t(row)] : -1;
+                if (track >= (int)v->tracks.size())
+                    track = -1;
                 const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                 const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
                 const float length = LengthOf(*v);
@@ -865,7 +868,7 @@ namespace tachyon
                             v->selectedTrack = v->tracks[size_t(track)].stableID;
                         // A clip: its body moves it, its ends trim it (not on a locked track).
                         if (const TimelineView::ClipPart part = clipPartAt(float(at.x));
-                            part != TimelineView::ClipPart::None && !v->tracks[size_t(track)].locked)
+                            part != TimelineView::ClipPart::None && !IsTrackLocked(*v, track))
                         {
                             v->clipDrag.Press(event, es, gsm, v->tracks, { .focus = false });
                             v->clipTrack     = track;
@@ -936,7 +939,8 @@ namespace tachyon
                                 case TimelineView::ClipPart::Start:
                                 {
                                     // Plays the sound from further in (or back to its start); the end stays.
-                                    const float d = std::clamp(delta, -from.offset, from.length - minLength);
+                                    // A clip already shorter than the minimum can't be trimmed shorter.
+                                    const float d = std::clamp(delta, -from.offset, std::max(-from.offset, from.length - minLength));
                                     clip.start  = from.start + d;
                                     clip.offset = from.offset + d;
                                     clip.length = from.length - d;
@@ -980,6 +984,8 @@ namespace tachyon
                             for (int r = r0; r <= r1 && r < (int)rows.size(); ++r)
                             {
                                 const int t = rows[size_t(r)];
+                                if (t < 0 || t >= (int)v->tracks.size())
+                                    continue;
                                 const TimelineTrack& tr = v->tracks[size_t(t)];
                                 for (const TimelineKey& key : tr.keys) if (key.time >= t0 && key.time <= t1) take(key.stableID);
                                 for (const TimelineEvent& e : tr.events) if (e.time >= t0 && e.time <= t1) take(e.stableID);

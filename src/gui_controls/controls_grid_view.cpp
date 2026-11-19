@@ -599,10 +599,31 @@ namespace tachyon
 
         // One ranged ID spans all items; an item's ID is the sub-ID at its dataset index,
         // so it's stable across frames and the index is recoverable from it.
+        const uint64_t prevItemsHash = vstate.internal.itemsRangeID != tachyon::ID::Invalid()
+            ? vstate.internal.itemsRangeID.value.rangedParts.hashValue : 0;
         const tachyon::ID itemsRangeID = (itemCount > 0)
             ? idManager.AllocateRangedID(static_cast<uint32_t>(itemCount), "_grid_items")
             : tachyon::ID::Invalid();
         vstate.internal.itemsRangeID = itemsRangeID; // read by the container's F2 handler
+
+        // Items past the new count are gone: out of the selection, or they'd come back
+        // selected on whatever item takes their index when items are added again.
+        if (prevItemsHash != 0)
+        {
+            auto pastEnd = [&](tachyon::ID item) {
+                return item.GetMode() == tachyon::IDMode::SubRange &&
+                       item.value.subRangeParts.parentHashValue == prevItemsHash &&
+                       item.value.subRangeParts.index >= uint64_t(std::max(0, itemCount));
+            };
+            if (multiSelect)
+            {
+                std::erase_if(multiSelect->selectedIDs, pastEnd);
+                if (pastEnd(multiSelect->lastClickedID))
+                    multiSelect->lastClickedID = tachyon::ID::Invalid();
+            }
+        }
+        if (selectedIndex && *selectedIndex >= itemCount)
+            *selectedIndex = itemCount - 1;
 
         VERIFY(elementStorage.BeginChildren());
 

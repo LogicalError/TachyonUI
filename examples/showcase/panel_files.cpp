@@ -299,6 +299,7 @@ namespace tachyon
     ID Application::CreateFilesPanel(std::unordered_map<ID, Panel>& panels, std::string title)
     {
         auto panel = std::make_shared<FilesPanel>();
+        std::erase_if(m_filesPanels, [](const auto& p) { return p.expired(); });   // closed ones
         m_filesPanels.push_back(panel);
         const ID id = CreatePanel(panels, std::move(title), showcase.panelFilesIcon, [this, panel] { RenderFilesPanel(*panel); }, {},
                                   [this, panel] { EnableFilesPanel(*panel); }, [this, panel] { DisableFilesPanel(*panel); });

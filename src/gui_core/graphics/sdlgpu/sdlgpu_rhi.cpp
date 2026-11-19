@@ -188,12 +188,19 @@ namespace tachyon::sdlgpu
         const SDLGPUGraphicsContext::Impl& d = m_device;
         SDL_GPUGraphicsPipeline* bound = nullptr;
         bool indexed = false;
+        // What's bound already: each bind makes SDL build the stage's descriptors again, and
+        // most draws in a row read the same buffers and images. A new pipeline binds all anew.
+        SDL_GPUBuffer*               boundStorage[kStorageBuffers] = {};
+        SDL_GPUTextureSamplerBinding boundImages[ImageBatcher::kMaxImages] = {};
+        DrawUniforms                 boundUniforms{};
+        bool                         fresh = true;
         for (const Draw& draw : m_draws)
         {
             if (d.pipelineObjects[draw.kind] != bound)
             {
                 bound = d.pipelineObjects[draw.kind];
                 SDL_BindGPUGraphicsPipeline(pass, bound);
+                fresh = true;
             }
 
             // The kind's buffer in its slot; the slots it doesn't read get a buffer all the same.
@@ -205,8 +212,12 @@ namespace tachyon::sdlgpu
                 storage[slot] = primitives;
             storage[5] = d.boxStyles != nullptr ? d.boxStyles : d.blankBuffer;
             storage[6] = d.colorStyles != nullptr ? d.colorStyles : d.blankBuffer;
-            SDL_BindGPUVertexStorageBuffers(pass, 0, storage, kStorageBuffers);
-            SDL_BindGPUFragmentStorageBuffers(pass, 0, storage, kStorageBuffers);
+            if (fresh || std::memcmp(storage, boundStorage, sizeof(storage)) != 0)
+            {
+                SDL_BindGPUVertexStorageBuffers(pass, 0, storage, kStorageBuffers);
+                SDL_BindGPUFragmentStorageBuffers(pass, 0, storage, kStorageBuffers);
+                std::memcpy(boundStorage, storage, sizeof(storage));
+            }
 
             // The run's images; the rest a blank one.
             SDL_GPUTextureSamplerBinding images[ImageBatcher::kMaxImages];
@@ -217,11 +228,20 @@ namespace tachyon::sdlgpu
                           ? SDL_GPUTextureSamplerBinding{ image->texture, d.SamplerFor(image->sampler) }
                           : SDL_GPUTextureSamplerBinding{ d.blankImage, d.samplers[0] };
             }
-            SDL_BindGPUVertexSamplers(pass, 0, images, ImageBatcher::kMaxImages);
-            SDL_BindGPUFragmentSamplers(pass, 0, images, ImageBatcher::kMaxImages);
+            if (fresh || std::memcmp(images, boundImages, sizeof(images)) != 0)
+            {
+                SDL_BindGPUVertexSamplers(pass, 0, images, ImageBatcher::kMaxImages);
+                SDL_BindGPUFragmentSamplers(pass, 0, images, ImageBatcher::kMaxImages);
+                std::memcpy(boundImages, images, sizeof(images));
+            }
 
-            SDL_PushGPUVertexUniformData(commands, 0, &draw.uniforms, sizeof(DrawUniforms));
-            SDL_PushGPUFragmentUniformData(commands, 0, &draw.uniforms, sizeof(DrawUniforms));
+            if (fresh || std::memcmp(&draw.uniforms, &boundUniforms, sizeof(DrawUniforms)) != 0)
+            {
+                SDL_PushGPUVertexUniformData(commands, 0, &draw.uniforms, sizeof(DrawUniforms));
+                SDL_PushGPUFragmentUniformData(commands, 0, &draw.uniforms, sizeof(DrawUniforms));
+                std::memcpy(&boundUniforms, &draw.uniforms, sizeof(DrawUniforms));
+            }
+            fresh = false;
             if (draw.shape == PrimitiveShape::Quad)
             {
                 // Four corners a quad, two triangles from the shared index buffer.
