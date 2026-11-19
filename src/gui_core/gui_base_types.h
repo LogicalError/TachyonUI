@@ -449,10 +449,25 @@ namespace tachyon
         static IntRect Deflate(IntRect a, int32_t n);
         inline IntRect Deflate(int32_t n) const { return Deflate(*this, n); }
 
-        static IntRect Intersection(IntRect a, IntRect b);
+        // Inline: layout and drawing intersect and unite rects for every element.
+        static IntRect Intersection(IntRect a, IntRect b)
+        {
+            const int32_t ax2 = a.x + (a.w > 0 ? a.w : 0), ay2 = a.y + (a.h > 0 ? a.h : 0);
+            const int32_t bx2 = b.x + (b.w > 0 ? b.w : 0), by2 = b.y + (b.h > 0 ? b.h : 0);
+            const int32_t x = a.x > b.x ? a.x : b.x, y = a.y > b.y ? a.y : b.y;
+            const int32_t w = (ax2 < bx2 ? ax2 : bx2) - x, h = (ay2 < by2 ? ay2 : by2) - y;
+            return IntRect{ x, y, w > 0 ? w : 0, h > 0 ? h : 0 };
+        }
         inline IntRect Intersection(IntRect b) const { return Intersection(*this, b); }
 
-        static IntRect Union(IntRect a, IntRect b);
+        static IntRect Union(IntRect a, IntRect b)
+        {
+            const int32_t ax2 = a.x + (a.w > 0 ? a.w : 0), ay2 = a.y + (a.h > 0 ? a.h : 0);
+            const int32_t bx2 = b.x + (b.w > 0 ? b.w : 0), by2 = b.y + (b.h > 0 ? b.h : 0);
+            const int32_t x = a.x < b.x ? a.x : b.x, y = a.y < b.y ? a.y : b.y;
+            const int32_t w = (ax2 > bx2 ? ax2 : bx2) - x, h = (ay2 > by2 ? ay2 : by2) - y;
+            return IntRect{ x, y, w > 0 ? w : 0, h > 0 ? h : 0 };
+        }
         inline IntRect Union(IntRect b) const { return Union(*this, b); }
 
         inline bool IsEmpty() const { return *this == IntRect{ 0,0,0,0 }; }

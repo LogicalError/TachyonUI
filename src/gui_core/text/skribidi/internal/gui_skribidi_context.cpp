@@ -14,6 +14,8 @@
 #include <skribidi/skb_rich_layout.h>
 #include <skribidi/skb_icon_collection.h>
 
+#include <cstring>
+
 static constexpr tachyon::Diagnostics::LogCategory kLogText = tachyon::Diagnostics::MakeLogCategory("text");
 
 #undef SKB_ATTRIBUTE_SET_FROM_STATIC_ARRAY
@@ -117,6 +119,7 @@ namespace tachyon
 		assert(rasterizer);
 
 		skb_image_atlas_compact(atlas);
+		ForgetGlyphQuads();
 		initialized = true;
 		return true;
 	}
@@ -133,6 +136,7 @@ namespace tachyon
 		if (entry->wrap_layout) skb_layout_destroy(entry->wrap_layout);
 		entry->wrap_layout = nullptr;
 		entry->wrapMeasurement = {};
+		entry->glyphCache.valid = false;
 		entry->base_measurement_valid = false;
 	}
 
@@ -163,6 +167,7 @@ namespace tachyon
 		{
 			skb_font_collection_destroy(font_collection);
 			font_collection = nullptr;
+			ForgetGlyphQuads();
 		}
 		m_fontIdToFamilyId.clear();
 		m_fontFamilyFaces.clear();
@@ -179,6 +184,7 @@ namespace tachyon
 		{
 			skb_image_atlas_destroy(atlas);
 			atlas = nullptr;
+			ForgetGlyphQuads();
 		}
 
 		if (rasterizer)
@@ -909,8 +915,28 @@ namespace tachyon
 	                                         skb_font_handle_t font, uint32_t glyphId, float fontSize,
 	                                         skb_color_t tint, skb_rasterize_alpha_mode_t mode)
 	{
-		const skb_quad_t quad = skb_image_atlas_get_glyph_quad(atlas, x, y, pixelScale,
-			fontCollection, font, glyphId, fontSize, tint, mode);
+		uint32_t sizeBits = 0;
+		std::memcpy(&sizeBits, &fontSize, sizeof(sizeBits));
+		const uint64_t mix = (uint64_t(reinterpret_cast<uintptr_t>(fontCollection)) ^ (uint64_t(font) << 40)
+		                      ^ (uint64_t(glyphId) << 16) ^ sizeBits ^ (uint64_t(mode) << 60)) * 0x9E3779B97F4A7C15ull;
+		GlyphQuadSlot& slot = glyphQuads[size_t(mix >> 54) & (glyphQuads.size() - 1)];
+		if (slot.epoch != glyphQuadEpoch || slot.collection != fontCollection || slot.font != font
+			|| slot.glyphId != glyphId || slot.fontSize != fontSize || slot.pixelScale != pixelScale || slot.mode != mode)
+		{
+			const skb_color_t white = skb_rgba(255, 255, 255, 255);
+			const skb_quad_t found = skb_image_atlas_get_glyph_quad(atlas, 0.f, 0.f, pixelScale,
+				fontCollection, font, glyphId, fontSize, white, mode);
+			// A failed lookup (no font, atlas full) is asked again next time.
+			if (!(found.flags & SKB_QUAD_IS_EMPTY) && found.geom.width <= 0.f)
+				return found;
+			slot = GlyphQuadSlot{ fontCollection, font, glyphId, fontSize, pixelScale, mode, glyphQuadEpoch, found };
+		}
+
+		// As the atlas gives it at (x, y) in `tint`: its offsets are added to the position.
+		skb_quad_t quad = slot.quad;
+		quad.geom.x += x;
+		quad.geom.y += y;
+		quad.color = (quad.flags & SKB_QUAD_IS_COLOR) ? skb_rgba(255, 255, 255, tint.a) : tint;
 		if (atlasRecorder)
 			RecordTouch(this, MakeTouchKey(AtlasTouch::Kind::Glyph, fontCollection, font, glyphId,
 			                               fontSize, 0.f, pixelScale, mode), quad);
@@ -948,9 +974,11 @@ namespace tachyon
 
 	void SkribidiContext::BeginAtlasRecord(ID scopeId)
 	{
-		auto& touches = atlasRecords[scopeId];
-		touches.clear();
-		atlasRecorder = &touches;
+		AtlasRecord& record = atlasRecords[scopeId];
+		record.touches.clear();
+		// What's recorded is looked up now, so it's intact for the rest of this epoch.
+		record.intactEpoch = glyphQuadEpoch;
+		atlasRecorder = &record.touches;
 		atlasRecorderKeys.clear();
 	}
 
@@ -964,8 +992,11 @@ namespace tachyon
 	{
 		auto it = atlasRecords.find(scopeId);
 		if (it == atlasRecords.end()) return false;
+		AtlasRecord& record = it->second;
+		if (record.intactEpoch == glyphQuadEpoch)
+			return true;
 		bool intact = true;
-		for (const AtlasTouch& t : it->second)
+		for (const AtlasTouch& t : record.touches)
 		{
 			const skb_quad_t quad = QueryTouch(this, t.key);
 			if (quad.texture_idx != t.textureIdx
@@ -974,6 +1005,8 @@ namespace tachyon
 				|| AtlasImageIndex(this, quad.texture_idx) != t.imageIndex)
 				intact = false;
 		}
+		if (intact)
+			record.intactEpoch = glyphQuadEpoch;
 		return intact;
 	}
 

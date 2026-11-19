@@ -74,6 +74,30 @@ namespace tachyon
         return true;
     }
 
+    // Whether `c` paints nothing, now and later: every stop it reads is transparent, and it
+    // isn't a theme variable's (SetVariableColor can change it) or a texture.
+    static bool IsInvisible(const ColorStyle& c) noexcept
+    {
+        if (c.variable != 0)
+            return false;
+        int stops = 0;
+        switch (c.type)
+        {
+            case ColorType::SolidColor:           return c.GetFirstColor().a == 0;
+            case ColorType::StretchedTexture:
+            case ColorType::RepeatedTexture:      return false;
+            case ColorType::InterpolatedTriangle: stops = 3; break;
+            case ColorType::InterpolatedBox:      stops = 4; break;
+            default:                              stops = c.gradient.stopCount; break;
+        }
+        if (stops == 0)
+            return false;
+        for (int s = 0; s < stops; ++s)
+            if (c.gradient.stops[s].GetColor4b().a != 0)
+                return false;
+        return true;
+    }
+
     static TextStyle ScaledTextStyle(const TextStyle& in, float s) noexcept
     {
         TextStyle t = in;
@@ -266,6 +290,7 @@ namespace tachyon
         VisualBoxStyle visualBoxStyle[Style::kStateCount];
         VisualTextStyle visualTextStyle[Style::kStateCount];
         bool opaqueBackground[Style::kStateCount];
+        bool blankBox[Style::kStateCount];
 
         uint64_t visualBoxHash = 0;
         uint64_t visualTextHash = 0;
@@ -328,6 +353,13 @@ namespace tachyon
             };
             visualBoxHash = Hash::Combine(visualBoxHash, visualBoxStyle[i].GetHashCode());
             opaqueBackground[i] = IsOpaque(styleState.backgroundColor);
+            {
+                const BoxEdges& w = visualBoxStyle[i].borderWidths;
+                const int widths[4] = { w.top, w.right, w.bottom, w.left };
+                blankBox[i] = IsInvisible(styleState.backgroundColor);
+                for (int e = 0; e < 4; ++e)
+                    blankBox[i] = blankBox[i] && (widths[e] == 0 || IsInvisible(styleState.borderColors[e]));
+            }
 
             visualTextStyle[i] = VisualTextStyle
             {
@@ -375,6 +407,10 @@ namespace tachyon
                     if (match)
                     {
                         visualBoxIndex = index;
+                        // The same colors registered from a theme variable too: blank only if
+                        // blank both ways.
+                        for (int i = 0; i < Style::kStateCount; i++)
+                            m_blankBoxes[offset + i] = m_blankBoxes[offset + i] && blankBox[i];
                         break;
                     }
                 }
@@ -388,6 +424,7 @@ namespace tachyon
                 {
                     m_visualBoxStyles.push_back(visualBoxStyle[i]);
                     m_opaqueBoxBackgrounds.push_back(opaqueBackground[i]);
+                    m_blankBoxes.push_back(blankBox[i]);
                 }
                 visualBoxStylesModified = true;
                 visualBoxIndex = static_cast<VisualBoxStyleIndex>(idx + 1);
@@ -711,6 +748,7 @@ namespace tachyon
 
         m_visualBoxStyles.clear();
         m_opaqueBoxBackgrounds.clear();
+        m_blankBoxes.clear();
         m_visualBoxHashMap.clear();
         m_visualShadowStyles.clear();
         m_outlines.clear();
@@ -797,6 +835,11 @@ namespace tachyon
     bool StyleManager::IsBoxBackgroundOpaque(uint32_t gpuStyleIndex) const noexcept
     {
         return gpuStyleIndex < m_opaqueBoxBackgrounds.size() && m_opaqueBoxBackgrounds[gpuStyleIndex];
+    }
+
+    bool StyleManager::IsBoxBlank(uint32_t gpuStyleIndex) const noexcept
+    {
+        return gpuStyleIndex < m_blankBoxes.size() && m_blankBoxes[gpuStyleIndex];
     }
 
     const VisualShadowStyle* StyleManager::GetVisualShadowStyle(uint32_t gpuStyleIndex) const noexcept

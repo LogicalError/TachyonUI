@@ -132,6 +132,19 @@ namespace tachyon
             EXPECT_EQ(word.minWidth, word.maxWidth);
         }
 
+        // A number is one word; a hyphen still lets a word break after it.
+        TEST_F(SkribidiTextMeasurementTest, ANumberIsOneWordAndAHyphenBreaks)
+        {
+            const StyleRef style = MakeStaticTextStyle();
+            const TextMeasurement number = textSystem->GetTextMeasurement(
+                textSystem->RegisterText(ID{ .value{ .integer = 6 } }, IconID::Invalid, "100.0%", style, ElementState::None));
+            const TextMeasurement hyphened = textSystem->GetTextMeasurement(
+                textSystem->RegisterText(ID{ .value{ .integer = 7 } }, IconID::Invalid, "well-known", style, ElementState::None));
+            EXPECT_GT(number.maxWidth, 0);
+            EXPECT_EQ(number.minWidth, number.maxWidth);
+            EXPECT_LT(hyphened.minWidth, hyphened.maxWidth);
+        }
+
         TEST_F(SkribidiTextMeasurementTest, TextThatDoesNotWrapHasOneLineAsMinContent)
         {
             Style s{};
@@ -171,6 +184,34 @@ namespace tachyon
             EXPECT_EQ(textSystem->GetTextHeightWithoutIcon(withIcon), line);
             EXPECT_EQ(textSystem->GetTextHeightWithoutIcon(alone), line);
             EXPECT_EQ(textSystem->GetTextHeightWithoutIcon(TextID::Invalid), 0);
+        }
+
+        // An icon beside wrapping text takes its room out of the width the text wraps in, as
+        // when the text is drawn: given less than the text, the gap and the icon need side by
+        // side, the text wraps, and the measurement fits the width given.
+        TEST_F(SkribidiTextMeasurementTest, WrappingTextBesideAnIconWrapsInTheRoomTheIconLeaves)
+        {
+            static constexpr char kDot[] = R"(<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" fill="#000"/></svg>)";
+            const IconID icon = textSystem->RegisterIconFromSVG("dot", kDot, sizeof(kDot) - 1);
+            ASSERT_NE(icon, IconID::Invalid);
+            Style s{};
+            s.textLayoutStyle.textWrapping = TextWrap::Wrap;
+            s.iconSide    = IconSide::Left;
+            s.iconSize    = 20;
+            s.iconTextGap = 6;
+            for (int i = 0; i < Style::kStateCount; ++i)
+                s.states[i].textStyle.fontSize = 13.0f;
+            const StyleRef style = styleManager.Register(s);
+            const TextID alone    = textSystem->RegisterText(ID{ .value{ .integer = 8 } }, IconID::Invalid, "a wonderful day", style, ElementState::None);
+            const TextID withIcon = textSystem->RegisterText(ID{ .value{ .integer = 9 } }, icon, "a wonderful day", style, ElementState::None);
+            const TextMeasurement line = textSystem->GetTextMeasurement(alone);
+            ASSERT_GT(line.maxWidth, 0);
+
+            TextWrapContext wrap{};
+            wrap.maxWidth = line.maxWidth + 10;   // under the text + 6 + 20
+            const TextMeasurement m = textSystem->MeasureText(withIcon, wrap);
+            EXPECT_LE(m.maxWidth, wrap.maxWidth) << "the text wraps in what the icon leaves";
+            EXPECT_GT(m.maxHeight, line.maxHeight) << "on more than one line";
         }
     }
 }

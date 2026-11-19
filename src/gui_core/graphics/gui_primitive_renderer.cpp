@@ -2,6 +2,7 @@
 #include <gui_core/diagnostics/gui_profiler.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 
@@ -11,6 +12,22 @@ namespace tachyon
 // Snapped edges are 16-bit: an edge past the range (a sizer stretched to kStretchHeight)
 // saturates, it doesn't wrap around to the other side.
 static int16_t SaturateInt16(int32_t v) { return int16_t(std::clamp<int32_t>(v, INT16_MIN, INT16_MAX)); }
+
+namespace
+{
+    // What a replay or an appended capture covers: anything.
+    constexpr int32_t kFarEdge = 1 << 29;
+
+    // How far back a primitive looks for its kind's pass: the overlap test runs over every
+    // pass in between.
+    constexpr size_t kLookBack = 32;
+}
+
+// The transform's largest stretch: how much a length in local coordinates can grow on screen.
+static float MaxScale(const float3x2& t)
+{
+    return std::max(std::abs(t.r0.x) + std::abs(t.r0.y), std::abs(t.r1.x) + std::abs(t.r1.y));
+}
 
 namespace
 {
@@ -168,6 +185,9 @@ size_t PrimitiveRenderTarget::Render(RHI::RenderCommandList& cmdList, const Pipe
 void PrimitiveRenderTarget::Reset()
 {
     renderPasses.clear();
+    passBounds.clear();
+    lastPass   = MakeNoPasses();
+    openBounds = {};
     replays.clear();
     for (auto& stream : streams)
     {
@@ -202,6 +222,10 @@ void PrimitiveRenderTarget::RenderBox(tachyon::IntRect rect, tachyon::IntRect cl
     const int first = std::clamp(int(packed[0] >> 24) + (255 - shares), 0, 255);
     packed[0] = (packed[0] & 0xFFFFFFu) | (uint32_t(first) << 24);
 
+    // The box's rect and, where given, the pixels it's snapped to: a pixel past either for the rounding.
+    ScreenBox bounds = Bounds(float2{ float(rect.x), float(rect.y) }, float2{ float(rect.x + rect.w), float(rect.y + rect.h) }, 1.0f, clipRect);
+    if (snappedPx.w > 0 && snappedPx.h > 0)
+        bounds = bounds.Cover(ScreenBox{ snappedPx.x - 1, snappedPx.y - 1, snappedPx.x + snappedPx.w + 1, snappedPx.y + snappedPx.h + 1 }.Within(clipRect));
     Append(PrimitiveKind::Box, BoxPrimitive
                     {
                         .transform0   = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -216,11 +240,13 @@ void PrimitiveRenderTarget::RenderBox(tachyon::IntRect rect, tachyon::IntRect cl
                         .styles       = { packed[0], packed[1], packed[2], packed[3] },
                         .snappedPx    = { SaturateInt16(snappedPx.x), SaturateInt16(snappedPx.y),
                                           SaturateInt16(snappedPx.x + snappedPx.w), SaturateInt16(snappedPx.y + snappedPx.h) }
-                    });
+                    }, bounds);
 }
 
 void PrimitiveRenderTarget::RenderTriangle(tachyon::float2 p0, tachyon::float2 p1, tachyon::float2 p2, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, tachyon::ImageIndex textureIndex, tachyon::TriangleEdges hardEdges)
 {
+    const ScreenBox bounds = Bounds(float2{ std::min({ p0.x, p1.x, p2.x }), std::min({ p0.y, p1.y, p2.y }) },
+                                  float2{ std::max({ p0.x, p1.x, p2.x }), std::max({ p0.y, p1.y, p2.y }) }, 2.0f, clipRect);
     Append(PrimitiveKind::Triangle, TrianglePrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -235,12 +261,13 @@ void PrimitiveRenderTarget::RenderTriangle(tachyon::float2 p0, tachyon::float2 p
                         .textureIndex = textureIndex,
                         .colorIndex = int16_t(colorStyleIndex),
                         .hardEdges = int16_t(hardEdges)
-                    });
+                    }, bounds);
 }
 
 
 void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, tachyon::ImageIndex textureIndex, const tachyon::UVRect& uv, const tachyon::ImageDisplay& display)
 {
+    const ScreenBox bounds = Bounds(float2{ float(rect.x), float(rect.y) }, float2{ float(rect.x + rect.w), float(rect.y + rect.h) }, 1.0f, clipRect);
     Append(PrimitiveKind::Quad, QuadPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -256,12 +283,14 @@ void PrimitiveRenderTarget::RenderQuad(tachyon::IntRect rect, tachyon::IntRect c
                         .displayFlags = display.PackedFlags(),
                         .uvRect = { uv.min.x, uv.min.y, uv.max.x, uv.max.y },
                         .tint = { display.tint.r, display.tint.g, display.tint.b, display.tint.a }
-                    });
+                    }, bounds);
 }
 
 void PrimitiveRenderTarget::RenderShadow(tachyon::IntRect rect, tachyon::IntRect clipRect, tachyon::VisualColorStyleIndex colorStyleIndex, float cornerRadius, int blur)
 {
     blur = std::clamp(blur, 0, 4096);
+    const ScreenBox bounds = Bounds(float2{ float(rect.x - blur), float(rect.y - blur) },
+                                  float2{ float(rect.x + rect.w + blur), float(rect.y + rect.h + blur) }, 1.0f, clipRect);
     Append(PrimitiveKind::Quad, QuadPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -274,13 +303,14 @@ void PrimitiveRenderTarget::RenderShadow(tachyon::IntRect rect, tachyon::IntRect
                         .colorIndex = int16_t(colorStyleIndex),
                         .blur = int16_t(blur),
                         .cornerRadius = cornerRadius
-                    });
+                    }, bounds);
 }
 
 void PrimitiveRenderTarget::RenderOccluder(tachyon::IntRect rect, tachyon::IntRect clipRect)
 {
     if (rect.w <= 0 || rect.h <= 0 || currentOpacity < 1.0f)
         return;
+    const ScreenBox bounds = Bounds(float2{ float(rect.x), float(rect.y) }, float2{ float(rect.x + rect.w), float(rect.y + rect.h) }, 0.0f, clipRect);
     Append(PrimitiveKind::Occluder, OccluderPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -289,11 +319,12 @@ void PrimitiveRenderTarget::RenderOccluder(tachyon::IntRect rect, tachyon::IntRe
                         .clipMax = { clipRect.Max(0), clipRect.Max(1) },
 
                         .pos = { rect.x, rect.y }, .size = { rect.w, rect.h },
-                    });
+                    }, bounds);
 }
 
 void PrimitiveRenderTarget::RenderGlyph(tachyon::float2 pos, tachyon::float2 size, tachyon::float2 uvMin, tachyon::float2 uvMax, float scale, int bpp, int mode, tachyon::VisualColorStyleIndex textColorIndex, tachyon::IntRect clipRect, tachyon::ImageIndex textureIndex, float shadowBlur)
 {
+    const ScreenBox bounds = Bounds(pos, float2{ pos.x + size.x, pos.y + size.y }, 1.0f, clipRect);
     Append(PrimitiveKind::Glyph, GlyphPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -313,12 +344,53 @@ void PrimitiveRenderTarget::RenderGlyph(tachyon::float2 pos, tachyon::float2 siz
 
                         .textColorIndex = int16_t(textColorIndex),
                         .shadowBlur = shadowBlur < 0.0f ? int16_t(-1) : int16_t(std::min(shadowBlur * 8.0f + 0.5f, 32767.0f)),
-                     });
+                     }, bounds);
+}
+
+void PrimitiveRenderTarget::RenderGlyphs(std::span<const GUIRenderer::GlyphInstance> glyphs, tachyon::float2 offset, tachyon::IntRect clipRect)
+{
+    if (glyphs.empty())
+        return;
+    float2 lo{ INFINITY, INFINITY }, hi{ -INFINITY, -INFINITY };
+    for (const GUIRenderer::GlyphInstance& g : glyphs)
+    {
+        const float x = g.pos.x + offset.x, y = g.pos.y + offset.y;
+        lo = { std::min(lo.x, x), std::min(lo.y, y) };
+        hi = { std::max(hi.x, x + g.size.x), std::max(hi.y, y + g.size.y) };
+    }
+    PlaceInPass(PrimitiveKind::Glyph, Bounds(lo, hi, 1.0f, clipRect), int(glyphs.size()));
+
+    auto& cpu = streams[size_t(PrimitiveKind::Glyph)].cpu;
+    const size_t at = cpu.size();
+    cpu.resize(at + glyphs.size() * sizeof(GlyphPrimitive));
+    std::byte* out = cpu.data() + at;
+    for (const GUIRenderer::GlyphInstance& g : glyphs)
+    {
+        const GlyphPrimitive primitive
+        {
+            .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, float(nextOrder++) },
+            .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 1.0f - currentOpacity },
+            .clipMin = { clipRect.Min(0), clipRect.Min(1) },
+            .clipMax = { clipRect.Max(0), clipRect.Max(1) },
+            .pos = { g.pos.x + offset.x, g.pos.y + offset.y }, .size = g.size,
+            .uvMin = g.uvMin, .uvMax = g.uvMax,
+            .scale = g.scale, .bpp = g.bpp, .mode = g.mode,
+            .textureIndex = g.textureIndex,
+            .textColorIndex = int16_t(g.color),
+            .shadowBlur = -1,
+        };
+        std::memcpy(out, &primitive, sizeof(primitive));
+        out += sizeof(primitive);
+    }
 }
 
 void PrimitiveRenderTarget::RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachyon::int2 p2, tachyon::int2 p3,
                                        tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle)
 {
+    // The control points' hull, the stroke wide around it (in screen pixels, or scaled up).
+    const ScreenBox bounds = Bounds(float2{ float(std::min({ p0.x, p1.x, p2.x, p3.x })), float(std::min({ p0.y, p1.y, p2.y, p3.y })) },
+                                  float2{ float(std::max({ p0.x, p1.x, p2.x, p3.x })), float(std::max({ p0.y, p1.y, p2.y, p3.y })) },
+                                  std::max(lineStyle.lineWidth, 1.0f) * std::max(1.0f, MaxScale(currentTransform)) + 2.0f, clipRect);
     Append(PrimitiveKind::Line, LinePrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -337,11 +409,13 @@ void PrimitiveRenderTarget::RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachy
                         .p1 = { int16_t(p1.x), int16_t(p1.y) },
                         .p2 = { int16_t(p2.x), int16_t(p2.y) },
                         .p3 = { int16_t(p3.x), int16_t(p3.y) }
-                    });
+                    }, bounds);
 }
 
 void PrimitiveRenderTarget::RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle)
 {
+    const ScreenBox bounds = Bounds(float2{ center.x - radius, center.y - radius }, float2{ center.x + radius, center.y + radius },
+                                  std::max(lineStyle.lineWidth, 1.0f) * 0.5f * std::max(1.0f, MaxScale(currentTransform)) + 2.0f, clipRect);
     Append(PrimitiveKind::Circle, CirclePrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -357,11 +431,13 @@ void PrimitiveRenderTarget::RenderCircle(tachyon::float2 center, float radius, t
                         .dashOffset     = lineStyle.dashOffset,
                         .gradientOffset = lineStyle.gradientOffset,
                         .gradientScale  = lineStyle.gradientScale,
-                    });
+                    }, bounds);
 }
 
 void PrimitiveRenderTarget::RenderDot(tachyon::float2 pos, tachyon::IntRect clipRect, float size, tachyon::color4f color)
 {
+    // The triangle around the dot reaches about twice its radius out.
+    const ScreenBox bounds = Bounds(pos, pos, std::max(size * MaxScale(currentTransform), 2.0f) + 4.0f, clipRect);
     Append(PrimitiveKind::Dot, DotPrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
@@ -372,9 +448,46 @@ void PrimitiveRenderTarget::RenderDot(tachyon::float2 pos, tachyon::IntRect clip
                         .color = color,
                         .size = size,
                         .pos = { pos.x, pos.y }
-                    });
+                    }, bounds);
 }
 
+
+void PrimitiveRenderTarget::RenderDots(std::span<const tachyon::float2> positions, tachyon::IntRect clipRect, float size, tachyon::color4f color)
+{
+    if (positions.empty())
+        return;
+    float2 lo{ INFINITY, INFINITY }, hi{ -INFINITY, -INFINITY };
+    for (const float2& p : positions)
+    {
+        lo = { std::min(lo.x, p.x), std::min(lo.y, p.y) };
+        hi = { std::max(hi.x, p.x), std::max(hi.y, p.y) };
+    }
+    // As RenderDot's: the triangle around a dot reaches about twice its radius out.
+    PlaceInPass(PrimitiveKind::Dot, Bounds(lo, hi, std::max(size * MaxScale(currentTransform), 2.0f) + 4.0f, clipRect), int(positions.size()));
+
+    auto& cpu = streams[size_t(PrimitiveKind::Dot)].cpu;
+    const size_t at = cpu.size();
+    cpu.resize(at + positions.size() * sizeof(DotPrimitive));
+    std::byte* out = cpu.data() + at;
+    // The dots differ only in where they are and their draw order.
+    DotPrimitive primitive
+    {
+        .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },
+        .transform1 = { currentTransform.r1.x, currentTransform.r1.y, currentTransform.r1.z, 1.0f - currentOpacity },
+        .clipMin = { clipRect.Min(0), clipRect.Min(1) },
+        .clipMax = { clipRect.Max(0), clipRect.Max(1) },
+        .color = color,
+        .size = size,
+    };
+    for (const float2& p : positions)
+    {
+        primitive.transform0.w = float(nextOrder++);
+        primitive.pos[0] = p.x;
+        primitive.pos[1] = p.y;
+        std::memcpy(out, &primitive, sizeof(primitive));
+        out += sizeof(primitive);
+    }
+}
 
 void PrimitiveRenderTarget::FinishRenderPass()
 {
@@ -384,14 +497,57 @@ void PrimitiveRenderTarget::FinishRenderPass()
     const auto& spec   = kPrimitiveSpecs[size_t(currentKind)];
     auto&       stream = streams[size_t(currentKind)];
     const int   count  = int(stream.cpu.size() / spec.stride);
+    lastPass[size_t(currentKind)] = int(renderPasses.size());
     renderPasses.push_back(PrimitiveRenderPass
     {
         .firstPrimitive = stream.passStart,
         .primitiveCount = count - stream.passStart,
         .kind           = PrimitiveKind(currentKind)
     });
+    passBounds.push_back(openBounds);
     currentKind = -1;
 }
+
+
+void PrimitiveRenderTarget::PlaceInPass(PrimitiveKind kind, ScreenBox bounds, int count)
+{
+    if (currentKind == int(kind))
+    {
+        openBounds = openBounds.Cover(bounds);
+        return;
+    }
+    const int last = lastPass[size_t(kind)];
+    const bool depthOnly = kPrimitiveSpecs[size_t(kind)].depthOnly;
+    bool join = last >= 0;
+    // Occluders only write the depth, the farthest draw order wins: in any order, in their own
+    // loop before the colours. A colour primitive mustn't pass a colour draw it overlaps; a
+    // replay's bounds are where its scope drew.
+    if (join && !depthOnly)
+    {
+        join = renderPasses.size() - size_t(last) <= kLookBack;
+        if (join && currentKind >= 0 && !kPrimitiveSpecs[size_t(currentKind)].depthOnly && openBounds.Overlaps(bounds))
+            join = false;
+        for (size_t i = size_t(last) + 1; join && i < renderPasses.size(); ++i)
+        {
+            const PrimitiveRenderPass& pass = renderPasses[i];
+            if (pass.replay < 0 && kPrimitiveSpecs[size_t(pass.kind)].depthOnly)
+                continue;
+            if (passBounds[i].Overlaps(bounds))
+                join = false;
+        }
+    }
+    if (join)
+    {
+        // Its primitives end the kind's stream: the ones appended next are the pass's next.
+        renderPasses[size_t(last)].primitiveCount += count;
+        passBounds[size_t(last)] = passBounds[size_t(last)].Cover(bounds);
+        return;
+    }
+    StartRenderPass(kind);
+    openBounds = bounds;
+}
+
+
 
 void PrimitiveRenderTarget::StartRenderPass(PrimitiveKind kind)
 {
@@ -404,13 +560,22 @@ void PrimitiveRenderTarget::StartRenderPass(PrimitiveKind kind)
     currentKind = int(kind);
 }
 
-void PrimitiveRenderTarget::AddReplay(tachyon::ID scope, tachyon::int2 delta, uint32_t primitiveCount)
+PrimitiveRenderTarget::ScreenBox PrimitiveRenderTarget::Covered() const
+{
+    ScreenBox covered = currentKind >= 0 ? openBounds : ScreenBox{};
+    for (const ScreenBox& box : passBounds)
+        covered = covered.Cover(box);
+    return covered;
+}
+
+void PrimitiveRenderTarget::AddReplay(tachyon::ID scope, tachyon::int2 delta, const PrimitiveRenderTarget& captured)
 {
     FinishRenderPass();
     renderPasses.push_back(PrimitiveRenderPass{ .firstPrimitive = 0, .primitiveCount = 0, .kind = PrimitiveKind::Box,
                                                 .replay = int(replays.size()) });
+    passBounds.push_back(captured.Covered().Moved(delta, kFarEdge));
     replays.push_back(ScopeReplay{ scope, delta, nextOrder });
-    nextOrder += primitiveCount;
+    nextOrder += captured.nextOrder;
 }
 
 void PrimitiveRenderTarget::AppendCaptured(const PrimitiveRenderTarget& src, tachyon::int2 delta)
@@ -468,7 +633,10 @@ void PrimitiveRenderTarget::AppendCaptured(const PrimitiveRenderTarget& src, tac
             }
         }
 
+        // Its primitives' bounds aren't kept: it covers anything.
+        lastPass[k] = int(renderPasses.size());
         renderPasses.push_back(PrimitiveRenderPass{ dstFirst, pass.primitiveCount, pass.kind });
+        passBounds.push_back(ScreenBox{ -kFarEdge, -kFarEdge, kFarEdge, kFarEdge });
     }
     currentKind = -1;
 }
@@ -608,7 +776,7 @@ void PrimitiveRenderer::EndScopeCapture(tachyon::ID scopeId)
     }
     cap.previous.Reset();
     // Drawn into the window this frame too, where it was captured.
-    currentTarget->AddReplay(scopeId, tachyon::int2{ 0, 0 }, cap.target.nextOrder);
+    currentTarget->AddReplay(scopeId, tachyon::int2{ 0, 0 }, cap.target);
 }
 
 bool PrimitiveRenderer::ReplayScopeCapture(tachyon::ID scopeId, tachyon::int2 delta)
@@ -618,7 +786,7 @@ bool PrimitiveRenderer::ReplayScopeCapture(tachyon::ID scopeId, tachyon::int2 de
     if (it == scopeCaptures.end() || it->second.target.renderPasses.empty())
         return false;
     it->second.lastUsedFrame = m_frame;
-    currentTarget->AddReplay(scopeId, delta, it->second.target.nextOrder);
+    currentTarget->AddReplay(scopeId, delta, it->second.target);
     return true;
 }
 
@@ -654,6 +822,18 @@ void PrimitiveRenderer::RenderGlyph(tachyon::float2 pos, tachyon::float2 size, t
 {
     assert(currentTarget != nullptr);
     currentTarget->RenderGlyph(pos, size, uvMin, uvMax, scale, bpp, mode, textColorIndex, clipRect, textureIndex, shadowBlur);
+}
+
+void PrimitiveRenderer::RenderGlyphs(std::span<const GlyphInstance> glyphs, tachyon::float2 offset, tachyon::IntRect clipRect)
+{
+    assert(currentTarget != nullptr);
+    currentTarget->RenderGlyphs(glyphs, offset, clipRect);
+}
+
+void PrimitiveRenderer::RenderDots(std::span<const tachyon::float2> positions, tachyon::IntRect clipRect, float size, tachyon::color4f color)
+{
+    assert(currentTarget != nullptr);
+    currentTarget->RenderDots(positions, clipRect, size, color);
 }
 
 void PrimitiveRenderer::RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachyon::int2 p2, tachyon::int2 p3, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle)

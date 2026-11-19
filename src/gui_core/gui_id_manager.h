@@ -1,8 +1,11 @@
 #pragma once
 
+#include <gui_core/gui_hash.h>
 #include <gui_core/gui_id.h>
 #include <gui_core/gui_platform.h>
 
+#include <array>
+#include <cstdint>
 #include <stdint.h>
 #include <source_location>
 #include <vector>
@@ -90,7 +93,7 @@ namespace tachyon
         /// call site. Repeated calls from one site under one parent are numbered in call order.
         public: [[nodiscard]] inline ID AllocateDynamicID(const std::source_location location = std::source_location::current())
         {
-            return AllocateDynamicID(location.file_name(), location.line());
+            return AllocateDynamicID(Hash::Combine(FileHash(location.file_name()), static_cast<uint64_t>(location.line())));
         }
 #endif
 
@@ -116,7 +119,7 @@ namespace tachyon
         /// Unlike dynamic IDs, repeated calls from one site under one parent return the same ID.
         public: [[nodiscard]] inline ID AllocateRangedID(uint32_t size, const std::source_location location = std::source_location::current())
         {
-            return AllocateRangedID(size, location.file_name(), location.line());
+            return AllocateRangedID(size, Hash::Combine(FileHash(location.file_name()), static_cast<uint64_t>(location.line())));
         }
 #endif
         /// A ranged ID of `size` sub-IDs from `file` and `line` (__FILE__, __LINE__) and the
@@ -174,6 +177,19 @@ namespace tachyon
 
         // Parent stack for hierarchical hashing
         std::vector<ParentData> m_parent_stack;
+        /// Hash::Calculate of a source location's file name, remembered by the name's address
+        /// (std::source_location gives names with static storage): an ID's site is hashed
+        /// from it many times a frame.
+        uint64_t FileHash(const char* file)
+        {
+            FileHashSlot& slot = m_file_hashes[(reinterpret_cast<uintptr_t>(file) >> 4) & (m_file_hashes.size() - 1)];
+            if (slot.file != file)
+                slot = { file, Hash::Calculate(std::string_view(file)) };
+            return slot.hash;
+        }
+        struct FileHashSlot { const char* file = nullptr; uint64_t hash = 0; };
+        std::array<FileHashSlot, 64> m_file_hashes {};
+
         // Dynamic IDs made so far this frame per call site (or hint) and parent: only a
         // repeat of the same site renumbers, so a widget appearing elsewhere doesn't. A flat
         // open-addressed table: a slot stamped with an older frame is empty, so a new frame

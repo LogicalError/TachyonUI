@@ -3,8 +3,8 @@
 #include <gui_core/gui_base_types.h>
 #include <gui_core/gui_enum_operators.h>
 #include <gui_core/gui_id.h>
+#include <gui_core/gui_id_map.h>
 
-#include <unordered_map>
 #include <vector>
 
 namespace tachyon
@@ -40,7 +40,7 @@ namespace tachyon
         };
 
         uint32_t m_frameIndex = 0;
-        std::unordered_map<ID, ScrollOffsetHandle> m_scrollOffsetHandlesByID;
+        IDMap<ScrollOffsetHandle> m_scrollOffsetHandlesByID;
         std::vector<ScrollOffsetEntry> m_scrollOffsets;
         std::vector<ScrollOffsetHandle> m_scrollOffsetFreeList;
 

@@ -180,13 +180,16 @@ namespace tachyon
         // Emit in window-local space, snapped to whole pixels (the dot shader adds the half
         // pixel): transformed canvas coords land on sub-pixels, and a 1px dot would smear across two.
         ctx.SetSpaceRaw(float3x2::Identity());
+        static thread_local std::vector<float2> dots;   // kept for its room: drawn every frame
+        dots.clear();
         const int firstX = firstLine(minX, originOffset.x);
         for (int y = firstLine(minY, originOffset.y); y <= maxY; y += step)
             for (int x = firstX; x <= maxX; x += step)
             {
                 const float2 p = currentToWL.TransformPoint({ (float)x, (float)y });
-                ctx.RenderDot({ std::floor(p.x), std::floor(p.y) }, dotSize, dotColor);
+                dots.push_back({ std::floor(p.x), std::floor(p.y) });
             }
+        ctx.RenderDots(dots, dotSize, dotColor);
         ctx.SetSpace(DrawSpace::Local);
     }
 

@@ -33,6 +33,22 @@ namespace tachyon
         IDManager manager;
     };
 
+    // A call site's ID is the one its file name and line give, each frame alike.
+    TEST(IDManagerSites, ASourceLocationGivesTheIDOfItsFileAndLine)
+    {
+        IDManager a, b;
+        for (int frame = 0; frame < 2; ++frame)
+        {
+            VERIFY(a.BeginFrame());
+            VERIFY(b.BeginFrame());
+            const std::source_location site = std::source_location::current();
+            EXPECT_EQ(a.AllocateDynamicID(site), b.AllocateDynamicID(site.file_name(), int(site.line())));
+            EXPECT_EQ(a.AllocateRangedID(4, site), b.AllocateRangedID(4, site.file_name(), int(site.line())));
+            a.EndFrame();
+            b.EndFrame();
+        }
+    }
+
     // ---------------------
     // Static ID Tests
     // ---------------------

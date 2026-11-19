@@ -9,6 +9,9 @@
 #if TACHYON_D3D12
 #include <gui_core/graphics/d3d12/d3d12_graphics_context.h>
 #endif
+#if TACHYON_VULKAN
+#include <gui_core/graphics/vulkan/vk_window_context.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -2396,8 +2399,89 @@ namespace tachyon
         EndStatusBar();
     }
 
+    void Application::RunBench()
+    {
+        constexpr int kWarmup = 120;   // frames before measuring: the first ones load fonts, lay out, fill caches
+        BenchState& b = m_bench;
+        if (b.seen++ == 0)
+        {
+            SetRedrawMode(RedrawMode::Always);
+            Diagnostics::SetProfilingEnabled(true);
+            SetDrawCacheEnabled(b.phase == 0);
+            return;
+        }
+        if (b.seen <= kWarmup)
+            return;
+#if TACHYON_VULKAN
+        // The last frame's GPU time, each window's.
+        double gpu = 0.0;
+        windowManager->ForEachAliveWindowContext([&gpu](IWindowContext* context, IntRect) {
+            if (auto* vk = dynamic_cast<vulkan::VulkanWindowContext*>(context))
+                gpu += vk->LastGpuFrameSeconds() * 1000.0;
+        });
+        if (gpu > 0.0)
+        {
+            b.gpuMs += gpu;
+            ++b.gpuFrames;
+        }
+#endif
+        // The last finished frame's scopes (windowed averages, so a mean of them is the mean).
+        for (const Diagnostics::ProfileSample& s : Diagnostics::LastFrameSamples(Diagnostics::MainThreadCollector()))
+        {
+            auto [it, added] = b.scopes.try_emplace(s.key);
+            if (added)
+            {
+                it->second.name   = s.name;
+                it->second.depth  = s.depth;
+                it->second.isWait = s.isWait;
+                b.order.push_back(s.key);
+            }
+            it->second.totalMs += s.totalMs;
+            it->second.selfMs  += s.selfMs;
+            it->second.calls   += s.callCount;
+        }
+        if (b.seen < kWarmup + b.frames)
+            return;
+
+        const double n = double(b.frames);
+        double waits = 0.0, frame = 0.0;
+        for (const uint64_t key : b.order)
+        {
+            const BenchState::Scope& s = b.scopes[key];
+            if (s.depth == 0)
+                frame += s.totalMs;
+            else if (s.isWait)
+                waits += s.totalMs;
+        }
+        std::printf("BENCH ---- draw cache %s: %d frames, mean per frame (ms); waits are marked and not work\n",
+                    b.phase == 0 ? "on" : "off", b.frames);
+        for (const uint64_t key : b.order)
+        {
+            const BenchState::Scope& s = b.scopes[key];
+            std::printf("BENCH %8.3f total %8.3f self %7.1f calls  %*s%s%s\n", s.totalMs / n, s.selfMs / n, double(s.calls) / n,
+                        s.depth * 2, "", s.name.c_str(), s.isWait ? "  (wait)" : "");
+        }
+        std::printf("BENCH CPU work %.3f ms per frame; GPU %.3f ms per frame\n", (frame - waits) / n,
+                    b.gpuFrames > 0 ? b.gpuMs / b.gpuFrames : 0.0);
+        std::fflush(stdout);
+
+        // The next phase, or the end.
+        b.order.clear();
+        b.scopes.clear();
+        b.gpuMs     = 0.0;
+        b.gpuFrames = 0;
+        b.seen      = 0;
+        if (++b.phase == 2)
+        {
+            SetDrawCacheEnabled(true);
+            applicationQuit = true;
+        }
+    }
+
     void Application::OnGUI()
     {
+        if (m_bench.frames > 0)
+            RunBench();
         ApplyPendingLayout();
         // The readouts of the frame timings: new numbers each frame only when every frame is drawn.
         {

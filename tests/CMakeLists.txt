@@ -3,6 +3,7 @@ list(APPEND GUI_CORE_TEST_FILES
   controls_basic_test.cpp
   dictionary_field_test.cpp
   skribidi_text_measurement_test.cpp
+  skribidi_glyph_quad_test.cpp
   controls_grid_view_test.cpp
   file_system_test.cpp
   file_thumbnails_test.cpp
@@ -159,6 +160,8 @@ list(APPEND GUI_CORE_TEST_FILES
   text_editor_coordinate_test.cpp
   ui_cache_test.cpp
   primitive_cache_test.cpp
+  primitive_batching_test.cpp
+  id_map_test.cpp
   pixel_snap_test.cpp
   main.cpp
 )

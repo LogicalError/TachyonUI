@@ -168,6 +168,10 @@ namespace tachyon
         void EndTextDragging();
 
         void RenderText(RegisteredText* entry, IntRect rect, IntRect innerRectScreen, IntRect clipRect, float pixelScale);
+        /// Makes `entry`'s glyph cache from `layout`: each glyph's atlas quad, relative to the
+        /// text's origin. Valid for reuse unless a run has a color of its own or the atlas
+        /// lookups are being recorded.
+        void BuildGlyphCache(RegisteredText* entry, const skb_layout_t* layout, float pixelScale);
         /// RenderIcon in the current shadow pass (SkribidiContext::DrawWithShadows).
         void DrawIcon(IconID iconId, IntRect rect, IntRect clipRect, VisualColorStyleIndex tint);
         void RenderEditor(RegisteredText* entry, IntRect rect, IntRect innerRectScreen, IntRect clipRect, float pixelScale);
@@ -185,6 +189,12 @@ namespace tachyon
         const ITextValidator* TextEditorValidator(ID elementId) const;
         bool CanDropDraggedTextInto(ID targetTextEditorId) const;
         void* UpdateLayoutWhenNecessary(RegisteredText* entry, float width) const;
+        /// The icon beside the text (Left / Right), as measured and drawn: its size, or the
+        /// icon's own when the style sets none.
+        IconMeasurement SideIconMeasurement(const RegisteredText* entry) const;
+        /// The width the text lays out in, in an element `width` wide: less the icon and the
+        /// gap beside it. Measuring and drawing both lay out at it, so they share one layout.
+        int32_t LayoutWidth(const RegisteredText* entry, int32_t width) const;
         void* UpdateEditorWhenNecessary(RegisteredText* entry, float width) const;
         TextMeasurement UpdateBaseMeasurementWhenNecessary(RegisteredText* entry) const;
         TextMeasurement UpdateWrapMeasurementWhenNecessary(RegisteredText* entry, const TextWrapContext& wrapContext) const;

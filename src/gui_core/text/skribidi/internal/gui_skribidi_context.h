@@ -1,13 +1,17 @@
 #include <gui_core/text/skribidi/gui_text_system_skribidi.h>
 #include <gui_core/text/skribidi/internal/gui_default_fonts_skribidi.h>
 #include <gui_core/input/gui_gesture.h>
+#include <gui_core/graphics/gui_renderer.h>
 
 #include <skribidi/skb_editor.h>
 #include <skribidi/skb_image_atlas.h>
 
+#include <array>
+#include <cstdint>
 #include <span>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -117,6 +121,19 @@ namespace tachyon
 		float				wrap_width = 0;
 		skb_layout_t*		wrap_layout = nullptr;
 		TextMeasurement		wrapMeasurement {};
+
+		// The glyphs RenderText last drew from wrap_layout, relative to the text's origin, and
+		// what they were made with: drawn again as they are while all of that holds.
+		struct GlyphCache
+		{
+			std::vector<GUIRenderer::GlyphInstance>             glyphs;
+			std::vector<std::pair<uint32_t, ImageIndex>>        textures;   ///< atlas texture -> image, as made
+			bool                  valid       = false;
+			uint32_t              epoch       = 0;   ///< SkribidiContext::glyphQuadEpoch
+			float                 pixelScale  = 0.0f;
+			intptr_t              hovered     = 0;   ///< hoveredContentId
+			VisualColorStyleIndex color       = VisualColorStyleIndex::Invalid;
+		} glyphCache;
 
 		// For rich text with icons
 		bool isRichText = false;
@@ -419,12 +436,40 @@ namespace tachyon
 		                             skb_decoration_style_t style, float length, float patternOffset, float thickness,
 		                             skb_color_t tint, skb_rasterize_alpha_mode_t mode);
 
+		/// Forgets the glyph quads GetGlyphQuad remembers. Call when the atlas compacts (it may
+		/// evict or move what wasn't looked up since), is destroyed, or the fonts change.
+		void ForgetGlyphQuads() { ++glyphQuadEpoch; }
+
 		void BeginAtlasRecord(ID scopeId);
 		void EndAtlasRecord();
 		// False when an entry was evicted or moved (its scope must re-render).
 		bool ReplayAtlasTouches(ID scopeId);
 
-		std::unordered_map<ID, std::vector<AtlasTouch>> atlasRecords;
+		// The glyph quads looked up since the atlas last compacted, at position (0, 0) and
+		// untinted. A glyph looked up once since then is already marked used for that
+		// compaction, so a repeat (the same letter again) needn't ask the atlas.
+		struct GlyphQuadSlot
+		{
+			const skb_font_collection_t* collection = nullptr;
+			skb_font_handle_t            font       = {};
+			uint32_t                     glyphId    = 0;
+			float                        fontSize   = 0.0f;
+			float                        pixelScale = 0.0f;
+			skb_rasterize_alpha_mode_t   mode       = {};
+			uint32_t                     epoch      = 0;   ///< glyphQuadEpoch when stored
+			skb_quad_t                   quad       = {};
+		};
+		std::array<GlyphQuadSlot, 1024> glyphQuads {};
+		uint32_t                        glyphQuadEpoch = 1;
+
+		/// A scope's atlas lookups, and the glyphQuadEpoch they were last found intact in: until
+		/// the atlas compacts again, nothing they found can go, so they needn't be looked up.
+		struct AtlasRecord
+		{
+			std::vector<AtlasTouch> touches;
+			uint32_t                intactEpoch = 0;
+		};
+		std::unordered_map<ID, AtlasRecord> atlasRecords;
 		std::vector<AtlasTouch>*     atlasRecorder = nullptr;
 		std::unordered_set<uint64_t> atlasRecorderKeys;
 
