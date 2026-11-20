@@ -3,6 +3,9 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "skribidi_test_fixture.h"   // StubGUIRenderer
+
+#include <gui_core/graphics/gui_custom_draw_context.h>
 
 #include <gui_controls/gui_plot_types.h>
 
@@ -190,6 +193,39 @@ namespace tachyon
                 return { int32_t(std::lround(float(r.x) + (x - shown.min) / (shown.max - shown.min) * float(r.w))), r.y + r.h / 2 };
             }
         };
+
+        // Handle colors the app animates keep a color style each: the style table doesn't grow
+        // by one a frame. The handles are drawn, as a frame's render would.
+        TEST_F(PlotTest, AnAnimatedHandleColorDoesNotGrowTheStyleTable)
+        {
+            auto draw = [&] {
+                GUITest::StubGUIRenderer renderer;
+                const auto& storage = app.elementStorage;
+                for (uint32_t d = 0; d < storage.NumberOfDepthLevels(); d++)
+                    for (uint32_t i = 0; i < storage.DepthSizeOf(d); i++)
+                    {
+                        const ElementRef ref{ d, i };
+                        const ElementCustomDraw* custom = storage.IsValidRef(ref) ? storage.GetCustomDraw(ref) : nullptr;
+                        const ElementRect* rects = storage.GetElementRectPtr(ref);
+                        if (custom == nullptr || !custom->callback || rects == nullptr)
+                            continue;
+                        CustomDrawContext ctx{ renderer, app.elementStorage, ref, rects->rect, rects->innerRect,
+                                               IntRect{ 0, 0, 4000, 4000 }, float3x2{}, int2{ 0, 0 } };
+                        custom->callback(ctx);
+                    }
+                return renderer.triangles.size();
+            };
+            ASSERT_GT(draw(), 0u) << "test setup: the handles are drawn";
+            const size_t before = app.styleManager.VisualColorStyleCount();
+            for (int i = 0; i < 60; ++i)
+            {
+                for (PlotHandle& handle : view.handles)
+                    handle.color = color4f{ float(i) / 60.0f, 0.5f, 0.25f, 1.0f };
+                Frame();
+                draw();
+            }
+            EXPECT_LE(app.styleManager.VisualColorStyleCount(), before + 2 * view.handles.size());
+        }
 
         TEST_F(PlotTest, DraggingAHandleMovesIt)
         {

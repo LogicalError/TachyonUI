@@ -2959,6 +2959,10 @@ namespace tachyon
 
         /// Registers a swatch claim with the enclosing cached scopes so hit frames can keep it alive.
         void NoteSwatchClaim(ID swatchID);
+        /// A color style of `owner`'s own for a color the app gives (and may change any frame):
+        /// changed in place while `owner` asks for it each frame, freed the frame after it
+        /// doesn't. RegisterColorStyle would add an entry for every color it's ever given.
+        VisualColorStyleIndex AppColorStyle(ID owner, color4f color);
         /// The text of the label just before the current control (empty without one).
         std::string PendingLabelText() const;
         /// How color swatches draw a color (the theme's checkerboard and alpha bar).

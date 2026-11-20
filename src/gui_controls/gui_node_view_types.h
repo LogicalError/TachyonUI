@@ -498,9 +498,10 @@ namespace tachyon
                            PropertyEndpoint output,
                            PropertyEndpoint input)> canConnect;
 
-        /// Packed RGBA -> registered color style, since RenderPolyline takes a style index.
+        /// This frame's colors from the app (sockets, nodes, frames): packed RGBA -> its color
+        /// style, a slot reused from frame to frame. Wires take their source socket's from here,
+        /// since RenderPolyline takes a style index.
         std::unordered_map<uint32_t, tachyon::VisualColorStyleIndex> wireColorStyles;
-        uint32_t wireColorStylesGeneration = 0; ///< StyleManager::Generation() of the cache
     };
     /// @}
 }

@@ -941,21 +941,31 @@ namespace tachyon
             for (int i = 0; i < nodeCount; ++i) view.ordering.push_back(i);
         }
 
-        // Cache a colour style per socket colour so wires can use their source socket's
-        // colour (RenderPolyline takes a style index). A theme reload invalidates the cache.
-        if (view.wireColorStylesGeneration != styleManager.Generation())
+        // The colors the app gives (sockets, nodes, frames) as styles: one slot per color shown
+        // this frame, numbered as they first come, so the slots are reused from frame to frame
+        // and a color being picked changes one in place rather than adding a style a frame.
+        constexpr uint32_t kPaletteSize = 4096;
+        // Under the canvas: each node view has its own.
+        const bool pushedPalette = idManager.PushParent(canvasID);
+        const ID paletteID = idManager.AllocateRangedID(kPaletteSize, "node-view-palette");
+        if (pushedPalette)
+            (void)idManager.PopParent();
+        view.wireColorStyles.clear();
+        auto appColor = [&](tachyon::color4f c) -> tachyon::VisualColorStyleIndex
         {
-            view.wireColorStyles.clear();
-            view.wireColorStylesGeneration = styleManager.Generation();
-        }
+            const uint32_t key = PackColor(c);
+            if (const auto it = view.wireColorStyles.find(key); it != view.wireColorStyles.end())
+                return it->second;
+            const uint32_t slot = uint32_t(view.wireColorStyles.size());
+            const tachyon::VisualColorStyleIndex style = slot < kPaletteSize
+                ? AppColorStyle(idManager.GetSubID(paletteID, slot), c)
+                : styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(c));   // past the palette: rare
+            view.wireColorStyles.emplace(key, style);
+            return style;
+        };
         for (const auto& cnode : view.nodes)
             for (const auto& cprop : cnode.properties)
-            {
-                const uint32_t ckey = PackColor(cprop.socketColor);
-                if (view.wireColorStyles.find(ckey) == view.wireColorStyles.end())
-                    view.wireColorStyles[ckey] =
-                        styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(cprop.socketColor));
-            }
+                (void)appColor(cprop.socketColor);
 
         // Socket box size, from the .node-socket CSS width; dot and border insets derive from it.
         const int kSocketSize = theme.socketSize;
@@ -1593,8 +1603,7 @@ namespace tachyon
                     VERIFY(elementStorage.BeginChildren());
                     tachyon::VisualColorStyleIndex tint{};
                     if (frame.color.a > 0.0f)
-                        tint = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
-                            tachyon::color4f{ frame.color.r, frame.color.g, frame.color.b, frame.color.a * 0.32f }));
+                        tint = appColor(tachyon::color4f{ frame.color.r, frame.color.g, frame.color.b, frame.color.a * 0.32f });
                     auto headerRes = elementStorage.Add(Element{ .id = idManager.AllocateDynamicID("frame-box-header"),
                                                                  .styleRef = theme.nodeHeaderStyleRef, .flags = ElementFlags::NoInput,
                                                                  .state = state, .colorStyleIndex = tint },
@@ -1838,8 +1847,8 @@ namespace tachyon
                 if (frame.color.a > 0.0f)
                 {
                     const tachyon::color4f c = frame.color;
-                    fill = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4f{ c.r, c.g, c.b, c.a * theme.nodeTints.frameFill }));
-                    band = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4f{ c.r, c.g, c.b, c.a * theme.nodeTints.frameBand }));
+                    fill = appColor(tachyon::color4f{ c.r, c.g, c.b, c.a * theme.nodeTints.frameFill });
+                    band = appColor(tachyon::color4f{ c.r, c.g, c.b, c.a * theme.nodeTints.frameBand });
                     edge = frameEdge(tachyon::color4f{ c.r, c.g, c.b, c.a * theme.nodeTints.frameBorder });
                 }
                 drawnFrames.push_back({ titleRes.ref, frame.size, state, fill, band, edge });
@@ -2325,8 +2334,7 @@ namespace tachyon
                 .flags    = ElementFlags::NoInput,
                 .state    = outerState
             };
-            header.colorStyleIndex = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
-                OverNodeBody(ownColor, stateMachine ? theme.nodeTints.state : theme.nodeTints.header)));
+            header.colorStyleIndex = appColor(OverNodeBody(ownColor, stateMachine ? theme.nodeTints.state : theme.nodeTints.header));
             if (stateMachine)
             {
                 const tachyon::color4f edge = OverNodeBody(ownColor, theme.nodeTints.stateBorder);
@@ -2354,8 +2362,7 @@ namespace tachyon
             if (!stateMachine)
             {
                 // The line under the header, over the border the style draws there.
-                const VisualColorStyleIndex line = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
-                    OverNodeBody(ownColor, theme.nodeTints.headerLine)));
+                const VisualColorStyleIndex line = appColor(OverNodeBody(ownColor, theme.nodeTints.headerLine));
                 VERIFY(elementStorage.AddCustomDraw(headerRes.ref, [line, width = std::max(1, styleManager.Px(1))](tachyon::CustomDrawContext& ctx) {
                     const IntRect r = ctx.ElementRect();
                     ctx.RenderQuad(IntRect{ r.x, r.y + r.h - width, r.w, width }, line);
@@ -2377,8 +2384,7 @@ namespace tachyon
                 };
                 // Alpha 0 keeps the CSS default (the accent).
                 const tachyon::VisualColorStyleIndex categoryColor = node.categoryColor.a > 0.0f
-                    ? styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(node.categoryColor))
-                    : tachyon::VisualColorStyleIndex{};
+                    ? appColor(node.categoryColor) : tachyon::VisualColorStyleIndex{};
                 addHeaderPart("node-category", theme.nodeCategoryStyleRef, {}, categoryColor);
                 addHeaderPart("node-title", theme.nodeTitleStyleRef, node.title, {});
                 if (!node.category.empty())
