@@ -13,6 +13,9 @@
 
 #include <skribidi/skb_rich_layout.h>
 
+#include <algorithm>
+#include <utility>
+
 
 #undef SKB_CURRENT_SELECTION
 #define SKB_CURRENT_SELECTION \
@@ -47,9 +50,40 @@ namespace tachyon
         }
     }
 
+    bool SkribidiTextSystem::HoldUntilEditorExists(EditorInput&& input)
+    {
+        const SkribidiContext* ctx = m_skribidiContext;
+        if (ctx->active_text_id == TextID::Invalid ||
+            (ctx->editor != nullptr && ctx->active_text_id == ctx->editing_text_id))
+            return false;
+        // A field focused but never drawn (scrolled out of a virtual list) holds a bounded
+        // amount; past that its keys are dropped, as they were before it was focused.
+        constexpr size_t kMaxHeldInput = 1024;
+        if (m_inputBeforeEditor.size() < kMaxHeldInput)
+            m_inputBeforeEditor.push_back(std::move(input));
+        return true;
+    }
+
+    void SkribidiTextSystem::TypeInputHeldForEditor()
+    {
+        const SkribidiContext* ctx = m_skribidiContext;
+        if (m_inputBeforeEditor.empty() || ctx->editor == nullptr || ctx->active_text_id != ctx->editing_text_id)
+            return;
+        const std::vector<EditorInput> held = std::exchange(m_inputBeforeEditor, {});
+        for (const EditorInput& input : held)
+        {
+            if (input.cursor >= 0)
+                OnTextComposition(ID::Invalid(), input.composition, input.cursor);
+            else
+                OnKeyboard(ID::Invalid(), input.key, 0, input.modifiers, input.action);
+        }
+    }
+
     void SkribidiTextSystem::OnKeyboard(ID /*windowId*/, tachyon::KeyCode key, int /*repeat*/, KeyModifier modifiers, KeyAction action)
     {
         if (!m_skribidiContext)
+            return;
+        if (HoldUntilEditorExists({ .key = key, .modifiers = modifiers, .action = action }))
             return;
         if (!m_skribidiContext->editor)
             return;
@@ -666,6 +700,8 @@ namespace tachyon
     void SkribidiTextSystem::OnTextComposition(ID /*windowId*/, std::string_view text, int32_t cursor)
     {
         SkribidiContext* ctx = m_skribidiContext;
+        if (ctx && HoldUntilEditorExists({ .cursor = std::max(cursor, 0), .composition = std::string(text) }))
+            return;
         if (!ctx || !ctx->editor || ctx->active_text_id != ctx->editing_text_id || ctx->active_read_only)
             return;
         if (text.empty())

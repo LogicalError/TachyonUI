@@ -168,6 +168,8 @@ namespace tachyon
         if (editor == nullptr) return;
 
         auto* ctx = m_skribidiContext;
+        if (entry->textId == ctx->active_text_id)
+            TypeInputHeldForEditor();
 
         float prev_x = ctx->view.cx;
         float prev_y = ctx->view.cy;
@@ -471,6 +473,8 @@ namespace tachyon
         const bool activeElementChanged = from != elementId;
         if (activeElementChanged && m_undoHistory)
             m_undoHistory->EndMerge();   // the next edit is a step of its own
+        if (activeElementChanged)
+            m_inputBeforeEditor.clear();   // held for a field never drawn
 
         if (from != ID::Invalid() && activeElementChanged)
         {

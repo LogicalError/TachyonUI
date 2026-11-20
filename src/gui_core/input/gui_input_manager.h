@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 #include <gui_core/input/gui_input_state.h>
@@ -29,11 +32,19 @@ namespace tachyon
 
     /// Receives raw OS events, records them, and runs the frame's input pipeline (tab
     /// navigation, text editor focus, dispatch, post-dispatch).
+    ///
+    /// With a text system set, every event also reaches it. Keys and IME text go to it at
+    /// once while the focus can't have moved; after a press, Tab, Enter or Escape this frame
+    /// they wait for the dispatch, which hands each one over once the events before it moved
+    /// the focus, so typing right after a Tab or a click lands in the field it moved to.
     class InputManager : public IPlatformInputHandler
     {
     public:
         InputManager() = default;
         ~InputManager() = default;
+
+        /// The text system the events are passed on to; null for none.
+        void SetTextSystem(ITextSystem* textSystem) { m_textSystem = textSystem; }
 
         /// IPlatformInputHandler: record OS events for this frame's dispatch.
         ///@{
@@ -41,9 +52,9 @@ namespace tachyon
         void OnMouseMove(tachyon::ID windowId, tachyon::int2 screenPos, tachyon::MouseButtons buttons, KeyModifier modifiers) override;
         void OnMouseButton(tachyon::ID windowId, tachyon::int2 screenPos, tachyon::MouseButtons buttons, KeyModifier modifiers, MouseAction action) override;
         void OnMouseScroll(tachyon::ID windowId, tachyon::int2 screenPos, tachyon::float2 scrollOffset, KeyModifier modifiers) override;
-        void OnTextComposition(tachyon::ID, std::string_view, int32_t) override {} // the text editor shows it
+        void OnTextComposition(tachyon::ID windowId, std::string_view text, int32_t cursor) override;
         void OnFileDrop(tachyon::ID windowId, tachyon::int2 screenPos, FileDropAction action, std::string_view data) override;
-        void OnPen(tachyon::ID /*windowId*/, const PenState& pen) override { m_pen = pen; }
+        void OnPen(tachyon::ID windowId, const PenState& pen) override;
         /// Recorded as a MouseScroll with InputState::pinch, where the pointer is.
         void OnPinch(tachyon::ID windowId, float scale, KeyModifier modifiers) override;
         ///@}
@@ -115,6 +126,25 @@ namespace tachyon
 
         void DispatchSingleEvent(RecordedInputEvent& recorded, GUIStateManager& guiStateManager, ElementStorage& storage);
 
+        /// Records a button event without passing it on (a press the OS missed).
+        void RecordMouseButton(int2 screenPos, MouseButtons buttons, KeyModifier modifiers, MouseAction action);
+
+        /// A key or IME text for the text system, held until the focus settles.
+        struct HeldTextInput
+        {
+            uint32_t    beforeEvent = 0;   ///< handed over before this recorded event is dispatched
+            ID          windowId    = ID::Invalid();
+            KeyCode     key         = KeyCode::None;
+            KeyModifier modifiers   = KeyModifier::None;
+            KeyAction   action      = KeyAction::KeyDown;
+            int32_t     cursor      = -1;  ///< >= 0: IME text in `composition`
+            std::string composition;
+        };
+
+        /// Hands the held text input due before recorded event `upTo` to the text system, once
+        /// the text focus follows the focus the events before it left.
+        void HandOverHeldTextInput(size_t upTo, size_t& next, GUIStateManager& guiStateManager);
+
         /// The pen a pointer event carries with `buttons` held: the pen's own, or for the mouse,
         /// pressure 1 while a button is held.
         PenState PointerPen(MouseButtons buttons) const;
@@ -125,7 +155,11 @@ namespace tachyon
         ID            m_prevFocusedID  = ID::Invalid();
         PenState      m_pen;
 
+        ITextSystem*  m_textSystem     = nullptr;
+        bool          m_holdTextInput  = false;   ///< the focus may move this frame: hold keys
+
         std::vector<RecordedInputEvent> m_recordedEvents;
+        std::vector<HeldTextInput>      m_heldTextInput;
         std::vector<EventHandler>       m_globalHandlers;
 
         FileDrag              m_fileDrag;

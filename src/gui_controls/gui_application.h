@@ -41,7 +41,6 @@
 #include <gui_core/input/gui_input_manager.h>
 #include <gui_core/input/gui_command_manager.h>
 #include <gui_core/input/gui_input_handler_func.h>
-#include <gui_core/input/gui_input_handler_broadcaster.h>
 
 #include <gui_core/layout/gui_layout_engine.h>
 
@@ -276,9 +275,6 @@ namespace tachyon
 
         /// Commands, their shortcuts and the undo history.
         CommandManager      commandManager {};
-
-        /// Sends each platform input event to the input manager and the text system.
-        InputHandlerBroadcaster inputBroadcaster {};
 
         /// Runs a frame from inside the OS's modal resize loop, so windows repaint while resized.
         /// Initialize sets it unless repaintWhileResizing is off or it is already set.

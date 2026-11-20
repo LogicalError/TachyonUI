@@ -186,7 +186,7 @@ namespace tachyon
 
         textSystem       = new tachyon::SkribidiTextSystem(m_allocationHooks);
         inputManager     = std::make_unique<tachyon::InputManager>();
-        inputBroadcaster = tachyon::InputHandlerBroadcaster({ inputManager.get(), textSystem });
+        inputManager->SetTextSystem(textSystem);
         m_imageWindows   = new tachyon::ImageWindowBackend(*m_osWindowBackend);
         windowBackend    = m_imageWindows;
         // The backend's settings, and the windows made for it.
@@ -222,7 +222,7 @@ namespace tachyon
         }
         guiRenderer      = graphicsContext->guiRenderer;
         layoutEngine     = std::make_unique<tachyon::LayoutEngine>(*textSystem, guiStateManager.GetScrollManagement());
-        windowManager    = std::make_unique<tachyon::OSWindowManager>(graphicsContext, windowBackend, &inputBroadcaster, styleManager, gradientManager);
+        windowManager    = std::make_unique<tachyon::OSWindowManager>(graphicsContext, windowBackend, inputManager.get(), styleManager, gradientManager);
 
         textSystem->SetFontDirectory(ResourcePath("fonts"));
         if (!options.fallbackFonts.empty())
@@ -518,29 +518,29 @@ namespace tachyon
 
     void GUIApplication::InjectMouseMove(ID windowID, int2 pos, KeyModifier mods)
     {
-        inputBroadcaster.OnMouseMove(windowID, InjectedScreenPos(windowID, pos), m_injectedButtons, mods);
+        inputManager->OnMouseMove(windowID, InjectedScreenPos(windowID, pos), m_injectedButtons, mods);
     }
 
     void GUIApplication::InjectMouseButton(ID windowID, int2 pos, MouseButtons button, bool down, KeyModifier mods)
     {
         m_injectedButtons = down ? (m_injectedButtons | button) : (m_injectedButtons & ~button);
-        inputBroadcaster.OnMouseButton(windowID, InjectedScreenPos(windowID, pos, down), m_injectedButtons, mods,
+        inputManager->OnMouseButton(windowID, InjectedScreenPos(windowID, pos, down), m_injectedButtons, mods,
                                        down ? MouseAction::MouseDown : MouseAction::MouseUp);
     }
 
     void GUIApplication::InjectMouseScroll(ID windowID, int2 pos, float2 offset, KeyModifier mods)
     {
-        inputBroadcaster.OnMouseScroll(windowID, InjectedScreenPos(windowID, pos), offset, mods);
+        inputManager->OnMouseScroll(windowID, InjectedScreenPos(windowID, pos), offset, mods);
     }
 
     void GUIApplication::InjectPen(ID windowID, const PenState& pen)
     {
-        inputBroadcaster.OnPen(windowID, pen);
+        inputManager->OnPen(windowID, pen);
     }
 
     void GUIApplication::InjectPinch(ID windowID, float scale, KeyModifier mods)
     {
-        inputBroadcaster.OnPinch(windowID, scale, mods);
+        inputManager->OnPinch(windowID, scale, mods);
     }
 
     void GUIApplication::InjectMouseLeave(ID windowID)
@@ -561,7 +561,7 @@ namespace tachyon
     void GUIApplication::InjectKey(ID windowID, KeyCode key, KeyAction action, KeyModifier mods)
     {
         InjectedFocus(windowID, false);
-        inputBroadcaster.OnKeyboard(windowID, key, 0, mods, action);
+        inputManager->OnKeyboard(windowID, key, 0, mods, action);
     }
 
     void GUIApplication::InjectText(ID windowID, std::string_view utf8)
@@ -573,7 +573,7 @@ namespace tachyon
             const uint32_t codepoint = NextUtf8Codepoint(utf8, i);
             if (codepoint == kInvalidCodepoint)
                 return;   // malformed: stop rather than send garbage
-            inputBroadcaster.OnKeyboard(windowID, static_cast<KeyCode>(codepoint), 0, KeyModifier::None, KeyAction::KeyChar);
+            inputManager->OnKeyboard(windowID, static_cast<KeyCode>(codepoint), 0, KeyModifier::None, KeyAction::KeyChar);
         }
     }
 

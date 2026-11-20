@@ -294,6 +294,38 @@ namespace tachyon
             EXPECT_EQ(bound.size(), 5u) << bound;
         }
 
+        // Keys that reach a field before its editor is made (focus moved to it earlier in
+        // the same frame) are typed once the editor is there, not dropped.
+        TEST_F(SkribidiEditorTest, KeysBeforeTheEditorExistsAreTypedWhenItDoes)
+        {
+            Frame(200);
+            Focus(field);
+            Type("XY");
+            Key(KeyCode::Return);
+            Frame(200);
+            Frame(200);
+
+            EXPECT_TRUE(modified);
+            EXPECT_EQ(bound.size(), 5u) << bound;
+            EXPECT_NE(bound.find("XY"), std::string::npos) << bound;
+        }
+
+        // Keys held for a field the focus left before it was drawn don't reach the next one.
+        TEST_F(SkribidiEditorTest, KeysForAFieldLeftBeforeItWasDrawnAreDropped)
+        {
+            Frame(200);
+            Focus(field);
+            Type("XY");
+            Focus(ID::Invalid());
+            Frame(200);
+            Focus(field);
+            Frame(200);
+            Key(KeyCode::Return);
+            Frame(200);
+
+            EXPECT_EQ(bound, "abc");
+        }
+
         // Resizing the field (window or splitter drag) while typing must not
         // throw away the uncommitted text.
         TEST_F(SkribidiEditorTest, WidthChangeKeepsUncommittedTyping)
