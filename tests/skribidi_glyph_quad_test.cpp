@@ -46,8 +46,10 @@ namespace tachyon
             const std::vector<GlyphDraw> draws = Render("abab", IntRect{ 0, 0, 300, 40 });
             ASSERT_EQ(draws.size(), 4u);
             EXPECT_GT(draws[2].pos.x, draws[0].pos.x);
-            ExpectSame(draws[0], draws[2], float2{ draws[2].pos.x - draws[0].pos.x, 0 });
-            ExpectSame(draws[1], draws[3], float2{ draws[3].pos.x - draws[1].pos.x, 0 });
+            // Both letters repeat one "ab" further on: the same step for each.
+            const float2 step{ draws[2].pos.x - draws[0].pos.x, 0 };
+            ExpectSame(draws[0], draws[2], step);
+            ExpectSame(draws[1], draws[3], step);
         }
 
         TEST_F(SkribidiGlyphQuadTest, ATextMovedDrawsItsGlyphsMovedAsFar)

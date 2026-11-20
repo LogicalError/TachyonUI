@@ -64,7 +64,12 @@ void tachyon::vulkan::SetDeviceLost(bool lost) { g_deviceLost = lost; }
 void VulkanDeviceContext::WaitIdle() const
 {
     auto queueLock = LockQueue();
-    TACHYON_VK_CHECK(vkDeviceWaitIdle(device));
+    // On the host's device only the GUI's queue: vkDeviceWaitIdle would need every queue of
+    // the host's held, and would wait for all its GPU work.
+    if (UsesExternalDevice())
+        TACHYON_VK_CHECK(vkQueueWaitIdle(graphicsQueue));
+    else
+        TACHYON_VK_CHECK(vkDeviceWaitIdle(device));
 }
 
 bool VulkanDeviceContext::Initialize()

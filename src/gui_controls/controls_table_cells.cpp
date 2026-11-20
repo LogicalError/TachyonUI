@@ -45,8 +45,16 @@ namespace tachyon
         // EndTable replays the closures through VirtualTable's row loop.
         void RecordReplayCell(tachyon::TableEmit& emit, std::function<void()> replay)
         {
-            assert(emit.rowCount > 0 && "Cell() outside BeginRow/EndRow");
-            assert(emit.currentCol < int(emit.columnCount) && "more Cell() calls than columns");
+            if (emit.rowCount <= 0)
+            {
+                Diagnostics::ReportMisuse(Diagnostics::MakeLogCategory("app"), "GUIApplication: a table cell before BeginRow (ignored)");
+                return;
+            }
+            if (emit.currentCol >= int(emit.columnCount))
+            {
+                Diagnostics::ReportMisuse(Diagnostics::MakeLogCategory("app"), "GUIApplication: more cells in a row than the table has columns (ignored)");
+                return;
+            }
             auto& col = emit.columnCells[size_t(emit.currentCol)];
             col.resize(size_t(emit.rowCount));
             col.back() = std::move(replay);
@@ -492,7 +500,7 @@ namespace tachyon
 
                     tachyon::LineStyle style { .colorStyleIndex = lineColor, .lineWidth = sm->Px(1.f) };
 
-                    for (int d = 0; d < depth - 1; d++)
+                    for (int d = 0; d < depth - 1 && d < 32; d++)   // the mask is 32 bits wide
                     {
                         if ((ancestorMask & (1u << d)) == 0) continue;
                         int32_t x = leftX + padLeft + d * indent + indent / 2;

@@ -8,6 +8,7 @@
 
 #include <gui_controls/gui_widget_state_types.h>   // TreeDropPosition
 
+#include <algorithm>
 #include <concepts>
 #include <iterator>
 #include <stdint.h>
@@ -31,38 +32,41 @@ namespace tachyon::TreeUtils
 
     /// Recomputes the derived fields (skipCount, ancestorLineMask, isLastSibling) from
     /// each row's depth. Call once after structural edits; toggling isOpen needs no rebuild.
-    /// O(n^2) worst case, fine for the hundreds-of-rows datasets these views target.
+    /// One pass from the last row up, so a large tree (a virtualized view's) costs O(n).
     template <TreeRowLike Row>
     void RebuildTreeIndex(std::vector<Row>& rows)
     {
         const int n = static_cast<int>(rows.size());
-        for (int i = 0; i < n; i++)
+        int maxDepth = 0;
+        for (const Row& row : rows)
+            maxDepth = std::max(maxDepth, static_cast<int>(row.depth));
+        // later[t]: a row below this one is at depth t with none shallower in between, so a
+        // line at depth t runs on past this row. Only entries up to `highest` can be set.
+        std::vector<uint8_t> later(static_cast<size_t>(maxDepth) + 1, 0);
+        int highest = -1;
+        // The rows below this one that no row below them is at or above: the first one at or
+        // above this row's depth ends its subtree.
+        std::vector<int> open;
+        for (int i = n - 1; i >= 0; --i)
         {
-            const int D = rows[i].depth;
-
-            int j = i + 1;
-            while (j < n && rows[j].depth > D) j++;
-            rows[i].skipCount = j - i - 1;
+            const int D = std::max(0, static_cast<int>(rows[i].depth));
+            while (!open.empty() && rows[open.back()].depth > D)
+                open.pop_back();
+            rows[i].skipCount = (open.empty() ? n : open.back()) - i - 1;
+            open.push_back(i);
 
             uint32_t mask = 0;
-            for (int d = 0; d <= D - 2 && d < 32; d++) // the mask is 32 bits wide
-            {
-                const int target = d + 1;
-                for (int k = i + 1; k < n; k++)
-                {
-                    if (rows[k].depth < target) break;
-                    if (rows[k].depth == target) { mask |= (1u << d); break; }
-                }
-            }
+            for (int d = 0; d <= D - 2 && d < 32; d++)   // the mask is 32 bits wide
+                if (d + 1 <= highest && later[size_t(d + 1)])
+                    mask |= (1u << d);
             rows[i].ancestorLineMask = mask;
+            rows[i].isLastSibling    = !(D <= highest && later[size_t(D)]);
 
-            bool last = true;
-            for (int k = i + 1; k < n; k++)
-            {
-                if (rows[k].depth < D) break;
-                if (rows[k].depth == D) { last = false; break; }
-            }
-            rows[i].isLastSibling = last;
+            // For the rows above: lines deeper than this row end at it, its own runs on.
+            for (int t = D + 1; t <= highest; t++)
+                later[size_t(t)] = 0;
+            later[size_t(D)] = 1;
+            highest = D;
         }
     }
 

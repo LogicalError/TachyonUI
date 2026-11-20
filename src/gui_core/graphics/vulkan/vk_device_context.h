@@ -51,7 +51,7 @@ namespace tachyon::vulkan
         /// Queues a function for the next flush.
         void push_function(::std::function<void()>&& function)
         {
-            deletors.push_back(function);
+            deletors.push_back(::std::move(function));
         }
 
         /// Runs and clears the queued functions.
@@ -307,13 +307,13 @@ namespace tachyon::vulkan
         GUIRenderContext renderContext;
 
         /// The instance; the host's with SetExternalDevice.
-        VkInstance       instance;
+        VkInstance       instance  = VK_NULL_HANDLE;
         /// The device; the host's with SetExternalDevice.
-        VkDevice         device;
+        VkDevice         device    = VK_NULL_HANDLE;
         /// The allocator; the host's when it passed one.
-        VmaAllocator     allocator;
+        VmaAllocator     allocator = VK_NULL_HANDLE;
         /// The GPU the device runs on.
-        VkPhysicalDevice chosenGPU;
+        VkPhysicalDevice chosenGPU = VK_NULL_HANDLE;
         /// chosenGPU's name, as its driver reports it.
         std::string      deviceName;
 
@@ -349,6 +349,10 @@ namespace tachyon::vulkan
 
         /// Flushed at Destroy (DeviceScope::Application).
         DeletionQueue mainDeletionQueue;
+        /// Flushed only when the context shuts down (Cleanup), not when a lost device is
+        /// remade: for objects that outlive a device, made again on the new one (the glyph
+        /// atlas's pages).
+        DeletionQueue shutdownQueue;
         /// A timeline every frame submission signals, one value further each.
         VkSemaphore submitTimeline = VK_NULL_HANDLE;
         /// Frames advanced so far.

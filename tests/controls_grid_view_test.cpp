@@ -608,6 +608,25 @@ namespace tachyon
             }
         };
 
+        // An item removed while selected isn't selected again when another takes its place.
+        TEST_F(VirtualGridRenameTest, ARemovedItemsSelectionDoesNotComeBack)
+        {
+            GridFrame();
+            GridFrame();
+            app.ClickAt(app.CenterOf(itemIDs[3]));
+            GridFrame();
+            const ID last = itemIDs[3];
+            ASSERT_TRUE(multi.selectedIDs.contains(last));
+
+            names.pop_back();
+            GridFrame();
+            names.push_back("epsilon");
+            GridFrame();
+            EXPECT_EQ(itemIDs[3], last) << "the new item has the old one's ID";
+            EXPECT_FALSE(multi.selectedIDs.contains(last));
+            EXPECT_NE(multi.lastClickedID, last);
+        }
+
         TEST_F(VirtualGridRenameTest, ASlowSecondClickStartsARename)
         {
             GridFrame();

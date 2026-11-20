@@ -6,6 +6,7 @@
 #include "headless_gui_app.h"
 
 #include <gui_core/elements/gui_element_storage.h>
+#include <gui_controls/subsystems/gui_color_picker_subsystem.h>
 
 #include <vector>
 
@@ -91,6 +92,36 @@ namespace tachyon
 
             EXPECT_EQ(app.styleManager.VisualColorStyleCount(), baseline)
                 << "each frame must reuse the swatch's color-style slot, not allocate a new one";
+        }
+
+        // A grey in HSL has no hue: the strip still sets one, and the square then colors with it.
+        TEST_F(ColorFieldTest, AGreysHueStripStillSetsTheHue)
+        {
+            color = { 0.5f, 0.5f, 0.5f, 1.0f };
+            app.Frame([&] { EmitField(); });
+            ClickSwatch();
+            app.Frame([&] { EmitField(); });
+            app.Frame([&] { EmitField(); });
+            ASSERT_TRUE(PickerOpen());
+            auto& cp = app.m_colorPickerSub->State();
+            cp.activeSpace = tachyon::ColorSpace::HSL;
+            app.Frame([&] { EmitField(); });
+
+            auto drag = [&](tachyon::IntRect r, float fx, float fy) {
+                const tachyon::int2 at{ r.x + int(fx * float(r.w)), r.y + int(fy * float(r.h)) };
+                app.mouseWindow = cp.windowID;
+                app.InjectMouseMove(at);
+                app.InjectMouseDown(at);
+                app.Frame([&] { EmitField(); });
+                app.InjectMouseUp(at);
+                app.Frame([&] { EmitField(); });
+                app.mouseWindow = tachyon::ID::Invalid();
+            };
+            drag(FirstRectWithStyle(app.theme.colorPickerStripStyleRef), 0.5f, 1.0f / 3.0f);   // green
+            EXPECT_NEAR(cp.spaceHue, 1.0f / 3.0f, 0.02f) << "kept though the color is still grey";
+            drag(FirstRectWithStyle(app.theme.colorPickerSquareStyleRef), 0.9f, 0.5f);
+            EXPECT_GT(cp.s, 0.3f) << "the square gave it color";
+            EXPECT_NEAR(cp.h, 1.0f / 3.0f, 0.03f) << "in the hue the strip set";
         }
 
         TEST_F(ColorFieldTest, ClickSwatchOpensPicker)

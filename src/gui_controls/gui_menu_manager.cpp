@@ -17,6 +17,7 @@
 
 #include <gui_core/gui_id_manager.h>
 
+#include <algorithm>
 #include <assert.h>
 
 namespace tachyon
@@ -38,10 +39,36 @@ namespace tachyon
 
     ID MenuManager::PopupWindowFor(ID triggerID, IDManager& idManager)
     {
-        auto [it, added] = popupWindowIDs.try_emplace(triggerID, ID::Invalid());
-        if (added)
-            it->second = idManager.CreateStaticID();
-        return it->second;
+        ++popupWindowUses;
+        for (PopupWindow& popup : popupWindows)
+            if (popup.triggerID == triggerID)
+            {
+                popup.lastUse = popupWindowUses;
+                return popup.windowID;
+            }
+        if (popupWindows.size() < kMaxPopupWindows)
+        {
+            popupWindows.push_back({ triggerID, idManager.CreateStaticID(), popupWindowUses });
+            return popupWindows.back().windowID;
+        }
+        // The one used longest ago, unless an open menu shows in it.
+        auto shown = [this](ID windowID) {
+            for (int d = 0; d <= maxOpenDepth && d < kMaxDepth; ++d)
+                if (levels[d].isOpen && levels[d].windowID == windowID)
+                    return true;
+            return false;
+        };
+        PopupWindow* oldest = nullptr;
+        for (PopupWindow& popup : popupWindows)
+            if (!shown(popup.windowID) && (oldest == nullptr || popup.lastUse < oldest->lastUse))
+                oldest = &popup;
+        if (oldest == nullptr)
+            oldest = &*std::min_element(popupWindows.begin(), popupWindows.end(),
+                                        [](const PopupWindow& a, const PopupWindow& b) { return a.lastUse < b.lastUse; });
+        menuItemsHaveIcons.erase(oldest->triggerID);
+        oldest->triggerID = triggerID;
+        oldest->lastUse   = popupWindowUses;
+        return oldest->windowID;
     }
 
     void MenuManager::CloseOnInputOutside(const InputManager& inputManager, const ElementStorage& elementStorage,

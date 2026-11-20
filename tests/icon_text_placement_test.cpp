@@ -139,6 +139,7 @@ namespace tachyon
         // Icon sits one gap below the text's natural height - adjacent to
         // the text, not anchored to rect's bottom edge.
         EXPECT_EQ(p.iconRect.y, rect.y + kTextH + kGap);
+        EXPECT_EQ(p.textRect.h, kTextH) << "the rect less the icon and gap, as with Top";
     }
 
     // ---- Left/Right vertical centering -----------------------------------

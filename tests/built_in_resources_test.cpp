@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "scoped_temp_dir.h"
 
 #include <gui_core/gui_embedded_files_internal.h>
 #include <gui_core/gui_resources.h>
@@ -113,7 +114,8 @@ namespace
     TEST(BuiltInResources, ReadResourcePrefersTheFileOnDisk)
     {
         if (!Embedded()) GTEST_SKIP() << "built without TACHYON_EMBED_RESOURCES";
-        const std::filesystem::path folder = std::filesystem::temp_directory_path() / "tachyon-resource-test" / "themes";
+        const GUITest::ScopedTempDir temp("tachyon-resource-test");
+        const std::filesystem::path folder = temp / "themes";
         std::filesystem::create_directories(folder);
         const std::filesystem::path file = folder / "dark.css";
         {
@@ -121,8 +123,6 @@ namespace
             out << ":root { --accent: #123456; }\n";
         }
         const Result<std::string> read = ReadResource(file.string());
-        std::error_code ec;
-        std::filesystem::remove(file, ec);
         ASSERT_TRUE(read) << read.GetError().message;
         EXPECT_EQ(*read, ":root { --accent: #123456; }\n");
     }

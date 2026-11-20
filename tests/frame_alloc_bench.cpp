@@ -1,7 +1,10 @@
 // Heap allocations per frame: builds a UI of one control kind a few hundred times headless
 // and prints the allocations each control costs per frame, against static text (which
-// registers no event handler). Disabled by default; run with
+// registers no event handler). It replaces the executable's operator new, so it's built only
+// when asked for: configure with -DTACHYON_FRAME_ALLOC_BENCH=ON, then run
 //   gui_core_tests --gtest_also_run_disabled_tests --gtest_filter=*FrameAlloc*
+
+#if TACHYON_FRAME_ALLOC_BENCH
 
 #include <gtest/gtest.h>
 
@@ -107,3 +110,5 @@ namespace
         app.Cleanup();
     }
 }
+
+#endif // TACHYON_FRAME_ALLOC_BENCH

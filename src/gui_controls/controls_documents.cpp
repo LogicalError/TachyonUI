@@ -136,18 +136,29 @@ namespace tachyon
         return *set.documents.back();
     }
 
+    void GUIApplication::ForgetDockingLayout(DockingLayout& layout)
+    {
+        for (size_t i = m_floatingDockWindows.size(); i-- > 0; )
+            if (m_floatingDockWindows[i]->home == &layout)
+                CloseFloatingDockWindow(i);
+        std::erase(m_dockingLayoutsThisFrame, &layout);
+        std::erase_if(m_persistDocks, [&](const PersistedDock& dock) { return dock.target == &layout; });
+    }
+
     void GUIApplication::CloseDocument(DocumentSet& set, int index)
     {
         if (index < 0 || index >= int(set.documents.size()))
             return;
         Document& document = *set.documents[size_t(index)];
 
+        // A drag or drop of its tab ends with it: both point at the document.
+        if (m_documentDrag.document == &document)
+            m_documentDrag = {};
+        if (m_documentMove && m_documentMove->document == &document)
+            m_documentMove.reset();
+
         // Its torn-off panels go with it; they would dock back into a layout that's gone.
-        for (size_t i = m_floatingDockWindows.size(); i-- > 0; )
-            if (m_floatingDockWindows[i]->home == &document.layout)
-                CloseFloatingDockWindow(i);
-        std::erase(m_dockingLayoutsThisFrame, &document.layout);
-        std::erase_if(m_persistDocks, [&](const PersistedDock& dock) { return dock.target == &document.layout; });
+        ForgetDockingLayout(document.layout);
 
         DisableAllPanels(document.layout);
         ReleaseDockTreeIDs(document.layout.root.get(), &idManager);

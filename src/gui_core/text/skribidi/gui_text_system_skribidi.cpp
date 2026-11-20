@@ -859,7 +859,8 @@ namespace tachyon
 					tachyon::float2 localPos{ static_cast<float>(screenMousePos.x), static_cast<float>(screenMousePos.y) };
 					if (TryGetTextEditorLocalPoint(entry->elementId, ID::Invalid(), screenMousePos, localPos))
 					{
-						const auto* layout = static_cast<const skb_layout_t*>(UpdateLayoutWhenNecessary(entry, static_cast<float>(rect.w)));
+						// The width RenderText laid it out at, so this doesn't lay it out again.
+						const auto* layout = static_cast<const skb_layout_t*>(UpdateLayoutWhenNecessary(entry, static_cast<float>(LayoutWidth(entry, rect.w))));
 						if (layout)
 						{
 							const skb_text_position_t caretPos = skb_layout_hit_test(layout, SKB_MOVEMENT_CARET, localPos.x, localPos.y);
@@ -1046,6 +1047,12 @@ namespace tachyon
 					params->font_collection, run->font_handle, glyph.gid, run->font_size, paint.color, mode);
 				if (quad.flags & SKB_QUAD_IS_EMPTY)
 					continue;
+				// A failed lookup (atlas full, no font) is tried again next frame, not cached.
+				if (quad.geom.width <= 0.0f)
+				{
+					reusable = false;
+					continue;
+				}
 				const uint32_t texID = (uint32_t)skb_image_atlas_get_texture_user_data(ctx->atlas, quad.texture_idx);
 				if (texID == 0)
 				{

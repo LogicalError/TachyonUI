@@ -1053,16 +1053,16 @@ namespace tachyon
                 sizerFlags = tachyon::ElementFlags::None;
                 auto  headerStyleIndex = theme.tableHeaderStyleRef.layoutStyleIndex;
                 auto  cellStyleIndex   = theme.tableCellStyleRef.layoutStyleIndex;
-                // By pointer: max content width is only final when the handler runs.
-                auto* maxWidth         = &vcol.internal.maxContentWidth;
                 sizerHandler = tachyon::MakeHorizontalSizerHandler(
                     guiStateManager, elementStorage,
                     state->columnWidths[c],
                     col.minWidth.value, std::numeric_limits<int>::max(),
                     nullptr,
                     // when double-clicking the sizer, snap to content width (plus padding/borders)
-                    [maxWidth, sm = &styleManager, cellStyleIndex, headerStyleIndex]() -> int {
-                        return *maxWidth + 1 +
+                    [state, c, sm = &styleManager, cellStyleIndex, headerStyleIndex]() -> int {
+                        const auto& widths = state->internal.maxContentWidths;
+                        const int32_t maxWidth = size_t(c) < widths.size() ? widths[size_t(c)] : 0;
+                        return maxWidth + 1 +
                             std::max(sm->GetBorderBoxWidth(headerStyleIndex),
                                 sm->GetBorderBoxWidth(cellStyleIndex));
                     },
@@ -1548,6 +1548,9 @@ namespace tachyon
             MirrorTableScroll(statePtr);
         }
         VERIFY(elementStorage.EndChildren()); // table container
+        state.internal.maxContentWidths.resize(columnCount);
+        for (size_t c = 0; c < columnCount; c++)
+            state.internal.maxContentWidths[c] = columns[c].internal.maxContentWidth;
         m_tableEmit = std::move(m_outerTableEmits.back());
         m_outerTableEmits.pop_back();
 

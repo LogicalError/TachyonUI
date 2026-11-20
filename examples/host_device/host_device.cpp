@@ -263,6 +263,7 @@ int main()
     if (!SDL_Init(SDL_INIT_VIDEO))
         return 1;
     Host host;
+    bool ok = false;
     {
         HostedApp app(host);
         tachyon::Result<void> result = app.Initialize();
@@ -271,8 +272,9 @@ int main()
         app.Cleanup();   // the GUI destroys only what it created; the device stays
         if (!result)
             std::fprintf(stderr, "%s\n", result.GetError().message.c_str());
+        ok = bool(result);
     }
     host.Destroy();
     SDL_Quit();
-    return 0;
+    return ok ? 0 : 1;
 }

@@ -294,6 +294,38 @@ namespace tachyon
             EXPECT_EQ(bound.size(), 5u) << bound;
         }
 
+        // Keys that reach a field before its editor is made (focus moved to it earlier in
+        // the same frame) are typed once the editor is there, not dropped.
+        TEST_F(SkribidiEditorTest, KeysBeforeTheEditorExistsAreTypedWhenItDoes)
+        {
+            Frame(200);
+            Focus(field);
+            Type("XY");
+            Key(KeyCode::Return);
+            Frame(200);
+            Frame(200);
+
+            EXPECT_TRUE(modified);
+            EXPECT_EQ(bound.size(), 5u) << bound;
+            EXPECT_NE(bound.find("XY"), std::string::npos) << bound;
+        }
+
+        // Keys held for a field the focus left before it was drawn don't reach the next one.
+        TEST_F(SkribidiEditorTest, KeysForAFieldLeftBeforeItWasDrawnAreDropped)
+        {
+            Frame(200);
+            Focus(field);
+            Type("XY");
+            Focus(ID::Invalid());
+            Frame(200);
+            Focus(field);
+            Frame(200);
+            Key(KeyCode::Return);
+            Frame(200);
+
+            EXPECT_EQ(bound, "abc");
+        }
+
         // Resizing the field (window or splitter drag) while typing must not
         // throw away the uncommitted text.
         TEST_F(SkribidiEditorTest, WidthChangeKeepsUncommittedTyping)
@@ -850,6 +882,23 @@ namespace tachyon
                 if (NextUtf8Codepoint(text, i) == kInvalidCodepoint)
                     return false;
             return true;
+        }
+
+        // Byte sequences shaped like UTF-8 that still aren't: overlong forms, UTF-16 surrogates
+        // and values past U+10FFFF.
+        TEST(Utf8, OverlongSurrogateAndOutOfRangeFormsAreInvalid)
+        {
+            EXPECT_FALSE(IsValidUtf8("\xC0\xAF"));             // '/' in two bytes
+            EXPECT_FALSE(IsValidUtf8("\xE0\x80\xAF"));         // and in three
+            EXPECT_FALSE(IsValidUtf8("\xF0\x80\x80\xAF"));     // and in four
+            EXPECT_FALSE(IsValidUtf8("\xED\xA0\x80"));         // U+D800
+            EXPECT_FALSE(IsValidUtf8("\xF4\x90\x80\x80"));     // U+110000
+            EXPECT_TRUE (IsValidUtf8("\xF4\x8F\xBF\xBF"));     // U+10FFFF
+            EXPECT_TRUE (IsValidUtf8("\xE2\x82\xAC"));         // the euro sign
+            EXPECT_TRUE (IsValidUtf8(ToValidUtf8("\xED\xA0\x80 x")));
+            std::string out;
+            AppendUtf8(out, 0xD800);
+            EXPECT_EQ(out, "\xEF\xBF\xBD") << "a surrogate isn't encoded";
         }
 
         // Pasted bytes that aren't UTF-8: the field keeps valid text, the good part included,

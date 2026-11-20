@@ -69,7 +69,8 @@ void tachyon::vulkan::transition_image(VkCommandBuffer cmd, VkImage image, VkIma
     }
     else if (newLayout == VK_IMAGE_LAYOUT_PRESENT_SRC_KHR)
     {
-        dstStage = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT;
+        // Within the present semaphore's signal (ALL_COMMANDS), so presenting waits for it.
+        dstStage = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         dstAccess = 0;
     }
     else if (newLayout == VK_IMAGE_LAYOUT_GENERAL)

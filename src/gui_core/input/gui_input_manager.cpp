@@ -11,8 +11,9 @@
 
 #include <gui_core/text/gui_text_system.h>
 
-#include <optional>
+#include <algorithm>
 #include <atomic>
+#include <optional>
 
 namespace tachyon
 {
@@ -197,7 +198,7 @@ namespace tachyon
     // Recording - IPlatformInputHandler implementation
     // ---------------------------------------------------------------------------
 
-    void InputManager::OnKeyboard(tachyon::ID /*windowId*/, KeyCode key, int /*repeat*/, KeyModifier modifiers, KeyAction action)
+    void InputManager::OnKeyboard(tachyon::ID windowId, KeyCode key, int repeat, KeyModifier modifiers, KeyAction action)
     {
         // KeyChar carries a Unicode codepoint in `key`, not a KeyCode.
         if (action == KeyAction::KeyChar)
@@ -207,17 +208,58 @@ namespace tachyon
             state.modifiers = modifiers;
             state.buttons   = m_currentButtons;
             m_recordedEvents.push_back({ EventType::TextInput, std::move(state) });
-            return;
+        } else
+        {
+            InputState state;
+            state.lastKey       = key;
+            state.lastKeyAction = action;
+            state.modifiers     = modifiers;
+            state.buttons       = m_currentButtons;
+
+            const EventType type = (action == KeyAction::KeyDown) ? EventType::KeyDown : EventType::KeyUp;
+            m_recordedEvents.push_back({ type, std::move(state) });
         }
 
-        InputState state;
-        state.lastKey       = key;
-        state.lastKeyAction = action;
-        state.modifiers     = modifiers;
-        state.buttons       = m_currentButtons;
+        if (!m_textSystem)
+            return;
+        if (m_holdTextInput)
+        {
+            m_heldTextInput.push_back({ .beforeEvent = uint32_t(m_recordedEvents.size() - 1), .windowId = windowId,
+                                        .key = key, .modifiers = modifiers, .action = action });
+            return;
+        }
+        m_textSystem->OnKeyboard(windowId, key, repeat, modifiers, action);
+        // These keys move or let go of the focus: the keys after them wait to see where it went.
+        if (action == KeyAction::KeyDown)
+            switch (key)
+            {
+                case KeyCode::Tab:   case KeyCode::Return: case KeyCode::Return2:
+                case KeyCode::KeyPadEnter: case KeyCode::Escape:
+                    m_holdTextInput = true;
+                    break;
+                default:
+                    break;
+            }
+    }
 
-        const EventType type = (action == KeyAction::KeyDown) ? EventType::KeyDown : EventType::KeyUp;
-        m_recordedEvents.push_back({ type, std::move(state) });
+    void InputManager::OnTextComposition(tachyon::ID windowId, std::string_view text, int32_t cursor)
+    {
+        if (!m_textSystem)
+            return;
+        if (m_holdTextInput)
+        {
+            m_heldTextInput.push_back({ .beforeEvent = uint32_t(m_recordedEvents.size()), .windowId = windowId,
+                                        .cursor = std::max(cursor, 0), .composition = std::string(text) });
+            return;
+        }
+        m_textSystem->OnTextComposition(windowId, text, cursor);
+    }
+
+    void InputManager::OnPen(tachyon::ID windowId, const PenState& pen)
+    {
+        m_pen = pen;
+        if (m_textSystem)
+            m_textSystem->OnPen(windowId, pen);
     }
 
     PenState InputManager::PointerPen(MouseButtons buttons) const
@@ -229,8 +271,11 @@ namespace tachyon
         return mouse;
     }
 
-    void InputManager::OnMouseMove(tachyon::ID /*windowId*/, tachyon::int2 screenPos, tachyon::MouseButtons /*buttons*/, KeyModifier modifiers)
+    void InputManager::OnMouseMove(tachyon::ID windowId, tachyon::int2 screenPos, tachyon::MouseButtons buttons, KeyModifier modifiers)
     {
+        if (m_textSystem)
+            m_textSystem->OnMouseMove(windowId, screenPos, buttons, modifiers);
+
         InputState state;
         state.screenPos    = screenPos;
         state.prevScreenPos = m_prevScreenPos;
@@ -244,7 +289,18 @@ namespace tachyon
         m_recordedEvents.push_back({ EventType::MouseMove, std::move(state) });
     }
 
-    void InputManager::OnMouseButton(tachyon::ID /*windowId*/, tachyon::int2 screenPos, tachyon::MouseButtons buttons, KeyModifier modifiers, MouseAction action)
+    void InputManager::OnMouseButton(tachyon::ID windowId, tachyon::int2 screenPos, tachyon::MouseButtons buttons, KeyModifier modifiers, MouseAction action)
+    {
+        RecordMouseButton(screenPos, buttons, modifiers, action);
+        if (!m_textSystem)
+            return;
+        m_textSystem->OnMouseButton(windowId, screenPos, buttons, modifiers, action);
+        // A press may move the focus: the keys after it wait to see where it went.
+        if (action == MouseAction::MouseDown)
+            m_holdTextInput = true;
+    }
+
+    void InputManager::RecordMouseButton(tachyon::int2 screenPos, tachyon::MouseButtons buttons, KeyModifier modifiers, MouseAction action)
     {
         InputState state;
         state.screenPos    = screenPos;
@@ -263,6 +319,9 @@ namespace tachyon
 
     void InputManager::OnMouseScroll(tachyon::ID windowId, tachyon::int2 screenPos, tachyon::float2 scrollOffset, KeyModifier modifiers)
     {
+        if (m_textSystem)
+            m_textSystem->OnMouseScroll(windowId, screenPos, scrollOffset, modifiers);
+
         InputState state;
         state.screenPos    = screenPos;
         state.prevScreenPos = m_prevScreenPos;
@@ -279,6 +338,9 @@ namespace tachyon
 
     void InputManager::OnPinch(tachyon::ID windowId, float scale, KeyModifier modifiers)
     {
+        if (m_textSystem)
+            m_textSystem->OnPinch(windowId, scale, modifiers);
+
         InputState state;
         state.screenPos     = m_prevScreenPos;
         state.prevScreenPos = m_prevScreenPos;
@@ -292,6 +354,9 @@ namespace tachyon
 
     void InputManager::OnFileDrop(tachyon::ID windowId, tachyon::int2 screenPos, FileDropAction action, std::string_view data)
     {
+        if (m_textSystem)
+            m_textSystem->OnFileDrop(windowId, screenPos, action, data);
+
         switch (action)
         {
             case FileDropAction::Begin:
@@ -340,12 +405,12 @@ namespace tachyon
             if (physPressed && !currentPressed)
             {
                 MouseButtons newButtons = m_currentButtons | bit;
-                OnMouseButton(ID::Invalid(), screenPos, newButtons, KeyModifier::None, MouseAction::MouseDown);
+                RecordMouseButton(screenPos, newButtons, KeyModifier::None, MouseAction::MouseDown);
             } else
             if (!physPressed && currentPressed)
             {
                 MouseButtons newButtons = m_currentButtons & ~bit;
-                OnMouseButton(ID::Invalid(), screenPos, newButtons, KeyModifier::None, MouseAction::MouseUp);
+                RecordMouseButton(screenPos, newButtons, KeyModifier::None, MouseAction::MouseUp);
             }
         };
 
@@ -762,11 +827,49 @@ namespace tachyon
         }
         guiStateManager.Drag().ClearEvents();
 
-        // Dispatch each recorded OS event individually.
-        for (auto& recorded : m_recordedEvents)
-            DispatchSingleEvent(recorded, guiStateManager, storage);
+        // Dispatch each recorded OS event individually; the held keys go to the text system
+        // in between, after the events that came before them.
+        size_t nextHeld = 0;
+        for (size_t i = 0; i < m_recordedEvents.size(); ++i)
+        {
+            HandOverHeldTextInput(i, nextHeld, guiStateManager);
+            DispatchSingleEvent(m_recordedEvents[i], guiStateManager, storage);
+        }
+        HandOverHeldTextInput(m_recordedEvents.size(), nextHeld, guiStateManager);
 
         m_recordedEvents.clear();
+        m_heldTextInput.clear();
+        m_holdTextInput = false;
+    }
+
+    void InputManager::HandOverHeldTextInput(size_t upTo, size_t& next, GUIStateManager& guiStateManager)
+    {
+        if (next >= m_heldTextInput.size() || m_heldTextInput[next].beforeEvent > upTo || !m_textSystem)
+            return;
+
+        // The text focus follows the focus as the events so far left it, as after dispatch.
+        auto& textFocus = guiStateManager.TextEditorFocus();
+        const ID focused = guiStateManager.Interaction().GetFocusedID();
+        if (focused != ID::Invalid() && m_textSystem->IsTextEditor(focused))
+            textFocus.Set(focused);
+        else
+            textFocus.Clear();
+        if (textFocus.GetPrevFocusedID() != textFocus.GetFocusedID())
+        {
+            m_textSystem->SwitchTextEditor(textFocus.GetPrevFocusedID(), textFocus.GetFocusedID());
+            if (textFocus.GetFocusedID() != ID::Invalid())
+                m_textSystem->RequestSelectAll(textFocus.GetFocusedID());
+        }
+        textFocus.Commit();
+
+        for (; next < m_heldTextInput.size() && m_heldTextInput[next].beforeEvent <= upTo; ++next)
+        {
+            const HeldTextInput& held = m_heldTextInput[next];
+            if (held.cursor >= 0)
+                m_textSystem->OnTextComposition(held.windowId, held.composition, held.cursor);
+            else
+                m_textSystem->OnKeyboard(held.windowId, held.key, 0, held.modifiers, held.action);
+        }
     }
 
 } // namespace tachyon

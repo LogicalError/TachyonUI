@@ -63,7 +63,8 @@ namespace tachyon
     /// One row of a flat-data tree view (VirtualTreeView); rows are in depth-first order.
     struct TreeViewRow
     {
-        /// The caller's own ID for the row; the view does not read it.
+        /// The caller's own ID for the row. When set, the selection stays on the row as rows
+        /// are inserted, removed or moved above it; without it, on its position.
         tachyon::ID      id           = tachyon::ID::Invalid();
         std::string  name;                     ///< label
         int          depth        = 0;         ///< nesting level, 0 = root; defines the hierarchy

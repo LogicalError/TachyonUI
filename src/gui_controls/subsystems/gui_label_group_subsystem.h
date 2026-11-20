@@ -31,6 +31,7 @@ namespace tachyon
         struct State
         {
             int32_t labelWidth = 120;   ///< shared label width, CSS px
+            int32_t defaultWidth = 120; ///< the width it starts at; one still at it has nothing to keep
             int32_t minWidth   = 40;    ///< CSS px
             int32_t maxWidth   = 500;   ///< CSS px
             bool    resizable  = true;  ///< false: the width fits the widest label instead
@@ -40,6 +41,7 @@ namespace tachyon
             std::vector<tachyon::TextID> labelTextIDs; ///< transient: rebuilt each frame for auto-size
             int32_t maxLabelWidthThisFrame = 0;    ///< transient: widest label (pixels), for auto-width
             std::vector<tachyon::ElementRef> labelRefs; ///< transient: this frame's labels, in order
+            uint64_t lastUsedFrame = 0;          ///< the frame it was last begun in
         };
 
         LabelGroupSubsystem(FramePipeline& frame,
@@ -72,6 +74,9 @@ namespace tachyon
 
         std::unordered_map<tachyon::ID, State> m_states;
         std::vector<StackEntry>            m_stack;
+        std::vector<State*>                m_used;    ///< the groups begun this frame (node-stable)
+        uint64_t                           m_frame = 1;   ///< a new group's lastUsedFrame (0) is never it
+        static constexpr uint64_t          kForgetAfterFrames = 300;
 
         ElementStorage&  m_elementStorage;
         GUIStateManager& m_guiStateManager;

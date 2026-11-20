@@ -21,6 +21,9 @@
 #include <gui_core/graphics/vulkan/vk_defaults.h>
 #include <gui_core/windows/gui_layered_window.h>
 #include <gui_core/graphics/gui_graphics_context.h>
+#include <gui_core/diagnostics/gui_logging.h>
+
+static constexpr tachyon::Diagnostics::LogCategory kLogVulkan = tachyon::Diagnostics::MakeLogCategory("vulkan");
 
 using namespace tachyon::vulkan;
 
@@ -165,7 +168,7 @@ void VulkanWindowContext::CreateSwapchain()
             }
     }
 
-    vkb::Swapchain vkbSwapchain = swapchainBuilder
+    auto built = swapchainBuilder
         .set_desired_format(VkSurfaceFormatKHR{ .format = swapchain.swapchainImageFormat, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
         .set_composite_alpha_flags(compositeAlpha)
         .set_desired_present_mode(presentMode)
@@ -173,15 +176,31 @@ void VulkanWindowContext::CreateSwapchain()
         .set_desired_extent(width, height)
         .set_old_swapchain(swapchain.swapchain)
         .add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-        .build()
-        .value();
+        .build();
+    // No swapchain (the surface lost, the window going away between the size check and
+    // here): nothing drawn until the next resize tries again.
+    auto images = built ? built.value().get_images() : decltype(built.value().get_images()){ std::error_code{} };
+    auto views  = built && images ? built.value().get_image_views() : decltype(built.value().get_image_views()){ std::error_code{} };
+    if (!built || !images || !views)
+    {
+        TACHYON_LOG_ERROR(kLogVulkan, "VulkanWindowContext: the swapchain couldn't be made");
+        if (built)
+        {
+            if (views) built.value().destroy_image_views(views.value());
+            vkb::destroy_swapchain(built.value());
+        }
+        swapchain.swapchain = VK_NULL_HANDLE;
+        freeze_rendering    = true;
+        return;
+    }
+    vkb::Swapchain vkbSwapchain = built.value();
 
     swapchain.presentMode = vkbSwapchain.present_mode;
 
     swapchain.swapchainExtent = vkbSwapchain.extent;
     swapchain.swapchain = vkbSwapchain.swapchain;
-    swapchain.swapchainImages = vkbSwapchain.get_images().value();
-    swapchain.swapchainImageViews = vkbSwapchain.get_image_views().value();
+    swapchain.swapchainImages = images.value();
+    swapchain.swapchainImageViews = views.value();
 
     const VkSemaphoreCreateInfo semaphoreCreateInfo = tachyon::vulkan::semaphore_create_info();
     swapchain.presentSemaphores.resize(swapchain.swapchainImages.size());
@@ -373,8 +392,8 @@ VkCommandBuffer VulkanWindowContext::BeginWindowFrame(FrameData& currentFrame, V
     {
         // The swapchain image is acquired late, in EndWindowFrame; drawExtent
         // only needs the swapchain extent.
-        drawExtent.height = uint32_t(std::min(swapchain.swapchainExtent.height, currentFrame.drawImage.imageExtent.height) * 1.f);
-        drawExtent.width  = uint32_t(std::min(swapchain.swapchainExtent.width,  currentFrame.drawImage.imageExtent.width) * 1.f);
+        drawExtent.height = std::min(swapchain.swapchainExtent.height, currentFrame.drawImage.imageExtent.height);
+        drawExtent.width  = std::min(swapchain.swapchainExtent.width,  currentFrame.drawImage.imageExtent.width);
     }
     else
     {
@@ -460,12 +479,16 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
             acq = vkAcquireNextImageKHR(deviceContext->device, swapchain.swapchain, 1000000000, currentFrame.swapchainSemaphore, nullptr, &swapchain.swapchainImageIndex);
             acquireSeconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - acquireStart).count();
         }
-        if (acq == VK_ERROR_OUT_OF_DATE_KHR || acq == VK_TIMEOUT || acq == VK_NOT_READY)
+        if (acq != VK_SUCCESS && acq != VK_SUBOPTIMAL_KHR)
         {
-            // No image: still submit the offscreen work so renderFence (already
-            // reset by BeginWindowFrame) signals for the next frame's wait.
-            if (acq == VK_ERROR_OUT_OF_DATE_KHR)
+            // No image (out of date, timed out, or an error such as a lost surface): still
+            // submit the offscreen work so renderFence (already reset by BeginWindowFrame)
+            // signals for the next frame's wait. Nothing may wait on the acquire semaphore,
+            // which nothing signals.
+            if (acq == VK_ERROR_OUT_OF_DATE_KHR || acq == VK_ERROR_SURFACE_LOST_KHR)
                 resize_requested = true;
+            else if (acq != VK_TIMEOUT && acq != VK_NOT_READY)
+                TACHYON_VK_CHECK(acq);
             TACHYON_VK_CHECK(vkEndCommandBuffer(state.commandBuffer));
             VkCommandBufferSubmitInfo abortCmd = tachyon::vulkan::command_buffer_submit_info(state.commandBuffer);
             VkSemaphoreSubmitInfo abortSignal{};
@@ -485,14 +508,12 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
         }
         if (acq == VK_SUBOPTIMAL_KHR)
             resize_requested = true;
-        else
-            TACHYON_VK_CHECK(acq);
 
         tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
         currentFrame.drawImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        // After the acquire semaphore's wait (ALL_COMMANDS, below), not racing it.
+        // After the acquire semaphore's wait (at TRANSFER, below), not racing it.
         tachyon::vulkan::transition_image(state.commandBuffer, swapchain.swapchainImages[swapchain.swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                             VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+                                             VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
         tachyon::vulkan::copy_image_to_image(state.commandBuffer, currentFrame.drawImage.image, swapchain.swapchainImages[swapchain.swapchainImageIndex], drawExtent, swapchain.swapchainExtent);
 
@@ -532,12 +553,14 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
     VkSubmitInfo2 submit = tachyon::vulkan::submit_info(&cmdinfo, &signals[0], nullptr);
     if (swapchain.swapchain != VK_NULL_HANDLE)
     {
-        // Wait on the acquire semaphore at ALL_COMMANDS: the swapchain image's
-        // first use this frame is the TRANSFER-stage transition/blit above, not a
-        // color attachment, so waiting at COLOR_ATTACHMENT_OUTPUT lets the
-        // transition race the acquire (sync-validation WRITE_AFTER_READ).
-        waits.push_back(tachyon::vulkan::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, currentFrame.swapchainSemaphore));
-        signals[1] = tachyon::vulkan::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+        // Wait on the acquire semaphore at TRANSFER: the swapchain image's first use this
+        // frame is the transition and blit above, whose barrier starts at TRANSFER too, so
+        // the frame's drawing doesn't wait for the presentation engine. (At
+        // COLOR_ATTACHMENT_OUTPUT the transition would race the acquire.)
+        waits.push_back(tachyon::vulkan::semaphore_submit_info(VK_PIPELINE_STAGE_2_TRANSFER_BIT, currentFrame.swapchainSemaphore));
+        // Signaled after everything, the blit into the image and its move to PRESENT_SRC
+        // included (ALL_GRAPHICS has no transfer stage).
+        signals[1] = tachyon::vulkan::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                                                    swapchain.presentSemaphores[swapchain.swapchainImageIndex]);
         submit.signalSemaphoreInfoCount = 2;
         submit.pSignalSemaphoreInfos    = signals.data();
@@ -549,13 +572,20 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
         // The timeline's next value under the queue lock: the values reach it in order.
         auto queueLock = deviceContext->LockQueue();
         signals[0] = deviceContext->NextSubmitSignal();
-        TACHYON_VK_CHECK(vkQueueSubmit2(deviceContext->graphicsQueue, 1, &submit, currentFrame.renderFence));
+        if (const VkResult submitted = vkQueueSubmit2(deviceContext->graphicsQueue, 1, &submit, currentFrame.renderFence); submitted != VK_SUCCESS)
+        {
+            // The fence was reset and won't signal: the device is remade rather than waited on.
+            ::tachyon::vulkan::OnVulkanError(submitted, "vkQueueSubmit2");
+            ::tachyon::vulkan::SetDeviceLost(true);
+        }
     }
     deviceContext->frameWaits.Submitted();
 
 
-    presentPending = swapchain.swapchain != VK_NULL_HANDLE;
-    readbackPending = needsReadback ? &currentFrame : nullptr;
+    // Nothing to present or read back from a submit that failed (the device is being remade).
+    const bool submitted = !::tachyon::vulkan::IsDeviceLost();
+    presentPending = submitted && swapchain.swapchain != VK_NULL_HANDLE;
+    readbackPending = submitted && needsReadback ? &currentFrame : nullptr;
     frameNumber++;
 }
 
@@ -759,8 +789,14 @@ void VulkanWindowContext::RecordFrame(tachyon::GraphicsContext* graphicsContext,
         uint32_t requestedHeight = rect.size.y > 0 ? static_cast<uint32_t>(rect.size.y) : 0u;
         requestedExtent = { requestedWidth, requestedHeight };
 
+        // A swapchain window made smaller: remade at the new size, once per size asked for
+        // (the surface may settle on another extent than asked, which mustn't loop).
+        const bool shrunk = swapchain.swapchain != VK_NULL_HANDLE && requestedWidth > 0 && requestedHeight > 0
+            && (requestedWidth != swapchainRequest.width || requestedHeight != swapchainRequest.height)
+            && (requestedWidth < swapchain.swapchainExtent.width || requestedHeight < swapchain.swapchainExtent.height);
         // All FRAME_OVERLAP draw images share one extent, so any slot's is representative.
-        if (requestedWidth > swapchain.swapchainExtent.width ||
+        if (shrunk ||
+            requestedWidth > swapchain.swapchainExtent.width ||
             requestedHeight > swapchain.swapchainExtent.height ||
             requestedWidth > GetCurrentFrame().drawImage.imageExtent.width ||
             requestedHeight > GetCurrentFrame().drawImage.imageExtent.height)
@@ -794,6 +830,7 @@ void VulkanWindowContext::RecordFrame(tachyon::GraphicsContext* graphicsContext,
         {
             TACHYON_PROFILE_SCOPE("ResizeSwapchain");
             ResizeSwapchain(rect.size);
+            swapchainRequest = requestedExtent;
             resize_requested = false;
         }
 
@@ -860,6 +897,14 @@ VulkanWindowContext* VulkanWindowContext::Create(tachyon::ID id, void* nativeHan
     if (shouldCreateSurface)
     {
         context->surface = context->deviceContext->CreateSurface(context->osHandle);
+        // No surface for a window that needs one: no context, rather than a layered-window
+        // stand-in that reads back every frame and shows nothing.
+        if (context->surface == VK_NULL_HANDLE)
+        {
+            TACHYON_LOG_ERROR(kLogVulkan, "VulkanWindowContext: the window's surface couldn't be made");
+            delete context;
+            return nullptr;
+        }
     } else
     {
         context->surface = VK_NULL_HANDLE;
@@ -881,7 +926,7 @@ VulkanWindowContext* VulkanWindowContext::Create(tachyon::ID id, void* nativeHan
 
         TACHYON_VK_CHECK(vkAllocateCommandBuffers(context->deviceContext->device, &cmdAllocInfo, &context->state.frames[i].mainCommandBuffer));
 
-        context->state.frames[i].deletionQueue.push_function([=]()
+        context->state.frames[i].deletionQueue.push_function([context, i]()
                                                     {
                                                         vkDestroyCommandPool(context->deviceContext->device, context->state.frames[i].commandPool, context->deviceContext->AllocationCallbacks());
                                                     });
@@ -909,9 +954,10 @@ VulkanWindowContext* VulkanWindowContext::Create(tachyon::ID id, void* nativeHan
         {
             const VkQueryPoolCreateInfo poolInfo{ .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = 2 };
             TACHYON_VK_CHECK(vkCreateQueryPool(context->deviceContext->device, &poolInfo, context->deviceContext->AllocationCallbacks(), &frame.timestamps));
-            frame.deletionQueue.push_function([=]()
+            // The handles only: [=] would copy the whole FrameData, deletion queue and all.
+            frame.deletionQueue.push_function([context, pool = frame.timestamps]()
                                               {
-                                                  vkDestroyQueryPool(context->deviceContext->device, frame.timestamps, context->deviceContext->AllocationCallbacks());
+                                                  vkDestroyQueryPool(context->deviceContext->device, pool, context->deviceContext->AllocationCallbacks());
                                               });
         }
         std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes =
@@ -932,11 +978,11 @@ VulkanWindowContext* VulkanWindowContext::Create(tachyon::ID id, void* nativeHan
 
         TACHYON_VK_CHECK(vkCreateSemaphore(context->deviceContext->device, &semaphoreCreateInfo, context->deviceContext->AllocationCallbacks(), &frame.swapchainSemaphore));
 
-        frame.deletionQueue.push_function([=]()
+        frame.deletionQueue.push_function([context, i, semaphore = frame.swapchainSemaphore, fence = frame.renderFence]()
                                           {
-                                              vkDestroySemaphore(context->deviceContext->device, frame.swapchainSemaphore, context->deviceContext->AllocationCallbacks());
+                                              vkDestroySemaphore(context->deviceContext->device, semaphore, context->deviceContext->AllocationCallbacks());
 
-                                              vkDestroyFence(context->deviceContext->device, frame.renderFence, context->deviceContext->AllocationCallbacks());
+                                              vkDestroyFence(context->deviceContext->device, fence, context->deviceContext->AllocationCallbacks());
 
                                               context->state.frames[i].frameDescriptors.clear_pools(context->deviceContext->device);
                                               context->state.frames[i].frameDescriptors.destroy_pools(context->deviceContext->device);

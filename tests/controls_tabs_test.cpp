@@ -288,7 +288,8 @@ namespace tachyon
                 }
                 app.EndRootWindow();
             });
-            SUCCEED();
+            EXPECT_TRUE(app.HasElement(barID));
+            EXPECT_EQ(app.CountByText("Solo"), 1) << "its tab is built";
         }
 
         // Keyboard focus on tabs (#95): Tab reaches the bar at its selected tab, arrows

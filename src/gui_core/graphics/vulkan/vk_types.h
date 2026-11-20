@@ -47,16 +47,22 @@ namespace tachyon::vulkan
                 ::tachyon::vulkan::OnVulkanError(tachyon_vk_result, #x); \
         } while (0)
 
-    /// Waits for `fence` however long the GPU takes: VK_TIMEOUT only means the GPU is slow (a busy
-    /// or stalled driver, a paused debugger). A real error such as device loss is reported and
-    /// ends the wait.
+    /// Waits for `fence` while the GPU is only slow: VK_TIMEOUT means a busy or stalled driver,
+    /// a paused debugger. A real error such as device loss is reported and ends the wait; so
+    /// does a fence still unsignaled after a minute (its submit failed), as a lost device, which
+    /// the GUI recreates, instead of hanging the app.
     inline void WaitForFence(VkDevice device, VkFence fence)
     {
-        VkResult result;
-        do
-        {
+        constexpr int kMaxSeconds = 60;
+        VkResult result = VK_TIMEOUT;
+        for (int second = 0; second < kMaxSeconds && result == VK_TIMEOUT; ++second)
             result = vkWaitForFences(device, 1, &fence, VK_TRUE, 1000000000);
-        } while (result == VK_TIMEOUT);
+        if (result == VK_TIMEOUT)
+        {
+            OnVulkanError(result, "vkWaitForFences: no signal in a minute");
+            SetDeviceLost(true);
+            return;
+        }
         TACHYON_VK_CHECK(result);
     }
     /// @}

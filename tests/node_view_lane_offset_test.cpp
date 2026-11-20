@@ -73,6 +73,17 @@ namespace
         EXPECT_EQ(offsets.at(WireKey(2, 0)).offset, 0);
     }
 
+    // An input still naming a removed node (the app erased from `nodes` directly) gets no
+    // lane, and the others are unaffected.
+    TEST(NodeViewLaneOffset, AWireFromARemovedNodeIsSkipped)
+    {
+        NodeView view = WiredPair(2);
+        view.nodes[1].properties[1].input = PropertyEndpoint{ 7, 0 };
+        const auto offsets = ComputeWireLaneOffsets(view);
+        EXPECT_EQ(offsets.size(), 1u);
+        EXPECT_EQ(offsets.at(WireKey(1, 0)).offset, 0);
+    }
+
     TEST(NodeViewLaneOffset, MovesTheDefaultCorridorLaneByGridSteps)
     {
         constexpr int32_t grid = 20;

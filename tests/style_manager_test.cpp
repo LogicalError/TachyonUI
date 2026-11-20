@@ -512,6 +512,21 @@ namespace tachyon
         EXPECT_FALSE(sm.IsBoxBackgroundOpaque(base + int(ElementState::Hover))) << "cleared with the styles";
     }
 
+    // A theme variable's color can be given alpha later (SetVariableColor): never opaque.
+    TEST(StyleManagerTest, AThemeVariablesBackgroundIsNotOpaque)
+    {
+        GradientManager gm(16);
+        StyleManager    sm(gm);
+        Style s{};
+        for (StyleState& st : s.states)
+        {
+            st.backgroundColor = ColorStyle::Create(color4b{ 32, 32, 32, 255 });
+            st.backgroundColor.variable = 1;
+        }
+        const StyleRef ref = sm.Register(s, StyleUnits::Pixels);
+        EXPECT_FALSE(sm.IsBoxBackgroundOpaque(GUIRenderer::StyleIndex(ref.visualBoxStyleIndex, ElementState::None)));
+    }
+
     // A box draws nothing with no visible background and no visible border: its primitive can go.
     TEST(StyleManagerTest, ABoxWithNothingVisibleIsBlank)
     {

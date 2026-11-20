@@ -80,8 +80,9 @@ namespace tachyon
         float lo = view.yMin, hi = view.yMax;
         if (view.fitY)
         {
-            lo = 0.0f;
-            hi = 0.0f;
+            // From yMin, as far as the values shown reach either way.
+            lo = view.yMin;
+            hi = view.yMin;
             float xLo = view.xMin, xHi = view.xMax;
             if (!(xHi > xLo)) xHi = xLo + 1.0f;
             const PlotRange shown = PlotShownX(view);
@@ -98,8 +99,11 @@ namespace tachyon
                     const float from = xLo + slot * float(i);
                     if (from + slot <= shown.min || from >= shown.max)
                         continue;
-                    if (std::isfinite(series.values[size_t(i)]))
-                        hi = std::max(hi, series.values[size_t(i)]);
+                    if (const float value = series.values[size_t(i)]; std::isfinite(value))
+                    {
+                        lo = std::min(lo, value);
+                        hi = std::max(hi, value);
+                    }
                 }
             }
         }

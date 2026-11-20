@@ -84,6 +84,21 @@ namespace tachyon
             EXPECT_EQ(disables[0], 0);
         }
 
+        // A tab whose panel the app erased is dropped, so the others keep their indices: the
+        // selected one still shows, and closing tab 1 closes the panel in tab 1.
+        TEST_F(DockingTest, ATabWhosePanelIsGoneIsDropped)
+        {
+            const ID gone = app.idManager.CreateStaticID();
+            DockNode& right = *layout.root->second;
+            right.panelIds = { gone, panelB, panelC };
+            right.selectedTab = 2;   // C
+            Frame();
+            EXPECT_EQ(right.panelIds, (std::vector<ID>{ panelB, panelC }));
+            EXPECT_EQ(right.selectedTab, 1) << "C still";
+            EXPECT_EQ(drawsC, 1);
+            EXPECT_EQ(drawsB, 0);
+        }
+
         TEST_F(DockingTest, SplitPinsFirstPaneAndStacksHorizontally)
         {
             Frame();

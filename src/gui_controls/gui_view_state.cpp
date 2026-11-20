@@ -67,6 +67,11 @@ namespace tachyon
         float m[6];
         if (!object || !Numbers(*object, "transform", m))
             return false;
+        // A damaged state: a transform that can't be inverted (or isn't a number) would put
+        // the canvas nowhere.
+        const float det = m[0] * m[4] - m[1] * m[3];
+        if (!std::all_of(std::begin(m), std::end(m), [](float v) { return std::isfinite(v); }) || std::fabs(det) < 1e-12f)
+            return false;
         view.transform.r0 = float3{ m[0], m[1], m[2] };
         view.transform.r1 = float3{ m[3], m[4], m[5] };
         return true;
@@ -88,6 +93,9 @@ namespace tachyon
             return false;
         const std::optional<float> start = Number(*object, "start"), length = Number(*object, "length"), zoom = Number(*object, "zoom");
         if (!start || !length || !zoom)
+            return false;
+        // A damaged state: no negative span (0 shows the whole duration), nothing that isn't a number.
+        if (!std::isfinite(*start) || !std::isfinite(*length) || *length < 0.0f)
             return false;
         view.viewStart  = *start;
         view.viewLength = *length;

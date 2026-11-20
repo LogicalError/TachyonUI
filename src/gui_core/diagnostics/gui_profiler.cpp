@@ -1,5 +1,6 @@
 #include <gui_core/diagnostics/gui_profiler.h>
 
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 
@@ -17,7 +18,7 @@ namespace tachyon::Diagnostics
     namespace
     {
         constexpr int kMaxDepth = 4096;
-        constexpr int64_t kWindowNs = 250'000'000;   // 0.25s window, matching the FPS panel
+        constexpr int64_t kDefaultWindowNs = 250'000'000;   // 0.25s window, matching the FPS panel
 
         bool g_enabled = true;
 
@@ -82,6 +83,7 @@ namespace tachyon::Diagnostics
             m_nodes.reserve(4096);
             m_index.reserve(4096);
             m_samples.reserve(4096);
+            m_sampleNodes.reserve(4096);
         }
 
         void BeginFrame();
@@ -92,6 +94,7 @@ namespace tachyon::Diagnostics
 
         std::span<const ProfileSample> Samples() const { return { m_samples.data(), m_samples.size() }; }
         double TotalMs() const { return m_rootTotalMs; }
+        void   SetWindow(int64_t nanoseconds) { m_windowNs = std::max<int64_t>(0, nanoseconds); }
 
     private:
         int32_t FindOrCreate(uint64_t key, uint64_t parentKey, int32_t parentIndex,
@@ -99,6 +102,7 @@ namespace tachyon::Diagnostics
         void   Flush();
         void   RebuildSamples();
         void   AppendSubtree(int32_t index);
+        void   WriteFrameValues(ProfileSample& sample, const TimingNode& node) const;
         void   Calibrate();
         double NsFromTicks(int64_t ticks) const { return double(ticks) / m_tscPerNs; }
 
@@ -106,8 +110,13 @@ namespace tachyon::Diagnostics
         std::unordered_map<uint64_t, int32_t> m_index;
         std::vector<OpenScope>                m_stack;
         std::vector<ProfileSample>            m_samples;
+        std::vector<int32_t>                  m_sampleNodes;   ///< each sample's node
+        /// The samples' shape or smoothed values changed (a new node, a flushed window): they
+        /// are rebuilt; otherwise only the per-frame values are written into them.
+        bool                                  m_samplesStale = true;
 
         int64_t m_windowStartNs = 0;
+        int64_t m_windowNs      = kDefaultWindowNs;
         int32_t m_windowFrames  = 0;
         bool    m_windowStarted = false;
         bool    m_frameArmed    = false;
@@ -153,6 +162,8 @@ namespace tachyon::Diagnostics
         m_nodes.clear();
         m_index.clear();
         m_samples.clear();
+        m_sampleNodes.clear();
+        m_samplesStale = true;
         m_stack.clear();
         m_windowStartNs = 0;
         m_windowFrames  = 0;
@@ -168,7 +179,11 @@ namespace tachyon::Diagnostics
         auto it = m_index.find(key);
         if (it != m_index.end())
         {
-            if (loc.isWait) m_nodes[it->second].isWait = true;
+            if (loc.isWait && !m_nodes[it->second].isWait)
+            {
+                m_nodes[it->second].isWait = true;
+                m_samplesStale = true;
+            }
             return it->second;
         }
 
@@ -185,6 +200,7 @@ namespace tachyon::Diagnostics
         node.isWait    = loc.isWait;
         m_nodes.push_back(node);   // may reallocate; take parent ref afterwards
         m_index.emplace(key, index);
+        m_samplesStale = true;
 
         // Append to the parent's child list so siblings keep call order.
         if (parentIndex >= 0)
@@ -286,9 +302,20 @@ namespace tachyon::Diagnostics
         m_windowFrames++;
 
         const int64_t now = SteadyClockNowNanos();
-        if (now - m_windowStartNs >= kWindowNs && m_windowFrames > 0) Flush();
+        if (now - m_windowStartNs >= m_windowNs && m_windowFrames > 0) Flush();
 
-        RebuildSamples();
+        if (m_samplesStale)
+            RebuildSamples();
+        else
+            for (size_t i = 0; i < m_samples.size(); ++i)
+                WriteFrameValues(m_samples[i], m_nodes[size_t(m_sampleNodes[i])]);
+    }
+
+    void ProfilerCollector::WriteFrameValues(ProfileSample& s, const TimingNode& n) const
+    {
+        s.callCount    = n.callCount;
+        s.frameTotalMs = NsFromTicks(n.totalTicks) / 1.0e6;
+        s.frameSelfMs  = std::max(0.0, NsFromTicks(n.totalTicks - n.childTicks) / 1.0e6);
     }
 
     void ProfilerCollector::Flush()
@@ -306,6 +333,7 @@ namespace tachyon::Diagnostics
         }
         m_windowFrames  = 0;
         m_windowStartNs = SteadyClockNowNanos();
+        m_samplesStale  = true;
     }
 
     void ProfilerCollector::AppendSubtree(int32_t index)
@@ -318,13 +346,14 @@ namespace tachyon::Diagnostics
         s.file      = n.file;
         s.line      = n.line;
         s.depth     = n.depth;
-        s.callCount = n.callCount;
         s.totalMs   = n.smTotalMs;
         s.selfMs    = n.smSelfMs;
         s.minMs     = n.smMinMs;
         s.maxMs     = n.smMaxMs;
         s.isWait    = n.isWait;
+        WriteFrameValues(s, n);
         m_samples.push_back(s);
+        m_sampleNodes.push_back(index);
 
         for (int32_t c = n.firstChild; c >= 0; c = m_nodes[c].nextSibling)
             AppendSubtree(c);
@@ -333,6 +362,8 @@ namespace tachyon::Diagnostics
     void ProfilerCollector::RebuildSamples()
     {
         m_samples.clear();
+        m_sampleNodes.clear();
+        m_samplesStale = false;
         m_rootTotalMs = 0.0;
 
         // Roots in creation order, each subtree pre-order.
@@ -356,6 +387,7 @@ namespace tachyon::Diagnostics
     void BeginFrame(ProfilerCollector& c) { c.BeginFrame(); }
     void EndFrame  (ProfilerCollector& c) { c.EndFrame(); }
     void Reset     (ProfilerCollector& c) { c.Reset(); }
+    void SetSmoothingWindow(ProfilerCollector& c, int64_t nanoseconds) { c.SetWindow(nanoseconds); }
 
     void EnterScope(ProfilerCollector& c, ScopeLocation& loc) noexcept { c.Enter(loc); }
     void ExitScope (ProfilerCollector& c) noexcept { c.Exit(); }

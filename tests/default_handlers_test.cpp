@@ -153,7 +153,7 @@ namespace tachyon
             EXPECT_TRUE(TextBoxTakes(KeyCode::Backspace));
             EXPECT_TRUE(TextBoxTakes(KeyCode::Return));
             EXPECT_TRUE(TextBoxTakes(KeyCode::Left, KeyModifier::Control | KeyModifier::Shift));
-            for (KeyCode key : { KeyCode::KeyA, KeyCode::KeyC, KeyCode::KeyV, KeyCode::KeyX, KeyCode::KeyZ })
+            for (KeyCode key : { KeyCode::KeyA, KeyCode::KeyC, KeyCode::KeyV, KeyCode::KeyX, KeyCode::KeyZ, KeyCode::KeyY })
                 EXPECT_TRUE(TextBoxTakes(key, KeyModifier::Control));
         }
 
@@ -182,6 +182,7 @@ namespace tachyon
             EXPECT_FALSE(uses(KeyCode::KeyW));
             EXPECT_FALSE(uses(KeyCode::Backspace));
             EXPECT_FALSE(uses(KeyCode::KeyV, KeyModifier::Control));
+            EXPECT_FALSE(uses(KeyCode::KeyY, KeyModifier::Control)) << "no redo in read-only text";
             EXPECT_FALSE(uses(KeyCode::KeyS, KeyModifier::Control));
         }
 

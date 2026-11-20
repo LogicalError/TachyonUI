@@ -472,8 +472,16 @@ namespace tachyon
             else if (dockBack)
             {
                 // The window closed (OS close, Alt+F4, its parent closing): the item goes
-                // back to its home side. dockBack erases the entry, so i stays.
-                dockBack(fw.windowID, fw.homeSide);
+                // back to its home side. dockBack should erase the entry; if it didn't, it's
+                // dropped here, or the loop would come back to it forever. `fw` may dangle
+                // once dockBack has changed the list.
+                const ID windowID = fw.windowID;
+                dockBack(windowID, fw.homeSide);
+                if (i < floatingItems.size() && floatingItems[i].windowID == windowID)
+                {
+                    idManager.ReleaseStaticID(windowID);
+                    floatingItems.erase(floatingItems.begin() + (ptrdiff_t)i);
+                }
             }
             else
             {

@@ -254,9 +254,10 @@ namespace tachyon
             {
                 if (flexLayout.wrap != FlexWrap::NoWrap && parentRect.constraints.HasFixedHeight())
                 {
-                    const IntRect& parentContentRect = parentRect.innerRect;
+                    // The inner rect isn't laid out yet while sizing: the height comes from the
+                    // fixed size.
                     int32_t totalCross = 0, lineCount = 0;
-                    VisitLines(childRects, parentContentRect.size[1], flexLayout.gap, true, 1, 0,
+                    VisitLines(childRects, LayoutHelpers::FixedContentSize<1>(parentRect), flexLayout.gap, true, 1, 0,
                                [&](size_t, size_t, int32_t, int32_t crossSize, int32_t)
                                {
                                    totalCross += crossSize;

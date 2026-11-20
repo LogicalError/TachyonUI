@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "scoped_temp_dir.h"
 #include "misuse_reports.h"
 #include "skribidi_test_fixture.h"
 
@@ -95,8 +96,8 @@ namespace
     TEST(FuzzTest, ThemeReloadsWithFuzzedPalettes)
     {
         namespace fs = std::filesystem;
-        const fs::path dir = "fuzz-theme";
-        fs::create_directories(dir);
+        const GUITest::ScopedTempDir temp("tachyon-fuzz-theme");   // not in the source tree
+        const fs::path dir = temp.Path();
         fs::copy_file("themes/styles.css", dir / "styles.css", fs::copy_options::overwrite_existing);
         std::string realPalette;
         {
@@ -124,8 +125,6 @@ namespace
         app.RequestReloadTheme("themes/dark.css", 1.0f);
         ExpectAFrameWorks(app);
         app.Cleanup();
-        std::error_code ec;
-        fs::remove_all(dir, ec);
     }
 
     // ---- Saved dock layouts ----

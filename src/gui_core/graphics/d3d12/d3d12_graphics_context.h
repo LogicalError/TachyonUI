@@ -79,6 +79,9 @@ namespace tachyon::d3d12
 
         GraphicsAPI      GetAPI() const override { return GraphicsAPI::D3D12; }
         std::string_view GetDeviceName() const override;
+        /// The device was removed. This backend doesn't make a new one: the app's frames end
+        /// with the error, for it to start again.
+        bool DeviceLost() const override;
         void             SetGpuPreference(std::string_view preference) override;
         /// 4096 by default, 1,000,000 at most (a shader-visible descriptor heap's size). Call
         /// before Initialize.

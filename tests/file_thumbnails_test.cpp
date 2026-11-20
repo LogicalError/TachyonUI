@@ -5,6 +5,7 @@
 
 #include <gui_controls/gui_file_thumbnails.h>
 
+#include "fake_clock.h"
 #include "gui_text_system_stub.h"
 
 #ifdef _WIN32
@@ -117,6 +118,7 @@ namespace tachyon
         EXPECT_EQ(size.height, 16);
         EXPECT_EQ(thumbnails.Get("C:/cat.jpg", kMonday, 32), cat);
         EXPECT_EQ(shell.Reads("cat.jpg"), 1u) << "read once";
+        std::lock_guard lock(shell.mutex);   // the reader thread writes it
         ASSERT_EQ(shell.threads.size(), 1u);
         EXPECT_NE(shell.threads[0], std::this_thread::get_id());
     }
@@ -230,11 +232,12 @@ namespace tachyon
     {
         StubTextSystem textSystem;
         FakeShell shell;
+        GUITest::ScopedFakeClock clock;
         FileThumbnails thumbnails(textSystem, 2, shell.Reader(), 300ms);
         thumbnails.Get("C:/a.jpg", kMonday, 32);
         thumbnails.Get("C:/b.jpg", kMonday, 32);
         ASSERT_TRUE(Settle(thumbnails));
-        std::this_thread::sleep_for(400ms);
+        clock.Advance(400ms);
         thumbnails.Get("C:/a.jpg", kMonday, 32);
         thumbnails.Get("C:/b.jpg", kMonday, 32);
         EXPECT_EQ(thumbnails.Get("C:/c.jpg", kMonday, 32), IconID::Invalid);

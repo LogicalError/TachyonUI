@@ -97,7 +97,7 @@ namespace tachyon
                     LayoutHelpers::CalculateLeafSize(
                         m_textSystem, cursor.CurrentElement(storage),
                         parentRect, minContentWidth);
-                parentRect.minContentWidth = int16_t(std::min<int32_t>(minContentWidth, parentRect.rect.w));
+                parentRect.minContentWidth = int16_t(std::min<int32_t>({ minContentWidth, parentRect.rect.w, INT16_MAX }));
             }
         }
     }
@@ -256,10 +256,11 @@ namespace tachyon
 
             {
                 // innerRect y/h from the margin-box rect; x/w are already final.
-                int16_t top    = parentRect.layoutStyle->margin.top    + parentRect.layoutStyle->borderWidths.top    + parentRect.layoutStyle->padding.top;
-                int16_t bottom = parentRect.layoutStyle->margin.bottom + parentRect.layoutStyle->borderWidths.bottom + parentRect.layoutStyle->padding.bottom;
+                const LayoutStyle& ls = *parentRect.layoutStyle;
+                const int32_t top    = int32_t(ls.margin.top)    + ls.borderWidths.top    + ls.padding.top;
+                const int32_t bottom = int32_t(ls.margin.bottom) + ls.borderWidths.bottom + ls.padding.bottom;
                 parentRect.innerRect.y = parentRect.rect.y + top;
-                parentRect.innerRect.h = std::max<int16_t>(0, static_cast<int16_t>(parentRect.rect.h - static_cast<int32_t>(top + bottom)));
+                parentRect.innerRect.h = std::max(0, parentRect.rect.h - (top + bottom));
             }
             if (cursor.parentDepth == 0 ||
                 (parentRect.flags & ElementFlags::IsWindow) != ElementFlags::None)

@@ -561,15 +561,28 @@ namespace tachyon
         }
     }
 
-    // Row IDs are visible positions, so when visibility changes the selection
-    // is carried over to the same flat rows. A single selection hidden by a
-    // collapse moves to its nearest visible ancestor; hidden multi-selection
-    // entries are dropped.
+    // Row IDs are visible positions, so when the rows shown change the selection is
+    // carried over to the same rows: by their own IDs where they have them, else by flat
+    // index. A single selection hidden by a collapse moves to its nearest visible ancestor;
+    // hidden multi-selection entries are dropped.
     static void RemapTreeSelection(const std::vector<TreeViewRow>& rows,
                                    const std::vector<int>& visibleIdx,
                                    TableState& state)
     {
-        const std::vector<int>& prevVisible = state.internal.treeVisibleIdx;
+        const std::vector<int>&         prevVisible = state.internal.treeVisibleIdx;
+        const std::vector<tachyon::ID>& prevRowIDs  = state.internal.treeVisibleRowIDs;
+        std::unordered_map<tachyon::ID, int> flatOfRowID;   // filled on first use
+        auto flatOf = [&](size_t prevVis) -> int {
+            const tachyon::ID rowID = prevVis < prevRowIDs.size() ? prevRowIDs[prevVis] : tachyon::ID::Invalid();
+            if (rowID == tachyon::ID::Invalid())
+                return prevVisible[prevVis];
+            if (flatOfRowID.empty())
+                for (size_t i = 0; i < rows.size(); ++i)
+                    if (rows[i].id != tachyon::ID::Invalid())
+                        flatOfRowID.emplace(rows[i].id, int(i));
+            const auto it = flatOfRowID.find(rowID);
+            return it != flatOfRowID.end() ? it->second : -1;   // removed
+        };
         std::vector<int> flatToVisible(rows.size(), -1);
         for (size_t v = 0; v < visibleIdx.size(); ++v)
             flatToVisible[size_t(visibleIdx[v])] = int(v);
@@ -593,7 +606,7 @@ namespace tachyon
                 return id;
             const size_t prevVis = size_t(id.value.subRangeParts.index);
             if (prevVis >= prevVisible.size()) return tachyon::ID::Invalid();
-            const int flat = prevVisible[prevVis];
+            const int flat = flatOf(prevVis);
             if (flat < 0 || flat >= int(rows.size())) return tachyon::ID::Invalid();
             const int vis = toAncestor ? visibleOrAncestor(flat) : flatToVisible[size_t(flat)];
             return vis >= 0 ? state.RowIDInRange(vis) : tachyon::ID::Invalid();
@@ -615,9 +628,21 @@ namespace tachyon
                                                 std::vector<int>& visibleIdx, TableState& state)
     {
         WalkTreeViewVisibility(rows, visibleIdx);
-        if (state.internal.rowsRangeID != tachyon::ID::Invalid() && visibleIdx != state.internal.treeVisibleIdx)
+        // The rows shown, by their own IDs: a move or an insert can leave the positions as
+        // they were and still put other rows there.
+        std::vector<tachyon::ID>& shownIDs = state.internal.treeVisibleRowIDs;
+        bool sameRows = shownIDs.size() == visibleIdx.size();
+        for (size_t v = 0; sameRows && v < visibleIdx.size(); ++v)
+            sameRows = rows[size_t(visibleIdx[v])].id == shownIDs[v];
+        if (state.internal.rowsRangeID != tachyon::ID::Invalid() && (!sameRows || visibleIdx != state.internal.treeVisibleIdx))
             RemapTreeSelection(rows, visibleIdx, state);
         state.internal.treeVisibleIdx = visibleIdx;
+        if (!sameRows)
+        {
+            shownIDs.resize(visibleIdx.size());
+            for (size_t v = 0; v < visibleIdx.size(); ++v)
+                shownIDs[v] = rows[size_t(visibleIdx[v])].id;
+        }
     }
 
     void GUIApplication::VirtualTreeView(tachyon::ID id,

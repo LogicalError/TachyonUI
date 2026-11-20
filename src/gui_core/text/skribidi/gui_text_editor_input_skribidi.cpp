@@ -13,6 +13,9 @@
 
 #include <skribidi/skb_rich_layout.h>
 
+#include <algorithm>
+#include <utility>
+
 
 #undef SKB_CURRENT_SELECTION
 #define SKB_CURRENT_SELECTION \
@@ -47,9 +50,40 @@ namespace tachyon
         }
     }
 
+    bool SkribidiTextSystem::HoldUntilEditorExists(EditorInput&& input)
+    {
+        const SkribidiContext* ctx = m_skribidiContext;
+        if (ctx->active_text_id == TextID::Invalid ||
+            (ctx->editor != nullptr && ctx->active_text_id == ctx->editing_text_id))
+            return false;
+        // A field focused but never drawn (scrolled out of a virtual list) holds a bounded
+        // amount; past that its keys are dropped, as they were before it was focused.
+        constexpr size_t kMaxHeldInput = 1024;
+        if (m_inputBeforeEditor.size() < kMaxHeldInput)
+            m_inputBeforeEditor.push_back(std::move(input));
+        return true;
+    }
+
+    void SkribidiTextSystem::TypeInputHeldForEditor()
+    {
+        const SkribidiContext* ctx = m_skribidiContext;
+        if (m_inputBeforeEditor.empty() || ctx->editor == nullptr || ctx->active_text_id != ctx->editing_text_id)
+            return;
+        const std::vector<EditorInput> held = std::exchange(m_inputBeforeEditor, {});
+        for (const EditorInput& input : held)
+        {
+            if (input.cursor >= 0)
+                OnTextComposition(ID::Invalid(), input.composition, input.cursor);
+            else
+                OnKeyboard(ID::Invalid(), input.key, 0, input.modifiers, input.action);
+        }
+    }
+
     void SkribidiTextSystem::OnKeyboard(ID /*windowId*/, tachyon::KeyCode key, int /*repeat*/, KeyModifier modifiers, KeyAction action)
     {
         if (!m_skribidiContext)
+            return;
+        if (HoldUntilEditorExists({ .key = key, .modifiers = modifiers, .action = action }))
             return;
         if (!m_skribidiContext->editor)
             return;
@@ -61,7 +95,10 @@ namespace tachyon
         const bool readOnly = m_skribidiContext->active_read_only;
 
         const ITextValidator* validator = m_skribidiContext->active_validator;
-        if (!readOnly && action != KeyAction::KeyUp)
+        // Keys that only move the caret or select can't start an edit: no need to look.
+        const bool movesOnly = key == KeyCode::Left || key == KeyCode::Right || key == KeyCode::Up || key == KeyCode::Down ||
+                               key == KeyCode::Home || key == KeyCode::End || key == KeyCode::PageUp || key == KeyCode::PageDown;
+        if (!readOnly && action != KeyAction::KeyUp && !(movesOnly && action == KeyAction::KeyDown))
             NoteSelectionBeforeEdit();
 
         if (action == KeyAction::KeyChar)
@@ -120,6 +157,9 @@ namespace tachyon
             if ((modifiers & KeyModifier::Option) != KeyModifier::None) skb_modifiers |= SKB_MOD_OPTION;
             if ((modifiers & KeyModifier::Command) != KeyModifier::None) skb_modifiers |= SKB_MOD_COMMAND;
 
+            // Copy, paste, undo and the rest: Control, or Command on macOS.
+            const bool shortcut = (skb_modifiers & (SKB_MOD_CONTROL | SKB_MOD_COMMAND)) != 0;
+
             // Map keys
             switch (key)
             {
@@ -151,21 +191,21 @@ namespace tachyon
                         selection.start.affinity == selection.end.affinity)
                     {
                         int32_t textOffset = skb_editor_get_text_offset_from_text_position(m_skribidiContext->editor, selection.start);
-                        int32_t textLength = skb_editor_get_text_utf8_count(m_skribidiContext->editor);
+                        int32_t textLength = skb_editor_get_text_utf32_count(m_skribidiContext->editor);   // offsets count codepoints
                         if (textOffset >= textLength) return;
                     }
                     break;
                 }
                 case tachyon::KeyCode::KeyV:
                     if (readOnly) return;
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         if (m_skribidiContext->clipboard != nullptr)
                             Paste(m_skribidiContext->clipboard->Get());
                     }
                     return;
                 case tachyon::KeyCode::KeyC:
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         std::string copiedText = Copy();
                         if (!copiedText.empty() && m_skribidiContext->clipboard != nullptr)
@@ -176,7 +216,7 @@ namespace tachyon
                     return;
                 case tachyon::KeyCode::KeyX:
                     if (readOnly) return;
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         std::string cutText = Cut();
                         if (!cutText.empty() && m_skribidiContext->clipboard != nullptr)
@@ -186,7 +226,7 @@ namespace tachyon
                     }
                     return;
                 case tachyon::KeyCode::KeyA:
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         skb_editor_select_all(m_skribidiContext->editor);
                         EnsureCursorVisible(ActiveElementID());
@@ -195,7 +235,7 @@ namespace tachyon
                 case tachyon::KeyCode::KeyZ:
                 case tachyon::KeyCode::KeyY:
                     if (readOnly) return;
-                    if (skb_modifiers & SKB_MOD_CONTROL)
+                    if (shortcut)
                     {
                         // The field's own typing first; past that, the app's history (e.g. a
                         // text move between fields).
@@ -660,6 +700,8 @@ namespace tachyon
     void SkribidiTextSystem::OnTextComposition(ID /*windowId*/, std::string_view text, int32_t cursor)
     {
         SkribidiContext* ctx = m_skribidiContext;
+        if (ctx && HoldUntilEditorExists({ .cursor = std::max(cursor, 0), .composition = std::string(text) }))
+            return;
         if (!ctx || !ctx->editor || ctx->active_text_id != ctx->editing_text_id || ctx->active_read_only)
             return;
         if (text.empty())

@@ -360,6 +360,9 @@ namespace tachyon
     bool GUIApplication::CurveField(ID id, CurveView& view, LayoutOverride&& constraints)
     {
         CurveView* v = &view;
+        // The app may have taken channels away: the active one is one of those left.
+        const int channelCount = (int)view.channels.size();
+        view.activeChannel = channelCount > 0 ? std::clamp(view.activeChannel, 0, channelCount - 1) : 0;
         const bool changed = view.revision != view.revisionSeen;
         view.revisionSeen = view.revision;
         const bool disabled = guiStateManager.Construction().IsDisabled();

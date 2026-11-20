@@ -66,6 +66,7 @@ tachyon::Result<void> HeadlessGUIApp::Initialize(const InitializeOptions& option
     ownedTextSystem.SetStyleManager(&styleManager);
     windowBackend = m_mockBackend.get();
     inputManager  = std::make_unique<tachyon::InputManager>();
+    inputManager->SetTextSystem(textSystem);
     layoutEngine  = std::make_unique<tachyon::LayoutEngine>(*textSystem, guiStateManager.GetScrollManagement());
     // Menus, tooltips and popups reach the mock-backed OSWindowManager through this.
     windowManager = std::make_unique<tachyon::OSWindowManager>(nullptr, m_mockBackend.get());
@@ -377,10 +378,8 @@ void HeadlessGUIApp::InjectMouseUp(tachyon::int2 pos, tachyon::MouseButtons butt
 void HeadlessGUIApp::InjectKey(tachyon::KeyCode key, tachyon::KeyAction action,
                                 tachyon::KeyModifier mods)
 {
+    // The input manager passes it on to the text system.
     inputManager->OnKeyboard(m_rootWindowID, key, /*repeat*/0, mods, action);
-    // Like the SDL backend, keyboard events also go to the text system.
-    if (textSystem)
-        textSystem->OnKeyboard(m_rootWindowID, key, /*repeat*/0, mods, action);
 }
 
 void HeadlessGUIApp::InjectMouseScroll(tachyon::int2 pos, tachyon::int2 scrollOffset,

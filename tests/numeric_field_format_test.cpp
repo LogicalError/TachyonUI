@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <clocale>
 #include <limits>
+#include <string>
 
+#include <gui_core/text/gui_numeric_field_config.h>
 #include <gui_core/text/gui_text_converter.h>
 #include <gui_core/text/skribidi/internal/gui_skribidi_context.h>
 
@@ -273,5 +276,67 @@ namespace tachyon
         std::string dotInExponent = "1e2.5";
         EXPECT_TRUE(PasteFilter(NumericType::TypeFloat, dotInExponent));
         EXPECT_EQ(dotInExponent, "1e25");
+    }
+
+    // =========================================================================
+    // Dragging an integer field: the result stays in range, at the type's ends too.
+    // =========================================================================
+
+    TEST(NumericFieldDrag, A64BitValueAtItsTopStaysThere)
+    {
+        const NumericFieldConfig<int64_t> s{};
+        EXPECT_EQ(s.Calculate(5, 1.0, INT64_MAX), INT64_MAX);
+        EXPECT_EQ(s.Calculate(-5, 1.0, INT64_MAX), INT64_MAX - 5) << "a small drag still moves it";
+        EXPECT_EQ(s.Calculate(-5, 1.0, INT64_MIN), INT64_MIN);
+        EXPECT_EQ(s.Calculate(5, 1.0, INT64_MIN), INT64_MIN + 5);
+        const NumericFieldConfig<uint64_t> u{};
+        EXPECT_EQ(u.Calculate(5, 1.0, UINT64_MAX), UINT64_MAX);
+        EXPECT_EQ(u.Calculate(-3, 1.0, UINT64_MAX), UINT64_MAX - 3);
+        EXPECT_EQ(u.Calculate(-5, 1.0, 2), 0u);
+    }
+
+    TEST(NumericFieldDrag, SmallValuesMoveAsBefore)
+    {
+        const NumericFieldConfig<int32_t> c{ .minVal = -10, .maxVal = 10 };
+        EXPECT_EQ(c.Calculate(3, 1.0, 1), 4);
+        EXPECT_EQ(c.Calculate(30, 1.0, 1), 10);
+        EXPECT_EQ(c.Calculate(-30, 1.0, 1), -10);
+        EXPECT_EQ(c.Calculate(1, 0.1, 3), 3) << "a fraction of a step rounds toward zero";
+        EXPECT_EQ(c.Calculate(1, std::numeric_limits<double>::quiet_NaN(), 3), 3);
+        const NumericFieldConfig<int32_t> inverted{ .minVal = 5, .maxVal = 1 };
+        EXPECT_EQ(inverted.Calculate(0, 1.0, 3), 5) << "min wins over a smaller max";
+    }
+
+    // A host app with a comma-decimal C locale: numbers still read and show with a point.
+    TEST(NumericText, TheCLocaleDoesNotChangeNumbers)
+    {
+        const std::string before = std::setlocale(LC_ALL, nullptr);
+        if (std::setlocale(LC_ALL, "de-DE") == nullptr && std::setlocale(LC_ALL, "de_DE.UTF-8") == nullptr)
+            GTEST_SKIP() << "no comma-decimal locale here";
+        NumericValue parsed{};
+        const bool ok = ParseNumber("1.5", NumericType::TypeDouble, parsed);
+        const std::string shown = FormatNumber(NumericType::TypeDouble, MakeDouble(2.25));
+        NumericValue signedInt{};
+        const bool okInt = ParseNumber(" +42", NumericType::TypeInt32, signedInt);
+        std::setlocale(LC_ALL, before.c_str());
+
+        EXPECT_TRUE(ok);
+        EXPECT_EQ(parsed.value_double, 1.5);
+        EXPECT_EQ(shown, "2.25");
+        EXPECT_TRUE(okInt);
+        EXPECT_EQ(signedInt.value_int32, 42);
+    }
+
+    TEST(NumericText, ParsingTakesWholeNumbersOnly)
+    {
+        NumericValue v{};
+        EXPECT_FALSE(ParseNumber("1.5x", NumericType::TypeDouble, v));
+        EXPECT_FALSE(ParseNumber("+-1", NumericType::TypeInt32, v));
+        EXPECT_FALSE(ParseNumber("-1", NumericType::TypeUInt32, v));
+        EXPECT_FALSE(ParseNumber("99999999999999999999", NumericType::TypeInt64, v));
+        EXPECT_FALSE(ParseNumber("1e999", NumericType::TypeDouble, v));
+        EXPECT_TRUE (ParseNumber("-7", NumericType::TypeInt8, v));
+        EXPECT_EQ(v.value_int8, -7);
+        EXPECT_EQ(FormatNumber(NumericType::TypeInt64, [] { NumericValue n{}; n.value_int64 = INT64_MIN; return n; }()), "-9223372036854775808");
     }
 }

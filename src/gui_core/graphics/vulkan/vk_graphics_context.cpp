@@ -264,6 +264,12 @@ VulkanGraphicsContext::VulkanGraphicsContext()
     guiRenderer = new tachyon::PrimitiveRenderer();
 }
 
+// A host that drops the context without Cleanup (or one never initialized) still frees it.
+VulkanGraphicsContext::~VulkanGraphicsContext()
+{
+    Cleanup();
+}
+
 // ---- Scenes the app draws (RenderScene) ----------------------------------------
 
 namespace
@@ -492,6 +498,9 @@ tachyon::Result<void> VulkanGraphicsContext::Initialize(tachyon::IWindowBackend*
     if (!deviceContext.Initialize())
     {
         TACHYON_LOG_ERROR(kLogVulkan, "Failed to initialize device context");
+        // The surface goes before its window, and before Cleanup destroys the instance.
+        if (bootstrapSurface != VK_NULL_HANDLE && deviceContext.instance != VK_NULL_HANDLE)
+            vkDestroySurfaceKHR(deviceContext.instance, bootstrapSurface, deviceContext.AllocationCallbacks());
         windowBackend->DestroyWindow(bootstrapWindow);
         return deviceContext.initError.message.empty()
             ? tachyon::Error{ tachyon::ErrorCode::Failed, "could not initialize the Vulkan device" }
@@ -551,6 +560,9 @@ tachyon::Result<void> VulkanGraphicsContext::RecreateDevice(tachyon::IWindowBack
         return result;
     deviceContext.RebuildLiveImages();
     vulkanImageSet->RefreshDescriptors();
+    // The glyph atlas's slots were set by descriptor, not by owner: pointed at the remade pages.
+    if (m_textAtlas)
+        m_textAtlas->SyncTextureIndices();
     return {};
 }
 
@@ -582,9 +594,11 @@ void VulkanGraphicsContext::Cleanup()
 
         // mainDeletionQueue captures atlas font textures by pointer - they must
         // outlive Flush/Destroy.
+        deviceContext.shutdownQueue.flush();
         deviceContext.Flush();
         deviceContext.DestroyHandedOverImages();
         deviceContext.Destroy();
+        deviceContext.initialized = false;   // a second Cleanup (the destructor's) does nothing
     }
     else
         deviceContext.DestroyHandedOverImages();   // no device: the objects only
@@ -648,7 +662,8 @@ void VulkanGraphicsContext::DestroyVisualBoxStylesAtEnd(tachyon::Buffer* buffer,
 
 tachyon::TextAtlasManager* VulkanGraphicsContext::CreateTextAtlasManager()
 {
-    return new tachyon::vulkan::VulkanTextAtlasManager();
+    m_textAtlas = new tachyon::vulkan::VulkanTextAtlasManager();
+    return m_textAtlas;
 }
 
 void tachyon::vulkan::VulkanImageSet::Clear()
@@ -1901,33 +1916,8 @@ tachyon::vulkan::VulkanImage tachyon::vulkan::VulkanDeviceContext::CreateImage(V
 
     TACHYON_VK_CHECK(vmaCreateImage(allocator, &img_info, &allocinfo, &newImage.image, &newImage.allocation, nullptr));
 
-    static int imageCount = 0;
-    static const char* imageNameList[20] =
-    {
-        "CreateImage1",
-        "CreateImage2",
-        "CreateImage3",
-        "CreateImage4",
-        "CreateImage5",
-        "CreateImage6",
-        "CreateImage7",
-        "CreateImage8",
-        "CreateImage9",
-        "CreateImage10",
-        "CreateImage11",
-        "CreateImage12",
-        "CreateImage13",
-        "CreateImage14",
-        "CreateImage15",
-        "CreateImage16",
-        "CreateImage17",
-        "CreateImage18",
-        "CreateImage19",
-        "CreateImage20"
-    };
-
-    vmaSetAllocationName(allocator, newImage.allocation, imageNameList[imageCount]);
-    imageCount = (imageCount + 1) % 20;
+    // One name for all: images are made from any thread, and a counter would race.
+    vmaSetAllocationName(allocator, newImage.allocation, "Image");
 
     VkImageViewCreateInfo view_info = tachyon::vulkan::imageview_create_info(format, newImage.image, aspectFlag);
     view_info.subresourceRange.levelCount = img_info.mipLevels;

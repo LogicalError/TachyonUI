@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "scoped_temp_dir.h"
 #include "misuse_reports.h"
 
 #include <cstdio>
@@ -267,7 +268,8 @@ namespace
 
     TEST(MisuseTest, AMalformedThemeKeepsTheCurrentOne)
     {
-        const char* path = "misuse-malformed.css";
+        const GUITest::ScopedTempDir temp("tachyon-misuse");   // not in the source tree
+        const std::string path = (temp / "malformed.css").string();
         {
             std::ofstream out(path, std::ios::binary);
             out << ".button { color: ; padding: 4px 4px 4px 4px 4px; } }}} @@@ { .x { background-color: rgb(1,2";
@@ -277,7 +279,6 @@ namespace
         MisuseReports reports;
         app.RequestReloadTheme(path, 1.0f);
         ExpectTheNextFrameWorks(app);
-        std::remove(path);
         app.Cleanup();
     }
 

@@ -10,6 +10,7 @@
 #include <vulkan/vulkan.h>
 #endif
 
+#include <memory>
 #include <span>
 #include <vector>
 
@@ -87,6 +88,9 @@ namespace tachyon
         VkPipeline       m_shapes = VK_NULL_HANDLE;   ///< lit triangles
         VkPipeline       m_lines  = VK_NULL_HANDLE;   ///< the grid
         VkDeviceAddress  m_vertices = 0;
+        /// False once the device's teardown destroyed the objects above (a lost device remade):
+        /// they're made again on the new one.
+        std::shared_ptr<bool> m_vkObjectsLive;
 #endif
 #if TACHYON_D3D12
         bool CreateD3D12(const d3d12::D3D12SceneRender& target);

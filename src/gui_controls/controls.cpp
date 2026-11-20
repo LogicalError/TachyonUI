@@ -1334,9 +1334,8 @@ namespace tachyon
 
     void GUIApplication::InvalidatePanel(ID panelId)
     {
-        auto it = m_panelContentIDs.find(panelId);
-        if (it != m_panelContentIDs.end())
-            Invalidate(it->second);
+        if (const ID* contentID = m_panelContentIDs.Find(panelId))
+            Invalidate(*contentID);
     }
 
 

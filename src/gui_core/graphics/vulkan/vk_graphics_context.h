@@ -58,6 +58,7 @@ namespace tachyon::vulkan
 
     public:
         VulkanGraphicsContext();
+        ~VulkanGraphicsContext() override;
 
         tachyon::GraphicsAPI GetAPI() const override { return tachyon::GraphicsAPI::Vulkan; }
         std::string_view GetDeviceName() const override { return deviceContext.deviceName; }
@@ -123,6 +124,9 @@ namespace tachyon::vulkan
         void DestroyWindowContext(tachyon::IWindowContext* context) override;
 
         tachyon::TextAtlasManager* CreateTextAtlasManager() override;
+        /// The atlas manager made last (the text system owns it), its slots refreshed when a
+        /// lost device is remade.
+        class VulkanTextAtlasManager* m_textAtlas = nullptr;
 
         tachyon::ImageSet* GetImageSet() const override;
         tachyon::ImageIndex RegisterImage(tachyon::Image* image) override;

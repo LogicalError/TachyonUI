@@ -51,7 +51,9 @@ namespace tachyon
 
     ScrollOffsetHandle ScrollManagement::GetOrCreateScrollOffsetHandle(ID id)
     {
-        assert(id != ID::Invalid() && "GetOrCreateScrollOffsetHandle called with invalid ID");
+        // No ID, no scroll state: it couldn't be found again, so it would never be freed.
+        if (id == ID::Invalid())
+            return ScrollOffsetHandle::Invalid;
 
         if (const ScrollOffsetHandle* found = m_scrollOffsetHandlesByID.Find(id))
         {

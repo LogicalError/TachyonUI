@@ -15,6 +15,9 @@
 #include <gui_core/graphics/gui_renderer.h>
 #include <gui_controls/gui_menu_manager.h>
 
+#include <set>
+#include <vector>
+
 namespace tachyon
 {
     using GUITest::HeadlessGUIApp;
@@ -573,6 +576,106 @@ namespace tachyon
             EXPECT_EQ(open(fileID), fileWindow) << "a menu keeps its window";
         }
 
+        // Many dropdowns opened one after another (one per row of a list) share a few popup
+        // windows: each is an OS window, so they mustn't pile up one per trigger.
+        TEST_F(ControlsMenuTest, ManyMenusShareABoundedSetOfPopupWindows)
+        {
+            std::vector<ID> triggers;
+            for (int i = 0; i < 20; ++i)
+                triggers.push_back(app.idManager.CreateStaticID());
+            auto draw = [&] {
+                app.BeginRootWindow();
+                for (const ID id : triggers)
+                {
+                    if (app.BeginMenu(id, "Menu", LayoutOverride{}.Size(60, 20)))
+                        app.MenuItem("Item", nullptr);
+                    app.EndMenu();
+                }
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            std::set<uint64_t> windows;
+            for (const ID id : triggers)
+            {
+                app.ClickAt(app.CenterOf(id));
+                app.Frame(draw);
+                app.Frame(draw);
+                ASSERT_TRUE(app.menuManager.IsOpen());
+                ASSERT_EQ(app.menuManager.levels[0].triggerID, id);
+                windows.insert(app.menuManager.levels[0].windowID.Value());
+                app.InjectKey(KeyCode::Escape);
+                app.Frame(draw);
+                app.Frame(draw);
+            }
+            EXPECT_LE(windows.size(), MenuManager::kMaxPopupWindows);
+            EXPECT_LE(app.menuManager.popupWindows.size(), MenuManager::kMaxPopupWindows);
+        }
+
+        // Each menu trigger's rect is kept for the next frame's popup, but not after the
+        // trigger is gone: menus on rows that scrolled away don't pile up.
+        TEST_F(ControlsMenuTest, TheRectsOfMenusNoLongerBuiltGo)
+        {
+            std::vector<ID> triggers;
+            for (int i = 0; i < 30; ++i)
+                triggers.push_back(app.idManager.CreateStaticID());
+            bool shown = true;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                if (shown)
+                    for (const ID id : triggers)
+                    {
+                        if (app.BeginMenu(id, "Menu", LayoutOverride{}.Size(60, 20)))
+                            app.MenuItem("Item", nullptr);
+                        app.EndMenu();
+                    }
+                app.EndRootWindow();
+            };
+            app.runPostLayoutCallbacks = true;
+            app.Frame(draw);
+            app.Frame(draw);
+            EXPECT_GE(GUIApplicationInternals::MenuRects(app).Size(), 30u);
+            shown = false;
+            for (uint32_t i = 0; i < RecentIDMap<int>::kKeepFrames + 2 * RecentIDMap<int>::kSweepPeriod; ++i)
+                app.Frame(draw);
+            EXPECT_EQ(GUIApplicationInternals::MenuRects(app).Size(), 0u);
+        }
+
+        // A context menu opened after a dropdown gets a window of its own, not the
+        // dropdown's (which still holds that menu's last frame).
+        TEST_F(ControlsMenuTest, AContextMenuDoesNotReuseTheLastDropdownsWindow)
+        {
+            const ID trigger = app.idManager.CreateStaticID();
+            const ID target  = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.BeginRootWindow();
+                if (app.BeginMenu(trigger, "Menu", LayoutOverride{}.Size(60, 20)))
+                    app.MenuItem("Item", nullptr);
+                app.EndMenu();
+                app.Button(target, "Target", nullptr, LayoutOverride{}.Size(200, 100));
+                if (app.BeginContextMenu(target))
+                    app.MenuItem("Context item", nullptr);
+                app.EndContextMenu();
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.ClickAt(app.CenterOf(trigger));
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.IsOpen());
+            const ID dropdownWindow = app.menuManager.levels[0].windowID;
+            app.InjectKey(KeyCode::Escape);
+            app.Frame(draw);
+            ASSERT_FALSE(app.menuManager.IsOpen());
+            const int2 at = app.CenterOf(target);
+            app.InjectMouseMove(at);
+            app.Frame(draw);
+            app.ClickAt(at, MouseButtons::Right);
+            app.Frame(draw);
+            app.Frame(draw);
+            ASSERT_TRUE(app.menuManager.IsOpen());
+            EXPECT_NE(app.menuManager.levels[0].windowID, dropdownWindow);
+        }
+
         // OpenContextMenu opens a context menu at a point, for something that isn't an
         // element (a node-view wire); a right-click alone never opens it.
         TEST_F(ControlsMenuTest, OpenContextMenuOpensAtThePoint)
@@ -1038,9 +1141,14 @@ namespace tachyon
             ASSERT_EQ(app.guiStateManager.Interaction().GetFocusedID(), second);
             const float now = app.guiStateManager.Interaction().GetFrameTime();
             ASSERT_TRUE(app.transitionManager.IsRunning(first)) << "the item left blends out";
+            int blending = 0;
             for (const TransitionChannel channel : { TransitionChannel::Hover, TransitionChannel::Focused })
                 if (const auto on = app.transitionManager.Value(first, channel, now + 0.05f))
+                {
+                    ++blending;
                     EXPECT_LT(*on, 1.0f) << "on its way to neither hovered nor focused";
+                }
+            EXPECT_GT(blending, 0) << "hover or focus is what blends out";
         }
 
         // An invalid control's border and halo come from --error and --invalid-halo.

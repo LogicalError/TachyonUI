@@ -154,6 +154,17 @@ namespace tachyon
         // The field and its window
         // ---------------------------------------------------------------------
 
+        // Channels taken away by the app: the active one becomes one still there.
+        TEST_F(CurveFieldTest, AnActiveChannelThatIsGoneBecomesOneThatIsThere)
+        {
+            view.activeChannel = 3;
+            Frame();
+            EXPECT_EQ(view.activeChannel, int(view.channels.size()) - 1);
+            view.activeChannel = -2;
+            Frame();
+            EXPECT_EQ(view.activeChannel, 0);
+        }
+
         TEST_F(CurveFieldTest, AClickOpensTheEditorAndAnotherClosesIt)
         {
             Frame();

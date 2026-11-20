@@ -7,6 +7,7 @@
 #include <gui_core/graphics/vulkan/vk_graphics_context.h>
 
 #include <chrono>
+#include <cstdlib>
 #include <cstddef>
 #include <thread>
 #include <vector>
@@ -161,6 +162,54 @@ namespace
 
         ASSERT_TRUE(app.Frames(2));
         EXPECT_TRUE(app.CenterIsRed()) << "the image is copied from its own pixels";
+
+        app.graphicsContext->DestroyImageAtEnd(app.image, tachyon::DeviceScope::Application);
+        app.Cleanup();
+    }
+
+    // Text after a lost device: the glyph atlas's pages are made again and its slots point
+    // at them, so the label still draws.
+    class DeviceLossTextApp : public DeviceLossApp
+    {
+    public:
+        void OnGUI() override
+        {
+            if (BeginWindow(windowID, "Text", theme.windowStyleRef, tachyon::LayoutOverride{}.Size(240, 120),
+                            tachyon::ElementFlags::WindowRenderToImage))
+                Text(idManager.AllocateDynamicID("label"), "WWWWWWWWWWWWWWWW");
+            EndWindow();
+        }
+        // The pixels unlike the corner's (the window background): the text's.
+        size_t InkPixels()
+        {
+            const tachyon::IntRect rect = windowManager->GetWindowRect(windowID);
+            if (rect.w <= 0) return 0;
+            std::vector<uint8_t> pixels(size_t(rect.w) * rect.h * 4);
+            if (!ReadWindowPixels(windowID, pixels)) return 0;
+            size_t ink = 0;
+            for (size_t i = 0; i + 3 < pixels.size(); i += 4)
+                if (std::abs(int(pixels[i]) - int(pixels[0])) + std::abs(int(pixels[i + 1]) - int(pixels[1])) > 60)
+                    ink++;
+            return ink;
+        }
+    };
+
+    TEST(GpuApplicationInit, TextDrawsAfterADeviceLoss)
+    {
+        DeviceLossTextApp app;
+        if (!app.Start())
+        {
+            app.Cleanup();
+            GTEST_SKIP() << "no Vulkan device available";
+        }
+        ASSERT_TRUE(app.Frames(3));
+        const size_t before = app.InkPixels();
+        ASSERT_GT(before, 50u) << "the label draws before the loss";
+
+        static_cast<tachyon::vulkan::VulkanGraphicsContext*>(app.graphicsContext)->SimulateDeviceLoss();
+        ASSERT_TRUE(app.Frames(3));
+        EXPECT_FALSE(app.graphicsContext->DeviceLost());
+        EXPECT_GT(app.InkPixels(), before / 2) << "the glyphs draw from the remade atlas";
 
         app.graphicsContext->DestroyImageAtEnd(app.image, tachyon::DeviceScope::Application);
         app.Cleanup();

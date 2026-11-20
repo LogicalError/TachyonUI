@@ -49,6 +49,20 @@ namespace tachyon::d3d12
 
     // ---- The queue -----------------------------------------------------------------------
 
+    void D3D12GraphicsContext::Impl::NoteFailure(HRESULT hr, const char* what)
+    {
+        const bool gone = hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == DXGI_ERROR_DEVICE_HUNG;
+        if (!gone)
+        {
+            TACHYON_LOG_ERROR(kLogD3D12, "{} failed ({})", what, HResultText(hr));
+            return;
+        }
+        // Once, with why: every later call fails the same way.
+        if (!removed.exchange(true))
+            TACHYON_LOG_ERROR(kLogD3D12, "{} failed: the device was removed ({})", what,
+                              HResultText(device ? device->GetDeviceRemovedReason() : hr));
+    }
+
     UINT64 D3D12GraphicsContext::Impl::Submit(ID3D12CommandList* list)
     {
         // The queue runs in order: what comes after the first submit waits too.

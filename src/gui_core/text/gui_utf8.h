@@ -34,12 +34,23 @@ namespace tachyon
             }
             codepoint = (codepoint << 6) | (next & 0x3Fu);
         }
+        // Overlong forms, UTF-16 surrogates and values past U+10FFFF aren't UTF-8.
+        constexpr uint32_t kLeast[5] = { 0, 0, 0x80, 0x800, 0x10000 };
+        if (codepoint < kLeast[length] || (codepoint >= 0xD800 && codepoint <= 0xDFFF) || codepoint > 0x10FFFF)
+        {
+            i++;
+            return kInvalidCodepoint;
+        }
         i += size_t(length);
         return codepoint;
     }
 
+    /// Appends `codepoint` as UTF-8; one that isn't a Unicode scalar value (a surrogate, or
+    /// past U+10FFFF) appends U+FFFD.
     inline void AppendUtf8(std::string& out, uint32_t codepoint)
     {
+        if ((codepoint >= 0xD800 && codepoint <= 0xDFFF) || codepoint > 0x10FFFF)
+            codepoint = 0xFFFD;
         if      (codepoint < 0x80)    { out += char(codepoint); }
         else if (codepoint < 0x800)   { out += char(0xC0 | (codepoint >> 6));  out += char(0x80 | (codepoint & 0x3F)); }
         else if (codepoint < 0x10000) { out += char(0xE0 | (codepoint >> 12)); out += char(0x80 | ((codepoint >> 6) & 0x3F)); out += char(0x80 | (codepoint & 0x3F)); }

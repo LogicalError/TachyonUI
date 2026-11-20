@@ -45,6 +45,45 @@ namespace tachyon
             return out;
         }
 
+        // Against the definitions, row by row, on trees of every shape (deeper than the
+        // 32-bit mask too).
+        TEST(TreeUtilsTest, RebuildIndexMatchesTheDefinitions)
+        {
+            uint32_t seed = 12345;
+            auto next = [&] { seed = seed * 1664525u + 1013904223u; return seed >> 8; };
+            for (int tree = 0; tree < 40; ++tree)
+            {
+                std::vector<TestRow> rows;
+                int depth = 0;
+                const int count = 1 + int(next() % 120);
+                for (int i = 0; i < count; ++i)
+                {
+                    rows.push_back({ "", depth });
+                    const uint32_t step = next() % 4;
+                    if (step == 0 && depth < 40)      depth++;
+                    else if (step == 1 && depth > 0)  depth -= 1 + int(next() % uint32_t(depth));
+                }
+                TreeUtils::RebuildTreeIndex(rows);
+                const int n = int(rows.size());
+                for (int i = 0; i < n; ++i)
+                {
+                    const int D = rows[i].depth;
+                    int j = i + 1;
+                    while (j < n && rows[j].depth > D) j++;
+                    EXPECT_EQ(rows[i].skipCount, j - i - 1) << "tree " << tree << " row " << i;
+                    uint32_t mask = 0;
+                    for (int d = 0; d <= D - 2 && d < 32; d++)
+                        for (int k = i + 1; k < n && rows[k].depth >= d + 1; k++)
+                            if (rows[k].depth == d + 1) { mask |= 1u << d; break; }
+                    EXPECT_EQ(rows[i].ancestorLineMask, mask) << "tree " << tree << " row " << i;
+                    bool last = true;
+                    for (int k = i + 1; k < n && rows[k].depth >= D; k++)
+                        if (rows[k].depth == D) { last = false; break; }
+                    EXPECT_EQ(rows[i].isLastSibling, last) << "tree " << tree << " row " << i;
+                }
+            }
+        }
+
         TEST(TreeUtilsTest, RebuildIndexComputesSkipCounts)
         {
             auto rows = MakeTree();

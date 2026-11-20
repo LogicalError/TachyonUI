@@ -83,7 +83,7 @@ namespace tachyon
             IconID                                icon    = IconID::Invalid;
             bool                                  pending = true;
             std::list<std::string>::iterator      used;   ///< its place in m_used
-            std::chrono::steady_clock::time_point asked;
+            int64_t                               asked   = 0;   ///< SteadyClockNowNanos
         };
         struct Job
         {

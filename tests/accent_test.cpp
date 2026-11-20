@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "headless_gui_app.h"
+#include "scoped_temp_dir.h"
 
 #include <gui_controls/gui_theme.h>
 #include <gui_core/gui_resources.h>
@@ -169,7 +170,8 @@ namespace tachyon
             const size_t at = light->find(from);
             ASSERT_NE(at, std::string::npos);
             // In a themes folder of its own, where the built-in styles.css is found next to it.
-            const std::filesystem::path folder = std::filesystem::temp_directory_path() / "tachyon-accent-test" / "themes";
+            const GUITest::ScopedTempDir temp("tachyon-accent-test");
+            const std::filesystem::path folder = temp / "themes";
             std::filesystem::create_directories(folder);
             const std::string path = (folder / "palette.css").string();
             app.SetAccent(kAccentPresets[1].colors);   // teal
@@ -183,13 +185,9 @@ namespace tachyon
                 }
                 app.RequestReloadTheme(path, isLight ? 1.0f : 1.1f);
                 Frame();
-                std::filesystem::remove(path);
                 EXPECT_EQ(app.theme.IsLight(), isLight) << panel;
                 EXPECT_TRUE(Near(Color("--accent"), isLight ? Rgba(0x0E8277FF) : Rgba(0x34D1BFFF))) << panel;
             }
-            std::error_code ignored;   // the folders it made, now empty
-            std::filesystem::remove(folder, ignored);
-            std::filesystem::remove(folder.parent_path(), ignored);
         }
 
         TEST(AccentPresetsTest, TheDesignsFour)

@@ -37,10 +37,13 @@ namespace tachyon
         const T* Find(ID key) const { return const_cast<IDMap*>(this)->Find(key); }
 
         /// Adds `key` with `value` unless the key is there already. Returns the value held
-        /// for the key and whether it was added.
+        /// for the key and whether it was added; {null, false} for ID::Invalid(), which marks
+        /// a free slot and can't be a key.
         std::pair<T*, bool> TryEmplace(ID key, const T& value)
         {
             assert(key != ID::Invalid());
+            if (key == ID::Invalid())
+                return { nullptr, false };
             if ((m_size + 1) * 2 > m_slots.size())
                 Grow();
             for (size_t i = Home(key);; i = (i + 1) & Mask())
@@ -57,11 +60,22 @@ namespace tachyon
             }
         }
 
-        /// Empties the map, keeping its room.
+        /// Empties the map, keeping its room, unless that is far more than this fill needed:
+        /// after one huge frame, later small ones don't pay to clear (or hold) all of it.
         void Clear()
         {
             if (m_size == 0)
                 return;
+            if (m_slots.size() > kMinCapacity && m_size * 16 < m_slots.size())
+            {
+                size_t capacity = kMinCapacity;
+                while (capacity < m_size * 4)
+                    capacity *= 2;
+                std::vector<Slot>(capacity).swap(m_slots);
+                m_shift = 64u - uint32_t(std::countr_zero(capacity));
+                m_size  = 0;
+                return;
+            }
             for (Slot& slot : m_slots)
                 slot.key = ID::Invalid();
             m_size = 0;
@@ -108,6 +122,8 @@ namespace tachyon
             T  value {};
         };
 
+        static constexpr size_t kMinCapacity = 64;
+
         size_t Mask() const { return m_slots.size() - 1; }
         /// Fibonacci hashing: the multiply spreads every key bit into the top bits, which pick
         /// the slot (an ID's low bits are its mode, and a static ID's are a small index).
@@ -116,7 +132,7 @@ namespace tachyon
         void Grow()
         {
             std::vector<Slot> old = std::move(m_slots);
-            const size_t capacity = old.empty() ? 64 : old.size() * 2;
+            const size_t capacity = old.empty() ? kMinCapacity : old.size() * 2;
             m_slots.assign(capacity, Slot{});
             m_shift = 64u - uint32_t(std::countr_zero(capacity));
             m_size = 0;

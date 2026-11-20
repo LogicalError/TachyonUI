@@ -1,4 +1,5 @@
 #include <gui_core/text/gui_numeric_text.h>
+#include <gui_core/gui_from_chars.h>
 
 #include <cassert>
 #include <cerrno>
@@ -148,6 +149,41 @@ namespace tachyon
 		return true;
 	}
 
+	// std::to_chars / from_chars, unlike printf and strtod, ignore the C locale: "1.5" stays
+	// "1.5" in a host app that set a comma-decimal one.
+	template<typename T, typename... Format>
+	std::string FormatChars(T value, Format... format)
+	{
+		char buffer[128];
+		const std::to_chars_result result = std::to_chars(buffer, buffer + sizeof(buffer), value, format...);
+		return result.ec == std::errc{} ? std::string(buffer, result.ptr) : std::string("0");
+	}
+
+	// The whole of `text` as a number. Leading white space and a '+' are taken, as strtod did.
+	template<typename T>
+	bool ParseChars(std::string_view text, T& out)
+	{
+		size_t i = 0;
+		while (i < text.size() && (text[i] == ' ' || text[i] == '\t'))
+			i++;
+		if (i < text.size() && text[i] == '+')
+		{
+			i++;
+			if (i < text.size() && text[i] == '-')
+				return false;
+		}
+		const char* first = text.data() + i;
+		const char* last  = text.data() + text.size();
+		if (first == last)
+			return false;
+		T value{};
+		const std::from_chars_result result = FromChars(first, last, value);
+		if (result.ec != std::errc{} || result.ptr != last)
+			return false;
+		out = value;
+		return true;
+	}
+
 	std::string format_to_text(double value, bool clamp)
 	{
 		if (std::isinf(value))
@@ -162,17 +198,9 @@ namespace tachyon
 		}
 		if (clamp)
 		{
-			char buffer[128] = {};
-			int written = snprintf(buffer, sizeof(buffer), "%.9g", value);
-			if (written <= 0) return "0";
-			return std::string(buffer, static_cast<size_t>(written));
-		} else
-		{
-			char buffer[128] = {};
-			int written = snprintf(buffer, sizeof(buffer), "%g", value);
-			if (written <= 0) return "0";
-			return std::string(buffer, static_cast<size_t>(written));
+			return FormatChars(value, std::chars_format::general, 9);   // %.9g, in any locale
 		}
+		return FormatChars(value, std::chars_format::general, 6);       // %g
 	}
 
 	// The fewest digits that read back as the same float: 1.8f is "1.8", not the
@@ -190,10 +218,7 @@ namespace tachyon
 
 	std::string format_to_text(int64_t value)
 	{
-		char buffer[64] = {};
-		int written = snprintf(buffer, sizeof(buffer), "%lld", static_cast<long long>(value));
-		if (written <= 0) return "0";
-		return std::string(buffer, static_cast<size_t>(written));
+		return FormatChars(value);
 	}
 	std::string format_to_text(int32_t value) { return format_to_text(static_cast<int64_t>(value)); }
 	std::string format_to_text(int16_t value) { return format_to_text(static_cast<int64_t>(value)); }
@@ -201,10 +226,7 @@ namespace tachyon
 
 	std::string format_to_text(uint64_t value)
 	{
-		char buffer[64] = {};
-		int written = snprintf(buffer, sizeof(buffer), "%llu", static_cast<unsigned long long>(value));
-		if (written <= 0) return "0";
-		return std::string(buffer, static_cast<size_t>(written));
+		return FormatChars(value);
 	}
 	std::string format_to_text(uint32_t value) { return format_to_text(static_cast<uint64_t>(value)); }
 	std::string format_to_text(uint16_t value) { return format_to_text(static_cast<uint64_t>(value)); }
@@ -234,72 +256,28 @@ namespace tachyon
 
 	bool try_parse_text(std::string_view text, double& outValue)
 	{
-		if (text.empty()) return false;
-		std::string tmp(text);
-		char* end = nullptr;
-		errno = 0;
-		double value = strtod(tmp.c_str(), &end);
-		if (end == tmp.c_str() || *end != '\0') return false;
-		if (errno == ERANGE || !std::isfinite(value)) return false;
+		double value = 0.0;
+		if (!ParseChars(text, value) || !std::isfinite(value)) return false;
 		outValue = value;
 		return true;
 	}
 
 	bool try_parse_text(std::string_view text, float& outValue)
 	{
-		if (text.empty()) return false;
-		std::string tmp(text);
-		char* end = nullptr;
-		errno = 0;
-		float value = strtof(tmp.c_str(), &end);
-		if (end == tmp.c_str() || *end != '\0') return false;
-		if (errno == ERANGE || !std::isfinite(value)) return false;
-
+		float value = 0.0f;
+		if (!ParseChars(text, value) || !std::isfinite(value)) return false;
 		outValue = value;
 		return true;
 	}
 
 	bool try_parse_text(std::string_view text, int64_t& outValue)
 	{
-		if (text.empty())
-			return false;
-
-		std::string tmp(text);
-		char* end = nullptr;
-		errno = 0;
-		long long value = strtoll(tmp.c_str(), &end, 10);
-
-		if (end == tmp.c_str() || *end != '\0')
-			return false;
-		if (errno == ERANGE)
-			return false;
-
-		outValue = static_cast<int64_t>(value);
-		return true;
+		return ParseChars(text, outValue);
 	}
 
 	bool try_parse_text(std::string_view text, uint64_t& outValue)
 	{
-		if (text.empty())
-			return false;
-
-		// strtoull does not handle leading '-' the way we want for unsigned parsing,
-		// so reject negative values explicitly.
-		if (!text.empty() && text.front() == '-')
-			return false;
-
-		std::string tmp(text);
-		char* end = nullptr;
-		errno = 0;
-		unsigned long long value = strtoull(tmp.c_str(), &end, 10);
-
-		if (end == tmp.c_str() || *end != '\0')
-			return false;
-		if (errno == ERANGE)
-			return false;
-
-		outValue = static_cast<uint64_t>(value);
-		return true;
+		return ParseChars(text, outValue);
 	}
 
 	bool try_parse_text(std::string_view text, int32_t& outValue)

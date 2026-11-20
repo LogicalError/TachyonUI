@@ -100,11 +100,14 @@ namespace tachyon::vulkan
         VkExtent2D               drawExtent = {};
         /// The size the last frame was recorded for; without a swapchain, what's drawn.
         VkExtent2D               requestedExtent = {};
+        /// The size the swapchain was last remade for: a window grown smaller than its
+        /// swapchain asks again once, even on drivers that don't report it out of date.
+        VkExtent2D               swapchainRequest = {};
 
         bool                     resize_requested{ false };
         bool                     freeze_rendering{ false };
         tachyon::int2                mouse_pos = { 0,0 };
-        int                      frameNumber{ 0 };
+        uint64_t                 frameNumber{ 0 };   ///< frames recorded; never wraps
 
         /// When the last vkQueuePresentKHR returned. The frame-build time runs from here to
         /// just before the next present: the CPU work, without the vsync wait.

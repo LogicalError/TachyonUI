@@ -51,6 +51,35 @@ namespace tachyon
             EXPECT_EQ(Orders(t, t.renderPasses[1]), (std::vector<float>{ 1, 3, 5, 7, 9, 11, 13, 15, 17, 19 }));
         }
 
+        // A circle under a stretching transform reaches past its transformed square: a box
+        // drawn after it over that part stays over it.
+        TEST(PrimitiveBatching, ABoxOverAStretchedCircleKeepsItsPlace)
+        {
+            PrimitiveRenderTarget t;
+            Box(t, IntRect{ 0, 0, 10, 10 });
+            t.SetTransform(float3x2{ float3{ 4.0f, 0.0f, 0.0f }, float3{ 0.0f, 1.0f, 0.0f } });
+            t.RenderCircle(float2{ 100.0f, 300.0f }, 50.0f, kClip, LineStyle{ .colorStyleIndex = VisualColorStyleIndex(1), .lineWidth = 1.0f });
+            t.SetTransform(float3x2::Identity());
+            Box(t, IntRect{ 390, 210, 20, 20 });   // 90 above the center: inside the ring as drawn
+            t.FinishRenderPass();
+            ASSERT_EQ(t.renderPasses.size(), 3u);
+            EXPECT_EQ(t.renderPasses[2].kind, PrimitiveKind::Box);
+        }
+
+        // A line far outside the 16-bit range is drawn where its saturated points are: its
+        // bounds say the same, so it can't join a pass under something it really overlaps.
+        TEST(PrimitiveBatching, ALinePastSixteenBitsIsBoundedWhereItIsDrawn)
+        {
+            PrimitiveRenderTarget t;
+            const IntRect wide{ 0, 0, 70000, 100 };
+            const LineStyle style{ .colorStyleIndex = VisualColorStyleIndex(1), .lineWidth = 1.0f };
+            t.RenderBox(IntRect{ 0, 0, 10, 10 }, wide, 1, 1, 1.0f);
+            t.RenderLine({ 40000, 10 }, { 40000, 10 }, { 40010, 10 }, { 40010, 10 }, wide, style);   // drawn at 32767
+            t.RenderBox(IntRect{ 32760, 0, 10, 20 }, wide, 1, 1, 1.0f);
+            t.FinishRenderPass();
+            ASSERT_EQ(t.renderPasses.size(), 3u) << "the second box covers the line as drawn: it stays over it";
+        }
+
         TEST(PrimitiveBatching, ABoxOverEarlierTextKeepsItsPlace)
         {
             PrimitiveRenderTarget t;

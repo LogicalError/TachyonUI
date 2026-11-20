@@ -1034,6 +1034,10 @@ namespace tachyon
 
         m_eventWatch = [](OSWindowHandle data, SDL_Event* event) -> bool
             {
+                // An app's own event (Wake's, pushed from any thread, the watch running on that
+                // thread): nothing for a window, and nothing below may run off the main thread.
+                if (event->type >= SDL_EVENT_USER)
+                    return true;
                 // For not-focusable windows (e.g. tooltips), reroute all input
                 // events to the last focusable window so the tooltip never
                 // consumes input.
@@ -2058,6 +2062,10 @@ namespace tachyon
     {
         auto* backend = static_cast<SDLWindowBackend*>(userdata);
         ++backend->m_events;
+        // Wake pushes from any thread, and SDL runs the watches on the pushing thread: it
+        // touches nothing the main thread changes.
+        if (event->type >= SDL_EVENT_USER)
+            return true;
 
         // A modal window stays in front; its blocked owners get no events (see the per-window watch).
         if (SDL_Window* modal = backend->ModalBlockerFor(event))

@@ -82,6 +82,17 @@ namespace tachyon
             EXPECT_EQ(view.handles[1].x, 128.0f);
         }
 
+        // Fitted, the range starts at yMin and reaches values below it as well as above.
+        TEST(PlotHelpers, AFittedYRangeTakesNegativeValues)
+        {
+            PlotView view;
+            view.series = { PlotSeries{ .name = "R", .values = { -5.0f, 3.0f } } };
+            EXPECT_EQ(PlotShownY(view).min, -5.0f);
+            EXPECT_EQ(PlotShownY(view).max, 3.0f);
+            view.yMin = -10.0f;
+            EXPECT_EQ(PlotShownY(view).min, -10.0f) << "yMin when the values stay above it";
+        }
+
         TEST(PlotHelpers, TheYRangeFitsWhatsShown)
         {
             PlotView view;

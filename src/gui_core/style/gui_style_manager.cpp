@@ -50,12 +50,13 @@ namespace tachyon
         }
     }
 
-    // Text metrics at the UI scale: sizes and spacing exactly, decorations to whole
-    // pixels (a set thickness stays at least 1px).
-    // Whether `c` hides what's under it everywhere it paints: every stop it reads is opaque.
+    // Whether `c` hides what's under it everywhere it paints, now and later: every stop it
+    // reads is opaque, and it isn't a theme variable's (SetVariableColor can change it).
     // Textures can have transparent pixels.
     static bool IsOpaque(const ColorStyle& c) noexcept
     {
+        if (c.variable != 0)
+            return false;
         int stops = 0;
         switch (c.type)
         {
@@ -64,7 +65,7 @@ namespace tachyon
             case ColorType::RepeatedTexture:      return false;
             case ColorType::InterpolatedTriangle: stops = 3; break;
             case ColorType::InterpolatedBox:      stops = 4; break;
-            default:                              stops = c.gradient.stopCount; break;
+            default:                              stops = int(c.gradient.StopCount()); break;
         }
         if (stops == 0)
             return false;
@@ -88,7 +89,7 @@ namespace tachyon
             case ColorType::RepeatedTexture:      return false;
             case ColorType::InterpolatedTriangle: stops = 3; break;
             case ColorType::InterpolatedBox:      stops = 4; break;
-            default:                              stops = c.gradient.stopCount; break;
+            default:                              stops = int(c.gradient.StopCount()); break;
         }
         if (stops == 0)
             return false;
@@ -98,6 +99,8 @@ namespace tachyon
         return true;
     }
 
+    // Text metrics at the UI scale: sizes and spacing exactly, decorations to whole
+    // pixels (a set thickness stays at least 1px).
     static TextStyle ScaledTextStyle(const TextStyle& in, float s) noexcept
     {
         TextStyle t = in;
@@ -407,10 +410,6 @@ namespace tachyon
                     if (match)
                     {
                         visualBoxIndex = index;
-                        // The same colors registered from a theme variable too: blank only if
-                        // blank both ways.
-                        for (int i = 0; i < Style::kStateCount; i++)
-                            m_blankBoxes[offset + i] = m_blankBoxes[offset + i] && blankBox[i];
                         break;
                     }
                 }
@@ -423,8 +422,7 @@ namespace tachyon
                 for (int i = 0; i < Style::kStateCount; i++)
                 {
                     m_visualBoxStyles.push_back(visualBoxStyle[i]);
-                    m_opaqueBoxBackgrounds.push_back(opaqueBackground[i]);
-                    m_blankBoxes.push_back(blankBox[i]);
+                    m_boxFlags.push_back(uint8_t((opaqueBackground[i] ? kBoxOpaqueBackground : 0) | (blankBox[i] ? kBoxBlank : 0)));
                 }
                 visualBoxStylesModified = true;
                 visualBoxIndex = static_cast<VisualBoxStyleIndex>(idx + 1);
@@ -747,8 +745,7 @@ namespace tachyon
         m_layoutHashMap.clear();
 
         m_visualBoxStyles.clear();
-        m_opaqueBoxBackgrounds.clear();
-        m_blankBoxes.clear();
+        m_boxFlags.clear();
         m_visualBoxHashMap.clear();
         m_visualShadowStyles.clear();
         m_outlines.clear();
@@ -834,12 +831,12 @@ namespace tachyon
 
     bool StyleManager::IsBoxBackgroundOpaque(uint32_t gpuStyleIndex) const noexcept
     {
-        return gpuStyleIndex < m_opaqueBoxBackgrounds.size() && m_opaqueBoxBackgrounds[gpuStyleIndex];
+        return gpuStyleIndex < m_boxFlags.size() && (m_boxFlags[gpuStyleIndex] & kBoxOpaqueBackground) != 0;
     }
 
     bool StyleManager::IsBoxBlank(uint32_t gpuStyleIndex) const noexcept
     {
-        return gpuStyleIndex < m_blankBoxes.size() && m_blankBoxes[gpuStyleIndex];
+        return gpuStyleIndex < m_boxFlags.size() && (m_boxFlags[gpuStyleIndex] & kBoxBlank) != 0;
     }
 
     const VisualShadowStyle* StyleManager::GetVisualShadowStyle(uint32_t gpuStyleIndex) const noexcept

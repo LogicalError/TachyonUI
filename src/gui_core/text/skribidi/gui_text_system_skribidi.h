@@ -1,5 +1,6 @@
 #pragma once
 
+#include <gui_core/input/gui_input_enums.h>
 #include <gui_core/input/gui_platform_input_handler.h>
 #include <gui_core/input/gui_undo_history.h>
 #include <gui_core/text/gui_text_system.h>
@@ -9,6 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <string>
+#include <vector>
 
 struct skb_layout_t;
 struct skb_text_position_t;
@@ -228,6 +230,23 @@ namespace tachyon
         std::string m_valueEditText;                      ///< the text it edits
 
         ID m_pendingCursorVisibleEditorId = ID::Invalid();
+
+        /// Keys and IME text for the focused field that came before its editor was made (the
+        /// focus moved to it earlier in the frame): typed into it once it's drawn, dropped
+        /// when the focus moves on first.
+        struct EditorInput
+        {
+            KeyCode     key       = KeyCode::None;
+            KeyModifier modifiers = KeyModifier::None;
+            KeyAction   action    = KeyAction::KeyDown;
+            int32_t     cursor    = -1;   ///< >= 0: IME text in `composition`
+            std::string composition;
+        };
+        std::vector<EditorInput> m_inputBeforeEditor;
+        /// Holds `input` when a field is focused but its editor isn't there yet.
+        bool HoldUntilEditorExists(EditorInput&& input);
+        /// Types the held input into the focused field's new editor.
+        void TypeInputHeldForEditor();
 
         LibraryAllocator::RouteHandle m_libraryRoute = nullptr;   ///< the hooks the libraries allocate through, if any
         SkribidiContext* m_skribidiContext;

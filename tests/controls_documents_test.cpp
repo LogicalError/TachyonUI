@@ -619,6 +619,27 @@ namespace tachyon
             EXPECT_EQ(app.CountByText("Forest"), 1);
         }
 
+        // A document closed while its tab is dragged over another bar: the drag goes with it.
+        TEST_F(DocumentsTest, ClosingTheDraggedDocumentEndsItsDrag)
+        {
+            twoBars = true;
+            Document& forest = Add("Forest", ".level", "level");
+            Add("Desert", ".level", "level");
+            AddTo(other, "Terrain", ".mat", "material");
+            Settle();
+
+            const IntRect terrain = app.GetElementRect(other.documents[0]->id);
+            int forestsAfterClose = -1;
+            DragTab(TabCenter(forest), { terrain.x + terrain.w * 3 / 4, terrain.y + terrain.h / 2 }, [&] {
+                app.CloseDocument(set, 0);
+                Frame();
+                forestsAfterClose = app.CountByText("Forest");
+            });
+            EXPECT_EQ(forestsAfterClose, 0) << "no phantom of a document that is gone";
+            EXPECT_EQ(Names(set), (std::vector<std::string>{ "Desert" }));
+            EXPECT_EQ(Names(other), (std::vector<std::string>{ "Terrain" }));
+        }
+
         // Over another bar the phantom follows the cursor, held where the tab was grabbed, as a
         // tab dragged within its own bar does.
         TEST_F(DocumentsTest, ThePhantomFollowsTheCursor)
@@ -807,6 +828,39 @@ namespace tachyon
             EXPECT_EQ(other.documents[0]->layout.panels.size(), 1u);
             ASSERT_EQ(app.m_floatingDockWindows.size(), 1u) << "it floats, as off every dock";
             EXPECT_EQ(app.m_floatingDockWindows[0]->home, &set.documents[0]->layout);
+        }
+
+        // An app's own layout, destroyed while a panel torn off it floats: forgotten first,
+        // its windows go, and nothing refers to it after.
+        TEST_F(DocumentsTest, AForgottenLayoutTakesItsFloatingWindows)
+        {
+            auto layout = std::make_unique<DockingLayout>();
+            const ID kept    = app.CreatePanel(layout->panels, "Kept", IconID::Invalid, [] {}, {});
+            const ID floated = app.CreatePanel(layout->panels, "Floated", IconID::Invalid, [] {}, {});
+            layout->root = MakeLeaf({ kept, floated });
+            const ID dockID = app.idManager.CreateStaticID();
+            auto draw = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow(windowSize, ElementFlags::None, app.theme.mainWindowStyleRef);
+                    if (layout)
+                    {
+                        app.BeginDockingContainer(dockID, layout.get(), LayoutOverride{}.Size(600, 400));
+                        app.EndDockingContainer();
+                    }
+                    app.EndRootWindow();
+                    app.EmitFloatingDockWindows();
+                });
+            };
+            draw();
+            ASSERT_TRUE(app.FloatPanel(*layout, floated, { 100, 100 }));
+            draw();
+            ASSERT_EQ(app.m_floatingDockWindows.size(), 1u);
+
+            app.ForgetDockingLayout(*layout);
+            layout.reset();
+            draw();
+            draw();
+            EXPECT_TRUE(app.m_floatingDockWindows.empty());
         }
 
         TEST_F(DocumentsTest, TornOffPanelsBelongToTheirDocumentsWindow)

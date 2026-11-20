@@ -1036,6 +1036,54 @@ namespace tachyon
 
     // A popup auto-closed because another window took focus, but still declared by
     // the app that frame, is hidden for reuse rather than destroyed and recreated.
+    // The top modal is the one made last, after a window closing reorders the list.
+    TEST_F(OSWindowManagerTest, TheTopModalIsTheLastMadeAfterAWindowCloses)
+    {
+        const ID mainId = CreateTestID(1), otherId = CreateTestID(2), modalA = CreateTestID(3), modalB = CreateTestID(4);
+        auto declare = [&](bool withOther) {
+            manager->GetOrCreateWindow(mainId, "Main", IntRect{ 0, 0, 800, 600 }, nullptr);
+            if (withOther)
+                manager->GetOrCreateWindow(otherId, "Other", IntRect{ 0, 0, 200, 200 }, nullptr);
+            manager->GetOrCreateWindow(modalA, "A", IntRect{ 0, 0, 200, 200 }, nullptr, WindowFlags::DefaultFlags | WindowFlags::Modal, mainId);
+            manager->GetOrCreateWindow(modalB, "B", IntRect{ 0, 0, 200, 200 }, nullptr, WindowFlags::DefaultFlags | WindowFlags::Modal, modalA);
+        };
+        manager->BeginFrame();
+        declare(true);
+        manager->EndFrame();
+        ASSERT_EQ(manager->GetTopModalWindow(), modalB);
+
+        manager->BeginFrame();
+        declare(true);
+        (void)manager->RequestClose(otherId);
+        manager->EndFrame();
+        manager->Update();
+        manager->BeginFrame();
+        declare(false);
+        manager->EndFrame();
+        EXPECT_EQ(manager->GetTopModalWindow(), modalB);
+    }
+
+    // A hidden popup closed (its parent closing) isn't shown first.
+    TEST_F(OSWindowManagerTest, AHiddenPopupClosesWithoutShowing)
+    {
+        const ID mainId  = CreateTestID(1);
+        const ID popupId = CreateTestID(2);
+        manager->BeginFrame();
+        manager->GetOrCreateWindow(mainId, "Main", IntRect{ 0, 0, 800, 600 }, nullptr);
+        manager->GetOrCreateWindow(popupId, "Popup", IntRect{ 10, 10, 100, 100 }, nullptr,
+                                   WindowFlags::DefaultFlags | WindowFlags::PopupMenu, mainId);
+        manager->EndFrame();
+        manager->HidePopupWindow(popupId);
+        ASSERT_EQ(manager->GetWindowState(popupId), WindowState::Hidden);
+
+        const OSWindowHandle popupHandle = manager->GetWindowHandle(popupId);
+        EXPECT_CALL(*mockBackend, SetWindowVisible(popupHandle, true)).Times(0);
+        manager->BeginFrame();
+        manager->GetOrCreateWindow(mainId, "Main", IntRect{ 0, 0, 800, 600 }, nullptr);
+        (void)manager->RequestClose(popupId);
+        manager->EndFrame();
+    }
+
     TEST_F(OSWindowManagerTest, AutoClosedPopupIsHiddenNotDestroyed)
     {
         const ID mainId  = CreateTestID(1);

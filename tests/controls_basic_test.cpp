@@ -731,6 +731,86 @@ namespace tachyon
             EXPECT_EQ(text, "untouched");
         }
 
+        // Keys typed after a Tab in the same frame go to the field the Tab moved to.
+        TEST_F(ControlsBasicTest, TypingRightAfterATabGoesToTheNextField)
+        {
+            const ID firstID  = app.idManager.CreateStaticID();
+            const ID secondID = app.idManager.CreateStaticID();
+            std::string first, second;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.Field(firstID, first);
+                app.Field(secondID, second);
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.ClickAt(app.CenterOf(firstID));
+            app.Frame(draw);
+            ASSERT_EQ(app.guiStateManager.TextEditorFocus().GetFocusedID(), firstID);
+
+            app.InjectKey(KeyCode::Tab, KeyAction::KeyDown);
+            app.InjectText("x");
+            app.Frame(draw);
+            app.Frame(draw);
+
+            EXPECT_EQ(app.guiStateManager.TextEditorFocus().GetFocusedID(), secondID);
+            EXPECT_EQ(first, "");
+            EXPECT_EQ(second, "x");
+        }
+
+        // Keys typed after a click in the same frame go to the clicked field.
+        TEST_F(ControlsBasicTest, TypingRightAfterAClickGoesToTheClickedField)
+        {
+            const ID firstID  = app.idManager.CreateStaticID();
+            const ID secondID = app.idManager.CreateStaticID();
+            std::string first, second;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.Field(firstID, first);
+                app.Field(secondID, second);
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.ClickAt(app.CenterOf(firstID));
+            app.Frame(draw);
+            ASSERT_EQ(app.guiStateManager.TextEditorFocus().GetFocusedID(), firstID);
+
+            app.ClickAt(app.CenterOf(secondID));
+            app.InjectText("y");
+            app.Frame(draw);
+            app.Frame(draw);
+
+            EXPECT_EQ(app.guiStateManager.TextEditorFocus().GetFocusedID(), secondID);
+            EXPECT_EQ(first, "");
+            EXPECT_EQ(second, "y");
+        }
+
+        // Keys typed before the Tab stay in the field they were typed in.
+        TEST_F(ControlsBasicTest, TypingBeforeATabStaysInTheFirstField)
+        {
+            const ID firstID  = app.idManager.CreateStaticID();
+            const ID secondID = app.idManager.CreateStaticID();
+            std::string first, second;
+            auto draw = [&] {
+                app.BeginRootWindow();
+                app.Field(firstID, first);
+                app.Field(secondID, second);
+                app.EndRootWindow();
+            };
+            app.Frame(draw);
+            app.ClickAt(app.CenterOf(firstID));
+            app.Frame(draw);
+
+            app.InjectText("a");
+            app.InjectKey(KeyCode::Tab, KeyAction::KeyDown);
+            app.InjectText("b");
+            app.Frame(draw);
+            app.Frame(draw);
+
+            EXPECT_EQ(first, "a");
+            EXPECT_EQ(second, "b");
+        }
+
         TEST_F(ControlsBasicTest, IndeterminateTextFieldIsReadOnlyPlaceholder)
         {
             // Under BeginIndeterminate, Field(string&) only renders the placeholder.

@@ -36,6 +36,21 @@ namespace tachyon
             EXPECT_EQ(again.zoom, 60);
         }
 
+        // A damaged state: numbers that would leave the view unusable are refused.
+        TEST(ViewState, AnUnusableViewIsRefused)
+        {
+            NodeView view;
+            view.transform.r0 = float3{ 2.0f, 0.0f, 5.0f };
+            EXPECT_FALSE(RestoreViewState(view, R"({"transform":[0,0,10,0,0,20]})")) << "no scale: can't be inverted";
+            EXPECT_EQ(view.transform.r0.x, 2.0f);
+
+            TimelineView timeline;
+            timeline.viewLength = 3.0f;
+            EXPECT_FALSE(RestoreViewState(timeline, R"({"start":0,"length":-2,"zoom":10})"));
+            EXPECT_EQ(timeline.viewLength, 3.0f);
+            EXPECT_TRUE(RestoreViewState(timeline, R"({"start":0,"length":0,"zoom":10})")) << "0: the whole duration";
+        }
+
         TEST(ViewState, ACurvePlotsShownPartComesBack)
         {
             CurveView view;

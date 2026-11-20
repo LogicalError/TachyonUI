@@ -12,6 +12,7 @@ list(APPEND GUI_FILES
 
   gui_core/gui_id.h
   gui_core/gui_id_map.h
+  gui_core/gui_recent_id_map.h
   gui_core/gui_id_manager.h
   gui_core/gui_id_manager.cpp
   gui_core/gui_from_chars.h

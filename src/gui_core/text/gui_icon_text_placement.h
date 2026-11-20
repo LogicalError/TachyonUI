@@ -162,7 +162,7 @@ namespace tachyon
                 out.textRect.x = rect.x;
                 out.textRect.w = rect.w;
                 out.textRect.y = blockY;
-                out.textRect.h = textHeight - iconMeasurement.height - iconTextGap;
+                out.textRect.h = rect.h - iconMeasurement.height - iconTextGap;   // as Top: the rect less the icon's room
                 out.iconRect = IntRect{
                     .x = iconCenterX - iconMeasurement.width / 2,
                     .y = blockY + textHeight + iconTextGap,

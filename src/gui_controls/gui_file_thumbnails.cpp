@@ -1,5 +1,6 @@
 #include <gui_controls/gui_file_thumbnails.h>
 
+#include <gui_core/gui_base_types.h>
 #include <gui_core/text/gui_text_system.h>
 
 #include <algorithm>
@@ -125,7 +126,7 @@ namespace tachyon
         if (file.empty() || pixels == 0 || !m_reader)
             return IconID::Invalid;
         Collect();
-        const auto now = std::chrono::steady_clock::now();
+        const int64_t now = SteadyClockNowNanos();
         std::string key = Key(file, modified, pixels);
         if (const auto it = m_entries.find(key); it != m_entries.end())
         {
@@ -134,7 +135,7 @@ namespace tachyon
             return it->second.icon;
         }
         // All of them on screen: no room for another.
-        if (m_entries.size() >= m_capacity && now - m_entries.at(m_used.back()).asked < m_inUse)
+        if (m_entries.size() >= m_capacity && now - m_entries.at(m_used.back()).asked < std::chrono::nanoseconds(m_inUse).count())
             return IconID::Invalid;
 
         m_used.push_front(key);

@@ -51,6 +51,9 @@ namespace
                   RHI::RenderCommandList& cmdList, const PipelineSet& pipelines, GPUDrawPushConstants& push_constants)
     {
         const auto& spec = kPrimitiveSpecs[size_t(pass.kind)];
+        // No address: the upload failed (out of memory). Drawing would read address 0.
+        if (addresses[size_t(pass.kind)] == 0)
+            return;
         push_constants.primitiveAddresses[spec.pushSlot] = addresses[size_t(pass.kind)];
         const auto& cpu = source.streams[size_t(pass.kind)].cpu;
         const std::span<const std::byte> primitives(cpu.data() + size_t(pass.firstPrimitive) * spec.stride,
@@ -387,6 +390,9 @@ void PrimitiveRenderTarget::RenderGlyphs(std::span<const GUIRenderer::GlyphInsta
 void PrimitiveRenderTarget::RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachyon::int2 p2, tachyon::int2 p3,
                                        tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle)
 {
+    // The points go to the shader in 16 bits: saturated there, and the bounds are of those.
+    auto saturate = [](tachyon::int2 p) { return tachyon::int2{ SaturateInt16(p.x), SaturateInt16(p.y) }; };
+    p0 = saturate(p0); p1 = saturate(p1); p2 = saturate(p2); p3 = saturate(p3);
     // The control points' hull, the stroke wide around it (in screen pixels, or scaled up).
     const ScreenBox bounds = Bounds(float2{ float(std::min({ p0.x, p1.x, p2.x, p3.x })), float(std::min({ p0.y, p1.y, p2.y, p3.y })) },
                                   float2{ float(std::max({ p0.x, p1.x, p2.x, p3.x })), float(std::max({ p0.y, p1.y, p2.y, p3.y })) },
@@ -414,8 +420,11 @@ void PrimitiveRenderTarget::RenderLine(tachyon::int2 p0, tachyon::int2 p1, tachy
 
 void PrimitiveRenderTarget::RenderCircle(tachyon::float2 center, float radius, tachyon::IntRect clipRect, const tachyon::LineStyle& lineStyle)
 {
-    const ScreenBox bounds = Bounds(float2{ center.x - radius, center.y - radius }, float2{ center.x + radius, center.y + radius },
-                                  std::max(lineStyle.lineWidth, 1.0f) * 0.5f * std::max(1.0f, MaxScale(currentTransform)) + 2.0f, clipRect);
+    // Around the center on screen, as far as the largest stretch takes the radius: under a
+    // non-uniform scale the shader's ring is no ellipse inside the transformed square.
+    const float scale = MaxScale(currentTransform);
+    const ScreenBox bounds = Bounds(center, center,
+                                  radius * scale + std::max(lineStyle.lineWidth, 1.0f) * 0.5f * std::max(1.0f, scale) + 2.0f, clipRect);
     Append(PrimitiveKind::Circle, CirclePrimitive
                     {
                         .transform0 = { currentTransform.r0.x, currentTransform.r0.y, currentTransform.r0.z, 0 },

@@ -185,6 +185,17 @@ namespace tachyon
 
     void Application::RenderProfilerTreePanel()
     {
+        // Its state is the panel's one copy (statics above): a second Profiler tab shown in
+        // the same frame says where the first is instead of fighting it for IDs and rows.
+        static float s_builtAt = -1.0f;
+        const float now = guiStateManager.Interaction().GetFrameTime();
+        if (s_builtAt == now)
+        {
+            Label("The profiler is open in another tab.");
+            return;
+        }
+        s_builtAt = now;
+
         auto& collector = Diagnostics::MainThreadCollector();
         // Recording and not paused, it's a live view: a frame after each one, with its numbers.
         // Otherwise new numbers only when the status bar takes them (see frameTimingsFresh).

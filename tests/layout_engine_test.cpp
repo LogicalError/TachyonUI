@@ -1751,4 +1751,40 @@ namespace tachyon
         const ElementRect& s = storage.GetElementRectUnsafe(sticky.ref);
         EXPECT_EQ(s.rect.x, p.innerRect.x);
     }
+
+    // Content taller than 32767 pixels (a long list): the parent's content box holds it all.
+    TEST_F(LayoutEngineTest, ContentTallerThanInt16FitsTheParentsInnerRect)
+    {
+        Style padded;
+        padded.padding = { 3, 0, 5, 0 };
+        const StyleRef paddedRef = styleManager.Register(padded);
+        ASSERT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        auto parent = storage.Add(CreateElement(paddedRef));
+        ASSERT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+        auto child = storage.Add(CreateElement(defaultStyleIndex), LayoutOverride::FixedSize(Pixels{ 50 }, Pixels{ 40000 }));
+        ASSERT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+        ASSERT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        layoutEngine.Layout(*osWindowManager, storage);
+
+        const ElementRect& p = storage.GetElementRectUnsafe(parent.ref);
+        const ElementRect& c = storage.GetElementRectUnsafe(child.ref);
+        EXPECT_EQ(p.rect.h, 40008);
+        EXPECT_EQ(p.innerRect.h, 40000);
+        EXPECT_EQ(c.rect.h, 40000);
+    }
+
+    // A min-width above the max-width: min wins, as in CSS.
+    TEST_F(LayoutEngineTest, AMinAboveTheMaxWins)
+    {
+        ASSERT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+        auto leaf = storage.Add(CreateElement(defaultStyleIndex), LayoutOverride{}.MinWidth(Pixels{ 300 }).MaxWidth(Pixels{ 200 }));
+        ASSERT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+
+        layoutEngine.Layout(*osWindowManager, storage);
+
+        EXPECT_EQ(storage.GetElementRectUnsafe(leaf.ref).rect.w, 300);
+        EXPECT_EQ((SizeConstraintAxis{ .min = 300, .max = 200 }).Clamp(250), 300);
+        EXPECT_EQ((SizeConstraintAxis{ .min = 10,  .max = 200 }).Clamp(250), 200);
+    }
 }

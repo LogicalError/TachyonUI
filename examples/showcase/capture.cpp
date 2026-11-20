@@ -608,8 +608,6 @@ namespace tachyon
         // The next shot: what this one made goes.
         auto nextShot = [&] {
             // A panel docked again is the tab shown where it lands: the first tabs, as before.
-            if (shot.act == CaptureAct::Dialog)
-                CaptureOpenDialog(shot.text, c.windowID);
             if (shot.act == CaptureAct::Float)
                 if (Document* document = c.documents.Active())
                 {

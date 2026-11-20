@@ -234,7 +234,7 @@ namespace tachyon::d3d12
                 const UINT flags = m_device.tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
                 if (HRESULT hr = m_swapchain->ResizeBuffers(kFrames, UINT(rect.w), UINT(rect.h), kDrawFormat, flags); FAILED(hr))
                 {
-                    TACHYON_LOG_ERROR(kLogD3D12, "window: ResizeBuffers failed ({})", HResultText(hr));
+                    m_device.NoteFailure(hr, "window: ResizeBuffers");
                     return;
                 }
             }
@@ -390,7 +390,7 @@ namespace tachyon::d3d12
         m_presentPending = false;
         const auto start = std::chrono::steady_clock::now();
         if (HRESULT hr = m_swapchain->Present(1, 0); FAILED(hr))
-            TACHYON_LOG_ERROR(kLogD3D12, "window: Present failed ({})", HResultText(hr));
+            m_device.NoteFailure(hr, "window: Present");
         m_frameIndex = (m_frameIndex + 1) % kFrames;
         return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     }
@@ -400,6 +400,8 @@ namespace tachyon::d3d12
         if (!m_lastFrame || bgra.size() < size_t(m_width) * m_height * 4)
             return false;
         Frame& frame = m_frames[*m_lastFrame];
+        if (!frame.drawTexture)   // a resize that failed left it without one
+            return false;
         m_device.Wait(frame.fenceValue);
         ID3D12Device* d = m_device.device.Get();
 
