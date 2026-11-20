@@ -705,7 +705,7 @@ namespace tachyon
                            [v, t] { if (t < (int)v->tracks.size()) v->tracks[size_t(t)].expanded = !v->tracks[size_t(t)].expanded; },
                            theme.timelineChevronStyleRef);
                     const VisualColorStyleIndex chip = track.color.a > 0.0f
-                        ? styleManager.RegisterColorStyle(ColorStyle::Create(track.color)) : VisualColorStyleIndex{};
+                        ? AppColorStyle(idManager.AllocateDynamicID("chip-color"), track.color) : VisualColorStyleIndex{};
                     RegisterElement(Element{ .id = idManager.AllocateDynamicID("chip"), .styleRef = theme.timelineChipStyleRef,
                                              .flags = ElementFlags::NoInput, .colorStyleIndex = chip }, LayoutOverride{});
                     Text(idManager.AllocateDynamicID("name"), track.name, theme.timelineGroupNameStyleRef);

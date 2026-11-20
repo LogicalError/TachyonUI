@@ -185,6 +185,20 @@ namespace tachyon
         };
 
         // In a panel, it takes the panel's height, as a node view does: the body grows.
+        // A group's color the app animates keeps one color style: the style table doesn't grow
+        // by one a frame.
+        TEST_F(TimelineEditorTest, AnAnimatedTrackColorDoesNotGrowTheStyleTable)
+        {
+            Settle();
+            const size_t before = app.styleManager.VisualColorStyleCount();
+            for (int i = 0; i < 60; ++i)
+            {
+                view.tracks[0].color = color4f{ float(i) / 60.0f, 0.5f, 0.25f, 1.0f };
+                Frame();
+            }
+            EXPECT_LE(app.styleManager.VisualColorStyleCount(), before + 2);
+        }
+
         TEST_F(TimelineEditorTest, ItFillsAPanel)
         {
             const ID panel = app.idManager.CreateStaticID();

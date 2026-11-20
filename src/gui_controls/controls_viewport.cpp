@@ -361,7 +361,7 @@ namespace tachyon
         const int32_t px1 = std::max(1, styleManager.Px(1));
         const float axisRadius = float(styleManager.Px(int32_t(kAxisGizmoRadius)));
         const float axisMargin = float(styleManager.Px(int32_t(kAxisGizmoMargin)));
-        const VisualColorStyleIndex background = styleManager.RegisterColorStyle(ColorStyle::Create(view.background));
+        const VisualColorStyleIndex background = AppColorStyle(idManager.AllocateDynamicID("viewport-background"), view.background);
         VERIFY(elementStorage.AddCustomDraw(ref, [=, this](CustomDrawContext& ctx)
         {
             const IntRect inner = ctx.ElementInnerRect();

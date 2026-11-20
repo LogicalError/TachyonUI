@@ -430,6 +430,19 @@ namespace tachyon
             EXPECT_EQ(builds, 1) << "and still built at the new size";
         }
 
+        // A background the app animates keeps its own color style: the style table doesn't grow
+        // by one a frame.
+        TEST_F(ViewportControlTest, AnAnimatedBackgroundDoesNotGrowTheStyleTable)
+        {
+            const size_t before = app.styleManager.VisualColorStyleCount();
+            for (int i = 0; i < 60; ++i)
+            {
+                view.background = color4f{ float(i) / 60.0f, 0.2f, 0.3f, 1.0f };
+                Frame();
+            }
+            EXPECT_LE(app.styleManager.VisualColorStyleCount(), before + 2);
+        }
+
         TEST_F(ViewportControlTest, TheMouseMovesTheCamera)
         {
             ASSERT_GT(view.viewRect.w, 0);

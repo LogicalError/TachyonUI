@@ -1242,6 +1242,18 @@ namespace tachyon
             m_uiCache->GetOrCreate(scopeID).claimedSwatches.push_back(swatchID);
     }
 
+    VisualColorStyleIndex GUIApplication::AppColorStyle(ID owner, color4f color)
+    {
+        NoteSwatchClaim(owner);
+        VisualColorStyleIndex& slot = m_colorPickerSub->ClaimSwatchStyle(owner);
+        const ColorStyle style = ColorStyle::Create(color);
+        if (slot == VisualColorStyleIndex::Invalid)
+            slot = styleManager.CreateColorStyle(style);
+        else
+            styleManager.UpdateColorStyle(slot, style);
+        return slot;
+    }
+
     // Called for every BeginCached, hit or miss.
     void GUIApplication::EndCached()
     {

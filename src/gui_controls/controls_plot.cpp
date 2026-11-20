@@ -348,7 +348,16 @@ namespace tachyon
         const VisualBoxStyleIndex readoutBox = theme.plotReadoutStyleRef.visualBoxStyleIndex;
         const int2 readoutPad{ styleManager.Px(6), styleManager.Px(2) };
         const int32_t labelBelow = int32_t(band) + px4;
-        VERIFY(elementStorage.AddCustomDraw(plotRef, [=, this](CustomDrawContext& ctx)
+        // Each handle's fill: its own color's style, kept while it's shown (alpha 0: the theme's).
+        std::vector<VisualColorStyleIndex> handleFills(view.handles.size(), theme.curveSelectedKeyColor);
+        if (!view.handles.empty())
+        {
+            const ID fillsID = idManager.AllocateRangedID(uint32_t(view.handles.size()), "plot-handle-fills");
+            for (size_t h = 0; h < view.handles.size(); ++h)
+                if (view.handles[h].color.a > 0.0f)
+                    handleFills[h] = AppColorStyle(idManager.GetSubID(fillsID, uint32_t(h)), view.handles[h].color);
+        }
+        VERIFY(elementStorage.AddCustomDraw(plotRef, [=, this, handleFills = std::move(handleFills)](CustomDrawContext& ctx)
         {
             const IntRect inner = ctx.ElementInnerRect();
             const PlotGrid::Frame f = FrameOf(*v, inner);
@@ -437,8 +446,7 @@ namespace tachyon
                 ctx.RenderQuad(IntRect{ int32_t(x), inner.y, px1, inner.h }, inner, theme.curveZeroColor);
                 const float y0 = float(inner.y + inner.h) + float(px1);
                 const float2 tip{ x, y0 }, baseL{ x - handleSize, y0 + handleSize * 1.7f }, baseR{ x + handleSize, y0 + handleSize * 1.7f };
-                const VisualColorStyleIndex fill = handle.color.a > 0.0f
-                    ? styleManager.RegisterColorStyle(ColorStyle::Create(handle.color)) : theme.curveSelectedKeyColor;
+                const VisualColorStyleIndex fill = size_t(h) < handleFills.size() ? handleFills[size_t(h)] : theme.curveSelectedKeyColor;
                 ctx.RenderTriangle(tip, baseL, baseR, fill);
                 const int2 outline[] = { { int32_t(tip.x), int32_t(tip.y) }, { int32_t(baseL.x), int32_t(baseL.y) }, { int32_t(baseR.x), int32_t(baseR.y) } };
                 ctx.RenderPolyline(outline, /*closed*/ true,

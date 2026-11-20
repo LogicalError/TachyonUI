@@ -173,6 +173,22 @@ namespace tachyon
 
         // A collapsed node's sockets sit on its header's centre line, like an
         // expanded row's sockets sit on the row's.
+        // A node's and a socket's colors the app animates (a color being picked) keep a color
+        // style each: the style table doesn't grow by one a frame.
+        TEST_F(NodeViewControlTest, AnimatedNodeColorsDoNotGrowTheStyleTable)
+        {
+            Settle();
+            const size_t before = app.styleManager.VisualColorStyleCount();
+            for (int i = 0; i < 60; ++i)
+            {
+                const tachyon::color4f c{ float(i) / 60.0f, 0.5f, 0.25f, 1.0f };
+                view.nodes[0].categoryColor = c;
+                view.nodes[0].properties[0].socketColor = c;
+                Frame();
+            }
+            EXPECT_LE(app.styleManager.VisualColorStyleCount(), before + 8);
+        }
+
         TEST_F(NodeViewControlTest, CollapsedSocketsCentreOnTheHeader)
         {
             view.nodes[0].collapsed = true;
