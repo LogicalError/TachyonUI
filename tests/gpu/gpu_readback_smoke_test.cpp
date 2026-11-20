@@ -576,6 +576,43 @@ namespace
         EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
     }
 
+    // Rows written into a page already on the GPU go into its image: the page keeps it, its new
+    // rows draw and the rest stays, validation-clean.
+    TEST_F(GpuTextAtlasTest, ChangedRowsAreWrittenIntoThePage)
+    {
+        RegisterColorStyles();
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+
+        const tachyon::uint2 size{ 64, 64 };
+        std::vector<uint8_t> pixels = Filled(size, 0);
+        const tachyon::TextureIndex page = atlas.CreateTexture(pixels.data(), size, 4);
+        const tachyon::ImageIndex imageIndex = atlas.GetImageIndex(page);
+        atlas.SyncTextureIndices();
+        const tachyon::VisualColorStyleIndex textured = styleManager.RegisterColorStyle(
+            tachyon::ColorStyle::Create(tachyon::color4b{ 255, 255, 255, 255 }, tachyon::color4b{ 255, 255, 255, 255 },
+                                        tachyon::ColorType::StretchedTexture));
+        const auto draw = [&](tachyon::GUIRenderer* r) { r->RenderQuad(tachyon::IntRect{ 40, 40, 80, 80 }, kFullClip, textured, 0.0f, imageIndex); };
+        graphicsContext->BeginFrame();
+        RenderFrame(ctx, draw);
+        const uint32_t empty = PixelAt(ctx, 80, 100);
+        tachyon::Image* const image = atlas.fontTextures[uint32_t(page) - 1].image;
+        sink.Clear();
+
+        // The top half white, as glyphs added there would be.
+        std::fill(pixels.begin(), pixels.begin() + ptrdiff_t(size.x) * 32 * 4, uint8_t(255));
+        atlas.UpdateTextureRows(page, pixels.data(), size, 0, 32);
+        atlas.SyncTextureIndices();
+        graphicsContext->BeginFrame();
+        RenderFrame(ctx, draw);
+
+        EXPECT_EQ(atlas.fontTextures[uint32_t(page) - 1].image, image) << "written into, not made again";
+        EXPECT_EQ(PixelAt(ctx, 80, 50), 0xFFFFFFFFu) << "the new rows draw";
+        EXPECT_EQ(PixelAt(ctx, 80, 110), empty) << "the rest is as it was";
+        EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+    }
+
     // ---- Image uploads (gradient pages, user images) ----
 
     // Creating an image with pixel data doesn't wait for the GPU either: the

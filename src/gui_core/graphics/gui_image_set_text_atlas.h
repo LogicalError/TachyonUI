@@ -1,8 +1,9 @@
 #pragma once
 
 // The text system's atlas pages as images in a backend's image set: each page an image made
-// with GraphicsContext::CreateImage, at an index reserved for it. A page that grows is a new
-// image under the same index, the old one let go once no frame draws with it. For backends
+// with GraphicsContext::CreateImage, at an index reserved for it. Changed rows go into the page's
+// image; a page that grows is a new image under the same index, the old one let go once no
+// frame draws with it. For backends
 // whose image set reserves an index and points it at an image (ReserveIndex, SetImage).
 
 #include <gui_core/diagnostics/gui_logging.h>
@@ -49,6 +50,21 @@ namespace tachyon
                 Replace(*page, imageData, imageSize);
         }
 
+        // The rows go into the page's image when it's this size; a page that grew, or a backend
+        // that can't write rows, is a new image.
+        void UpdateTextureRows(TextureIndex textureIndex, const uint8_t* imageData, uint2 imageSize,
+                               uint32_t firstRow, uint32_t rowCount) override
+        {
+            Page* page = Find(textureIndex);
+            if (page == nullptr)
+                return;
+            const size_t rowBytes = size_t(imageSize.x) * page->bpp;
+            if (page->image != nullptr && page->size.x == imageSize.x && page->size.y == imageSize.y && rowCount > 0 &&
+                m_graphics->UpdateImageRows(page->image, firstRow, rowCount, imageData + rowBytes * firstRow))
+                return;
+            Replace(*page, imageData, imageSize);
+        }
+
         ImageIndex GetImageIndex(TextureIndex textureIndex) override
         {
             Page* page = Find(textureIndex);
@@ -75,6 +91,7 @@ namespace tachyon
         struct Page
         {
             Image*     image = nullptr;
+            uint2      size {};    ///< its image's
             uint8_t    bpp   = 1;
             ImageIndex index = ImageIndex::Invalid;
             bool       used  = false;
@@ -99,6 +116,7 @@ namespace tachyon
                 m_graphics->DestroyImageAtEnd(page.image, DeviceScope::Frame);
             page.image = m_graphics->CreateImage(const_cast<uint8_t*>(imageData), imageSize,
                                                  page.bpp == 1 ? ImageFormat::R8 : ImageFormat::R8G8B8A8, Sampler::LinearClampToEdge);
+            page.size  = imageSize;
         }
 
         GraphicsContext*  m_graphics = nullptr;

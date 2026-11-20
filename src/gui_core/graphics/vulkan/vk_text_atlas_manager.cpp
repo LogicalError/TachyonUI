@@ -127,6 +127,23 @@ void tachyon::vulkan::VulkanTextAtlasManager::UpdateTexture(tachyon::TextureInde
 	};
 }
 
+void tachyon::vulkan::VulkanTextAtlasManager::UpdateTextureRows(tachyon::TextureIndex textureIndex, const uint8_t* imageData,
+                                                                tachyon::uint2 imageSize, uint32_t firstRow, uint32_t rowCount)
+{
+	// The rows go into the page's image when it's this size: its descriptor stays as it is.
+	// A page that grew is a new image.
+	const uint32_t i = uint32_t(textureIndex) - 1;
+	if (textureIndex != tachyon::TextureIndex::Invalid && i < fontTextures.size() && fontTextures[i].used &&
+		fontTextures[i].image != nullptr && rowCount > 0 &&
+		fontTextures[i].size.x == imageSize.x && fontTextures[i].size.y == imageSize.y)
+	{
+		const size_t rowBytes = size_t(imageSize.x) * size_t(fontTextures[i].bpp);
+		if (graphicsContext->deviceContext.UpdateImageRows(fontTextures[i].image, firstRow, rowCount, imageData + rowBytes * firstRow))
+			return;
+	}
+	UpdateTexture(textureIndex, imageData, imageSize);
+}
+
 tachyon::ImageIndex tachyon::vulkan::VulkanTextAtlasManager::GetImageIndex(tachyon::TextureIndex textureIndex)
 {
 	if (textureIndex == tachyon::TextureIndex::Invalid)

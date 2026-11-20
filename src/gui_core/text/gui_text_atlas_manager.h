@@ -22,6 +22,14 @@ namespace tachyon
 
 		virtual TextureIndex CreateTexture(const uint8_t* imageData, uint2 imageSize, uint8_t bpp) = 0;
 		virtual void UpdateTexture(TextureIndex textureIndex, const uint8_t* imageData, uint2 imageSize) = 0;
+		/// The page's pixels, all of them, of which only rows [firstRow, firstRow + rowCount)
+		/// changed: where the page's image is that size, those rows go into it, not a new image
+		/// (GraphicsContext::UpdateImageRows). The default sends the whole page (UpdateTexture).
+		virtual void UpdateTextureRows(TextureIndex textureIndex, const uint8_t* imageData, uint2 imageSize,
+		                               uint32_t /*firstRow*/, uint32_t /*rowCount*/)
+		{
+			UpdateTexture(textureIndex, imageData, imageSize);
+		}
 
 		virtual ImageIndex GetImageIndex(TextureIndex textureIndex) = 0;
 		virtual void SyncTextureIndices() = 0;
