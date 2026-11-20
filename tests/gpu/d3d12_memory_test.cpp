@@ -2,6 +2,7 @@
 // buffer are copied into the GPU's own memory, not read across the bus each frame; and a frame
 // copies only the resident buffers still waiting.
 
+#include "allocation_count.h"
 #include "d3d12_test_harness.h"
 
 #include <gui_core/graphics/d3d12/d3d12_device.h>
@@ -70,6 +71,41 @@ TEST_F(D3D12ImageWindowTest, AFrameCopiesOnlyTheResidentBuffersWaiting)
     RenderFrame([](tachyon::GUIRenderer*) {});
     EXPECT_EQ(d.ResidentState(kept), tachyon::RHI::ResidentState::Ready);
     d.ReleaseResident(kept);
+    EXPECT_TRUE(sink.Empty()) << sink.Dump();
+}
+
+// A frame like the one before reuses that frame's storage: recording and submitting it allocates
+// nothing.
+TEST_F(D3D12ImageWindowTest, ASteadyFrameAllocatesNothing)
+{
+    if (!AllocationCount::ScopedAllocationCount::Supported())
+        GTEST_SKIP() << "allocations are counted in Debug builds with MSVC's CRT";
+    const tachyon::VisualColorStyleIndex white = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 255, 255, 255, 255 }));
+    tachyon::GUIRenderer* r = graphics->guiRenderer;
+    const auto frame = [&] {
+        graphics->BeginFrame();
+        graphics->PrepareFrame(styleManager, gradientManager, 0.0f);
+        r->Reset();
+        if (r->BeginWindow(window->GetID()))
+        {
+            for (int i = 0; i < 64; ++i)
+                r->RenderQuad(tachyon::IntRect{ i * 4, 0, 4, 4 }, kFullClip, white, 0.0f);
+            r->EndWindow();
+        }
+    };
+    for (int i = 0; i < 4; ++i)   // what the first frames make is kept
+    {
+        frame();
+        window->RenderWindowFrame(graphics, kFullClip, false);
+    }
+    frame();
+    uint64_t allocations = 0;
+    {
+        AllocationCount::ScopedAllocationCount count;
+        window->RenderWindowFrame(graphics, kFullClip, false);
+        allocations = count.Count();
+    }
+    EXPECT_EQ(allocations, 0u) << "allocations recording and submitting a steady frame";
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
 }
 

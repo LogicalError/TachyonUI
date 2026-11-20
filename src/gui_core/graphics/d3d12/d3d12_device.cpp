@@ -162,17 +162,20 @@ namespace tachyon::d3d12
 
     void D3D12GraphicsContext::Impl::RecordPendingUploads(ID3D12GraphicsCommandList* list)
     {
-        std::vector<ImageUpload> images;
+        // Taken in one go; the two vectors trade places, each keeping its storage.
+        std::vector<ImageUpload>& images = uploadScratch.images;
         {
             std::lock_guard lock(uploadMutex);
             images.swap(imageUploads);
         }
-        std::vector<D3D12_RESOURCE_BARRIER> barriers;
+        std::vector<D3D12_RESOURCE_BARRIER>& barriers = uploadScratch.barriers;
+        barriers.clear();
         const UINT64 thisSubmit = submitted + 1;
         constexpr D3D12_RESOURCE_STATES kSampled = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         // The images copied into in this list: in COPY_DEST until the barriers at the end, so a
         // second copy into one needs no barrier of its own, and gets no second one after.
-        std::vector<const D3D12Image*> copying;
+        std::vector<const D3D12Image*>& copying = uploadScratch.copying;
+        copying.clear();
         for (ImageUpload& upload : images)
         {
             ID3D12Resource* const resource = upload.image->Resource();
@@ -200,6 +203,7 @@ namespace tachyon::d3d12
             }
             DestroyAfterGpu(std::move(upload.staging.allocation), thisSubmit);
         }
+        images.clear();
         for (const RHI::ResidentBufferId id : pendingResidents)
         {
             const auto it = residents.find(id);

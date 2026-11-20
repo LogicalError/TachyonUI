@@ -12,6 +12,7 @@
 
 #include <gui_core/gui_base_types.h>
 #include <gui_core/graphics/sdlgpu/sdlgpu_device.h>
+#include <gui_core/graphics/sdlgpu/sdlgpu_rhi.h>
 #include <gui_core/windows/gui_window_backend.h>
 
 #include <optional>
@@ -90,6 +91,8 @@ namespace tachyon::sdlgpu
         SDL_GPUTransferBuffer*  m_arenaUpload = nullptr;
         uint32_t                m_arenaSize = 0;
         uint32_t                m_arenaEntry = 0;
+        /// Each frame's draws, recorded while the renderer runs and replayed after the copies.
+        SDLGPUCommandList       m_commands{ m_device, m_staging };
 
         /// ReadPixels' buffer, kept for the next.
         SDL_GPUTransferBuffer* m_download = nullptr;

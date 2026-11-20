@@ -184,7 +184,8 @@ namespace tachyon::sdlgpu
 
         // The frame's draws, kept, and its primitives, staged: SDL copies outside render passes.
         m_staging.clear();
-        SDLGPUCommandList commands(m_device, m_staging, m_arenaEntry);
+        SDLGPUCommandList& commands = m_commands;
+        commands.Begin(m_arenaEntry);
         if (renderer != nullptr)
         {
             // Pixels to clip space, y down as SDL GPU's clip space is y up. A primitive's depth is
