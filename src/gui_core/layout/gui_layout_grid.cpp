@@ -13,15 +13,19 @@ namespace tachyon
     {
         if (childRects.empty())
         {
-            outPlacement = {};
+            outPlacement.cellPositions.clear();   // keeps its capacity: the placement is reused
+            outPlacement.effectiveColumnCount = 0;
+            outPlacement.effectiveRowCount    = 0;
             return;
         }
 
         // Each in-flow item's lines, kept within the track limit: a span of 1 to the limit, a
-        // start no further than leaves room for its span. A start < 0 is auto.
+        // start no further than leaves room for its span. A start < 0 is auto. This and the
+        // occupancy are kept per thread and reused, as the Scratch is.
         struct Item { int32_t col, row, colSpan, rowSpan; bool inFlow; };
         constexpr int32_t kMax = GridAxisProperties::kMaxTracks;
-        std::vector<Item> items(childRects.size());
+        thread_local std::vector<Item> items;
+        items.assign(childRects.size(), Item{});
         int32_t cols = 1, rows = 1;
         for (size_t i = 0; i < childRects.size(); ++i)
         {
@@ -40,7 +44,8 @@ namespace tachyon
             rows = std::max(rows, it.row >= 0 ? it.row + it.rowSpan : it.rowSpan);
         }
 
-        std::vector<uint8_t> occupied(size_t(cols) * size_t(rows), 0);
+        thread_local std::vector<uint8_t> occupied;
+        occupied.assign(size_t(cols) * size_t(rows), 0);
         auto growRows = [&](int32_t needed)
         {
             if (needed > rows)
@@ -128,244 +133,107 @@ namespace tachyon
         outPlacement.effectiveRowCount    = size_t(rows);
     }
 
-    void LayoutGrid::BuildTrackDefinitions(std::span<const ElementRect> childRects,
-                                           const GridPlacement&         placement,
-                                           std::vector<GridTrack>&      outColumnTracks,
-                                           std::vector<GridTrack>&      outRowTracks)
+    LayoutGrid::Scratch& LayoutGrid::ThreadScratch()
     {
-        outColumnTracks.assign(placement.effectiveColumnCount, GridTrack::Auto());
-        outRowTracks.assign(placement.effectiveRowCount, GridTrack::Auto());
-        
-        // Children define tracks; Fixed > Fractional > Auto.
-        auto trackPriority = [](GridTrack::Type type) -> int {
+        thread_local Scratch scratch;
+        return scratch;
+    }
+
+    namespace
+    {
+        // One axis of a grid: 0 columns (x, width), 1 rows (y, height).
+        template <int Axis> int32_t CellOf(int2 cell) { return Axis == 0 ? cell.x : cell.y; }
+        template <int Axis> const GridAxisProperties& AxisOf(const GridProperties& grid) { return Axis == 0 ? grid.column : grid.row; }
+        template <int Axis> int32_t ExtentOf(const IntRect& rect) { return Axis == 0 ? rect.w : rect.h; }
+
+        // Children define a track: Fixed beats Fractional beats Auto, and the larger value wins.
+        int TrackPriority(GridTrack::Type type)
+        {
             switch (type)
             {
-                case GridTrack::Type::Fixed: return 3;
+                case GridTrack::Type::Fixed:      return 3;
                 case GridTrack::Type::Fractional: return 2;
-                case GridTrack::Type::Auto: return 1;
-                default: return 0;
+                case GridTrack::Type::Auto:       return 1;
+                default:                          return 0;
             }
-        };
-        
+        }
+        void MergeTrack(GridTrack& existing, const GridTrack& child)
+        {
+            if (TrackPriority(child.type) > TrackPriority(existing.type))
+                existing = child;
+            else if (child.type == existing.type &&
+                     (child.type == GridTrack::Type::Fixed || child.type == GridTrack::Type::Fractional))
+                existing.value = std::max(existing.value, child.value);
+        }
+    }
+
+    // Stages 2 and 3: the axis's tracks and intrinsic sizes, then its final sizes and offsets.
+    template <int Axis>
+    void LayoutGrid::ComputeAxisOffsets(const GridProperties& grid, std::span<const ElementRect> childRects,
+                                        int32_t available, Scratch& s)
+    {
+        const GridPlacement& placement = s.placement;
+        const size_t count = Axis == 0 ? placement.effectiveColumnCount : placement.effectiveRowCount;
+        s.tracks.assign(count, GridTrack::Auto());
+        s.intrinsics.assign(count, 0);
+
+        // The tracks the children ask for, and the single-span items' sizes as the tracks'
+        // intrinsic ones.
         for (size_t i = 0; i < childRects.size(); ++i)
         {
             if (!childRects[i].constraints.IsInFlow())
                 continue;
-
-            const int2 cell = placement.cellPositions[i];
-            const GridProperties grid = childRects[i].constraints.GetGridItem(childRects[i].layoutStyle);
-            
-            // Column track
-            if (cell.x >= 0 && cell.x < static_cast<int32_t>(placement.effectiveColumnCount))
-            {
-                GridTrack& existingCol = outColumnTracks[cell.x];
-                const GridTrack& childCol = grid.column.track;
-                
-                if (trackPriority(childCol.type) > trackPriority(existingCol.type))
-                {
-                    existingCol = childCol;
-                }
-                else if (childCol.type == existingCol.type)
-                {
-                    // Same type - use larger value
-                    if (childCol.type == GridTrack::Type::Fixed)
-                    {
-                        existingCol.value = std::max(existingCol.value, childCol.value);
-                    }
-                    else if (childCol.type == GridTrack::Type::Fractional)
-                    {
-                        existingCol.value = std::max(existingCol.value, childCol.value);
-                    }
-                }
-            }
-            
-            // Row track
-            if (cell.y >= 0 && cell.y < static_cast<int32_t>(placement.effectiveRowCount))
-            {
-                GridTrack& existingRow = outRowTracks[cell.y];
-                const GridTrack& childRow = grid.row.track;
-                
-                if (trackPriority(childRow.type) > trackPriority(existingRow.type))
-                {
-                    existingRow = childRow;
-                }
-                else if (childRow.type == existingRow.type)
-                {
-                    if (childRow.type == GridTrack::Type::Fixed)
-                    {
-                        existingRow.value = std::max(existingRow.value, childRow.value);
-                    }
-                    else if (childRow.type == GridTrack::Type::Fractional)
-                    {
-                        existingRow.value = std::max(existingRow.value, childRow.value);
-                    }
-                }
-            }
+            const int32_t cell = CellOf<Axis>(placement.cellPositions[i]);
+            if (cell < 0 || cell >= static_cast<int32_t>(count))
+                continue;
+            const GridAxisProperties item = AxisOf<Axis>(childRects[i].constraints.GetGridItem(childRects[i].layoutStyle));
+            MergeTrack(s.tracks[size_t(cell)], item.track);
+            if (item.span == 1)
+                s.intrinsics[size_t(cell)] = std::max(s.intrinsics[size_t(cell)], ExtentOf<Axis>(childRects[i].rect));
         }
-    }
 
-    // Stage 2: Compute intrinsic track sizes
-    void LayoutGrid::ComputeIntrinsicTrackSizes(std::span<const ElementRect> childRects,
-                                                const GridPlacement&         placement,
-                                                std::vector<int32_t>&        outColumnIntrinsics,
-                                                std::vector<int32_t>&        outRowIntrinsics)
-    {
-        outColumnIntrinsics.assign(placement.effectiveColumnCount, 0);
-        outRowIntrinsics.assign(placement.effectiveRowCount, 0);
-
-        // First pass: single-span items directly define intrinsic track sizes.
+        // Multi-span items must fit across the tracks so far: a shortfall is shared out
+        // evenly over the tracks they span.
         for (size_t i = 0; i < childRects.size(); ++i)
         {
             if (!childRects[i].constraints.IsInFlow())
                 continue;
-
-            const int2 cell = placement.cellPositions[i];
-            const GridProperties grid = childRects[i].constraints.GetGridItem(childRects[i].layoutStyle);
-
-            if (grid.column.span == 1 &&
-                cell.x >= 0 && cell.x < static_cast<int32_t>(outColumnIntrinsics.size()))
-            {
-                outColumnIntrinsics[cell.x] = std::max(outColumnIntrinsics[cell.x], childRects[i].rect.w);
-            }
-
-            if (grid.row.span == 1 &&
-                cell.y >= 0 && cell.y < static_cast<int32_t>(outRowIntrinsics.size()))
-            {
-                outRowIntrinsics[cell.y] = std::max(outRowIntrinsics[cell.y], childRects[i].rect.h);
-            }
-        }
-
-        // Second pass: multi-span items must fit across the already-established track sizes.
-        // If current sum is too small, distribute the deficit evenly across spanned tracks.
-        for (size_t i = 0; i < childRects.size(); ++i)
-        {
-            if (!childRects[i].constraints.IsInFlow())
+            const GridAxisProperties item = AxisOf<Axis>(childRects[i].constraints.GetGridItem(childRects[i].layoutStyle));
+            if (item.span <= 1)
                 continue;
-
-            const int2 cell = placement.cellPositions[i];
-            const GridProperties grid = childRects[i].constraints.GetGridItem(childRects[i].layoutStyle);
-
-            const int32_t colStart = std::max(0, cell.x);
-            const int32_t rowStart = std::max(0, cell.y);
-            const int32_t colEnd = std::min<int32_t>(
-                static_cast<int32_t>(outColumnIntrinsics.size()),
-                colStart + std::max<int32_t>(1, grid.column.span));
-            const int32_t rowEnd = std::min<int32_t>(
-                static_cast<int32_t>(outRowIntrinsics.size()),
-                rowStart + std::max<int32_t>(1, grid.row.span));
-
-            if (colStart < colEnd && grid.column.span > 1)
+            const int32_t start = std::max(0, CellOf<Axis>(placement.cellPositions[i]));
+            const int32_t end   = std::min<int32_t>(static_cast<int32_t>(count), start + item.span);
+            if (start >= end)
+                continue;
+            int32_t current = 0;
+            for (int32_t t = start; t < end; ++t)
+                current += s.intrinsics[size_t(t)];
+            const int32_t needed = ExtentOf<Axis>(childRects[i].rect);
+            if (needed <= current)
+                continue;
+            const int32_t deficit = needed - current;
+            const int32_t spanned = end - start;
+            const int32_t addEach = deficit / spanned;
+            int32_t remainder = deficit - addEach * spanned;
+            for (int32_t t = start; t < end; ++t)
             {
-                int32_t current = 0;
-                for (int32_t c = colStart; c < colEnd; ++c)
-                    current += outColumnIntrinsics[c];
-
-                const int32_t needed = childRects[i].rect.w;
-                if (needed > current)
+                s.intrinsics[size_t(t)] += addEach;
+                if (remainder > 0)
                 {
-                    const int32_t deficit = needed - current;
-                    const int32_t count = colEnd - colStart;
-                    const int32_t addEach = deficit / count;
-                    int32_t remainder = deficit - (addEach * count);
-                    for (int32_t c = colStart; c < colEnd; ++c)
-                    {
-                        outColumnIntrinsics[c] += addEach;
-                        if (remainder > 0)
-                        {
-                            outColumnIntrinsics[c] += 1;
-                            remainder--;
-                        }
-                    }
-                }
-            }
-
-            if (rowStart < rowEnd && grid.row.span > 1)
-            {
-                int32_t current = 0;
-                for (int32_t r = rowStart; r < rowEnd; ++r)
-                    current += outRowIntrinsics[r];
-
-                const int32_t needed = childRects[i].rect.h;
-                if (needed > current)
-                {
-                    const int32_t deficit = needed - current;
-                    const int32_t count = rowEnd - rowStart;
-                    const int32_t addEach = deficit / count;
-                    int32_t remainder = deficit - (addEach * count);
-                    for (int32_t r = rowStart; r < rowEnd; ++r)
-                    {
-                        outRowIntrinsics[r] += addEach;
-                        if (remainder > 0)
-                        {
-                            outRowIntrinsics[r] += 1;
-                            remainder--;
-                        }
-                    }
+                    s.intrinsics[size_t(t)] += 1;
+                    remainder--;
                 }
             }
         }
-    }
 
-    // Stage 3: Resolve final sizes and offsets
-    void LayoutGrid::ResolveFinalLayout(const GridProperties&        gridLayout,
-                                        std::span<const ElementRect> childRects,
-                                        const GridPlacement&         placement,
-                                        const std::span<int32_t>     intrinsicColumnSizes,
-                                        const std::span<int32_t>     intrinsicRowSizes,
-                                        int32_t                      availableWidth,
-                                        int32_t                      availableHeight,
-                                        GridLayout&                  outLayout)
-    {
-        outLayout.effectiveColumnCount = intrinsicColumnSizes.size();
-        outLayout.effectiveRowCount = intrinsicRowSizes.size();
-
-        outLayout.columnSizes.resize(outLayout.effectiveColumnCount);
-        outLayout.rowSizes.resize(outLayout.effectiveRowCount);
-
-        std::vector<GridTrack> columnTracks, rowTracks;
-        BuildTrackDefinitions(childRects, placement, columnTracks, rowTracks);
-
-        // Available space is the content box; gaps are added later by ComputeOffsets.
-        const int32_t totalColumnGaps =
-            static_cast<int32_t>(std::max<size_t>(1, outLayout.effectiveColumnCount) - 1) * gridLayout.column.gap;
-        const int32_t totalRowGaps =
-            static_cast<int32_t>(std::max<size_t>(1, outLayout.effectiveRowCount) - 1) * gridLayout.row.gap;
-
-        const int32_t availableTrackWidth = (availableWidth == INT32_MAX)
-            ? INT32_MAX
-            : std::max(0, availableWidth - totalColumnGaps);
-        const int32_t availableTrackHeight = (availableHeight == INT32_MAX)
-            ? INT32_MAX
-            : std::max(0, availableHeight - totalRowGaps);
-
-        ResolveTrackSizes(columnTracks, intrinsicColumnSizes, availableTrackWidth,
-                         outLayout.columnSizes);
-        ResolveTrackSizes(rowTracks, intrinsicRowSizes, availableTrackHeight,
-                         outLayout.rowSizes);
-
-        outLayout.columnOffsets.resize(outLayout.effectiveColumnCount + 1);
-        outLayout.rowOffsets.resize(outLayout.effectiveRowCount + 1);
-
-        ComputeOffsets(outLayout.columnSizes, gridLayout.column.gap, outLayout.columnOffsets);
-        ComputeOffsets(outLayout.rowSizes, gridLayout.row.gap, outLayout.rowOffsets);
-    }
-
-    void LayoutGrid::ComputeGridLayout(const GridProperties&        gridLayout,
-                                       std::span<const ElementRect> childRects,
-                                       int32_t                      availableWidth,
-                                       int32_t                      availableHeight,
-                                       GridLayout&                  outLayout,
-                                       GridPlacement*               outPlacement)
-    {
-        GridPlacement localPlacement;
-        GridPlacement& placement = outPlacement ? *outPlacement : localPlacement;
-        DeterminePlacement(childRects, placement);
-
-        std::vector<int32_t> intrinsicCols, intrinsicRows;
-        ComputeIntrinsicTrackSizes(childRects, placement, intrinsicCols, intrinsicRows);
-
-        ResolveFinalLayout(gridLayout, childRects, placement, intrinsicCols, intrinsicRows,
-                          availableWidth, availableHeight, outLayout);
+        // The space is the content box's; the gaps go in with the offsets.
+        const int16_t gap = AxisOf<Axis>(grid).gap;
+        const int32_t totalGaps = static_cast<int32_t>(std::max<size_t>(1, count) - 1) * gap;
+        const int32_t availableTracks = available == INT32_MAX ? INT32_MAX : std::max(0, available - totalGaps);
+        s.sizes.resize(count);
+        ResolveTrackSizes(s.tracks, s.intrinsics, availableTracks, s.sizes);
+        s.offsets.resize(count + 1);
+        ComputeOffsets(s.sizes, gap, s.offsets);
     }
 
     void LayoutGrid::ResolveTrackSizes(std::span<const GridTrack> tracks,
@@ -515,12 +383,10 @@ namespace tachyon
             return 0;
 
         //TACHYON_PROFILE_SCOPE("LayoutGrid::HorizontalSizing");
-        const GridProperties& gridLayout = parentRect.layoutStyle->layoutData.grid;
-
-        GridLayout layout {};
-        ComputeGridLayout(gridLayout, childRects, INT32_MAX, INT32_MAX, layout);
-
-        return layout.columnOffsets.empty() ? 0 : layout.columnOffsets.back();
+        Scratch& s = ThreadScratch();
+        DeterminePlacement(childRects, s.placement);
+        ComputeAxisOffsets<0>(parentRect.layoutStyle->layoutData.grid, childRects, INT32_MAX, s);
+        return s.offsets.back();
     }
 
     int32_t LayoutGrid::VerticalSizing(const ElementRect&           parentRect,
@@ -530,12 +396,10 @@ namespace tachyon
             return 0;
 
         //TACHYON_PROFILE_SCOPE("LayoutGrid::VerticalSizing");
-        const GridProperties& gridLayout = parentRect.layoutStyle->layoutData.grid;
-
-        GridLayout layout{};
-        ComputeGridLayout(gridLayout, childRects, INT32_MAX, INT32_MAX, layout);
-
-        return layout.rowOffsets.empty() ? 0 : layout.rowOffsets.back();
+        Scratch& s = ThreadScratch();
+        DeterminePlacement(childRects, s.placement);
+        ComputeAxisOffsets<1>(parentRect.layoutStyle->layoutData.grid, childRects, INT32_MAX, s);
+        return s.offsets.back();
     }
 
     void LayoutGrid::HorizontalPositioning(const ElementRect&      parentRect,
@@ -548,9 +412,11 @@ namespace tachyon
         const GridProperties& gridLayout = parentRect.layoutStyle->layoutData.grid;
         const IntRect& areaRect = parentRect.innerRect;
 
-        GridLayout layout{};
-        GridPlacement placement{};
-        ComputeGridLayout(gridLayout, childRects, areaRect.w, areaRect.h, layout, &placement);
+        Scratch& s = ThreadScratch();
+        DeterminePlacement(childRects, s.placement);
+        ComputeAxisOffsets<0>(gridLayout, childRects, areaRect.w, s);
+        const GridPlacement& placement = s.placement;
+        const size_t columnCount = placement.effectiveColumnCount;
 
         for (size_t i = 0; i < childRects.size(); ++i)
         {
@@ -558,19 +424,18 @@ namespace tachyon
                 continue;
 
             const int2 cell = placement.cellPositions[i];
-            if (cell.x >= static_cast<int32_t>(layout.effectiveColumnCount))
+            if (cell.x >= static_cast<int32_t>(columnCount))
                 continue;
 
             const GridProperties grid = childRects[i].constraints.GetGridItem(childRects[i].layoutStyle);
 
             // Calculate cell bounds accounting for spans.
-            int32_t cellX = areaRect.x + layout.columnOffsets[cell.x];
-            const size_t clampedEnd = std::min<size_t>(cell.x + grid.column.span,
-                                                       layout.effectiveColumnCount);
-            int32_t cellEndX = areaRect.x + layout.columnOffsets[clampedEnd];
+            int32_t cellX = areaRect.x + s.offsets[cell.x];
+            const size_t clampedEnd = std::min<size_t>(cell.x + grid.column.span, columnCount);
+            int32_t cellEndX = areaRect.x + s.offsets[clampedEnd];
 
             // Offsets include a gap after each non-last track. Remove the trailing gap from this span.
-            if (clampedEnd < layout.effectiveColumnCount)
+            if (clampedEnd < columnCount)
                 cellEndX -= gridLayout.column.gap;
 
             int32_t cellW = std::max(0, cellEndX - cellX);
@@ -604,9 +469,11 @@ namespace tachyon
         const GridProperties& gridLayout = parentRect.layoutStyle->layoutData.grid;
         const IntRect& areaRect = parentRect.innerRect;
 
-        GridLayout layout{};
-        GridPlacement placement;
-        ComputeGridLayout(gridLayout, childRects, areaRect.w, areaRect.h, layout, &placement);
+        Scratch& s = ThreadScratch();
+        DeterminePlacement(childRects, s.placement);
+        ComputeAxisOffsets<1>(gridLayout, childRects, areaRect.h, s);
+        const GridPlacement& placement = s.placement;
+        const size_t rowCount = placement.effectiveRowCount;
 
         IntRect contentRect {};
 
@@ -617,19 +484,18 @@ namespace tachyon
 
             childRects[i].clipRect = clipRect;
             const int2 cell = placement.cellPositions[i];
-            if (cell.y >= static_cast<int32_t>(layout.effectiveRowCount))
+            if (cell.y >= static_cast<int32_t>(rowCount))
                 continue;
 
             const GridProperties grid = childRects[i].constraints.GetGridItem(childRects[i].layoutStyle);
 
             // Calculate cell bounds accounting for spans.
-            int32_t cellY = areaRect.y + layout.rowOffsets[cell.y];
-            const size_t clampedEnd = std::min<size_t>(cell.y + grid.row.span,
-                                                       layout.effectiveRowCount);
-            int32_t cellEndY = areaRect.y + layout.rowOffsets[clampedEnd];
+            int32_t cellY = areaRect.y + s.offsets[cell.y];
+            const size_t clampedEnd = std::min<size_t>(cell.y + grid.row.span, rowCount);
+            int32_t cellEndY = areaRect.y + s.offsets[clampedEnd];
 
             // Offsets include a gap after each non-last track. Remove the trailing gap from this span.
-            if (clampedEnd < layout.effectiveRowCount)
+            if (clampedEnd < rowCount)
                 cellEndY -= gridLayout.row.gap;
 
             int32_t cellH = std::max(0, cellEndY - cellY);
