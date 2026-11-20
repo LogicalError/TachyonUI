@@ -205,9 +205,15 @@ namespace tachyon
 						skb_image_atlas_set_texture_user_data(m_skribidiContext->atlas, i, (uint32_t)textureIndex);
 					} else
 					{
-						textAtlasManager->
-							UpdateTexture(textureIndex, image->buffer, 
-								uint2 { uint32_t(image->width), uint32_t(image->height) });
+						// The rows the new glyphs went in, the rest of the page as it was; rows found
+						// by their offset only when they're packed with nothing between them.
+						const uint2 imageSize{ uint32_t(image->width), uint32_t(image->height) };
+						if (image->stride_bytes == image->width * int32_t(image->bpp))
+							textAtlasManager->UpdateTextureRows(textureIndex, image->buffer, imageSize,
+																uint32_t(std::max(0, dirty_bounds.y)),
+																uint32_t(std::max(0, dirty_bounds.height)));
+						else
+							textAtlasManager->UpdateTexture(textureIndex, image->buffer, imageSize);
 					}
 				}
 			}

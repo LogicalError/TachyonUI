@@ -93,6 +93,7 @@ list(APPEND GUI_CORE_TEST_FILES
   gui_base_types_test.cpp
   color_conversions_test.cpp
   gradient_manager_test.cpp
+  image_set_text_atlas_test.cpp
   gradient_test.cpp
   icon_text_layout_test.cpp
   icon_text_placement_test.cpp

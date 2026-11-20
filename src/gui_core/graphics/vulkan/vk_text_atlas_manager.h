@@ -35,6 +35,8 @@ namespace tachyon::vulkan
 
 		tachyon::TextureIndex CreateTexture(const uint8_t* imageData, tachyon::uint2 imageSize, uint8_t bpp) override;
 		void UpdateTexture(tachyon::TextureIndex textureIndex, const uint8_t* imageData, tachyon::uint2 imageSize) override;
+		void UpdateTextureRows(tachyon::TextureIndex textureIndex, const uint8_t* imageData, tachyon::uint2 imageSize,
+		                       uint32_t firstRow, uint32_t rowCount) override;
 
 		tachyon::ImageIndex GetImageIndex(tachyon::TextureIndex textureIndex) override;
 		void SyncTextureIndices() override;
