@@ -58,6 +58,53 @@ TEST(VulkanImageSet, RemovedSlotsAreReused)
     EXPECT_EQ(set.textures.size(), 2u);
 }
 
+// A window frame writes its descriptor set again only when the set's version moved: every
+// change moves it, and setting a slot to the image it holds is no change.
+TEST(VulkanImageSet, ItsVersionMovesWhenASlotChanges)
+{
+    tachyon::vulkan::VulkanImageSet set;
+    tachyon::vulkan::VulkanImage a = FakeImage(1), b = FakeImage(2);
+    uint64_t version = set.Version();
+    const auto moved = [&]
+    {
+        const uint64_t now = set.Version();
+        const bool changed = now != version;
+        version = now;
+        return changed;
+    };
+
+    const tachyon::ImageIndex ia = set.Add(&a);
+    EXPECT_TRUE(moved()) << "added";
+    EXPECT_TRUE(set.SetImage(ia, &a));
+    EXPECT_FALSE(moved()) << "the image it holds";
+    EXPECT_TRUE(set.SetImage(ia, &b));
+    EXPECT_TRUE(moved()) << "another image";
+    const VkDescriptorImageInfo hosts{ .imageView = b.imageView, .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL };
+    EXPECT_TRUE(set.SetDescriptor(ia, hosts));
+    EXPECT_TRUE(moved()) << "a host's descriptor";
+    EXPECT_TRUE(set.SetDescriptor(ia, hosts));
+    EXPECT_TRUE(moved()) << "a host's again: its view may be a new one with the old handle";
+    set.ReserveIndex();
+    EXPECT_TRUE(moved()) << "reserved: one more slot";
+    set.Remove(ia);
+    EXPECT_TRUE(moved()) << "removed";
+    set.Clear();
+    EXPECT_TRUE(moved()) << "cleared";
+}
+
+// A window frame remembers the version it wrote, whichever set that was: two sets never hand
+// out the same one.
+TEST(VulkanImageSet, TwoSetsNeverShareAVersion)
+{
+    tachyon::vulkan::VulkanImageSet first, second;
+    EXPECT_NE(first.Version(), second.Version());
+    EXPECT_NE(first.Version(), 0u) << "0 is a frame that wrote none";
+    tachyon::vulkan::VulkanImage a = FakeImage(1);
+    first.Add(&a);
+    second.Add(&a);
+    EXPECT_NE(first.Version(), second.Version());
+}
+
 // Asked for before the device is made, the image slots are as many as asked for (one at
 // least), whatever the device holds; after, as many as there are.
 TEST(VulkanImageSet, TheSlotCountIsSetBeforeTheDevice)
@@ -110,6 +157,53 @@ namespace
     };
     using GpuManyImageSlotsTest = GpuImageSlotsTest<8192>;
     using GpuFewImageSlotsTest  = GpuImageSlotsTest<300>;
+    using GpuImageDescriptorTest = GpuImageSlotsTest<4096>;
+}
+
+// Each frame slot keeps the descriptor set it wrote and binds it again while the image set
+// is unchanged. An image registered later is written once into each slot's set, and draws.
+TEST_F(GpuImageDescriptorTest, AFrameWritesTheImageSlotsOnlyWhenTheyChanged)
+{
+    auto* window = CreateImageWindowContext({ 64, 64 });
+    ASSERT_NE(window, nullptr);
+    const tachyon::ImageIndex grey = Register(0xff808080u);
+    ASSERT_NE(grey, tachyon::ImageIndex::Invalid);
+    const auto white = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
+        tachyon::color4b{ 255, 255, 255, 255 }, tachyon::color4b{ 255, 255, 255, 255 }, tachyon::ColorType::StretchedTexture));
+    const tachyon::IntRect full{ 0, 0, 64, 64 };
+    const auto frames = [&](int count, tachyon::ImageIndex image)
+    {
+        for (int frame = 0; frame < count; ++frame)
+        {
+            graphicsContext->BeginFrame();
+            graphicsContext->PrepareFrame(styleManager, gradientManager, 0.0f);
+            tachyon::GUIRenderer* renderer = graphicsContext->guiRenderer;
+            renderer->Reset();
+            if (renderer->BeginWindow(window->GetID()))
+            {
+                renderer->RenderQuad(full, full, white, 0.0f, image);
+                renderer->EndWindow();
+            }
+            window->RenderWindowFrame(graphicsContext, full, false);
+        }
+    };
+
+    frames(4, grey);   // the uploads and the gradient pages settle
+    const uint64_t settled = vk->ImageDescriptorSetWrites();
+    frames(4, grey);
+    EXPECT_EQ(vk->ImageDescriptorSetWrites(), settled) << "nothing changed: no writes";
+
+    const tachyon::ImageIndex red = Register(0xff0000ffu);   // RGBA: red, opaque
+    ASSERT_NE(red, tachyon::ImageIndex::Invalid);
+    frames(4, red);
+    EXPECT_EQ(vk->ImageDescriptorSetWrites(), settled + tachyon::vulkan::FRAME_OVERLAP) << "once for each frame slot";
+
+    std::vector<uint8_t> pixels(64 * 64 * 4);
+    ASSERT_TRUE(window->ReadPixels(pixels));
+    const size_t centre = (size_t(32) * 64 + 32) * 4;
+    EXPECT_TRUE(pixels[centre + 2] > 200 && pixels[centre + 1] < 50 && pixels[centre] < 50)
+        << "the new image, red: " << int(pixels[centre + 2]) << "," << int(pixels[centre + 1]) << "," << int(pixels[centre]);
+    EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
 }
 
 // Thousands of images registered, more than a frame's first descriptor pool holds: the

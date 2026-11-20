@@ -1,5 +1,6 @@
 #include <format>
 #include <algorithm>
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <optional>
@@ -193,33 +194,40 @@ bool tachyon::vulkan::VulkanGraphicsContext::RenderWindowFrame(VkCommandBuffer c
         VkRect2D scissor = { .offset = {0, 0}, .extent { uint32_t(viewport.width), uint32_t(viewport.height) } };
         vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-        // As many slots as the image set has handed out (one at least), not the whole array.
-        const uint32_t slotsInUse = std::clamp(uint32_t(vulkanImageSet->textures.size()), 1u, deviceContext.imageSlots);
-        VkDescriptorSetVariableDescriptorCountAllocateInfo slotCount
+        const auto& textures = vulkanImageSet->textures;
+#ifndef NDEBUG
+        // A dropped image in a slot: this frame would use it after its destroy was timed.
+        for (uint32_t i = 0; i < uint32_t(textures.size()); ++i)
+            if (textures[i].imageView != VK_NULL_HANDLE)
+                if (const std::source_location* dropped = deviceContext.WasDropped(textures[i].imageView))
+                {
+                    TACHYON_LOG_ERROR(kLogVulkan, "image slot {} holds an image dropped at {}:{}; unregister it first",
+                                      i + 1, dropped->file_name(), dropped->line());
+                    assert(false && "a dropped image is still in the image set");
+                }
+#endif
+        if (currentFrame.imageDescriptorsVersion != vulkanImageSet->Version())
         {
-            .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-            .descriptorSetCount = 1,
-            .pDescriptorCounts  = &slotsInUse,
-        };
-        VkDescriptorSet descriptorImageSet = currentFrame.frameDescriptors.allocate(deviceContext.device, deviceContext.singleImageDescriptorLayout, &slotCount);
-        {
+            // The slot's fence has passed (BeginWindowFrame): no frame in flight binds its set.
+            currentFrame.frameDescriptors.clear_pools(deviceContext.device);
+            // As many slots as the image set has handed out (one at least), not the whole array.
+            const uint32_t slotsInUse = std::clamp(uint32_t(textures.size()), 1u, deviceContext.imageSlots);
+            VkDescriptorSetVariableDescriptorCountAllocateInfo slotCount
+            {
+                .sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+                .descriptorSetCount = 1,
+                .pDescriptorCounts  = &slotsInUse,
+            };
+            currentFrame.imageDescriptors = currentFrame.frameDescriptors.allocate(deviceContext.device, deviceContext.singleImageDescriptorLayout, &slotCount);
+
             // One write per run of filled slots; empty slots stay unwritten (PARTIALLY_BOUND).
             DescriptorWriter writer;
-            const auto& textures = vulkanImageSet->textures;
             const uint32_t count = std::min(uint32_t(textures.size()), slotsInUse);
             for (uint32_t first = 0; first < count; )
             {
                 if (textures[first].imageView == VK_NULL_HANDLE) { ++first; continue; }
                 uint32_t end = first + 1;
                 while (end < count && textures[end].imageView != VK_NULL_HANDLE) ++end;
-                // A dropped image in a slot: this frame would use it after its destroy was timed.
-                for (uint32_t i = first; i < end; ++i)
-                    if (const std::source_location* dropped = deviceContext.WasDropped(textures[i].imageView))
-                    {
-                        TACHYON_LOG_ERROR(kLogVulkan, "image slot {} holds an image dropped at {}:{}; unregister it first",
-                                          i + 1, dropped->file_name(), dropped->line());
-                        assert(false && "a dropped image is still in the image set");
-                    }
                 writer.writes.push_back(VkWriteDescriptorSet
                     {
                         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -231,10 +239,11 @@ bool tachyon::vulkan::VulkanGraphicsContext::RenderWindowFrame(VkCommandBuffer c
                     });
                 first = end;
             }
-
-            writer.update_set(deviceContext.device, descriptorImageSet);
+            writer.update_set(deviceContext.device, currentFrame.imageDescriptors);
+            currentFrame.imageDescriptorsVersion = vulkanImageSet->Version();
+            ++m_imageDescriptorSetWrites;
         }
-        VulkanRenderCommandList cmdList(deviceContext, cmd, descriptorImageSet, currentFrame);
+        VulkanRenderCommandList cmdList(deviceContext, cmd, currentFrame.imageDescriptors, currentFrame);
         static_cast<tachyon::PrimitiveRenderer*>(guiRenderer)->Render(
             windowID, cmdList, deviceContext.renderContext.pipelines, pushConstants);
     }
@@ -671,11 +680,18 @@ tachyon::TextAtlasManager* VulkanGraphicsContext::CreateTextAtlasManager()
     return m_textAtlas;
 }
 
+uint64_t VulkanImageSet::NextVersion()
+{
+    static std::atomic<uint64_t> last{ 0 };
+    return ++last;
+}
+
 void tachyon::vulkan::VulkanImageSet::Clear()
 {
     textures.clear();
     owners.clear();
     m_freeIndices.clear();
+    m_version = NextVersion();
 }
 
 void VulkanImageSet::RefreshDescriptors()
@@ -683,6 +699,8 @@ void VulkanImageSet::RefreshDescriptors()
     for (size_t i = 0; i < owners.size(); ++i)
         if (owners[i] != nullptr)
             SetImage(tachyon::ImageIndex(i + 1), owners[i]);
+    // A new device's view may have the old one's handle value.
+    m_version = NextVersion();
 }
 
 tachyon::ImageIndex VulkanImageSet::Allocate(const VkDescriptorImageInfo& descriptor)
@@ -693,6 +711,7 @@ tachyon::ImageIndex VulkanImageSet::Allocate(const VkDescriptorImageInfo& descri
         m_freeIndices.pop_back();
         textures[uint32_t(index) - 1] = descriptor;
         owners[uint32_t(index) - 1]   = nullptr;
+        m_version = NextVersion();
         return index;
     }
     if (textures.size() >= capacity)
@@ -702,6 +721,7 @@ tachyon::ImageIndex VulkanImageSet::Allocate(const VkDescriptorImageInfo& descri
     }
     textures.push_back(descriptor);
     owners.push_back(nullptr);
+    m_version = NextVersion();   // one more slot: a set of the new size
     return tachyon::ImageIndex(textures.size());
 }
 
@@ -740,10 +760,17 @@ void VulkanImageSet::Remove(tachyon::ImageIndex index)
     textures[uint32_t(index) - 1] = {};
     owners[uint32_t(index) - 1]   = nullptr;
     m_freeIndices.push_back(index);
+    m_version = NextVersion();
 }
 
 bool VulkanImageSet::SetImage(tachyon::ImageIndex index, VulkanImage* image)
 {
+    // The gradient pages are set each frame, mostly to what they hold. An image of the set's
+    // own keeps its view until it's dropped, which it may not be while in a slot.
+    const uint32_t slot = uint32_t(index) - 1;
+    if (index != tachyon::ImageIndex::Invalid && slot < owners.size() && owners[slot] == image
+        && textures[slot].imageView == image->imageView && textures[slot].sampler == image->imageSampler)
+        return true;
     if (!SetDescriptor(index, VkDescriptorImageInfo
         {
             .sampler     = image->imageSampler,
@@ -759,8 +786,10 @@ bool VulkanImageSet::SetDescriptor(tachyon::ImageIndex index, const VkDescriptor
 {
     if (!IsInRange(index))
         return false;
+    // A host's view may be a new one with an old one's handle value: always a change.
     textures[uint32_t(index) - 1] = descriptor;
     owners[uint32_t(index) - 1]   = nullptr;   // a host's descriptor; SetImage sets the owner
+    m_version = NextVersion();
     return true;
 }
 
@@ -1254,9 +1283,9 @@ bool tachyon::vulkan::VulkanDeviceContext::InitializeSharedResources()
         builder.add_binding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
         builder.bindings[0].descriptorCount = imageSlots; // bindless texture array
 
-        // PARTIALLY_BOUND: each frame only textures.size() slots are written and
-        // only those are indexed by the shader; the rest stay undefined.
-        // VARIABLE_DESCRIPTOR_COUNT: each frame's set is made with only the slots in use.
+        // PARTIALLY_BOUND: only the filled slots are written and only those are indexed by
+        // the shader; the rest stay undefined.
+        // VARIABLE_DESCRIPTOR_COUNT: a frame slot's set is made with only the slots in use.
         // Relies on the descriptor-indexing features enabled at device creation.
         VkDescriptorBindingFlags bindingFlags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT
                                               | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;

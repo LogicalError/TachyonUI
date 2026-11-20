@@ -47,6 +47,10 @@ namespace tachyon::vulkan
         /// Points every index back at its image, after the images were made again.
         void RefreshDescriptors();
 
+        /// Moves on with every change to a slot, never back, and no two sets share one (0 is
+        /// none): a window frame's descriptor set is written again when it differs.
+        uint64_t Version() const { return m_version; }
+
     public:
         void Clear() override;
         tachyon::ImageIndex Add(tachyon::Image* image) override;
@@ -58,8 +62,10 @@ namespace tachyon::vulkan
     private:
         tachyon::ImageIndex Allocate(const VkDescriptorImageInfo& descriptor);
         bool IsInRange(tachyon::ImageIndex index) const;
+        static uint64_t NextVersion();
 
         std::vector<tachyon::ImageIndex> m_freeIndices;
+        uint64_t                         m_version = NextVersion();
     };
     /// @}
 }

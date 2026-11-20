@@ -29,7 +29,13 @@ namespace tachyon::vulkan
         VkSemaphore swapchainSemaphore = {};
         VkFence renderFence = {};
 
+        /// Holds imageDescriptors alone; cleared when that is made again.
         DescriptorAllocatorGrowable frameDescriptors = {};
+        /// The image set's slots as this frame slot last wrote them, bound again while the set's
+        /// version is imageDescriptorsVersion (0: none written). Rewritten only after the slot's
+        /// fence, so no frame in flight has it bound.
+        VkDescriptorSet imageDescriptors        = VK_NULL_HANDLE;
+        uint64_t        imageDescriptorsVersion = 0;
         DeletionQueue flushQueue = {};
         DeletionQueue deletionQueue = {};
 

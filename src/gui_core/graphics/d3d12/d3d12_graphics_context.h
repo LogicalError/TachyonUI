@@ -160,6 +160,10 @@ namespace tachyon::d3d12
         /// Waits until the GPU has done all work submitted so far.
         void WaitIdle();
 
+        /// How many image views the image set has written: a slot set to the image it holds
+        /// writes none.
+        uint64_t ImageViewWrites() const;
+
         struct Impl;
         /// Library internal: the device, its queue, and what the window contexts draw with.
         Impl& Internal() { return *m_impl; }
