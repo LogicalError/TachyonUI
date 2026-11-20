@@ -248,8 +248,6 @@ namespace tachyon::d3d12
 
         if (HRESULT hr = CreateDXGIFactory2(d.debugLayer ? DXGI_CREATE_FACTORY_DEBUG : 0, IID_PPV_ARGS(&d.factory)); FAILED(hr))
             return fail(ErrorCode::Unsupported, std::format("Direct3D 12: no DXGI factory ({})", HResultText(hr)));
-        BOOL tearing = FALSE;
-        d.tearing = SUCCEEDED(d.factory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &tearing, sizeof(tearing))) && tearing;
 
         if (external)
         {
@@ -430,9 +428,12 @@ namespace tachyon::d3d12
         MarkContentChanged();   // its pixels are drawn again, its image slot the same
         Impl::Scene& scene = d.scenes[key];
         scene.lastFrame = d.sceneFrame;
-        if (scene.color == nullptr || scene.extent != size)
+        // Clearing to another color than the texture's optimized clear is slower, and the debug
+        // layer says so each frame: a new clear color makes it again too, as a new size does.
+        const bool sameClear = scene.clear.r == clear.r && scene.clear.g == clear.g && scene.clear.b == clear.b && scene.clear.a == clear.a;
+        if (scene.color == nullptr || scene.extent != size || !sameClear)
         {
-            // Made again at the new size; the old textures go once the frames using them are done.
+            // Made again; the old textures go once the frames using them are done.
             ReleaseScene(*this, scene);
             scene.lastFrame = d.sceneFrame;
             // Cleared to the app's clear color each frame, and depth to 1: their optimized clears.
@@ -458,6 +459,7 @@ namespace tachyon::d3d12
             d.device->CreateRenderTargetView(scene.color->Resource(), nullptr, scene.rtv->GetCPUDescriptorHandleForHeapStart());
             d.device->CreateDepthStencilView(scene.depth->Resource(), nullptr, scene.dsv->GetCPUDescriptorHandleForHeapStart());
             scene.extent = size;
+            scene.clear  = clear;
             scene.index  = RegisterImage(scene.color);
         }
         d.sceneRequests.push_back({ key, window, clear, std::move(record) });

@@ -105,6 +105,16 @@ TEST(VulkanImageSet, TwoSetsNeverShareAVersion)
     EXPECT_NE(first.Version(), second.Version());
 }
 
+// A window draws into its draw image as a color attachment and copies it out; nothing writes it
+// as a storage image, which would keep drivers from compressing it (DCC).
+TEST(VulkanWindowContext, TheDrawImageIsNoStorageImage)
+{
+    constexpr VkImageUsageFlags usage = tachyon::vulkan::VulkanWindowContext::kDrawImageUsage;
+    EXPECT_EQ(usage & VK_IMAGE_USAGE_STORAGE_BIT, 0u);
+    EXPECT_NE(usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 0u);
+    EXPECT_NE(usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 0u);
+}
+
 // Asked for before the device is made, the image slots are as many as asked for (one at
 // least), whatever the device holds; after, as many as there are.
 TEST(VulkanImageSet, TheSlotCountIsSetBeforeTheDevice)

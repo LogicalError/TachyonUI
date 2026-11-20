@@ -59,6 +59,32 @@ TEST_F(D3D12ImageWindowTest, AnUnchangedGradientPageIsNotWrittenAgain)
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
 }
 
+// A scene's clear color changed at the same size: its texture is made again with the new
+// color as its optimized clear, so clearing to it draws no debug-layer warning, and shows it.
+TEST_F(D3D12ImageWindowTest, ASceneClearedToAnotherColorMatchesItsOptimizedClear)
+{
+    const tachyon::VisualColorStyleIndex stretched = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(
+        tachyon::color4b{ 255, 255, 255, 255 }, tachyon::color4b{ 255, 255, 255, 255 }, tachyon::ColorType::StretchedTexture));
+    tachyon::ID key;
+    key.value.dynamicParts.mode      = tachyon::IDMode::Static;
+    key.value.dynamicParts.hashValue = 0x5CE4F;
+    const auto frame = [&](tachyon::color4f clear) {
+        graphics->BeginFrame();
+        const tachyon::ImageIndex index = graphics->RenderScene(key, window->GetID(), { 32, 32 }, clear, [](const tachyon::ScenePayload&) {});
+        EXPECT_NE(index, tachyon::ImageIndex::Invalid);
+        RenderFrame([&](tachyon::GUIRenderer* r) {
+            r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x, kSize.y }, kFullClip, stretched, 0.0f, index);
+        });
+    };
+    frame({ 0, 0, 1, 1 });
+    EXPECT_GT(Rgba(kSize.x / 2, kSize.y / 2)[2], 200) << "blue";
+    frame({ 1, 0, 0, 1 });
+    frame({ 1, 0, 0, 1 });
+    EXPECT_GT(Rgba(kSize.x / 2, kSize.y / 2)[0], 200) << "red";
+    EXPECT_LT(Rgba(kSize.x / 2, kSize.y / 2)[2], 50);
+    EXPECT_TRUE(sink.Empty()) << sink.Dump();
+}
+
 // A scene the app draws (RenderScene, a viewport's): its drawing goes into the scene's own
 // texture before the UI's, which shows it where the UI puts it. Made again when its size
 // changes, and let go when it's no longer asked for.

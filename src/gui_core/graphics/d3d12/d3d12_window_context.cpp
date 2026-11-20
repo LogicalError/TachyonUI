@@ -77,7 +77,9 @@ namespace tachyon::d3d12
             desc.Scaling     = DXGI_SCALING_NONE;
             desc.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD;
             desc.AlphaMode   = DXGI_ALPHA_MODE_IGNORE;
-            desc.Flags       = device.tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+            // No ALLOW_TEARING: every present waits for vsync (Present(1, 0)), which tearing
+            // can't be used with.
+            desc.Flags       = 0;
             ComPtr<IDXGISwapChain1> swapchain1;
             if (HRESULT hr = device.factory->CreateSwapChainForHwnd(device.queue.Get(), window, &desc, nullptr, nullptr, &swapchain1); FAILED(hr))
                 return fail("CreateSwapChainForHwnd", hr);
@@ -231,8 +233,7 @@ namespace tachyon::d3d12
             {
                 m_device.WaitIdle();
                 ReleaseSizedResources();
-                const UINT flags = m_device.tearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
-                if (HRESULT hr = m_swapchain->ResizeBuffers(kFrames, UINT(rect.w), UINT(rect.h), kDrawFormat, flags); FAILED(hr))
+                if (HRESULT hr = m_swapchain->ResizeBuffers(kFrames, UINT(rect.w), UINT(rect.h), kDrawFormat, 0); FAILED(hr))
                 {
                     m_device.NoteFailure(hr, "window: ResizeBuffers");
                     return;

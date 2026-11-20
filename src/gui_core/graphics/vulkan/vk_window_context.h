@@ -54,7 +54,7 @@ namespace tachyon::vulkan
         /// BeginWindowFrame gates their reuse.
         VulkanImage drawImage = {};
         VulkanImage depthImage = {};
-        /// The layout the slot's last commands left drawImage in: GENERAL after drawing,
+        /// The layout the slot's last commands left drawImage in: COLOR_ATTACHMENT_OPTIMAL after drawing,
         /// TRANSFER_SRC_OPTIMAL once copied out (to the swapchain, the host's image, or read back).
         VkImageLayout drawImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
@@ -148,6 +148,9 @@ namespace tachyon::vulkan
         void ResizeSwapchain(tachyon::int2 size);
         void FlushWindowContext();
 
+        /// The draw image is drawn into as a color attachment and copied out; it's no storage
+        /// image, which would keep drivers from compressing it (DCC).
+        static constexpr VkImageUsageFlags kDrawImageUsage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         /// Creates a draw and depth image pair sized to windowExtent; each FRAME_OVERLAP slot
         /// has its own.
         void CreateDrawDepthImages(VulkanImage& drawImage, VulkanImage& depthImage, VkFormat colorFormat);
