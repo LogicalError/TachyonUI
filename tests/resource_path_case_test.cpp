@@ -57,16 +57,19 @@ namespace
         PathCaseCheck m_previous;
     };
 
-    // A temporary folder holding Folder/Sample.css.
+    // A temporary folder holding Folder/Sample.css, one per test: ctest runs the tests as
+    // processes side by side, and one's TearDown mustn't remove another's files.
     class PathCaseTest : public ::testing::Test
     {
     protected:
-        fs::path root = fs::temp_directory_path() / "tachyon-path-case-test";
+        fs::path root;
         std::string exact;
         std::string wrong;
 
         void SetUp() override
         {
+            root = fs::temp_directory_path() /
+                   (std::string("tachyon-path-case-") + ::testing::UnitTest::GetInstance()->current_test_info()->name());
             fs::create_directories(root / "Folder");
             std::ofstream(root / "Folder" / "Sample.css", std::ios::binary) << ":root { --accent: #123456; }\n";
             exact = (root / "Folder" / "Sample.css").generic_string();
