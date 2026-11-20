@@ -189,6 +189,34 @@ namespace tachyon
             EXPECT_LE(app.styleManager.VisualColorStyleCount(), before + 8);
         }
 
+        // A frame's and a state's edge in a color the app animates keep a box style each: the
+        // box style table doesn't grow by one a frame either.
+        TEST_F(NodeViewControlTest, AnimatedEdgeColorsDoNotGrowTheBoxStyleTable)
+        {
+            view.frames.push_back(NodeFrame{ .stableID = app.idManager.CreateStaticID(), .title = "Frame",
+                                             .color = tachyon::color4f{ 0.2f, 0.4f, 0.8f, 1.0f },
+                                             .pos = { 60, 40 }, .size = { 400, 300 } });
+            Settle();
+            size_t before = app.styleManager.VisualBoxStyleCount();
+            for (int i = 0; i < 60; ++i)
+            {
+                view.frames[0].color = tachyon::color4f{ float(i) / 60.0f, 0.4f, 0.8f, 1.0f };
+                Frame();
+            }
+            EXPECT_LE(app.styleManager.VisualBoxStyleCount(), before + 2) << "a frame's edge";
+
+            view.frames.clear();
+            view.kind = NodeViewKind::StateMachine;
+            Settle();
+            before = app.styleManager.VisualBoxStyleCount();
+            for (int i = 0; i < 60; ++i)
+            {
+                view.nodes[0].categoryColor = tachyon::color4f{ float(i) / 60.0f, 0.5f, 0.25f, 1.0f };
+                Frame();
+            }
+            EXPECT_LE(app.styleManager.VisualBoxStyleCount(), before + 4) << "a state's edge";
+        }
+
         TEST_F(NodeViewControlTest, CollapsedSocketsCentreOnTheHeader)
         {
             view.nodes[0].collapsed = true;

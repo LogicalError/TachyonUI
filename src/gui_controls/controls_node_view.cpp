@@ -1376,10 +1376,11 @@ namespace tachyon
         if (const VisualBoxStyle* frameBox = styleManager.GetVisualBoxStyle(theme.nodeFrameStyleRef.visualBoxStyleIndex, ElementState::None))
             frameRadius = frameBox->borderRadius;
         const BoxEdges frameEdgeWidths = BoxEdges(uint16_t(std::max(1, styleManager.Px(1))));
+        // An edge's color is a palette slot, so its outline is one box style per slot.
         auto frameEdge = [&](tachyon::color4f c) {
-            return styleManager.RegisterOutline(frameEdgeWidths, frameRadius,
-                tachyon::color4b{ uint8_t(std::lround(std::clamp(c.r, 0.0f, 1.0f) * 255.0f)), uint8_t(std::lround(std::clamp(c.g, 0.0f, 1.0f) * 255.0f)),
-                                  uint8_t(std::lround(std::clamp(c.b, 0.0f, 1.0f) * 255.0f)), uint8_t(std::lround(std::clamp(c.a, 0.0f, 1.0f) * 255.0f)) });
+            const tachyon::color4f clamped{ std::clamp(c.r, 0.0f, 1.0f), std::clamp(c.g, 0.0f, 1.0f),
+                                            std::clamp(c.b, 0.0f, 1.0f), std::clamp(c.a, 0.0f, 1.0f) };
+            return styleManager.RegisterOutline(frameEdgeWidths, frameRadius, appColor(clamped));
         };
         const VisualBoxStyleIndex neutralFrameEdge = frameEdge(theme.GetColor("--frame-border", tachyon::color4f{ 0.56f, 0.59f, 0.65f, 0.28f }));
         std::vector<DrawnFrame> drawnFrames;
@@ -2339,7 +2340,7 @@ namespace tachyon
             {
                 const tachyon::color4f edge = OverNodeBody(ownColor, theme.nodeTints.stateBorder);
                 const VisualBoxStyleIndex outline = styleManager.RegisterOutline(stateEdgeWidths, stateEdgeRadius,
-                    tachyon::color4b{ uint8_t(std::lround(edge.r * 255.0f)), uint8_t(std::lround(edge.g * 255.0f)), uint8_t(std::lround(edge.b * 255.0f)), 255 });
+                    appColor(tachyon::color4f{ edge.r, edge.g, edge.b, 1.0f }));
                 if ((outerState & (ElementState::Hover | ElementState::Active | ElementState::Focused | ElementState::Selected)) == ElementState::None)
                     VERIFY(elementStorage.AddCustomDraw(outerRes.ref, [outline](tachyon::CustomDrawContext& ctx) {
                         ctx.RenderBox(ctx.ElementRect(), outline);

@@ -118,6 +118,10 @@ namespace tachyon
         /// A border-only box style in pixels: `widths` and `radius` with a `color` border and no
         /// background, registered once (until ClearAll).
         VisualBoxStyleIndex RegisterOutline(BoxEdges widths, BoxCorners radius, color4b color) noexcept;
+        /// As RegisterOutline, its border the color style `color` (a slot an app color is
+        /// written into, say): one box style for each slot and shape, whatever color the slot
+        /// shows, so a changing color doesn't add a box style each time.
+        VisualBoxStyleIndex RegisterOutline(BoxEdges widths, BoxCorners radius, VisualColorStyleIndex color) noexcept;
         /// For Style::stateLayer Content (Register does it): each hovered and pressed slot gets the
         /// slot's text color over its background without hover and press, 8% and 14%.
         static void ApplyStateLayer(Style& style) noexcept;
@@ -251,7 +255,8 @@ namespace tachyon
         std::vector<VisualTextStyle>  m_visualTextStyles;
         std::vector<VisualColorStyle> m_visualColorStyles;
         std::vector<VisualShadowStyle> m_visualShadowStyles; ///< few: searched linearly at registration
-        struct Outline { BoxEdges widths; BoxCorners radius; color4b color; VisualBoxStyleIndex index; };
+        /// An outline's border: `color`, or the color style `colorIndex` when it's valid.
+        struct Outline { BoxEdges widths; BoxCorners radius; color4b color; VisualColorStyleIndex colorIndex; VisualBoxStyleIndex index; };
         std::vector<Outline>           m_outlines;           ///< RegisterOutline's; few, searched linearly
 
         /// Parallel to m_visualColorStyles; invalid for texture-only entries.
