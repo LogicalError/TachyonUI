@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include "gpu/allocation_count.h"
 #include "headless_gui_app.h"
 
 #include <gui_core/gui_id.h>
@@ -112,6 +113,42 @@ namespace tachyon
             RunFrame();
             EXPECT_EQ(bodyRuns, settledRuns); // no more rebuilds - clean again
             EXPECT_FALSE(app.HasElement(btnA)); // content absent
+        }
+
+        // A hovered cached panel is rebuilt and recorded again each frame. Recording what's in it
+        // (its elements, scroll containers and text editors) reuses the last frame's storage: a
+        // panel twice as big costs no more allocations a frame.
+        TEST_F(UICacheTest, RecordingAHoveredPanelAllocatesNothingPerElement)
+        {
+            if (!AllocationCount::ScopedAllocationCount::Supported())
+                GTEST_SKIP() << "allocations are counted in Debug builds with MSVC's CRT";
+            app.SetDrawCacheEnabled(true);
+            const auto allocationsAHoveredFrame = [&](int rows) {
+                const auto frame = [&] {
+                    app.Frame([&] {
+                        app.BeginRootWindow();
+                        if (app.BeginCached(scopeID, app.theme.emptyVertStyleRef, uint64_t(rows),
+                                            tachyon::LayoutOverride{}.Width(400).Height(600)))
+                        {
+                            app.Button(btnA, "A", [] {});
+                            for (int i = 0; i < rows; ++i)
+                                app.Text("row");
+                        }
+                        app.EndCached();
+                        app.EndRootWindow();
+                    });
+                };
+                frame();
+                app.InjectMouseMove(app.CenterOf(btnA));
+                for (int i = 0; i < 8; ++i)   // hovered: rebuilt each frame, storage warmed up
+                    frame();
+                AllocationCount::ScopedAllocationCount count;
+                frame();
+                return count.Count();
+            };
+            const uint64_t small = allocationsAHoveredFrame(200);
+            const uint64_t large = allocationsAHoveredFrame(400);
+            EXPECT_EQ(large, small) << "allocations that grow with the panel's elements";
         }
 
         // A disabled control in a cached panel: the pointer on it keeps the panel live, as on

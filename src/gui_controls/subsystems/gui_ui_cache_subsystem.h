@@ -1,7 +1,7 @@
 #pragma once
 
+#include <algorithm>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -38,7 +38,9 @@ namespace tachyon
         /// not the element tree.
         struct Scope
         {
-            std::unordered_set<ID> scopeIDs;  ///< every element id in the subtree (membership tests)
+            /// Every element id in the subtree, sorted (membership tests by binary search).
+            /// Refilled at each capture, keeping its storage.
+            std::vector<ID> scopeIDs;
             /// Scroll offsets of scroll containers in the scope at capture time. A
             /// change (wheel/drag scroll) invalidates the cache so virtual content
             /// re-emits its visible rows - scroll isn't an interaction-state change.
@@ -46,7 +48,7 @@ namespace tachyon
             /// Text-editor element ids in the scope (recorded at capture). A scope with a
             /// focused editor rebuilds every frame so the editor's editable-text registration
             /// (typing, caret) re-runs.
-            std::unordered_set<ID> textEditorIds;
+            std::vector<ID> textEditorIds;
             /// Swatch color-style ids claimed while building the scope; kept alive on hit frames.
             std::vector<ID> claimedSwatches;
 
@@ -131,7 +133,12 @@ namespace tachyon
         /// `id` when scope `s` contains it, else Invalid.
         static ID MemberOrNull(const Scope& s, ID id)
         {
-            return s.scopeIDs.find(id) != s.scopeIDs.end() ? id : ID::Invalid();
+            return IsMember(s, id) ? id : ID::Invalid();
+        }
+        /// True when scope `s` contains `id`.
+        static bool IsMember(const Scope& s, ID id)
+        {
+            return id != ID::Invalid() && std::binary_search(s.scopeIDs.begin(), s.scopeIDs.end(), id);
         }
 
     private:
