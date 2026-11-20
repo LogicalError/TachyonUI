@@ -55,6 +55,16 @@ namespace tachyon
         int2 GetScrollOffset(ScrollOffsetHandle handle);
         void SetScrollOffset(ScrollOffsetHandle handle, int2 offset);
 
+        /// Calls `use(id, offset)` for each scroll offset kept; one it returns true for is used
+        /// this frame, as GetScrollOffset would make it.
+        template <class Use>
+        void ForEachScrollOffset(Use&& use)
+        {
+            for (ScrollOffsetEntry& entry : m_scrollOffsets)
+                if (entry.inUse && use(entry.id, entry.offset))
+                    entry.lastSeenFrame = m_frameIndex;
+        }
+
         /// Scrolls just enough to show `rectMin`..`rectMax` (content space) in a container of
         /// `containerSize`; true when it scrolled. Oversized, partly visible rects stay put.
         bool MakeRectVisibleInScroll(ScrollOffsetHandle scrollHandle, int2 rectMin, int2 rectMax, int2 containerSize, ScrollAxis axis = ScrollAxis::Both);

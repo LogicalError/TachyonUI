@@ -6,6 +6,8 @@
 #include <gui_core/state/gui_scroll_management.h>
 #include <gui_core/text/gui_text_system.h>
 
+#include <algorithm>
+
 namespace tachyon
 {
     UICacheManager::UICacheManager(FramePipeline& frame, ElementStorage& storage, GUIStateManager& stateManager)
@@ -56,11 +58,11 @@ namespace tachyon
         // editable text for live typing/caret) - focus alone doesn't change which
         // element is focused, so the focus transition check above wouldn't catch it.
         const ID focused = I.GetFocusedID();
-        if (focused != ID::Invalid() && s.textEditorIds.find(focused) != s.textEditorIds.end())
+        if (focused != ID::Invalid() && std::find(s.textEditorIds.begin(), s.textEditorIds.end(), focused) != s.textEditorIds.end())
             return false;
 
         // Keys are routed to the focused element, which only exists in a rebuilt scope.
-        if (input.keyboard && focused != ID::Invalid() && s.scopeIDs.find(focused) != s.scopeIDs.end())
+        if (input.keyboard && IsMember(s, focused))
             return false;
 
         // A scroll within the scope must rebuild (virtual content re-emits rows).
@@ -166,9 +168,9 @@ namespace tachyon
         s.hasCachedSize       = true;
 
         // Collect the subtree's element ids (membership for the interaction/scroll
-        // invalidation checks). A window opened in the subtree can't be replayed from
-        // a blit, nor can an element drawn differently every frame (a spinner), so mark
-        // the scope non-cacheable (always rebuild).
+        // invalidation checks), and its text editors. A window opened in the subtree can't
+        // be replayed from a blit, nor can an element drawn differently every frame (a
+        // spinner), so mark the scope non-cacheable (always rebuild).
         auto recurse = [&](auto&& self, ElementRef parentRef) -> void
         {
             const IndexRange range = m_storage.GetChildRange(parentRef);
@@ -179,19 +181,27 @@ namespace tachyon
                 if (!e) continue;
                 if ((e->flags & (ElementFlags::IsWindow | ElementFlags::Animated)) != ElementFlags::None)
                     s.nonCacheable = true;
-                s.scopeIDs.insert(e->id);
+                s.scopeIDs.push_back(e->id);
+                // Recorded here because the editor is registered during this (miss) frame's
+                // construction: a focused one must rebuild each frame (its editable-text
+                // registration is per-frame).
+                if (textSystem && textSystem->IsTextEditor(e->id))
+                    s.textEditorIds.push_back(e->id);
                 if (m_storage.HasChildren(childRef))
                     self(self, childRef);
             }
         };
         recurse(recurse, s.lastContainerRef);
+        std::sort(s.scopeIDs.begin(), s.scopeIDs.end());
+        // An element sharing an earlier one's id (SharesID) is in the list twice.
+        s.scopeIDs.erase(std::unique(s.scopeIDs.begin(), s.scopeIDs.end()), s.scopeIDs.end());
 
         // A scope using AddPostLayout (deferred size measurement - virtual tables,
         // node view) reads last frame's size, so it needs the EvaluateHit settle.
         for (const auto& entry : m_storage.GetPostLayoutEntries())
         {
             const Element* owner = m_storage.GetElementPtr(entry.ownerRef);
-            if (owner && s.scopeIDs.find(owner->id) != s.scopeIDs.end()) { s.usesPostLayout = true; break; }
+            if (owner && IsMember(s, owner->id)) { s.usesPostLayout = true; break; }
         }
 
         const InteractionState& I = m_stateManager.Interaction();
@@ -203,26 +213,18 @@ namespace tachyon
         // Scroll snapshot: any scroll container in the scope (the dock content
         // itself or an inner table body). A wheel/drag scroll changes the offset
         // without changing interaction state, so record it here to invalidate.
+        // The scroll offsets there are, few, matched against the scope, rather than a lookup
+        // for each of its elements.
         s.scrollSnapshot.clear();
-        ScrollManagement& sm = m_stateManager.GetScrollManagement();
-        auto recordScroll = [&](ID id)
+        const Element* containerElem = m_storage.GetElementPtr(s.lastContainerRef);
+        const ID containerID = containerElem != nullptr ? containerElem->id : ID::Invalid();
+        m_stateManager.GetScrollManagement().ForEachScrollOffset([&](ID id, int2 offset)
         {
-            const ScrollOffsetHandle h = sm.GetScrollOffsetHandle(id);
-            if (sm.IsScrollOffsetHandleValid(h))
-                s.scrollSnapshot.push_back({ id, sm.GetScrollOffset(h) });
-        };
-        if (const Element* containerElem = m_storage.GetElementPtr(s.lastContainerRef))
-            recordScroll(containerElem->id);
-        for (ID id : s.scopeIDs)
-            recordScroll(id);
-
-        // Text editors in the scope: a focused one must rebuild each frame (its
-        // editable-text registration is per-frame). Recorded here because the
-        // editor is registered during this (miss) frame's construction.
-        if (textSystem)
-            for (ID id : s.scopeIDs)
-                if (textSystem->IsTextEditor(id))
-                    s.textEditorIds.insert(id);
+            if (id != containerID && !IsMember(s, id))
+                return false;
+            s.scrollSnapshot.push_back({ id, offset });
+            return true;
+        });
 
         s.captured      = true;
         s.dirty         = false;
