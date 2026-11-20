@@ -329,6 +329,15 @@ namespace tachyon
         std::unordered_map<tachyon::ID, ScopeCapture> scopeCaptures;
         /// GPU copies to free, on the next Render (which has the command list).
         std::vector<RHI::ResidentBufferId> m_releasedResidents;
+        /// Where each replayed capture is drawn from in the frame being rendered; kept between
+        /// frames for its storage.
+        struct ResolvedReplay
+        {
+            const PrimitiveRenderTarget*                   passes = nullptr;
+            std::array<DeviceAddress, kPrimitiveKindCount> addresses{};
+            GPUDrawPushConstants                           push{};
+        };
+        std::vector<ResolvedReplay> m_resolvedReplays;
         /// The window target while a capture redirects emit calls.
         PrimitiveRenderTarget* m_captureSaved = nullptr;
         uint64_t m_frame = 0;

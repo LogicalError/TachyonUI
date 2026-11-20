@@ -78,9 +78,10 @@ namespace tachyon::sdlgpu
 
     void SDLGPUGraphicsContext::Impl::RecordCopies(SDL_GPUCopyPass* pass)
     {
-        std::vector<TextureCopy>  textures;
-        std::vector<BufferCopy>   copied;
-        std::vector<SDLGPUImage*> released;
+        // Taken in one go; each pair of vectors trades places, both keeping their storage.
+        std::vector<TextureCopy>&  textures = copyScratch.textures;
+        std::vector<BufferCopy>&   copied   = copyScratch.buffers;
+        std::vector<SDLGPUImage*>& released = copyScratch.released;
         {
             std::lock_guard lock(copyMutex);
             textures.swap(textureCopies);
@@ -121,6 +122,9 @@ namespace tachyon::sdlgpu
             SDL_ReleaseGPUTexture(device, image->texture);
             delete image;
         }
+        textures.clear();
+        copied.clear();
+        released.clear();
     }
 
     // ---- Resident buffers ----------------------------------------------------------------

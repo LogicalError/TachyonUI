@@ -143,6 +143,13 @@ namespace tachyon::sdlgpu
         /// Images let go of (DestroyImageAtEnd, on any thread), freed by RecordCopies on the
         /// frame's thread after the copies it took: one may be among them.
         std::vector<SDLGPUImage*> releasedImages;
+        /// RecordCopies' working lists, kept between frames for their storage.
+        struct CopyScratch
+        {
+            std::vector<TextureCopy>  textures;
+            std::vector<BufferCopy>   buffers;
+            std::vector<SDLGPUImage*> released;
+        } copyScratch;
         /// Records the queued copies; resident buffers they make are Ready after.
         void RecordCopies(SDL_GPUCopyPass* pass);
 

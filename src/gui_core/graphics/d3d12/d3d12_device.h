@@ -180,6 +180,13 @@ namespace tachyon::d3d12
         };
         std::mutex               uploadMutex;   ///< images are made on any thread
         std::vector<ImageUpload> imageUploads;
+        /// RecordPendingUploads' working lists, kept between frames for their storage.
+        struct UploadScratch
+        {
+            std::vector<ImageUpload>            images;
+            std::vector<D3D12_RESOURCE_BARRIER> barriers;
+            std::vector<const D3D12Image*>      copying;
+        } uploadScratch;
 
         /// Records the queued image and resident-buffer copies into `list`.
         void RecordPendingUploads(ID3D12GraphicsCommandList* list);

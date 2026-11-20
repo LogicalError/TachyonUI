@@ -96,8 +96,8 @@ void PrimitiveRenderer::Render(tachyon::ID id, RHI::RenderCommandList& cmdList,
     m_lastUploadBytes = bytes;
 
     // Where each replayed capture is drawn from this frame.
-    struct ResolvedReplay { const PrimitiveRenderTarget* passes = nullptr; std::array<DeviceAddress, kPrimitiveKindCount> addresses{}; GPUDrawPushConstants push{}; };
-    std::vector<ResolvedReplay> replays(target.replays.size());
+    std::vector<ResolvedReplay>& replays = m_resolvedReplays;
+    replays.assign(target.replays.size(), ResolvedReplay{});
     for (size_t r = 0; r < target.replays.size(); ++r)
     {
         const PrimitiveRenderTarget::ScopeReplay& replay = target.replays[r];

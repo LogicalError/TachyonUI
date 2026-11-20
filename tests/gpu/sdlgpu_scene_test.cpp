@@ -2,11 +2,13 @@
 // render-to-image window draws and reads back, and a scene's drawing shows where the UI puts it,
 // with nothing from SDL GPU's debug mode.
 
+#include "allocation_count.h"
 #include "sdlgpu_test_harness.h"
 
 #include <gui_core/graphics/sdlgpu/sdlgpu_device.h>
 
 #include <SDL3/SDL_gpu.h>
+#include <SDL3/SDL_stdinc.h>
 
 #include <cstring>
 
@@ -70,6 +72,79 @@ TEST_P(SDLGPUImageWindowTest, AFrameCopiesOnlyTheResidentBuffersWaiting)
     RenderFrame([](tachyon::GUIRenderer*) {});
     EXPECT_EQ(d.ResidentState(kept), tachyon::RHI::ResidentState::Ready);
     d.ReleaseResident(kept);
+    EXPECT_TRUE(sink.Empty()) << sink.Dump();
+}
+
+namespace
+{
+    // SDL's own allocations, which its GPU calls make as it pleases, left out of the count: SDL
+    // allocates through these, which call its originals with the count paused.
+    SDL_malloc_func  g_sdlMalloc  = nullptr;
+    SDL_calloc_func  g_sdlCalloc  = nullptr;
+    SDL_realloc_func g_sdlRealloc = nullptr;
+    SDL_free_func    g_sdlFree    = nullptr;
+
+    void* SDLCALL UncountedMalloc(size_t size)
+    {
+        AllocationCount::Ignored ignored;
+        return g_sdlMalloc(size);
+    }
+    void* SDLCALL UncountedCalloc(size_t count, size_t size)
+    {
+        AllocationCount::Ignored ignored;
+        return g_sdlCalloc(count, size);
+    }
+    void* SDLCALL UncountedRealloc(void* memory, size_t size)
+    {
+        AllocationCount::Ignored ignored;
+        return g_sdlRealloc(memory, size);
+    }
+    void SDLCALL UncountedFree(void* memory) { g_sdlFree(memory); }
+
+    struct SDLAllocationsUncounted
+    {
+        SDLAllocationsUncounted()
+        {
+            SDL_GetMemoryFunctions(&g_sdlMalloc, &g_sdlCalloc, &g_sdlRealloc, &g_sdlFree);
+            SDL_SetMemoryFunctions(&UncountedMalloc, &UncountedCalloc, &UncountedRealloc, &UncountedFree);
+        }
+        ~SDLAllocationsUncounted() { SDL_SetMemoryFunctions(g_sdlMalloc, g_sdlCalloc, g_sdlRealloc, g_sdlFree); }
+    };
+}
+
+// A frame like the one before reuses that frame's storage: recording and submitting it allocates
+// nothing outside SDL.
+TEST_P(SDLGPUImageWindowTest, ASteadyFrameAllocatesNothing)
+{
+    if (!AllocationCount::ScopedAllocationCount::Supported())
+        GTEST_SKIP() << "allocations are counted in Debug builds with MSVC's CRT";
+    const SDLAllocationsUncounted sdlUncounted;
+    const tachyon::VisualColorStyleIndex white = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 255, 255, 255, 255 }));
+    tachyon::GUIRenderer* r = graphics->guiRenderer;
+    const auto frame = [&] {
+        graphics->BeginFrame();
+        graphics->PrepareFrame(styleManager, gradientManager, 0.0f);
+        r->Reset();
+        if (r->BeginWindow(window->GetID()))
+        {
+            for (int i = 0; i < 64; ++i)
+                r->RenderQuad(tachyon::IntRect{ i * 4, 0, 4, 4 }, kFullClip, white, 0.0f);
+            r->EndWindow();
+        }
+    };
+    for (int i = 0; i < 4; ++i)   // what the first frames make is kept
+    {
+        frame();
+        window->RenderWindowFrame(graphics, kFullClip, false);
+    }
+    frame();
+    uint64_t allocations = 0;
+    {
+        AllocationCount::ScopedAllocationCount count;
+        window->RenderWindowFrame(graphics, kFullClip, false);
+        allocations = count.Count();
+    }
+    EXPECT_EQ(allocations, 0u) << "allocations recording and submitting a steady frame";
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
 }
 

@@ -19,10 +19,19 @@ namespace tachyon::sdlgpu
     class SDLGPUCommandList final : public RHI::RenderCommandList
     {
     public:
-        /// `staging` takes the frame's transient data; `stagingEntry` is the buffer table's entry
-        /// of the buffer it's copied into.
-        SDLGPUCommandList(SDLGPUGraphicsContext::Impl& device, std::vector<std::byte>& staging, uint32_t stagingEntry)
-            : m_device(device), m_staging(staging), m_stagingEntry(stagingEntry) {}
+        /// `staging` takes each frame's transient data. A window keeps one for all its frames, so
+        /// the lists keep their storage.
+        SDLGPUCommandList(SDLGPUGraphicsContext::Impl& device, std::vector<std::byte>& staging)
+            : m_device(device), m_staging(staging) {}
+
+        /// A new frame: the last one's draws gone. `stagingEntry` is the buffer table's entry of
+        /// the buffer the staging is copied into.
+        void Begin(uint32_t stagingEntry)
+        {
+            m_stagingEntry = stagingEntry;
+            m_draws.clear();
+            m_mostQuads = 0;
+        }
 
         /// Cut where a run would read more than the 16 images a draw binds, and kept for Replay.
         void DrawPrimitives(const RHI::GpuPipeline& pipeline, const GPUDrawPushConstants& pushConstants,
@@ -53,7 +62,7 @@ namespace tachyon::sdlgpu
 
         SDLGPUGraphicsContext::Impl& m_device;
         std::vector<std::byte>&      m_staging;
-        uint32_t                     m_stagingEntry;
+        uint32_t                     m_stagingEntry = 0;
         std::vector<Draw>            m_draws;
         std::vector<ImageBatcher::Batch> m_batches;   ///< reused
         uint32_t                     m_mostQuads = 0;
