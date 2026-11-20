@@ -56,7 +56,8 @@ namespace tachyon
         struct ChildStyleRefs { StyleRef first, last, only; };
         /// Registers `s` as a style of its own (never shared, so its variants are its alone)
         /// with the styles its elements take as a first, last or only child (ElementStorage
-        /// swaps them in when the parent's children are done).
+        /// swaps them in when the parent's children are done). A variant changes the box only:
+        /// its size, min/max, display and visibility are taken from `s`, as in CSS.
         StyleRef RegisterWithChildStyles(const Style& s, const Style& first, const Style& last, const Style& only,
                                          StyleUnits units = StyleUnits::Css) noexcept;
         /// The child styles of a style registered with them, by its layout style; nullptr for others.
@@ -264,8 +265,19 @@ namespace tachyon
         std::unordered_map<uint64_t, std::vector<VisualBoxStyleIndex>>   m_visualBoxHashMap;
         std::unordered_map<uint64_t, std::vector<VisualTextStyleIndex>>  m_visualTextHashMap;
         std::unordered_map<uint64_t, std::vector<VisualColorStyleIndex>> m_visualColorHashMap;
-        /// A theme variable's fills (ColorStyle::variable), kept apart from the rest.
-        std::unordered_map<uint16_t, std::vector<VisualColorStyleIndex>> m_variableColors;
+        /// A theme variable's fills (ColorStyle::variable), kept apart from the rest: each slot
+        /// with the fill it was registered as, which a registration matches even after
+        /// SetVariableColor wrote another color into the slot. That fill's atlas texel is held
+        /// (registeredHandles), so no other color can be given it and match by mistake.
+        struct VariableFills
+        {
+            std::vector<VisualColorStyleIndex> indices;
+            std::vector<VisualColorStyle>      registeredAs;
+            std::vector<GradientHandle>        registeredHandles;
+        };
+        std::unordered_map<uint16_t, VariableFills> m_variableColors;
+        /// The color SetVariableColor last gave each variable: a fill registered later starts at it.
+        std::unordered_map<uint16_t, ColorStyle> m_variableValues;
 
         /// Free list for on-demand (runtime-mutable) color style slots.
         std::vector<VisualColorStyleIndex> m_freeColorStyleSlots;

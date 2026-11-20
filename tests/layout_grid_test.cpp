@@ -211,4 +211,87 @@ namespace tachyon
         EXPECT_EQ(bounds.y, 0);
         EXPECT_EQ(bounds.h, 70);
     }
+
+    // Grid placement cases: each child is a 100x100 cell in fixed 100px tracks, placed by
+    // `place` (start < 0: auto); returns where each one lands, in cells.
+    class LayoutGridPlacementTest : public LayoutGridTest
+    {
+    protected:
+        struct Place { int16_t col = GridAxisProperties::kAuto, row = GridAxisProperties::kAuto, colSpan = 1, rowSpan = 1; };
+
+        // An empty auto column takes the grid's free space, so a test reading a column's x gives
+        // the grid none (parentSize 0).
+        std::vector<int2> Cells(std::initializer_list<Place> places, int16_t columnGap = 0, int32_t parentSize = 4000)
+        {
+            Style parentStyle;
+            parentStyle.display = Display::Grid;
+            parentStyle.layoutData.grid.column.gap = columnGap;
+            const StyleRef parentIdx = styleManager.Register(parentStyle);
+
+            EXPECT_EQ(storage.BeginConstruction(), ElementStorageResult::Success);
+            EXPECT_EQ(storage.Add(Element{ .styleRef = parentIdx }, LayoutOverride::FixedSize(parentSize, parentSize)), ElementStorageResult::Success);
+            EXPECT_EQ(storage.BeginChildren(), ElementStorageResult::Success);
+            std::vector<ElementRef> refs;
+            for (const Place& p : places)
+            {
+                Style childStyle;
+                childStyle.layoutData.grid.column = { .track = GridTrack::Fixed(100.0f), .start = p.col, .span = p.colSpan };
+                childStyle.layoutData.grid.row    = { .track = GridTrack::Fixed(100.0f), .start = p.row, .span = p.rowSpan };
+                refs.push_back(storage.Add(Element{ .styleRef = styleManager.Register(childStyle) },
+                                           LayoutOverride::FixedSize(100 * p.colSpan, 100 * p.rowSpan)).ref);
+            }
+            EXPECT_EQ(storage.EndChildren(), ElementStorageResult::Success);
+            EXPECT_EQ(storage.EndConstruction(), ElementStorageResult::Success);
+            layoutEngine.Layout(*osWindowManager, storage);
+
+            std::vector<int2> cells;
+            rects.clear();
+            for (const ElementRef ref : refs)
+            {
+                const IntRect r = storage.GetElementRectUnsafe(ref).rect;
+                rects.push_back(r);
+                cells.push_back({ r.x / (100 + columnGap), r.y / 100 });
+            }
+            return cells;
+        }
+        std::vector<IntRect> rects;   ///< the children's rects from the last Cells
+    };
+
+    // An item spanning two columns goes where both are free, not over the item in the second.
+    TEST_F(LayoutGridPlacementTest, ASpanningItemDoesNotOverlapAPlacedOne)
+    {
+        const auto cells = Cells({ { .col = 1, .row = 0 }, { .colSpan = 2 } });
+        EXPECT_EQ(cells[0], (int2{ 1, 0 }));
+        EXPECT_EQ(cells[1], (int2{ 0, 1 })) << "row 0 has only one free column";
+    }
+
+    // Items with only a column start stay in that column (not the first one), a row each.
+    TEST_F(LayoutGridPlacementTest, AnItemWithOnlyAColumnKeepsIt)
+    {
+        (void)Cells({ { .col = 1 }, { .col = 1 } });
+        EXPECT_GT(rects[0].x, 0) << "in column 1";
+        EXPECT_EQ(rects[1].x, rects[0].x) << "the same column";
+        EXPECT_EQ(rects[1].y, rects[0].y + 100) << "the next row";
+    }
+
+    // Items placed by both lines in different columns and rows keep their cells, and an auto
+    // one takes the first free cell.
+    TEST_F(LayoutGridPlacementTest, ExplicitItemsInWiderColumnsKeepTheirCells)
+    {
+        (void)Cells({ { .col = 0, .row = 1 }, { .col = 2, .row = 0 }, {} });
+        EXPECT_EQ(rects[0].x, 0);
+        EXPECT_EQ(rects[0].y, 100);
+        EXPECT_EQ(rects[1].y, 0);
+        EXPECT_GT(rects[1].x, 100) << "past column 1";
+        EXPECT_EQ(rects[2].x, 0) << "the first free cell";
+        EXPECT_EQ(rects[2].y, 0);
+    }
+
+    // A start line far past the limit lands on the last track the grid has, not thousands in:
+    // the empty tracks before it are 0 wide, so it sits one gap per track in.
+    TEST_F(LayoutGridPlacementTest, AStartPastTheLimitIsClamped)
+    {
+        (void)Cells({ { .col = 20000, .row = 0 } }, /*columnGap*/ 1, /*parentSize*/ 0);
+        EXPECT_EQ(rects[0].x, GridAxisProperties::kMaxTracks - 1);
+    }
 }

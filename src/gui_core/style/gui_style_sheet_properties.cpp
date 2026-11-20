@@ -114,7 +114,7 @@ bool Parser::ParseDeclValue(StyleDecl& d)
             m_lex.Consume(); // consume "span"
             if (!m_lex.Check(TT::Number)) { Error("Expected number after 'span'"); return false; }
             d.iVal = -1; // start = auto
-            d.uVal = (uint16_t)ConsumeInt();
+            d.uVal = (uint16_t)std::clamp((int)ConsumeInt(), 1, (int)GridAxisProperties::kMaxTracks);
             d.hasSecondNumber = true;
             return true;
         }
@@ -133,7 +133,7 @@ bool Parser::ParseDeclValue(StyleDecl& d)
                 { Error("Expected 'span' after '/' in '"+p+"'"); return false; }
             m_lex.Consume(); // consume "span"
             if (!m_lex.Check(TT::Number)) { Error("Expected number after 'span'"); return false; }
-            d.uVal = (uint16_t)ConsumeInt();
+            d.uVal = (uint16_t)std::clamp((int)ConsumeInt(), 1, (int)GridAxisProperties::kMaxTracks);
             d.hasSecondNumber = true;
         }
         return true;
@@ -195,7 +195,7 @@ bool Parser::ParseDeclValue(StyleDecl& d)
             m_lex.Consume(); d.iVal = FlexProperties::kAuto; return true;
         }
         if (!ParseDim(d.uVal)) return false;
-        d.iVal = (int16_t)d.uVal;
+        d.iVal = d.uVal;   // 0..65535, clamped to a length where it's applied
         return true;
     }
 
@@ -223,7 +223,7 @@ bool Parser::ParseDeclValue(StyleDecl& d)
             {
                 float basis = ConsumeFloat();
                 if (m_lex.Check(TT::Ident) && ICEq(m_lex.Peek().text,"px")) m_lex.Consume();
-                d.iVal = (int16_t)basis;
+                d.iVal = (int32_t)std::clamp(basis, 0.0f, 65535.0f);   // clamped to a length where it's applied
             }
         }
         return true;
@@ -716,18 +716,23 @@ void Parser::ApplyDecl(Style& s, uint64_t slots, const StyleDecl& d)
     // Grid item properties
     if (ICEq(p,"-tachyon-grid-column-track")) { s.layoutData.grid.column.track = d.gridTrackVal; return; }
     if (ICEq(p,"-tachyon-grid-row-track"))    { s.layoutData.grid.row.track    = d.gridTrackVal; return; }
-    if (ICEq(p,"grid-column-start")) { s.layoutData.grid.column.start = (int16_t)d.iVal; return; }
-    if (ICEq(p,"grid-row-start"))    { s.layoutData.grid.row.start    = (int16_t)d.iVal; return; }
+    // A line past the track limit is its last; a negative one is auto.
+    const auto gridStart = [](int32_t v) {
+        return v < 0 ? GridAxisProperties::kAuto : (int16_t)std::min<int32_t>(v, GridAxisProperties::kMaxTracks - 1);
+    };
+    const auto gridSpan = [](uint16_t v) { return (int16_t)std::clamp((int)v, 1, (int)GridAxisProperties::kMaxTracks); };
+    if (ICEq(p,"grid-column-start")) { s.layoutData.grid.column.start = gridStart(d.iVal); return; }
+    if (ICEq(p,"grid-row-start"))    { s.layoutData.grid.row.start    = gridStart(d.iVal); return; }
     if (ICEq(p,"grid-column"))
     {
-        if (d.iVal != -1)            s.layoutData.grid.column.start = (int16_t)d.iVal;
-        if (d.hasSecondNumber)       s.layoutData.grid.column.span  = (int16_t)std::max(1, (int)d.uVal);
+        if (d.iVal != -1)            s.layoutData.grid.column.start = gridStart(d.iVal);
+        if (d.hasSecondNumber)       s.layoutData.grid.column.span  = gridSpan(d.uVal);
         return;
     }
     if (ICEq(p,"grid-row"))
     {
-        if (d.iVal != -1)            s.layoutData.grid.row.start = (int16_t)d.iVal;
-        if (d.hasSecondNumber)       s.layoutData.grid.row.span  = (int16_t)std::max(1, (int)d.uVal);
+        if (d.iVal != -1)            s.layoutData.grid.row.start = gridStart(d.iVal);
+        if (d.hasSecondNumber)       s.layoutData.grid.row.span  = gridSpan(d.uVal);
         return;
     }
 
@@ -740,7 +745,11 @@ void Parser::ApplyDecl(Style& s, uint64_t slots, const StyleDecl& d)
     if (ICEq(p,"justify-content")) { s.layoutData.flex.justifyContent = (JustifyContent)d.enumVal;
                                      s.layoutData.grid.justifyContent = (JustifyContent)d.enumVal;  return; }
     if (ICEq(p,"align-content"))   { s.layoutData.flex.alignContent   = (AlignContent)d.enumVal;    return; }
-    if (ICEq(p,"flex-basis"))      { s.layoutData.flex.flexBasis      = (int16_t)d.iVal;            return; }
+    // A basis past what a length holds is the largest one; auto stays auto.
+    const auto flexBasis = [](int32_t v) {
+        return v == FlexProperties::kAuto ? FlexProperties::kAuto : (int16_t)std::clamp(v, 0, int32_t(INT16_MAX));
+    };
+    if (ICEq(p,"flex-basis"))      { s.layoutData.flex.flexBasis      = flexBasis(d.iVal);          return; }
 
     // CSS size properties
     if (ICEq(p,"width"))      { s.layoutData.width     = d.iVal; return; }
@@ -757,7 +766,7 @@ void Parser::ApplyDecl(Style& s, uint64_t slots, const StyleDecl& d)
     {
         s.layoutData.flex.flexGrow   = (uint16_t)std::clamp((int)d.fVal, 0, 65535);
         s.layoutData.flex.flexShrink = (uint16_t)std::clamp((int)d.uVal2, 0, 65535);
-        s.layoutData.flex.flexBasis  = (int16_t)d.iVal;
+        s.layoutData.flex.flexBasis  = flexBasis(d.iVal);
         return;
     }
 

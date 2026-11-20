@@ -903,6 +903,28 @@ namespace tachyon
         const LayoutStyle* LayoutOf(ElementRef ref) const { return styleManager.GetLayoutStyle(storage.GetElementPtr(ref)->styleRef.layoutStyleIndex); }
     };
 
+    // A variant changes the box only, as a :first-child rule in CSS does: its size and display
+    // are the base style's, since an element's constraints come from the base when it's added.
+    TEST_F(ChildStyleTest, VariantsKeepTheBaseSizeAndDisplay)
+    {
+        Style base = Padded(2, 2);
+        base.layoutData.width = 50;
+        Style first = Padded(9, 2);
+        first.layoutData.width    = 80;
+        first.layoutData.minHeight = 30;
+        first.display = Display::None;
+        const StyleRef s = styleManager.RegisterWithChildStyles(base, first, Padded(2, 9), Padded(9, 9));
+        const StyleManager::ChildStyleRefs& variants = *styleManager.GetChildStyles(s.layoutStyleIndex);
+        const LayoutStyle* baseLayout  = styleManager.GetLayoutStyle(s.layoutStyleIndex);
+        const LayoutStyle* firstLayout = styleManager.GetLayoutStyle(variants.first.layoutStyleIndex);
+        ASSERT_NE(firstLayout, nullptr);
+        EXPECT_EQ(firstLayout->layoutData.width, baseLayout->layoutData.width);
+        EXPECT_EQ(firstLayout->layoutData.minHeight, baseLayout->layoutData.minHeight);
+        EXPECT_EQ(firstLayout->display, baseLayout->display);
+        EXPECT_TRUE(firstLayout->IsInFlow());
+        EXPECT_EQ(firstLayout->padding.left, 9u) << "the box is still the variant's";
+    }
+
     // A style registered with child styles is its own, even when another registration has the same values.
     TEST_F(ChildStyleTest, StylesWithChildStylesAreNeverShared)
     {

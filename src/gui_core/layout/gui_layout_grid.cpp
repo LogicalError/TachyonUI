@@ -17,174 +17,115 @@ namespace tachyon
             return;
         }
 
-        // First pass: find explicit bounds and required minimum span dimensions.
-        int32_t maxExplicitCol = 0;
-        int32_t maxExplicitRow = 0;
-        int32_t maxColumnSpan = 1;
-        int32_t maxRowSpan = 1;
-
-        for (const auto& childElem : childRects)
-        {
-            if (!childElem.constraints.IsInFlow())
-                continue;
-
-            const GridProperties grid = childElem.constraints.GetGridItem(childElem.layoutStyle);
-            maxColumnSpan = std::max(maxColumnSpan, std::max(1, static_cast<int32_t>(grid.column.span)));
-            maxRowSpan = std::max(maxRowSpan, std::max(1, static_cast<int32_t>(grid.row.span)));
-
-            if (grid.column.start >= 0)
-            {
-                maxExplicitCol = std::max(maxExplicitCol,
-                    grid.column.start + grid.column.span);
-            }
-            if (grid.row.start >= 0)
-            {
-                maxExplicitRow = std::max(maxExplicitRow,
-                    grid.row.start + grid.row.span);
-            }
-        }
-
-        // Initialize grid dimensions.
-        // Auto-placed items with spans must still have enough tracks to fit.
-        size_t effectiveCols = std::max<size_t>(1, std::max(maxExplicitCol, maxColumnSpan));
-        size_t effectiveRows = std::max<size_t>(1, std::max(maxExplicitRow, maxRowSpan));
-
-        // Account for auto-placed items.
-        size_t explicitlyPlacedCount = 0;
-        size_t layoutedCount = 0;
-        for (const auto& childElem : childRects)
-        {
-            if (!childElem.constraints.IsInFlow())
-                continue;
-            
-            layoutedCount++;
-            const GridProperties grid = childElem.constraints.GetGridItem(childElem.layoutStyle);
-            if (grid.column.start >= 0 && grid.row.start >= 0)
-            {
-                explicitlyPlacedCount++;
-            }
-        }
-
-        const size_t autoPlacedCount = layoutedCount - explicitlyPlacedCount;
-        if (autoPlacedCount > 0)
-        {
-            const size_t minCellsNeeded = explicitlyPlacedCount + autoPlacedCount;
-            const size_t currentCells = effectiveCols * effectiveRows;
-
-            if (currentCells < minCellsNeeded)
-            {
-                // Expand rows to accommodate; keep inferred column count stable.
-                effectiveRows = (minCellsNeeded + effectiveCols - 1) / effectiveCols;
-            }
-        }
-
-        outPlacement.effectiveColumnCount = effectiveCols;
-        outPlacement.effectiveRowCount = effectiveRows;
-        outPlacement.cellPositions.resize(childRects.size());
-
-        // Second pass: place items.
-        std::vector<bool> occupied(effectiveCols * effectiveRows, false);
-
-        // Place explicitly positioned items first.
+        // Each in-flow item's lines, kept within the track limit: a span of 1 to the limit, a
+        // start no further than leaves room for its span. A start < 0 is auto.
+        struct Item { int32_t col, row, colSpan, rowSpan; bool inFlow; };
+        constexpr int32_t kMax = GridAxisProperties::kMaxTracks;
+        std::vector<Item> items(childRects.size());
+        int32_t cols = 1, rows = 1;
         for (size_t i = 0; i < childRects.size(); ++i)
         {
-            if (!childRects[i].constraints.IsInFlow())
+            Item& it = items[i];
+            it.inFlow = childRects[i].constraints.IsInFlow();
+            if (!it.inFlow)
                 continue;
-
             const GridProperties grid = childRects[i].constraints.GetGridItem(childRects[i].layoutStyle);
-
-            if (grid.column.start >= 0 && grid.row.start >= 0)
-            {
-                outPlacement.cellPositions[i] = int2{ grid.column.start, grid.row.start };
-
-                // Mark cells as occupied (handle spans).
-                for (int32_t r = 0; r < grid.row.span; ++r)
-                {
-                    for (int32_t c = 0; c < grid.column.span; ++c)
-                    {
-                        const int32_t col = grid.column.start + c;
-                        const int32_t row = grid.row.start + r;
-
-                        while (col >= static_cast<int32_t>(effectiveCols))
-                            effectiveCols++;
-                        while (row >= static_cast<int32_t>(effectiveRows))
-                            effectiveRows++;
-
-                        if (occupied.size() < effectiveCols * effectiveRows)
-                            occupied.resize(effectiveCols * effectiveRows, false);
-
-                        if (col < static_cast<int32_t>(effectiveCols) && row < static_cast<int32_t>(effectiveRows))
-                            occupied[row * effectiveCols + col] = true;
-                    }
-                }
-            }
+            it.colSpan = std::clamp<int32_t>(grid.column.span, 1, kMax);
+            it.rowSpan = std::clamp<int32_t>(grid.row.span, 1, kMax);
+            it.col = grid.column.start < 0 ? -1 : std::min<int32_t>(grid.column.start, kMax - it.colSpan);
+            it.row = grid.row.start    < 0 ? -1 : std::min<int32_t>(grid.row.start, kMax - it.rowSpan);
+            // The columns are known up front, from the items' lines and spans; rows grow as
+            // items need them, so the row-major occupancy below never has to be laid out again.
+            cols = std::max(cols, it.col >= 0 ? it.col + it.colSpan : it.colSpan);
+            rows = std::max(rows, it.row >= 0 ? it.row + it.rowSpan : it.rowSpan);
         }
 
-        // Auto-place remaining items (dense packing).
-        size_t nextCol = 0;
-        size_t nextRow = 0;
-
-        for (size_t i = 0; i < childRects.size(); ++i)
+        std::vector<uint8_t> occupied(size_t(cols) * size_t(rows), 0);
+        auto growRows = [&](int32_t needed)
         {
-            if (!childRects[i].constraints.IsInFlow())
-                continue;
-
-            const GridProperties grid = childRects[i].constraints.GetGridItem(childRects[i].layoutStyle);
-
-            if (grid.column.start < 0 || grid.row.start < 0)
+            if (needed > rows)
             {
-                bool placed = false;
+                rows = needed;
+                occupied.resize(size_t(cols) * size_t(rows), 0);
+            }
+        };
+        auto fits = [&](int32_t col, int32_t row, const Item& it)
+        {
+            if (col + it.colSpan > cols)
+                return false;
+            growRows(row + it.rowSpan);
+            for (int32_t r = row; r < row + it.rowSpan; ++r)
+                for (int32_t c = col; c < col + it.colSpan; ++c)
+                    if (occupied[size_t(r) * size_t(cols) + size_t(c)])
+                        return false;
+            return true;
+        };
+        outPlacement.cellPositions.assign(childRects.size(), int2{ 0, 0 });
+        auto place = [&](size_t i, int32_t col, int32_t row)
+        {
+            const Item& it = items[i];
+            growRows(row + it.rowSpan);
+            for (int32_t r = row; r < row + it.rowSpan; ++r)
+                for (int32_t c = col; c < col + it.colSpan; ++c)
+                    occupied[size_t(r) * size_t(cols) + size_t(c)] = 1;
+            outPlacement.cellPositions[i] = int2{ col, row };
+        };
 
-                while (nextRow < effectiveRows && !placed)
+        // As CSS places them: items with both lines where they say (overlapping if they
+        // overlap), then those with only a row in its first free columns, then the rest in
+        // order from a cursor that only moves forward; one with only a column takes the first
+        // row from the cursor's where it fits in that column.
+        for (size_t i = 0; i < items.size(); ++i)
+            if (items[i].inFlow && items[i].col >= 0 && items[i].row >= 0)
+                place(i, items[i].col, items[i].row);
+
+        for (size_t i = 0; i < items.size(); ++i)
+        {
+            const Item& it = items[i];
+            if (!it.inFlow || it.col >= 0 || it.row < 0)
+                continue;
+            int32_t col = 0;
+            while (col + it.colSpan <= cols && !fits(col, it.row, it))
+                ++col;
+            place(i, col + it.colSpan <= cols ? col : 0, it.row);   // no room in its row: over the start
+        }
+
+        int32_t cursorCol = 0, cursorRow = 0;
+        for (size_t i = 0; i < items.size(); ++i)
+        {
+            const Item& it = items[i];
+            if (!it.inFlow || it.row >= 0)
+                continue;
+            if (it.col >= 0)
+            {
+                if (it.col < cursorCol)
+                    ++cursorRow;
+                int32_t row = cursorRow;
+                while (!fits(it.col, row, it))
+                    ++row;
+                place(i, it.col, row);
+                cursorRow = row;
+                cursorCol = it.col + it.colSpan;
+                continue;
+            }
+            // Every span fits the columns, so a row past all the placed ones always takes it.
+            for (int32_t row = cursorRow; ; ++row)
+            {
+                int32_t col = row == cursorRow ? cursorCol : 0;
+                while (col + it.colSpan <= cols && !fits(col, row, it))
+                    ++col;
+                if (col + it.colSpan <= cols)
                 {
-                    while (nextCol < effectiveCols && !placed)
-                    {
-                        if (!occupied[nextRow * effectiveCols + nextCol])
-                        {
-                            outPlacement.cellPositions[i] = int2{
-                                static_cast<int32_t>(nextCol),
-                                static_cast<int32_t>(nextRow)
-                            };
-
-                            for (int32_t r = 0; r < grid.row.span; ++r)
-                            {
-                                for (int32_t c = 0; c < grid.column.span; ++c)
-                                {
-                                    const int32_t col = static_cast<int32_t>(nextCol) + c;
-                                    const int32_t row = static_cast<int32_t>(nextRow) + r;
-
-                                    if (col < static_cast<int32_t>(effectiveCols) && row < static_cast<int32_t>(effectiveRows))
-                                        occupied[row * effectiveCols + col] = true;
-                                }
-                            }
-
-                            placed = true;
-                        }
-                        if (!placed) nextCol++;
-                    }
-                    if (!placed)
-                    {
-                        nextCol = 0;
-                        nextRow++;
-                    }
-                }
-
-                if (!placed)
-                {
-                    effectiveRows++;
-                    occupied.resize(effectiveCols * effectiveRows, false);
-
-                    outPlacement.cellPositions[i] = int2{
-                        static_cast<int32_t>(nextCol),
-                        static_cast<int32_t>(nextRow)
-                    };
-                    occupied[nextRow * effectiveCols + nextCol] = true;
+                    place(i, col, row);
+                    cursorRow = row;
+                    cursorCol = col + it.colSpan;
+                    break;
                 }
             }
         }
 
-        outPlacement.effectiveColumnCount = effectiveCols;
-        outPlacement.effectiveRowCount = effectiveRows;
+        outPlacement.effectiveColumnCount = size_t(cols);
+        outPlacement.effectiveRowCount    = size_t(rows);
     }
 
     void LayoutGrid::BuildTrackDefinitions(std::span<const ElementRect> childRects,

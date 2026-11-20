@@ -250,6 +250,29 @@ namespace tachyon
             EXPECT_FALSE(styles.SetVariableColor(901, plain)) << "forgotten with the styles";
         }
 
+        // A fill of a variable registered after its color was changed has the new color, as the
+        // ones registered before do: whether it's the same fill again or one new to the variable.
+        TEST(ThemeVariables, AFillRegisteredAfterAChangeHasTheNewColor)
+        {
+            HeadlessGUIApp app;
+            ASSERT_TRUE(app.Initialize());
+            StyleManager& styles = app.styleManager;
+            ColorStyle fill = ColorStyle::Create(color4b{ 10, 20, 30, 255 });
+            fill.variable = 901;
+            ColorStyle other = ColorStyle::Create(color4b{ 10, 20, 30, 128 });   // the same variable, another fill
+            other.variable = 901;
+
+            const VisualColorStyleIndex before = styles.RegisterColorStyle(fill);
+            const ColorStyle changed = ColorStyle::Create(color4b{ 200, 0, 0, 255 });
+            ASSERT_TRUE(styles.SetVariableColor(901, changed));
+            const VisualColorStyle shown = *styles.GetVisualColorStyle(before);
+
+            EXPECT_EQ(styles.RegisterColorStyle(fill), before) << "the same fill: the same slot";
+            const VisualColorStyleIndex later = styles.RegisterColorStyle(other);
+            EXPECT_NE(later, before);
+            EXPECT_TRUE(*styles.GetVisualColorStyle(later) == shown) << "a new fill of it starts at the new color";
+        }
+
         // ---------------------------------------------------------------------
         // The shipped theme
         // ---------------------------------------------------------------------
