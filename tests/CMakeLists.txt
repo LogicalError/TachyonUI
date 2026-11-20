@@ -154,6 +154,7 @@ list(APPEND GUI_CORE_TEST_FILES
   headless_gui_app.h
   misuse_reports.h
   scoped_temp_dir.h
+  fake_clock.h
   skribidi_test_fixture.h
   headless_gui_app.cpp
   mock_window_backend.h

@@ -8,6 +8,9 @@
 #include <gui_core/graphics/null/gui_null_graphics_context.h>
 #include <gui_core/windows/null/gui_null_window_backend.h>
 
+#include "fake_clock.h"
+
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -381,12 +384,13 @@ namespace tachyon
         // A hover fades in: frames while it runs, then none.
         TEST_F(RedrawTest, ATransitionKeepsFramesComingUntilItEnds)
         {
+            GUITest::ScopedFakeClock clock;
             app.Settle();
             app.InjectMouseMove(app.windowID, app.buttonCenter);
             app.Frame();
             app.Frame();
             EXPECT_TRUE(app.NeedsFrame()) << "the hover fading in";
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));   // past kHoverIn
+            clock.Advance(std::chrono::milliseconds(200));   // past kHoverIn
             app.Frame();
             app.Frame();
             app.Frame();
@@ -422,12 +426,14 @@ namespace tachyon
         // A redraw asked for later: none needed until then.
         TEST_F(RedrawTest, ARedrawLater)
         {
+            GUITest::ScopedFakeClock clock;
             app.Settle();
             app.RequestRedrawIn(0.05f);
             EXPECT_FALSE(app.NeedsFrame());
-            EXPECT_GT(app.SecondsUntilFrame(), 0.0f);
-            EXPECT_LE(app.SecondsUntilFrame(), 0.05f);
-            std::this_thread::sleep_for(std::chrono::milliseconds(60));
+            EXPECT_FLOAT_EQ(app.SecondsUntilFrame(), 0.05f);
+            clock.Advance(std::chrono::milliseconds(49));
+            EXPECT_FALSE(app.NeedsFrame()) << "not yet";
+            clock.Advance(std::chrono::milliseconds(1));
             EXPECT_TRUE(app.NeedsFrame());
             app.Frame();
             EXPECT_EQ(app.SecondsUntilFrame(), INFINITY) << "done with";
@@ -451,16 +457,19 @@ namespace tachyon
         // The tooltip's delay is a time a frame is needed at.
         TEST_F(RedrawTest, ATooltipsDelayIsScheduled)
         {
+            GUITest::ScopedFakeClock clock;
             app.Settle();
             app.InjectMouseMove(app.windowID, app.buttonCenter);
             app.Frame();
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));   // the hover's done
+            clock.Advance(std::chrono::milliseconds(200));   // the hover's done
             app.Settle();
             const float until = app.SecondsUntilFrame();
             EXPECT_GT(until, 0.0f);
             EXPECT_LE(until, app.tooltipManager.delaySeconds);
-            // ... and once it's up, a frame is needed.
-            std::this_thread::sleep_for(std::chrono::duration<float>(until + 0.02f));
+            // ... not before it's up, and once it is, a frame is needed.
+            clock.AdvanceSeconds(double(until) * 0.9);
+            EXPECT_FALSE(app.NeedsFrame());
+            clock.AdvanceSeconds(double(until) * 0.1 + 0.001);
             EXPECT_TRUE(app.NeedsFrame());
         }
 
@@ -479,24 +488,29 @@ namespace tachyon
                             return true;
                 return false;
             };
+            // Run's loop on a clock moved by hand: asleep until a frame is needed, and each
+            // frame a 60 Hz refresh long.
+            GUITest::ScopedFakeClock clock;
             app.Settle();
             app.InjectMouseMove(app.windowID, app.buttonCenter);
-            const auto start = std::chrono::steady_clock::now();
+            const int64_t start = clock.Now();
+            const auto elapsed = [&] { return double(clock.Now() - start) * 1.0e-9; };
             const float delay = app.tooltipManager.delaySeconds;
             double took = -1.0;
-            while (std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < double(delay) * 4.0)
+            for (int frames = 0; frames < 10'000 && elapsed() < double(delay) * 4.0; ++frames)
             {
-                while (!app.NeedsFrame())
+                for (int naps = 0; naps < 100 && !app.NeedsFrame(); ++naps)
                 {
                     const float until = app.SecondsUntilFrame();
                     if (!std::isfinite(until)) break;
-                    std::this_thread::sleep_for(std::chrono::duration<float>(until));
+                    clock.Advance(std::chrono::nanoseconds(std::max<int64_t>(int64_t(double(until) * 1.0e9), 1)));
                 }
                 if (!app.NeedsFrame()) break;   // nothing will ever come
                 app.Frame();
+                clock.AdvanceSeconds(1.0 / 60.0);
                 if (shown())
                 {
-                    took = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+                    took = elapsed();
                     break;
                 }
             }

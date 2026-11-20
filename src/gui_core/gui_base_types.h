@@ -482,8 +482,15 @@ namespace tachyon
     float HalfToFloat(uint16_t value);
 
     /// Monotonic steady_clock time in nanoseconds; a plain int64_t keeps `<chrono>` out of
-    /// widely-included headers.
+    /// widely-included headers. Redraw timers, the frame clock, tooltips, double-clicks and
+    /// thumbnails read it, so moving it moves them all.
     int64_t SteadyClockNowNanos();
+
+    /// Where SteadyClockNowNanos reads the time; must never go backwards.
+    using SteadyClockSource = int64_t (*)();
+    /// Makes SteadyClockNowNanos read `source`, e.g. a test's clock that it moves on instead
+    /// of sleeping; null for the steady clock again.
+    void SetSteadyClockSource(SteadyClockSource source);
 
     /// @}
 }// namespace tachyon

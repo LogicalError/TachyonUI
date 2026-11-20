@@ -14,7 +14,9 @@
 
 #include <gui_controls/gui_widget_state_types.h>
 
-#include <thread>
+#include "fake_clock.h"
+
+#include <chrono>
 
 namespace tachyon
 {
@@ -190,13 +192,17 @@ namespace tachyon
             SetDoubleClickMilliseconds(0.0f);
             EXPECT_EQ(DoubleClickMilliseconds(), 200.0f) << "a platform without a time keeps the last one";
 
+            GUITest::ScopedFakeClock clock;
             DoubleClickTracker clicks;
             const ID a{ .value{ .integer = 1 } }, b{ .value{ .integer = 2 } };
             EXPECT_FALSE(clicks.IsDoubleClick(a));
             EXPECT_TRUE(clicks.IsDoubleClick(a));
             EXPECT_FALSE(clicks.IsDoubleClick(a)) << "a third click starts over";
             EXPECT_FALSE(clicks.IsDoubleClick(b)) << "another item";
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            clock.Advance(std::chrono::milliseconds(199));
+            EXPECT_TRUE(clicks.IsDoubleClick(b)) << "just in time";
+            EXPECT_FALSE(clicks.IsDoubleClick(b)) << "a third click starts over";
+            clock.Advance(std::chrono::milliseconds(201));
             EXPECT_FALSE(clicks.IsDoubleClick(b)) << "too late";
 
             SetDoubleClickMilliseconds(before);

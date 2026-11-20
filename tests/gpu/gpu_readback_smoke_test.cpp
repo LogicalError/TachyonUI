@@ -508,7 +508,10 @@ namespace
         {
             auto queueLock = vk->deviceContext.LockQueue();
             updater = std::thread([&] { atlas.UpdateTexture(page, pixels.data(), size); updated = true; });
-            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            // Done while the lock is held; one that waited on the queue never is.
+            for (auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                 !updated && std::chrono::steady_clock::now() < end;)
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             EXPECT_TRUE(updated) << "the update waited on the queue";
         }
         updater.join();
@@ -564,7 +567,10 @@ namespace
                 image = graphicsContext->CreateImage(pixels.data(), size, tachyon::ImageFormat::R8G8B8A8,
                                                      tachyon::Sampler::LinearRepeat, true);
             });
-            std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            // Done while the lock is held; one that waited on the queue never is.
+            for (auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+                 image.load() == nullptr && std::chrono::steady_clock::now() < end;)
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
             EXPECT_NE(image.load(), nullptr) << "creating the image waited on the queue";
         }
         creator.join();

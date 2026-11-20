@@ -1,5 +1,6 @@
 #include <gui_core/gui_base_types.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstring>
 
@@ -284,10 +285,22 @@ namespace tachyon
         return result;
     }
 
+    namespace
+    {
+        std::atomic<SteadyClockSource> g_steadyClockSource{ nullptr };
+    }
+
     int64_t SteadyClockNowNanos()
     {
+        if (const SteadyClockSource source = g_steadyClockSource.load(std::memory_order_acquire))
+            return source();
         return std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+
+    void SetSteadyClockSource(SteadyClockSource source)
+    {
+        g_steadyClockSource.store(source, std::memory_order_release);
     }
 
 
