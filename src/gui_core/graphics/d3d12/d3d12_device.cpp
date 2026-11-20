@@ -416,6 +416,7 @@ namespace tachyon::d3d12
         // An empty slot gets a null view: the shaders never sample one, and a frame copies it.
         m_device->CreateShaderResourceView(image != nullptr ? image->Resource() : nullptr, &view, handle);
         m_samplers[slot] = image != nullptr ? SamplerSlot(image->sampler) : 0;
+        ++m_writes;
     }
 
     ImageIndex D3D12ImageSet::Add(Image* image)
@@ -438,6 +439,11 @@ namespace tachyon::d3d12
     {
         const uint32_t slot = uint32_t(index) - 1;
         if (index == ImageIndex::Invalid || slot >= m_images.size())
+            return;
+        // The gradient pages are set each frame, mostly to what they hold. An image the GUI made
+        // keeps its texture while it's in a slot; a host's is pointed at another in place
+        // (UpdateExternalImage), so its view is always written.
+        if (m_images[slot] == image && image != nullptr && image->external == nullptr)
             return;
         m_images[slot] = image;
         WriteSlot(slot);

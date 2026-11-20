@@ -77,8 +77,10 @@ namespace tachyon::d3d12
         void       Remove(ImageIndex index) override;
         /// A slot with no image yet, for one that comes later (a text atlas page).
         ImageIndex ReserveIndex();
-        /// Points the slot at another image.
+        /// Points the slot at another image; the image it holds is no change.
         void       SetImage(ImageIndex index, D3D12Image* image);
+        /// How many views were written into the heap.
+        uint64_t   Writes() const { return m_writes; }
 
         uint32_t Capacity() const { return m_capacity; }
         /// One past the highest slot handed out: what a frame copies.
@@ -98,6 +100,7 @@ namespace tachyon::d3d12
         std::vector<D3D12Image*>     m_images;     ///< by slot; null for an empty one
         std::vector<uint32_t>        m_samplers;   ///< by slot
         std::vector<uint32_t>        m_free;       ///< slots handed back
+        uint64_t                     m_writes = 0;
     };
 
     struct D3D12GraphicsContext::Impl

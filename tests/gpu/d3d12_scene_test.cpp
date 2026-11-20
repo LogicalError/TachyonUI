@@ -41,6 +41,24 @@ TEST_F(D3D12ImageWindowTest, AColorMadeLaterIsWrittenIntoThePage)
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
 }
 
+// The gradient page is put in its slot each frame: while it's the same image its view isn't
+// written again, and it still draws.
+TEST_F(D3D12ImageWindowTest, AnUnchangedGradientPageIsNotWrittenAgain)
+{
+    const tachyon::VisualColorStyleIndex red = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 255, 0, 0, 255 }));
+    const auto frame = [&] {
+        graphics->BeginFrame();
+        RenderFrame([&](tachyon::GUIRenderer* r) { r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x, kSize.y }, kFullClip, red, 0.0f); });
+    };
+    frame();
+    const uint64_t written = graphics->ImageViewWrites();
+    frame();
+    frame();
+    EXPECT_EQ(graphics->ImageViewWrites(), written) << "the same page: no view written";
+    EXPECT_EQ(Rgba(kSize.x / 2, kSize.y / 2), (std::array<int, 4>{ 255, 0, 0, 255 })) << "and it draws";
+    EXPECT_TRUE(sink.Empty()) << sink.Dump();
+}
+
 // A scene the app draws (RenderScene, a viewport's): its drawing goes into the scene's own
 // texture before the UI's, which shows it where the UI puts it. Made again when its size
 // changes, and let go when it's no longer asked for.

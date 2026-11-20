@@ -386,8 +386,7 @@ VkCommandBuffer VulkanWindowContext::BeginWindowFrame(FrameData& currentFrame, V
         currentFrame.timestampsWritten = false;
     }
     currentFrame.primitiveUploadOffset = 0;
-    currentFrame.frameDescriptors.clear_pools(deviceContext->device);
-    
+
     if (swapchain.swapchain != VK_NULL_HANDLE)
     {
         // The swapchain image is acquired late, in EndWindowFrame; drawExtent
@@ -960,17 +959,16 @@ VulkanWindowContext* VulkanWindowContext::Create(tachyon::ID id, void* nativeHan
                                                   vkDestroyQueryPool(context->deviceContext->device, pool, context->deviceContext->AllocationCallbacks());
                                               });
         }
+        // The frame slot's one set of image descriptors, as big as the image set may grow.
         std::vector<DescriptorAllocatorGrowable::PoolSizeRatio> frame_sizes =
         {
-            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 },
-            { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
-            { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
-            // The image set's descriptors: every slot in use, each window draw.
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4, context->deviceContext->imageSlots },
+            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, context->deviceContext->imageSlots },
         };
 
         frame.frameDescriptors = DescriptorAllocatorGrowable{};
-        frame.frameDescriptors.init(context->deviceContext->device, 1000, frame_sizes, context->deviceContext->AllocationCallbacks());
+        frame.frameDescriptors.init(context->deviceContext->device, 1, frame_sizes, context->deviceContext->AllocationCallbacks());
+        frame.imageDescriptors        = VK_NULL_HANDLE;
+        frame.imageDescriptorsVersion = 0;
 
         TACHYON_VK_CHECK(vkCreateFence(context->deviceContext->device, &context->deviceContext->fenceCreateInfo, context->deviceContext->AllocationCallbacks(), &frame.renderFence));
 

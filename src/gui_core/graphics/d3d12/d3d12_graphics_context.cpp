@@ -394,6 +394,11 @@ namespace tachyon::d3d12
         return m_impl->imageSlots;
     }
 
+    uint64_t D3D12GraphicsContext::ImageViewWrites() const
+    {
+        return m_impl->imageSet.Writes();
+    }
+
     void D3D12GraphicsContext::BeginFrame()
     {
         Impl& d = *m_impl;

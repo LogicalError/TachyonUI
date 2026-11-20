@@ -200,6 +200,9 @@ namespace tachyon::vulkan
         void RePrepareFrame();
         /// Library internal: records a window's primitives into `cmd`.
         bool RenderWindowFrame(VkCommandBuffer cmd, FrameData& currentFrame, tachyon::ID windowID, tachyon::uint2 extent);
+        /// How many times a window frame wrote its image descriptor set: once per frame slot
+        /// after the image set changed, not every frame.
+        uint64_t ImageDescriptorSetWrites() const { return m_imageDescriptorSetWrites; }
 
         /// GraphicsContext::RenderScene: a color image (R8G8B8A8_UNORM) and a depth one
         /// (D32_SFLOAT); `record` gets a VulkanSceneRender.
@@ -240,6 +243,7 @@ namespace tachyon::vulkan
         tachyon::GradientManager* m_lastGradientManager{ nullptr };
         float                 m_lastElapsedTimeSecs{ 0.0f };
         float                 m_frameBuildSeconds{ 0.0f };
+        uint64_t              m_imageDescriptorSetWrites{ 0 };
     };
     /// @}
 }
