@@ -13,9 +13,7 @@ namespace tachyon
     struct IntRect;
     struct ElementRect;
     struct GridProperties;
-    struct GridPlacement;
     struct GridTrack;
-    struct GridLayout;
 
     struct LayoutGrid
     {
@@ -36,16 +34,6 @@ namespace tachyon
                                            std::span<ElementRect> childRects);
 
       private:
-        struct GridLayout
-        {
-            std::vector<int32_t> columnSizes;
-            std::vector<int32_t> rowSizes;
-            std::vector<int32_t> columnOffsets;
-            std::vector<int32_t> rowOffsets;
-            size_t effectiveColumnCount = 0;
-            size_t effectiveRowCount = 0;
-        };
-
         /// Grid cell per child.
         struct GridPlacement
         {
@@ -53,31 +41,30 @@ namespace tachyon
             size_t effectiveColumnCount = 0;
             size_t effectiveRowCount = 0;
         };
-        
-        static void BuildTrackDefinitions(std::span<const ElementRect> childRects,
-                                          const GridPlacement& placement,
-                                          std::vector<GridTrack>& outColumnTracks,
-                                          std::vector<GridTrack>& outRowTracks);
+
+        /// What a sizing or positioning call works in: kept per thread and reused, so laying
+        /// out a grid allocates nothing once the buffers have grown. A call is done with it
+        /// before the next begins; grids don't nest inside a call.
+        struct Scratch
+        {
+            GridPlacement          placement;
+            std::vector<GridTrack> tracks;       ///< one axis's
+            std::vector<int32_t>   intrinsics;   ///< one axis's max-content sizes
+            std::vector<int32_t>   sizes;        ///< one axis's final sizes
+            std::vector<int32_t>   offsets;      ///< one axis's track starts, count + 1
+        };
+        static Scratch& ThreadScratch();
 
         /// Stage 1: auto-placement and effective grid dimensions
         static void DeterminePlacement(std::span<const ElementRect> childRects,
                                        GridPlacement& outPlacement);
 
-        /// Stage 2: intrinsic (max-content) track sizes
-        static void ComputeIntrinsicTrackSizes(std::span<const ElementRect> childRects,
-                                               const GridPlacement& placement,
-                                               std::vector<int32_t>& outColumnIntrinsics,
-                                               std::vector<int32_t>& outRowIntrinsics);
-
-        /// Stage 3: final track sizes and offsets
-        static void ResolveFinalLayout(const GridProperties& grid,
-                                      std::span<const ElementRect> childRects,
-                                      const GridPlacement& placement,
-                                      const std::span<int32_t> intrinsicColumnSizes,
-                                      const std::span<int32_t> intrinsicRowSizes,
-                                      int32_t availableWidth,
-                                      int32_t availableHeight,
-                                      GridLayout& outLayout);
+        /// Stages 2 and 3 along one axis (0: columns, 1: rows): its tracks, their intrinsic
+        /// and final sizes in `available`, and their offsets, into `s`. A sizing or
+        /// positioning pass needs only its own axis.
+        template <int Axis>
+        static void ComputeAxisOffsets(const GridProperties& grid, std::span<const ElementRect> childRects,
+                                       int32_t available, Scratch& s);
 
         static void ResolveTrackSizes(std::span<const GridTrack> tracks,
                                       std::span<const int32_t> intrinsicSizes,
@@ -86,14 +73,6 @@ namespace tachyon
 
         static void ComputeOffsets(std::span<const int32_t> sizes, int16_t gap,
                                    std::span<int32_t> outOffsets);
-
-        /// outPlacement lets callers reuse the placement.
-        static void ComputeGridLayout(const GridProperties& grid,
-                                     std::span<const ElementRect> childRects,
-                                     int32_t availableWidth,
-                                     int32_t availableHeight,
-                                     GridLayout& outLayout,
-                                     GridPlacement* outPlacement = nullptr);
     };
 
     /// @}
