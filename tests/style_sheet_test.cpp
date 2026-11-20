@@ -403,6 +403,18 @@ namespace tachyon
         EXPECT_EQ(s.GetStyle("a")->layoutData.flex.flexBasis, 100);
     }
 
+    // A basis past what a length holds is the largest one, not a wrapped negative.
+    TEST(StyleSheet, AHugeFlexBasisIsClampedNotWrapped)
+    {
+        auto s = ParseStyleSheet(".a { flex-basis: 40000; } .b { flex: 1 1 40000; } .c { flex: 1 1 -5; }");
+        ASSERT_NE(s.GetStyle("a"), nullptr);
+        EXPECT_EQ(s.GetStyle("a")->layoutData.flex.flexBasis, 32767);
+        ASSERT_NE(s.GetStyle("b"), nullptr);
+        EXPECT_EQ(s.GetStyle("b")->layoutData.flex.flexBasis, 32767);
+        ASSERT_NE(s.GetStyle("c"), nullptr);
+        EXPECT_EQ(s.GetStyle("c")->layoutData.flex.flexBasis, 0);
+    }
+
     TEST(StyleSheet, FlexBasisAuto)
     {
         auto s = ParseStyleSheet(".a { flex-basis: auto; }");
@@ -1369,6 +1381,20 @@ namespace tachyon
         EXPECT_FALSE(s.HasErrors());
         ASSERT_NE(s.GetStyle("a"), nullptr);
         EXPECT_EQ(s.GetStyle("a")->layoutData.grid.row.span, 2);
+    }
+
+    // Spans and start lines past the grid's track limit are clamped to it; a span under 1 is 1.
+    TEST(StyleSheet, GridSpansAndStartsStayInRange)
+    {
+        auto s = ParseStyleSheet(".a { grid-column: span 70000; grid-row: span 0; } "
+                                 ".b { grid-column: 40000 / span 2; grid-row-start: 50000; }");
+        ASSERT_NE(s.GetStyle("a"), nullptr);
+        EXPECT_EQ(s.GetStyle("a")->layoutData.grid.column.span, GridAxisProperties::kMaxTracks);
+        EXPECT_EQ(s.GetStyle("a")->layoutData.grid.row.span, 1);
+        ASSERT_NE(s.GetStyle("b"), nullptr);
+        EXPECT_EQ(s.GetStyle("b")->layoutData.grid.column.start, GridAxisProperties::kMaxTracks - 1);
+        EXPECT_EQ(s.GetStyle("b")->layoutData.grid.column.span, 2);
+        EXPECT_EQ(s.GetStyle("b")->layoutData.grid.row.start, GridAxisProperties::kMaxTracks - 1);
     }
 
     TEST(StyleSheet, GridColumnStartAndSpan)

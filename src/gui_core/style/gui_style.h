@@ -411,6 +411,9 @@ namespace tachyon
         /// Fixed beats Fractional beats Auto, and the larger value wins.
         GridTrack track = GridTrack::Default();
 
+        /// The most tracks a grid has along an axis: a start or span past it is clamped, so a
+        /// stray number can't make a grid of millions of cells.
+        static constexpr int16_t kMaxTracks = 1000;
         int16_t start{ kAuto }; ///< first track the item covers; kAuto = auto-place
         int16_t span{ 1 }; ///< tracks the item covers
         int16_t gap{ 0 };  ///< container: space between tracks (CSS: column-gap / row-gap)

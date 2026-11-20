@@ -48,6 +48,10 @@ namespace tachyon
             if (h.IsValid())
                 m_gradientManager.Release(h);
         }
+        for (const auto& [variable, fills] : m_variableColors)
+            for (const GradientHandle h : fills.registeredHandles)
+                if (h.IsValid())
+                    m_gradientManager.Release(h);
     }
 
     // Whether `c` hides what's under it everywhere it paints, now and later: every stop it
@@ -208,7 +212,23 @@ namespace tachyon
                                                    StyleUnits units) noexcept
     {
         const StyleRef base = RegisterImpl(s, units, true);
-        m_childStyles[uint32_t(base.layoutStyleIndex)] = ChildStyleRefs{ Register(first, units), Register(last, units), Register(only, units) };
+        // A variant changes the box only, as a :first-child rule does in CSS: an element's size
+        // and whether it takes space come from its base style when it's added, before its
+        // place among its siblings is known, so a variant's own would never apply.
+        auto boxOnly = [&s](Style v)
+        {
+            v.layoutData.width     = s.layoutData.width;
+            v.layoutData.height    = s.layoutData.height;
+            v.layoutData.minWidth  = s.layoutData.minWidth;
+            v.layoutData.maxWidth  = s.layoutData.maxWidth;
+            v.layoutData.minHeight = s.layoutData.minHeight;
+            v.layoutData.maxHeight = s.layoutData.maxHeight;
+            v.display    = s.display;
+            v.visibility = s.visibility;
+            return v;
+        };
+        m_childStyles[uint32_t(base.layoutStyleIndex)] =
+            ChildStyleRefs{ Register(boxOnly(first), units), Register(boxOnly(last), units), Register(boxOnly(only), units) };
         return base;
     }
 
@@ -599,19 +619,26 @@ namespace tachyon
         if (variable != 0)
         {
             // A variable's fills are its own, so a new value can be written into them alone.
-            std::vector<VisualColorStyleIndex>& slots = m_variableColors[variable];
-            for (const VisualColorStyleIndex index : slots)
-                if (m_visualColorStyles[size_t(index) - 1] == visualColorStyle)
+            VariableFills& fills = m_variableColors[variable];
+            for (size_t i = 0; i < fills.indices.size(); ++i)
+                if (fills.registeredAs[i] == visualColorStyle)
                 {
                     if (incomingHandle.IsValid())
                         m_gradientManager.Release(incomingHandle);
-                    return index;
+                    return fills.indices[i];
                 }
             m_visualColorStyles.push_back(visualColorStyle);
             m_visualColorStyleHandles.push_back(incomingHandle);
             visualColorStylesModified = true;
             const auto index = static_cast<VisualColorStyleIndex>(m_visualColorStyles.size());
-            slots.push_back(index);
+            if (incomingHandle.IsValid())
+                m_gradientManager.AddRef(incomingHandle);   // held for registeredAs, past any new color
+            fills.indices.push_back(index);
+            fills.registeredAs.push_back(visualColorStyle);
+            fills.registeredHandles.push_back(incomingHandle);
+            // Changed since the sheet was read: the new fill has the color the others show.
+            if (const auto live = m_variableValues.find(variable); live != m_variableValues.end())
+                UpdateColorStyle(index, live->second);
             return index;
         }
 
@@ -645,10 +672,13 @@ namespace tachyon
 
     bool StyleManager::SetVariableColor(uint16_t variable, const ColorStyle& s) noexcept
     {
-        const auto it = m_variableColors.find(variable);
-        if (variable == 0 || it == m_variableColors.end() || it->second.empty())
+        if (variable == 0)
             return false;
-        for (const VisualColorStyleIndex index : it->second)
+        m_variableValues[variable] = s;
+        const auto it = m_variableColors.find(variable);
+        if (it == m_variableColors.end() || it->second.indices.empty())
+            return false;
+        for (const VisualColorStyleIndex index : it->second.indices)
             UpdateColorStyle(index, s);
         return true;
     }
@@ -734,10 +764,15 @@ namespace tachyon
             if (h.IsValid())
                 m_gradientManager.Release(h);
         }
+        for (const auto& [variable, fills] : m_variableColors)
+            for (const GradientHandle h : fills.registeredHandles)
+                if (h.IsValid())
+                    m_gradientManager.Release(h);
         m_visualColorStyleHandles.clear();
         m_visualColorStyles.clear();
         m_visualColorHashMap.clear();
         m_variableColors.clear();
+        m_variableValues.clear();
         m_freeColorStyleSlots.clear();
         m_childStyles.clear();
 
