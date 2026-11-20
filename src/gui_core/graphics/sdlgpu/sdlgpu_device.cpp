@@ -109,16 +109,12 @@ namespace tachyon::sdlgpu
             SDL_UploadToGPUBuffer(pass, &from, &to, false);
             SDL_ReleaseGPUTransferBuffer(device, copy.staging);
         }
-        // The resident buffers copied now: draws from here on read them.
-        if (!copied.empty())
-        {
-            std::unordered_set<SDL_GPUBuffer*> copiedBuffers;
-            for (const BufferCopy& copy : copied)
-                copiedBuffers.insert(copy.buffer);
-            for (auto& [id, resident] : residents)
-                if (!resident.ready && copiedBuffers.contains(resident.buffer))
-                    resident.ready = true;
-        }
+        // The resident buffers copied now: draws from here on read them. Each one waiting had its
+        // copy among those taken, as both are made on this thread, and one let go of is gone.
+        for (const RHI::ResidentBufferId id : pendingResidents)
+            if (const auto it = residents.find(id); it != residents.end())
+                it->second.ready = true;
+        pendingResidents.clear();
         // Let go of after their last copy was recorded: SDL frees each once the GPU is done.
         for (SDLGPUImage* image : released)
         {
@@ -165,6 +161,7 @@ namespace tachyon::sdlgpu
                 addresses[i] = MakeAddress(resident.entry, offsets[i]);
         const RHI::ResidentBufferId id = nextResident++;
         residents.emplace(id, resident);
+        pendingResidents.push_back(id);
         return id;
     }
 

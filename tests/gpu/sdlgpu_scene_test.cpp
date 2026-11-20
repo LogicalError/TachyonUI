@@ -4,6 +4,8 @@
 
 #include "sdlgpu_test_harness.h"
 
+#include <gui_core/graphics/sdlgpu/sdlgpu_device.h>
+
 #include <SDL3/SDL_gpu.h>
 
 #include <cstring>
@@ -40,6 +42,34 @@ TEST_P(SDLGPUImageWindowTest, AColorMadeLaterIsWrittenIntoThePage)
     EXPECT_EQ(Rgba(kSize.x / 4, kSize.y / 2), (std::array<int, 4>{ 255, 0, 0, 255 })) << "red, still";
     EXPECT_EQ(Rgba(kSize.x * 3 / 4, kSize.y / 2), (std::array<int, 4>{ 0, 255, 0, 255 })) << "the new green";
     EXPECT_EQ(gradientManager.GetGradientImage(graphics, 0), page) << "written into, not made again";
+    EXPECT_TRUE(sink.Empty()) << sink.Dump();
+}
+
+// A frame copies the resident buffers made since the one before, and no others: once copied,
+// one is Ready and off the list. One let go of before its copy is left out.
+TEST_P(SDLGPUImageWindowTest, AFrameCopiesOnlyTheResidentBuffersWaiting)
+{
+    auto& d = graphics->Internal();
+    const uint32_t data[4] = { 1, 2, 3, 4 };
+    const tachyon::RHI::UploadRequest request{ data, sizeof(data), 16 };
+    tachyon::DeviceAddress address{};
+    const tachyon::RHI::ResidentBufferId kept    = d.CreateResident(std::span(&request, 1), std::span(&address, 1));
+    const tachyon::RHI::ResidentBufferId dropped = d.CreateResident(std::span(&request, 1), std::span(&address, 1));
+    ASSERT_NE(kept, 0u);
+    ASSERT_NE(dropped, 0u);
+    EXPECT_EQ(d.ResidentState(kept), tachyon::RHI::ResidentState::Pending);
+    d.ReleaseResident(dropped);
+
+    graphics->BeginFrame();
+    RenderFrame([](tachyon::GUIRenderer*) {});
+    EXPECT_EQ(d.ResidentState(kept), tachyon::RHI::ResidentState::Ready);
+    EXPECT_EQ(d.ResidentState(dropped), tachyon::RHI::ResidentState::Gone);
+    EXPECT_TRUE(d.pendingResidents.empty()) << "nothing left waiting";
+
+    graphics->BeginFrame();
+    RenderFrame([](tachyon::GUIRenderer*) {});
+    EXPECT_EQ(d.ResidentState(kept), tachyon::RHI::ResidentState::Ready);
+    d.ReleaseResident(kept);
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
 }
 

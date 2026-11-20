@@ -342,6 +342,7 @@ namespace tachyon::d3d12
             d.garbage.clear();
         }
         d.residents.clear();
+        d.pendingResidents.clear();
         d.gradientPages.clear();
         d.boxStyles   = 0;   // freed with the residents
         d.colorStyles = 0;

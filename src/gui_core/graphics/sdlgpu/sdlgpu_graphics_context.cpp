@@ -332,6 +332,7 @@ namespace tachyon::sdlgpu
             for (auto& [id, resident] : d.residents)
                 SDL_ReleaseGPUBuffer(d.device, resident.buffer);
             d.residents.clear();
+            d.pendingResidents.clear();
             for (SDL_GPUBuffer** buffer : { &d.boxStyles, &d.colorStyles, &d.quadIndices, &d.blankBuffer })
                 d.ReleaseBuffer(*buffer);
             d.quadCapacity = 0;
