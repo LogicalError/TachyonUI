@@ -95,6 +95,7 @@ namespace tachyon::vulkan
         tachyon::Image* CreateImage(tachyon::uint2 size, tachyon::ImageFormat format, tachyon::Sampler sampler, bool mipmapped = false);
         /// GraphicsContext::CreateImage; null data makes a cleared image.
         tachyon::Image* CreateImage(void* data, tachyon::uint2 size, tachyon::ImageFormat format, tachyon::Sampler sampler, bool mipmapped = false) override;
+        bool UpdateImageRows(tachyon::Image* image, uint32_t firstRow, uint32_t rowCount, const void* data) override;
         /// Destroys the image's Vulkan objects now, without waiting for the GPU; doesn't delete
         /// the object. DestroyImageAtEnd is the safe way.
         void DestroyImage(tachyon::Image* img);

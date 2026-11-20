@@ -4,6 +4,7 @@
 #include <gui_core/style/gui_style.h>
 
 #include <stdint.h>
+#include <algorithm>
 #include <vector>
 #include <span>
 #include <unordered_map>
@@ -129,7 +130,7 @@ namespace tachyon
 
         /// Writable CPU texels of a page; call MarkPageModified after writing.
         std::span<color4b> PageTextureData(uint32_t pageIndex) noexcept;
-        /// Makes the next GetGradientImage re-upload the page.
+        /// Makes the next GetGradientImage upload the whole page.
         void MarkPageModified(uint32_t pageIndex) noexcept;
 
         /// @name Renderer page table
@@ -148,8 +149,9 @@ namespace tachyon
         /// (StyleManager, the text system's caret) re-register. For a theme reload.
         void ClearAll() noexcept;
 
-        /// The GPU image of a page, created or re-uploaded as needed; nullptr when
-        /// `pageIndex` is out of range.
+        /// The GPU image of a page, made when it's new or has grown; otherwise the rows written
+        /// since go up into it (GraphicsContext::UpdateImageRows), or, where the backend can't,
+        /// it's made again. nullptr when `pageIndex` is out of range.
         tachyon::Image* GetGradientImage(GraphicsContext* graphicsContext, uint32_t pageIndex = 0);
 
     private:
@@ -172,7 +174,20 @@ namespace tachyon
             uint32_t rowsUsed = 0;            ///< rows occupied by allocations
             std::vector<color4b> data;         ///< width * height color4b
             Image* image = nullptr;
-            bool modified = true;
+            /// Its GPU image is made again (first use, or grown): the whole page goes up.
+            bool resized = true;
+            /// Rows written since the last upload, [dirtyFirst, dirtyLast]; none when first > last.
+            /// Only these go up, so changing one color doesn't send the whole page.
+            uint32_t dirtyFirst = UINT32_MAX;
+            uint32_t dirtyLast  = 0;
+            void MarkRows(uint32_t first, uint32_t last) noexcept
+            {
+                dirtyFirst = std::min(dirtyFirst, first);
+                dirtyLast  = std::max(dirtyLast, last);
+            }
+            void MarkAll() noexcept { if (height > 0) MarkRows(0, height - 1); }
+            bool HasDirtyRows() const noexcept { return dirtyFirst <= dirtyLast; }
+            void ClearDirty() noexcept { dirtyFirst = UINT32_MAX; dirtyLast = 0; }
 
             /// Cursor for packing small (<width) allocations into a shared row.
             /// -1 means "no open small row; next small alloc must open a new row".

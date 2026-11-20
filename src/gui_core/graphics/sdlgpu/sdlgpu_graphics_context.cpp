@@ -383,9 +383,10 @@ namespace tachyon::sdlgpu
         info.layer_count_or_depth = 1;
         info.num_levels           = 1;
         auto image = std::make_unique<SDLGPUImage>();
-        image->texture = SDL_CreateGPUTexture(d.device, &info);
-        image->sampler = sampler;
-        image->size    = size;
+        image->texture      = SDL_CreateGPUTexture(d.device, &info);
+        image->sampler      = sampler;
+        image->size         = size;
+        image->sourceFormat = format;
         const uint32_t bytes = size.x * size.y * stored.storedBytes;
         const SDL_GPUTransferBufferCreateInfo stagingInfo{ SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, bytes, 0 };
         SDL_GPUTransferBuffer* staging = image->texture != nullptr ? SDL_CreateGPUTransferBuffer(d.device, &stagingInfo) : nullptr;
@@ -406,6 +407,38 @@ namespace tachyon::sdlgpu
         d.textureCopies.push_back({ image.get(), staging });
         d.liveImages.insert(image.get());
         return image.release();
+    }
+
+    bool SDLGPUGraphicsContext::UpdateImageRows(Image* img, uint32_t firstRow, uint32_t rowCount, const void* data)
+    {
+        Impl& d = *m_impl;
+        auto* image = static_cast<SDLGPUImage*>(img);
+        if (d.device == nullptr || image == nullptr || image->texture == nullptr || !image->sourceFormat ||
+            data == nullptr || rowCount == 0 || uint64_t(firstRow) + rowCount > image->size.y)
+            return false;
+        const StoredFormat stored = Stored(*image->sourceFormat);
+        const uint2 band{ image->size.x, rowCount };
+        const uint32_t bytes = band.x * band.y * stored.storedBytes;
+        const SDL_GPUTransferBufferCreateInfo stagingInfo{ SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD, bytes, 0 };
+        SDL_GPUTransferBuffer* staging = SDL_CreateGPUTransferBuffer(d.device, &stagingInfo);
+        void* mapped = staging != nullptr ? SDL_MapGPUTransferBuffer(d.device, staging, false) : nullptr;
+        if (mapped == nullptr)
+        {
+            if (staging != nullptr)
+                SDL_ReleaseGPUTransferBuffer(d.device, staging);
+            return false;
+        }
+        Convert(static_cast<uint8_t*>(mapped), static_cast<const uint8_t*>(data), band, stored);
+        SDL_UnmapGPUTransferBuffer(d.device, staging);
+
+        std::lock_guard lock(d.copyMutex);
+        if (!d.liveImages.contains(image))
+        {
+            SDL_ReleaseGPUTransferBuffer(d.device, staging);
+            return false;
+        }
+        d.textureCopies.push_back({ image, staging, firstRow, rowCount });
+        return true;
     }
 
     void SDLGPUGraphicsContext::DestroyImageAtEnd(Image* img, DeviceScope scope, const std::source_location&)

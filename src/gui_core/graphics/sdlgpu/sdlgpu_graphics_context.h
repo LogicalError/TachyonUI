@@ -109,6 +109,7 @@ namespace tachyon::sdlgpu
         /// formats). `mipmapped` makes the base level only, as the samplers read no other. The
         /// pixels go to the GPU with the next window frame.
         Image* CreateImage(void* data, uint2 size, ImageFormat format, Sampler sampler, bool mipmapped = false) override;
+        bool   UpdateImageRows(Image* image, uint32_t firstRow, uint32_t rowCount, const void* data) override;
         void   DestroyImageAtEnd(Image* img, DeviceScope scope, const std::source_location& loc = std::source_location::current()) override;
         TextAtlasManager* CreateTextAtlasManager() override;
 

@@ -204,6 +204,9 @@ namespace tachyon::vulkan
         /// An image from `data` pixels (null: cleared). Doesn't wait for the GPU: the upload and
         /// mip generation are recorded at the start of the next window frame (RecordPendingUploads).
         tachyon::Image* CreateImage(const void* data, tachyon::uint2 size, tachyon::ImageFormat format, tachyon::Sampler sampler, bool mipmapped = false);
+        /// GraphicsContext::UpdateImageRows: the rows go up with the next frame's uploads, and
+        /// into the pixels kept for a device loss.
+        bool UpdateImageRows(tachyon::Image* image, uint32_t firstRow, uint32_t rowCount, const void* data);
         /// Records the queued uploads into `cmd`, outside any rendering scope.
         void RecordPendingUploads(VkCommandBuffer cmd);
 
@@ -396,7 +399,9 @@ namespace tachyon::vulkan
         bool m_ownsDevice    = true;
         bool m_ownsAllocator = true;
 
-        struct PendingUpload { Buffer staging; VkImage image; VkExtent3D extent; bool mipmapped; };
+        /// A whole image's pixels, or with `firstRow`/`partial` a band of rows written into an
+        /// image already up (UpdateImageRows): its other rows are kept.
+        struct PendingUpload { Buffer staging; VkImage image; VkExtent3D extent; bool mipmapped; uint32_t firstRow = 0; bool partial = false; };
         /// Guards m_pendingUploads and m_liveImages: images are made on any thread.
         mutable std::mutex         m_imagesMutex;
         std::vector<PendingUpload> m_pendingUploads;

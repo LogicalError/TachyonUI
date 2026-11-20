@@ -2,7 +2,9 @@
 #include <gui_core/style/gui_gradient_manager.h>
 #include <gui_core/style/gui_style.h>
 #include <gui_core/gui_base_types.h>
+#include <gui_core/graphics/null/gui_null_graphics_context.h>
 #include <algorithm>
+#include <vector>
 
 namespace tachyon
 {
@@ -202,6 +204,101 @@ namespace tachyon
         EXPECT_GE(gm.PageHeight(0), 200u);
 
         for (auto h : handles) gm.Release(h);
+    }
+
+    // --------------------------------------------------------------------
+    // Uploads: only the rows written go up
+    // --------------------------------------------------------------------
+
+    namespace
+    {
+        // Counts the images made and the rows written into them; `partial` false refuses
+        // UpdateImageRows, as a backend without it does.
+        class RecordingContext : public NullGraphicsContext
+        {
+        public:
+            bool partial = true;
+            int  created = 0;
+            struct Rows { uint32_t first, count; std::vector<color4b> pixels; };
+            std::vector<Rows> updates;
+            uint32_t width = 0;
+
+            Image* CreateImage(void* data, uint2 size, ImageFormat format, Sampler sampler, bool mipmapped) override
+            {
+                ++created;
+                width = size.x;
+                return NullGraphicsContext::CreateImage(data, size, format, sampler, mipmapped);
+            }
+            bool UpdateImageRows(Image*, uint32_t firstRow, uint32_t rowCount, const void* data) override
+            {
+                if (!partial)
+                    return false;
+                const auto* pixels = static_cast<const color4b*>(data);
+                updates.push_back({ firstRow, rowCount, std::vector<color4b>(pixels, pixels + size_t(rowCount) * width) });
+                return true;
+            }
+        };
+    }
+
+    // A color added to a page already on the GPU sends its row alone, not the page.
+    TEST(GradientManagerTest, AColorAddedSendsOnlyItsRow)
+    {
+        GradientManager gm(8);
+        RecordingContext gpu;
+        Gradient a; a.type = GradientType::Linear; a.AddStop(color4b{ 255, 0, 0, 255 }, 0.0f); a.AddStop(color4b{ 0, 0, 255, 255 }, 1.0f);
+        const GradientHandle ha = gm.AcquireGradient(a);
+        Image* const image = gm.GetGradientImage(&gpu, 0);
+        ASSERT_NE(image, nullptr);
+        EXPECT_EQ(gpu.created, 1);
+        EXPECT_TRUE(gpu.updates.empty());
+        EXPECT_EQ(gm.GetGradientImage(&gpu, 0), image) << "nothing written: nothing sent";
+        EXPECT_TRUE(gpu.updates.empty());
+
+        Gradient b; b.type = GradientType::Linear; b.AddStop(color4b{ 255, 0, 0, 255 }, 0.0f); b.AddStop(color4b{ 0, 255, 0, 255 }, 1.0f);
+        const GradientHandle hb = gm.AcquireGradient(b);
+        const uint32_t row = gm.GetLocation(hb).row;
+        EXPECT_EQ(gm.GetGradientImage(&gpu, 0), image) << "the same image, written into";
+        EXPECT_EQ(gpu.created, 1);
+        ASSERT_EQ(gpu.updates.size(), 1u);
+        EXPECT_EQ(gpu.updates[0].first, row);
+        EXPECT_EQ(gpu.updates[0].count, 1u);
+        const auto page = gm.PageTextureData(0);
+        EXPECT_TRUE(std::equal(gpu.updates[0].pixels.begin(), gpu.updates[0].pixels.end(), page.begin() + ptrdiff_t(row) * 8))
+            << "the row's pixels as they are now";
+
+        gm.Release(ha);
+        gm.Release(hb);
+        gm.ReleaseAll(&gpu);
+    }
+
+    // A page that grew is a bigger image, made again; a backend that can't write part of an
+    // image makes it again too.
+    TEST(GradientManagerTest, AGrownPageOrABackendWithoutRowWritesMakesTheImageAgain)
+    {
+        GradientManager gm(4);
+        RecordingContext gpu;
+        std::vector<GradientHandle> handles;
+        auto add = [&](int i) {
+            Gradient g; g.type = GradientType::Linear;
+            g.AddStop(color4b{ byte(i), 0, 0, 255 }, 0.0f); g.AddStop(color4b{ 0, byte(i), 0, 255 }, 1.0f);
+            handles.push_back(gm.AcquireGradient(g));
+        };
+        add(0);
+        gm.GetGradientImage(&gpu, 0);
+        const size_t height = gm.PageHeight(0);
+        for (int i = 1; gm.PageHeight(0) == height; ++i)
+            add(i);
+        gm.GetGradientImage(&gpu, 0);
+        EXPECT_EQ(gpu.created, 2) << "grown: a new image";
+        EXPECT_TRUE(gpu.updates.empty());
+
+        gpu.partial = false;
+        add(1000);
+        gm.GetGradientImage(&gpu, 0);
+        EXPECT_EQ(gpu.created, 3) << "no row writes: a new image";
+
+        for (auto h : handles) gm.Release(h);
+        gm.ReleaseAll(&gpu);
     }
 
     // --------------------------------------------------------------------

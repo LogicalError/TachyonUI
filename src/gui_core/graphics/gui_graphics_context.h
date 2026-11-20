@@ -110,6 +110,12 @@ namespace tachyon
         /// null for a cleared image); `mipmapped` generates its mip levels. Doesn't wait for the GPU:
         /// the upload goes with the next frame. RegisterImage makes it drawable.
         virtual Image*  CreateImage(void* data, uint2 size, ImageFormat format, Sampler sampler, bool mipmapped = false) = 0;
+        /// Writes `rowCount` rows from `firstRow` into an image CreateImage made with pixels (not
+        /// mipmapped): tightly packed in its format, the image's width each. As CreateImage's
+        /// upload, it doesn't wait for the GPU and goes with the next frame, ahead of its draws;
+        /// the frames already sent draw what they had. False when the backend can't, and the
+        /// caller makes the image again instead (the default).
+        virtual bool    UpdateImageRows(Image* /*image*/, uint32_t /*firstRow*/, uint32_t /*rowCount*/, const void* /*data*/) { return false; }
         /// Destroys the image and deletes the object once the GPU is done with it: for
         /// DeviceScope::Frame once it has finished the frames that may have drawn with it, however
         /// many frames draw nothing meanwhile; for DeviceScope::Application at Cleanup. Unregister
