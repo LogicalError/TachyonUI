@@ -323,7 +323,10 @@ if(TACHYON_SDL AND TACHYON_D3D12)
     gpu/d3d12_device_test.cpp
     gpu/d3d12_draw_test.cpp
     gpu/d3d12_scene_test.cpp
+    gpu/d3d12_memory_test.cpp
     gpu/d3d12_external_device_test.cpp)
+  # gui_core links D3D12MA PRIVATE, so the tests that look inside the backend link it themselves.
+  target_link_libraries(gui_d3d12_tests PRIVATE d3d12ma)
 endif()
 
 if(TACHYON_SDL AND TACHYON_SDLGPU)

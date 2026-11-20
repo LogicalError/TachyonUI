@@ -206,8 +206,10 @@ namespace tachyon::d3d12
 
         // ---- What every frame draws with ------------------------------------------------
         D3D12ImageSet                imageSet;
-        Buffer                       boxStyles;     ///< the box styles, uploaded again when they change
-        Buffer                       colorStyles;   ///< the color styles, with their gradient pages' slots
+        /// The box styles in GPU memory (a resident buffer), made again when they change; 0: none.
+        RHI::ResidentBufferId        boxStyles   = 0;
+        /// The color styles, with their gradient pages' slots, likewise.
+        RHI::ResidentBufferId        colorStyles = 0;
         std::vector<ImageIndex>      gradientPages; ///< each gradient page's index in the image set
         StyleManager*                lastStyles    = nullptr;   ///< PrepareFrame's, for a live resize's redraw
         GradientManager*             lastGradients = nullptr;
@@ -215,12 +217,14 @@ namespace tachyon::d3d12
         ComPtr<ID3D12RootSignature>  rootSignature;
         std::vector<ComPtr<ID3D12PipelineState>> pipelineStates;   ///< by PrimitiveKind
         std::array<RHI::GpuPipeline, kPrimitiveKindCount> pipelines {};
-        Buffer                       quadIndices;   ///< p * 4 + { 0, 1, 3, 0, 3, 2 } for each quad p
+        /// p * 4 + { 0, 1, 3, 0, 3, 2 } for each quad p, in GPU memory.
+        Buffer                       quadIndices;
         uint32_t                     quadCapacity = 0;
         GPUDrawPushConstants         pushConstants {};   ///< the styles' addresses and the time, from PrepareFrame
 
-        /// Grows the quads' index buffer to hold `quads`; false when it can't.
-        bool EnsureQuadIndices(uint32_t quads);
+        /// Grows the quads' index buffer to hold `quads`, its copy recorded into `list` before
+        /// the draw that needs it; false when it can't.
+        bool EnsureQuadIndices(ID3D12GraphicsCommandList* list, uint32_t quads);
 
         // ---- Scenes the app draws (RenderScene) ----------------------------------------
         static constexpr DXGI_FORMAT kSceneColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;

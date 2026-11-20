@@ -273,21 +273,29 @@ namespace tachyon::d3d12
         residents.erase(it);
     }
 
-    bool D3D12GraphicsContext::Impl::EnsureQuadIndices(uint32_t quads)
+    bool D3D12GraphicsContext::Impl::EnsureQuadIndices(ID3D12GraphicsCommandList* list, uint32_t quads)
     {
         if (quads <= quadCapacity)
             return true;
         const uint32_t capacity = std::bit_ceil(std::max(quads, 4096u));
-        Buffer buffer = CreateUploadBuffer(UINT64(capacity) * 6 * sizeof(uint32_t));
-        if (!buffer)
+        const UINT64   bytes    = UINT64(capacity) * 6 * sizeof(uint32_t);
+        Buffer buffer  = CreateGpuBuffer(bytes);
+        Buffer staging = CreateUploadBuffer(bytes);
+        if (!buffer || !staging)
             return false;
-        auto* indices = static_cast<uint32_t*>(buffer.mapped);
+        auto* indices = static_cast<uint32_t*>(staging.mapped);
         for (uint32_t p = 0; p < capacity; ++p)
         {
             const uint32_t base = p * 4;
             const uint32_t quad[6] = { base, base + 1, base + 3, base, base + 3, base + 2 };
             std::memcpy(indices + size_t(p) * 6, quad, sizeof(quad));
         }
+        // Copied where the draw is recorded: the list draws on with it after the barrier. Later
+        // lists promote it from COMMON to INDEX_BUFFER themselves, as a buffer is.
+        list->CopyBufferRegion(buffer.Resource(), 0, staging.Resource(), 0, bytes);
+        const D3D12_RESOURCE_BARRIER toIndices = Transition(buffer.Resource(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+        list->ResourceBarrier(1, &toIndices);
+        DestroyAfterGpu(std::move(staging.allocation), submitted + 1);
         // Draws already recorded this frame may use the old one.
         DestroyAfterGpu(std::move(quadIndices.allocation), submitted + 1);
         quadIndices  = std::move(buffer);

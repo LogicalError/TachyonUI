@@ -202,7 +202,7 @@ namespace tachyon::d3d12
         if (shape == PrimitiveShape::Quad)
         {
             // Four corners a quad, two triangles from the shared index buffer.
-            if (!m_device.EnsureQuadIndices(primitiveCount))
+            if (!m_device.EnsureQuadIndices(m_list, primitiveCount))
                 return;
             const D3D12_INDEX_BUFFER_VIEW view{ m_device.quadIndices.address, UINT(m_device.quadIndices.size), DXGI_FORMAT_R32_UINT };
             m_list->IASetIndexBuffer(&view);
