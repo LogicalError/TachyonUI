@@ -181,8 +181,22 @@ namespace tachyon
                     for (const TimelineEvent& e : t.events) consider(e.time, { e.stableID });
                     break;
                 case TimelineTrackKind::Group:
-                    for (const float time : SummaryTimes(view, track)) consider(time, KeysAtInGroup(view, track, time));
+                {
+                    // The nearest summary key is the nearest key in the tracks held; its keys
+                    // are gathered once, for it alone.
+                    float nearest = best;
+                    float time    = 0.0f;
+                    for (const TimelineTrack& held : TracksInGroup(view, track))
+                        for (const TimelineKey& key : held.keys)
+                            if (const float d = std::fabs(geometry.XAt(key.time) - x); d < nearest)
+                            {
+                                nearest = d;
+                                time    = key.time;
+                            }
+                    if (nearest <= reach)
+                        consider(time, KeysAtInGroup(view, track, time));
                     break;
+                }
                 default: break;
             }
             return hit;
@@ -195,26 +209,30 @@ namespace tachyon
             std::stable_sort(track.events.begin(), track.events.end(), [](const TimelineEvent& a, const TimelineEvent& b) { return a.time < b.time; });
         }
 
-        // `from` with the selected keys and events of unlocked tracks moved by `delta`, kept
-        // inside the length.
-        std::vector<TimelineTrack> MovedKeys(const TimelineView& view, const std::vector<TimelineTrack>& from, float delta)
+        // The view's tracks as `from` (the same tracks) with the selected keys and events of
+        // unlocked tracks moved by `delta`, kept inside the length. Only the tracks holding
+        // selected ones are rewritten, their keys and events alone: a drag calls it each move,
+        // and the others (an audio clip's waveform) stay as they are.
+        void MoveSelectedKeys(TimelineView& view, const std::vector<TimelineTrack>& from, float delta)
         {
             const float length = LengthOf(view);
-            std::vector<TimelineTrack> moved = from;
-            for (int t = 0; t < (int)moved.size(); ++t)
+            auto selected = [&view](const auto& items) {
+                return std::any_of(items.begin(), items.end(), [&view](const auto& item) { return view.selectedKeys.contains(item.stableID); });
+            };
+            for (int t = 0; t < (int)from.size(); ++t)
             {
-                if (IsTrackLocked(view, t))
+                const TimelineTrack& was = from[size_t(t)];
+                if (IsTrackLocked(view, t) || (!selected(was.keys) && !selected(was.events)))
                     continue;
-                TimelineTrack& track = moved[size_t(t)];
-                bool any = false;
+                TimelineTrack& track = view.tracks[size_t(t)];
+                track.keys   = was.keys;     // into the storage it has
+                track.events = was.events;
                 for (TimelineKey& key : track.keys)
-                    if (view.selectedKeys.contains(key.stableID)) { key.time = std::clamp(key.time + delta, 0.0f, length); any = true; }
+                    if (view.selectedKeys.contains(key.stableID)) key.time = std::clamp(key.time + delta, 0.0f, length);
                 for (TimelineEvent& event : track.events)
-                    if (view.selectedKeys.contains(event.stableID)) { event.time = std::clamp(event.time + delta, 0.0f, length); any = true; }
-                if (any)
-                    SortTimes(track);
+                    if (view.selectedKeys.contains(event.stableID)) event.time = std::clamp(event.time + delta, 0.0f, length);
+                SortTimes(track);
             }
-            return moved;
         }
 
         // The edit taking the tracks from `before` to how they are now.
@@ -815,10 +833,10 @@ namespace tachyon
                 const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
                 const float length = LengthOf(*v);
                 auto commitMove = [&](float delta) {
-                    const std::vector<TimelineTrack> before = v->tracks;
-                    v->tracks = MovedKeys(*v, before, delta);
+                    std::vector<TimelineTrack> before = v->tracks;
+                    MoveSelectedKeys(*v, before, delta);
                     const TimelineEdit edit = ChangesSince(*v, before);
-                    v->tracks = before;
+                    v->tracks = std::move(before);
                     CommitTimelineEdit(*v, edit);
                 };
                 if (DragScroll(*v, event, es, gsm, g, bodyID, event.rect->rect.h, dragDistance))
@@ -967,7 +985,7 @@ namespace tachyon
                                 return true;
                             }
                             const float delta = SnappedDelta(*v, g.TimeAt(float(at.x)) - v->keyPressTime);
-                            v->tracks = MovedKeys(*v, v->keyDrag.before, delta);
+                            MoveSelectedKeys(*v, v->keyDrag.before, delta);
                             v->keyMoved = true;
                             return true;
                         }

@@ -908,6 +908,32 @@ namespace tachyon
             EXPECT_EQ(edits.size(), before + 1) << "no edit for the cancelled drag";
         }
 
+        // Each move of a key drag rewrites only the tracks holding selected keys: the others,
+        // an audio clip's waveform among them, are left as they are, not copied each move.
+        TEST_F(TimelineEditorTest, ADragMoveLeavesTheOtherTracksAlone)
+        {
+            view.selectedKeys = { positionKeys[1] };
+            Settle();
+            const float* peaks  = view.tracks[5].clip->peaks.data();
+            const auto*  scales = view.tracks[2].keys.data();
+            const int2 from = LanesPoint(2.0f, 1);
+            app.InjectMouseMove(from);
+            app.InjectMouseDown(from);
+            Frame();
+            for (const float to : { 2.5f, 3.0f, 3.5f })
+            {
+                app.InjectMouseMove(LanesPoint(to, 1), MouseButtons::Left);
+                Frame();
+                EXPECT_NEAR(view.tracks[1].keys[1].time, to, 1e-4f) << "the selected key moves";
+                EXPECT_EQ(view.tracks[5].clip->peaks.data(), peaks) << "the clip's waveform isn't copied";
+                EXPECT_EQ(view.tracks[2].keys.data(), scales) << "a track with no selected key isn't rewritten";
+            }
+            app.InjectMouseUp(LanesPoint(3.5f, 1));
+            Frame();
+            ASSERT_EQ(edits.size(), 1u);
+            EXPECT_EQ(edits[0].changes.size(), 1u) << "only Position changed";
+        }
+
         // Keys on the focused lanes.
         TEST_F(TimelineEditorTest, TheLanesTakeKeys)
         {
