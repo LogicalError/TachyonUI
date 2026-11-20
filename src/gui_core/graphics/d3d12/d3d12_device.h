@@ -110,7 +110,6 @@ namespace tachyon::d3d12
         std::string    gpuPreference;
         std::string deviceName;
         bool        debugLayer = false;   ///< the debug layer is on: its messages go to `debug`
-        bool        tearing    = false;   ///< presenting without vsync is allowed (variable refresh)
         uint32_t    imageSlots = 4096;    ///< asked for with SetImageSlotCount
 
         ComPtr<IDXGIFactory6>      factory;
@@ -250,6 +249,7 @@ namespace tachyon::d3d12
             ComPtr<ID3D12DescriptorHeap> dsv;
             ImageIndex                   index = ImageIndex::Invalid;
             uint2                        extent {};
+            color4f                      clear {};        ///< the color texture's optimized clear
             uint64_t                     lastFrame = 0;   ///< the frame it was last asked for
         };
         struct SceneRequest

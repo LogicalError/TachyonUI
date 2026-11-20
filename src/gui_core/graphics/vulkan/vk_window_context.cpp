@@ -49,9 +49,7 @@ void VulkanWindowContext::CreateDrawDepthImages(VulkanImage& drawImage, VulkanIm
 
     drawImage.imageFormat = colorFormat;
     drawImage.imageExtent = extent;
-    VkImageUsageFlags drawUsages =
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    VkImageCreateInfo drawInfo = tachyon::vulkan::image_create_info(colorFormat, drawUsages, extent);
+    VkImageCreateInfo drawInfo = tachyon::vulkan::image_create_info(colorFormat, kDrawImageUsage, extent);
     vmaCreateImage(deviceContext->allocator, &drawInfo, &allocInfo, &drawImage.image, &drawImage.allocation, nullptr);
     vmaSetAllocationName(deviceContext->allocator, drawImage.allocation, "Window::DrawImage::CreateImage");
     VkImageViewCreateInfo drawView = tachyon::vulkan::imageview_create_info(colorFormat, drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -424,15 +422,16 @@ VkCommandBuffer VulkanWindowContext::BeginWindowFrame(FrameData& currentFrame, V
     if (graphics != nullptr)
         graphics->RecordScenes(state.commandBuffer, id);
 
-    tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-    currentFrame.drawImageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    // A color attachment, in the layout drivers can keep compressed (DCC), not GENERAL.
+    tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    currentFrame.drawImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.depthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     // Layered and render-to-image windows clear to transparent, others to opaque black.
     float clearAlpha = (needsReadback || renderToImage) ? 0.0f : 1.0f;
     VkClearValue clearValue = { .color = { { 0.0f, 0.0f, 0.0f, clearAlpha } } };
 
-    VkRenderingAttachmentInfo colorAttachment = tachyon::vulkan::attachment_info(currentFrame.drawImage.imageView, &clearValue, VK_IMAGE_LAYOUT_GENERAL);
+    VkRenderingAttachmentInfo colorAttachment = tachyon::vulkan::attachment_info(currentFrame.drawImage.imageView, &clearValue, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     VkRenderingAttachmentInfo depthAttachment = tachyon::vulkan::depth_attachment_info(currentFrame.depthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
     VkRenderingInfo renderInfo = tachyon::vulkan::rendering_info(drawExtent, &colorAttachment, &depthAttachment);
@@ -508,7 +507,7 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
         if (acq == VK_SUBOPTIMAL_KHR)
             resize_requested = true;
 
-        tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
         currentFrame.drawImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         // After the acquire semaphore's wait (at TRANSFER, below), not racing it.
         tachyon::vulkan::transition_image(state.commandBuffer, swapchain.swapchainImages[swapchain.swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -521,7 +520,7 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
     else if (renderToImage)
     {
         // Ready to read back, and the source of the copy into the host's image.
-        tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+        tachyon::vulkan::transition_image(state.commandBuffer, currentFrame.drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
         currentFrame.drawImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
         if (targetImage != VK_NULL_HANDLE)
         {
@@ -671,7 +670,7 @@ void VulkanWindowContext::PerformReadback(FrameData& frame)
 void VulkanWindowContext::RecordReadbackCopy(VkCommandBuffer cmd, FrameData& frame)
 {
     const VulkanImage& drawImage = frame.drawImage;
-    // A layered window's frame is still in GENERAL when it's copied out; copied out already
+    // A layered window's frame is still a color attachment when it's copied out; copied out already
     // (a swapchain's or the host's image, or read back before), it stays as it is.
     if (frame.drawImageLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
     {
