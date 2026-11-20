@@ -156,7 +156,16 @@ namespace tachyon::vulkan
         VkCommandBuffer BeginWindowFrame(FrameData& currentFrame, VulkanGraphicsContext* graphics = nullptr);
         void EndWindowFrame(FrameData& currentFrame);
 
+        /// Copies `frame`'s draw image into the readback buffer in a submit of its own, waits,
+        /// and reads it (ReadPixels of a window whose frames aren't copied out themselves).
         void PerformReadback(FrameData& frame);
+        /// Records the copy of `frame`'s draw image into the readback buffer, made visible to the
+        /// host, into `cmd`.
+        void RecordReadbackCopy(VkCommandBuffer cmd, FrameData& frame);
+        /// The readback buffer into cachedBitmap, once the copy into it is done.
+        void ReadBackBuffer();
+        /// Readbacks that needed a submit of their own (PerformReadback).
+        uint64_t immediateReadbacks = 0;
 
         /// GPU time of the drawing of this window's most recent finished frame, in seconds; 0
         /// until one finished, or when the device can't time.
