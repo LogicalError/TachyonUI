@@ -884,7 +884,7 @@ namespace tachyon
     VisualBoxStyleIndex StyleManager::RegisterOutline(BoxEdges widths, BoxCorners radius, color4b color) noexcept
     {
         for (const Outline& o : m_outlines)
-            if (o.widths == widths && o.radius == radius && o.color == color)
+            if (o.colorIndex == VisualColorStyleIndex::Invalid && o.widths == widths && o.radius == radius && o.color == color)
                 return o.index;
         Style outline{};
         outline.borderWidths = widths;
@@ -895,7 +895,32 @@ namespace tachyon
             state.SetBorderColor(ColorStyle::Create(color));
         }
         const VisualBoxStyleIndex index = Register(outline, StyleUnits::Pixels).visualBoxStyleIndex;
-        m_outlines.push_back({ widths, radius, color, index });
+        m_outlines.push_back({ widths, radius, color, VisualColorStyleIndex::Invalid, index });
+        return index;
+    }
+
+    VisualBoxStyleIndex StyleManager::RegisterOutline(BoxEdges widths, BoxCorners radius, VisualColorStyleIndex color) noexcept
+    {
+        if (color == VisualColorStyleIndex::Invalid)
+            return RegisterOutline(widths, radius, color4b{});
+        for (const Outline& o : m_outlines)
+            if (o.colorIndex == color && o.widths == widths && o.radius == radius)
+                return o.index;
+        // The shape's transparent outline, its border pointed at the slot. A box style of its
+        // own: registered ones are shared by their values, so they can't be changed.
+        const VisualBoxStyleIndex shape = RegisterOutline(widths, radius, color4b{});
+        const size_t from = (size_t(shape) - 1) * Style::kStateCount;
+        const auto index = static_cast<VisualBoxStyleIndex>(m_visualBoxStyles.size() / Style::kStateCount + 1);
+        for (int i = 0; i < Style::kStateCount; i++)
+        {
+            VisualBoxStyle box = m_visualBoxStyles[from + size_t(i)];
+            for (VisualColorStyleIndex& edge : box.borderColorIndex)
+                edge = color;
+            m_visualBoxStyles.push_back(box);
+            m_boxFlags.push_back(0);   // a border of any color: neither opaque nor blank
+        }
+        visualBoxStylesModified = true;
+        m_outlines.push_back({ widths, radius, color4b{}, color, index });
         return index;
     }
 
