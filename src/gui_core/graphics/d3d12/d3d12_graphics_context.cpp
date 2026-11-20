@@ -343,8 +343,8 @@ namespace tachyon::d3d12
         }
         d.residents.clear();
         d.gradientPages.clear();
-        d.boxStyles   = {};
-        d.colorStyles = {};
+        d.boxStyles   = 0;   // freed with the residents
+        d.colorStyles = 0;
         d.quadIndices = {};
         d.quadCapacity  = 0;
         d.pushConstants = {};
@@ -678,19 +678,21 @@ namespace tachyon::d3d12
             }
         }
 
-        // A buffer is replaced, never written in place, so the frames in flight keep theirs. A
-        // live resize prepares again between windows, while one may be recording.
-        const auto upload = [&d](Buffer& buffer, const void* data, size_t bytes)
+        // Into GPU memory: a resident buffer, copied at the start of the next window frame, which
+        // draws with it. One is replaced, never written in place, so the frames in flight keep
+        // theirs. A live resize prepares again before its window's frame is recorded.
+        const auto upload = [&d](RHI::ResidentBufferId& buffer, DeviceAddress& address, const void* data, size_t bytes)
         {
-            d.DestroyAfterGpu(std::move(buffer.allocation), d.submitted + 1);
-            buffer = d.CreateUploadBuffer(bytes);
-            if (buffer && bytes > 0)
-                std::memcpy(buffer.mapped, data, bytes);
+            d.ReleaseResident(buffer);
+            const RHI::UploadRequest request{ data, bytes, 16 };
+            buffer = d.CreateResidentBuffer(std::span(&request, 1), std::span(&address, 1));
         };
+        DeviceAddress boxAddress   = d.pushConstants.boxStyleBuffer;
+        DeviceAddress colorAddress = d.pushConstants.colorStyleBuffer;
         if (styleManager.AreVisualBoxStylesModified() || !d.boxStyles)
         {
             const std::span<const VisualBoxStyle> styles = styleManager.GetVisualBoxStylesSpan();
-            upload(d.boxStyles, styles.data(), styles.size_bytes());
+            upload(d.boxStyles, boxAddress, styles.data(), styles.size_bytes());
             styleManager.ResetVisualBoxStylesModified();
         }
         if (styleManager.AreVisualColorStylesModified() || gradientManager.HasPageTableChanged() || !d.colorStyles)
@@ -704,14 +706,14 @@ namespace tachyon::d3d12
                 assert(slot >= 0);
                 style.gradientPage = uint16_t(slot);
             }
-            upload(d.colorStyles, resolved.data(), resolved.size() * sizeof(VisualColorStyle));
+            upload(d.colorStyles, colorAddress, resolved.data(), resolved.size() * sizeof(VisualColorStyle));
             styleManager.ResetVisualColorStylesModified();
             gradientManager.ClearPageTableChanged();
         }
 
         d.pushConstants = {};
-        d.pushConstants.boxStyleBuffer   = DeviceAddress(d.boxStyles.address);
-        d.pushConstants.colorStyleBuffer = DeviceAddress(d.colorStyles.address);
+        d.pushConstants.boxStyleBuffer   = boxAddress;
+        d.pushConstants.colorStyleBuffer = colorAddress;
         d.pushConstants.elapsedTime      = elapsedTimeSecs;
     }
 
