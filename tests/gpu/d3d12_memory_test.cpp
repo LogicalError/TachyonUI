@@ -1,5 +1,6 @@
 // Where the Direct3D 12 backend keeps what every frame reads: the styles and the quads' index
-// buffer are copied into the GPU's own memory, not read across the bus each frame.
+// buffer are copied into the GPU's own memory, not read across the bus each frame; and a frame
+// copies only the resident buffers still waiting.
 
 #include "d3d12_test_harness.h"
 
@@ -41,6 +42,34 @@ TEST_F(D3D12ImageWindowTest, TheStylesAreInGpuMemory)
     RenderFrame([&](tachyon::GUIRenderer* r) { r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x, kSize.y }, kFullClip, green, 0.0f); });
     EXPECT_EQ(HeapType(ResidentResource(d, d.colorStyles)), D3D12_HEAP_TYPE_DEFAULT) << "the color styles, changed";
     EXPECT_EQ(Rgba(kSize.x / 2, kSize.y / 2), (std::array<int, 4>{ 0, 255, 0, 255 })) << "the new style draws";
+    EXPECT_TRUE(sink.Empty()) << sink.Dump();
+}
+
+// A frame copies the resident buffers made since the one before, and no others: once copied,
+// one is Ready and off the list. One let go of before its copy is left out.
+TEST_F(D3D12ImageWindowTest, AFrameCopiesOnlyTheResidentBuffersWaiting)
+{
+    auto& d = graphics->Internal();
+    const uint32_t data[4] = { 1, 2, 3, 4 };
+    const tachyon::RHI::UploadRequest request{ data, sizeof(data), 16 };
+    tachyon::DeviceAddress address{};
+    const tachyon::RHI::ResidentBufferId kept    = d.CreateResidentBuffer(std::span(&request, 1), std::span(&address, 1));
+    const tachyon::RHI::ResidentBufferId dropped = d.CreateResidentBuffer(std::span(&request, 1), std::span(&address, 1));
+    ASSERT_NE(kept, 0u);
+    ASSERT_NE(dropped, 0u);
+    EXPECT_EQ(d.ResidentState(kept), tachyon::RHI::ResidentState::Pending);
+    d.ReleaseResident(dropped);
+
+    graphics->BeginFrame();
+    RenderFrame([](tachyon::GUIRenderer*) {});
+    EXPECT_EQ(d.ResidentState(kept), tachyon::RHI::ResidentState::Ready);
+    EXPECT_EQ(d.ResidentState(dropped), tachyon::RHI::ResidentState::Gone);
+    EXPECT_TRUE(d.pendingResidents.empty()) << "nothing left waiting";
+
+    graphics->BeginFrame();
+    RenderFrame([](tachyon::GUIRenderer*) {});
+    EXPECT_EQ(d.ResidentState(kept), tachyon::RHI::ResidentState::Ready);
+    d.ReleaseResident(kept);
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
 }
 

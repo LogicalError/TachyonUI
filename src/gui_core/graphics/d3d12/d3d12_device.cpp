@@ -200,10 +200,12 @@ namespace tachyon::d3d12
             }
             DestroyAfterGpu(std::move(upload.staging.allocation), thisSubmit);
         }
-        for (auto& [id, resident] : residents)
+        for (const RHI::ResidentBufferId id : pendingResidents)
         {
-            if (resident.ready)
-                continue;
+            const auto it = residents.find(id);
+            if (it == residents.end())
+                continue;   // let go of before its copy
+            Resident& resident = it->second;
             list->CopyBufferRegion(resident.gpu.Resource(), 0, resident.staging.Resource(), 0, resident.gpu.size);
             barriers.push_back(Transition(resident.gpu.Resource(), D3D12_RESOURCE_STATE_COPY_DEST,
                                           D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
@@ -211,6 +213,7 @@ namespace tachyon::d3d12
             resident.staging = {};
             resident.ready   = true;
         }
+        pendingResidents.clear();
         if (!barriers.empty())
             list->ResourceBarrier(UINT(barriers.size()), barriers.data());
     }
@@ -250,6 +253,7 @@ namespace tachyon::d3d12
         }
         const RHI::ResidentBufferId id = nextResident++;
         residents.emplace(id, std::move(resident));
+        pendingResidents.push_back(id);
         return id;
     }
 

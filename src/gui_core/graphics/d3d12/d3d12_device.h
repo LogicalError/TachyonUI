@@ -192,6 +192,9 @@ namespace tachyon::d3d12
             bool   ready = false;
         };
         std::unordered_map<RHI::ResidentBufferId, Resident> residents;
+        /// Made and not copied yet, oldest first; one let go of meanwhile is no longer in
+        /// `residents` and is passed over. Ids are never handed out twice.
+        std::vector<RHI::ResidentBufferId> pendingResidents;
         RHI::ResidentBufferId nextResident = 1;
 
         RHI::ResidentBufferId CreateResidentBuffer(std::span<const RHI::UploadRequest> requests,
