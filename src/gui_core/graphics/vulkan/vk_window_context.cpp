@@ -538,7 +538,12 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
             targetWritten = true;
         }
     }
-    
+    // A window read back every frame (a layered one) copies its frame out here, in the frame's
+    // own submit: PresentWindowFrame reads it once the frame's fence has passed.
+    const bool copiedOut = needsReadback && readbackBuffer.buffer != VK_NULL_HANDLE;
+    if (copiedOut)
+        RecordReadbackCopy(state.commandBuffer, currentFrame);
+
     TACHYON_VK_CHECK(vkEndCommandBuffer(state.commandBuffer));
 
     // Wait on the acquire semaphore and the host's (AddFrameWait), signal the image's present
@@ -584,7 +589,7 @@ void VulkanWindowContext::EndWindowFrame(FrameData& currentFrame)
     // Nothing to present or read back from a submit that failed (the device is being remade).
     const bool submitted = !::tachyon::vulkan::IsDeviceLost();
     presentPending = submitted && swapchain.swapchain != VK_NULL_HANDLE;
-    readbackPending = submitted && needsReadback ? &currentFrame : nullptr;
+    readbackPending = submitted && copiedOut ? &currentFrame : nullptr;
     frameNumber++;
 }
 
@@ -624,10 +629,11 @@ std::optional<double> VulkanWindowContext::PresentWindowFrame()
             TACHYON_VK_CHECK(presentResult);
     }
 
+    // The frame copied itself out: its pixels are there once it's done.
     if (FrameData* frame = std::exchange(readbackPending, nullptr))
     {
         WaitForFence(deviceContext->device, frame->renderFence);
-        PerformReadback(*frame);
+        ReadBackBuffer();
     }
 
     // Layered windows don't redraw on SDL expose events, so update them explicitly.
@@ -642,16 +648,31 @@ std::optional<double> VulkanWindowContext::PresentWindowFrame()
 
 void VulkanWindowContext::PerformReadback(FrameData& frame)
 {
-    const VulkanImage& drawImage = frame.drawImage;
     VkCommandBuffer cmd = deviceContext->immCommandBuffer;
     TACHYON_VK_CHECK(vkResetFences(deviceContext->device, 1, &deviceContext->immFence));
     TACHYON_VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
     VkCommandBufferBeginInfo beginInfo = tachyon::vulkan::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     TACHYON_VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
+    RecordReadbackCopy(cmd, frame);
+    TACHYON_VK_CHECK(vkEndCommandBuffer(cmd));
 
-    // A layered window's frame is still in GENERAL the first time it's read back; copied out
-    // already (a swapchain's or the host's image, or read back before), it stays as it is.
+    VkCommandBufferSubmitInfo cmdInfo = tachyon::vulkan::command_buffer_submit_info(cmd);
+    VkSubmitInfo2 submit = tachyon::vulkan::submit_info(&cmdInfo, nullptr, nullptr);
+    {
+        auto queueLock = deviceContext->LockQueue();
+        TACHYON_VK_CHECK(vkQueueSubmit2(deviceContext->graphicsQueue, 1, &submit, deviceContext->immFence));
+    }
+    WaitForFence(deviceContext->device, deviceContext->immFence);
+    ++immediateReadbacks;
+    ReadBackBuffer();
+}
+
+void VulkanWindowContext::RecordReadbackCopy(VkCommandBuffer cmd, FrameData& frame)
+{
+    const VulkanImage& drawImage = frame.drawImage;
+    // A layered window's frame is still in GENERAL when it's copied out; copied out already
+    // (a swapchain's or the host's image, or read back before), it stays as it is.
     if (frame.drawImageLayout != VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL)
     {
         tachyon::vulkan::transition_image(cmd, drawImage.image, frame.drawImageLayout, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -682,18 +703,10 @@ void VulkanWindowContext::PerformReadback(FrameData& frame)
     dependency.memoryBarrierCount = 1;
     dependency.pMemoryBarriers    = &toHost;
     vkCmdPipelineBarrier2(cmd, &dependency);
+}
 
-    TACHYON_VK_CHECK(vkEndCommandBuffer(cmd));
-
-    VkCommandBufferSubmitInfo cmdInfo = tachyon::vulkan::command_buffer_submit_info(cmd);
-    VkSubmitInfo2 submit = tachyon::vulkan::submit_info(&cmdInfo, nullptr, nullptr);
-
-    {
-        auto queueLock = deviceContext->LockQueue();
-        TACHYON_VK_CHECK(vkQueueSubmit2(deviceContext->graphicsQueue, 1, &submit, deviceContext->immFence));
-    }
-    WaitForFence(deviceContext->device, deviceContext->immFence);
-
+void VulkanWindowContext::ReadBackBuffer()
+{
     // Map and copy to CPU cache; invalidate first in case the memory is cached but not coherent.
     TACHYON_VK_CHECK(vmaInvalidateAllocation(deviceContext->allocator, readbackBuffer.allocation, 0, VK_WHOLE_SIZE));
     void* mapped;
@@ -709,6 +722,18 @@ bool VulkanWindowContext::ReadPixels(std::span<uint8_t> bgra)
     FrameData& last = GetLastFrame();
     if (bgra.size() < size_t(drawExtent.width) * drawExtent.height * 4)
         return false;
+    // A window whose frames copy themselves out has the last one's pixels, or will once it's
+    // done.
+    if (needsReadback && readbackBuffer.buffer != VK_NULL_HANDLE && !cachedBitmap.empty())
+    {
+        if (FrameData* frame = std::exchange(readbackPending, nullptr))
+        {
+            WaitForFence(deviceContext->device, frame->renderFence);
+            ReadBackBuffer();
+        }
+        std::memcpy(bgra.data(), cachedBitmap.data(), size_t(drawExtent.width) * drawExtent.height * 4);
+        return true;
+    }
     // A window with a swapchain reads back only now and then (a popup's fade): its buffer
     // is made the first time.
     if (readbackBuffer.buffer == VK_NULL_HANDLE)

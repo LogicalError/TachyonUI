@@ -104,6 +104,46 @@ TEST_F(GpuTest, ReadingALayeredWindowsFrameAgainIsValidationClean)
     windowBackend->DestroyWindow(window);
 }
 
+// A layered window's frame is copied out in the frame's own submit: once the frame is done its
+// pixels are there, the first frame's included, with no submit of their own. ReadPixels gets
+// the same ones without another.
+TEST_F(GpuTest, ALayeredWindowsFrameIsReadBackInItsOwnSubmit)
+{
+    using WF = tachyon::WindowFlags;
+    const WF flags = WF::Borderless | WF::PopupMenu | WF::NotFocusable | WF::AlwaysOnTop | WF::Transparent | WF::Hidden;
+    const tachyon::int2 size{ 64, 32 };
+    const tachyon::OSWindowHandle window =
+        windowBackend->CreateWindow("own-submit-test", tachyon::IntRect{ -3000, -3000, size.x, size.y }, flags, nullptr);
+    ASSERT_NE(window, nullptr);
+    tachyon::ID id{};
+    id.value.dynamicParts.mode      = tachyon::IDMode::Static;
+    id.value.dynamicParts.hashValue = 780;
+    auto* ctx = tachyon::vulkan::VulkanWindowContext::Create(id, windowBackend->GetNativeHandle(window), window, size,
+                                                                flags, &vk->deviceContext, [] {});
+    ASSERT_NE(ctx, nullptr);
+    ASSERT_TRUE(ctx->needsReadback);
+
+    sink.Clear();
+    for (int frame = 0; frame < 3; ++frame)
+    {
+        RenderOneFrameWithDot(ctx, size);
+        size_t opaque = 0;
+        for (size_t i = 3; i < ctx->cachedBitmap.size(); i += 4)
+            if (ctx->cachedBitmap[i] > 0) ++opaque;
+        EXPECT_GT(opaque, 0u) << "frame " << frame << "'s dot, once it's presented";
+    }
+    std::vector<uint8_t> pixels(size_t(size.x) * size.y * 4);
+    ASSERT_TRUE(ctx->ReadPixels(pixels));
+    EXPECT_TRUE(std::equal(pixels.begin(), pixels.end(), ctx->cachedBitmap.begin())) << "ReadPixels: the last frame";
+    EXPECT_EQ(ctx->immediateReadbacks, 0u) << "no submit of its own for a readback";
+    vk->deviceContext.WaitIdle();
+    EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+
+    ctx->Destroy();
+    delete ctx;
+    windowBackend->DestroyWindow(window);
+}
+
 // A layered window, as a tooltip's is, shows only when the backend shows it: a frame
 // presented to it while hidden leaves it hidden. Shown from the present instead, SDL took it
 // for a window shown by the OS and restored it, which activated it.
