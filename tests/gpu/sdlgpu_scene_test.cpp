@@ -22,6 +22,27 @@ TEST_P(SDLGPUImageWindowTest, ARenderToImageWindowDrawsAndReadsBack)
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
 }
 
+// A color made after the gradient page is on the GPU is written into it, not a page made again:
+// both colors draw, and the page keeps its image.
+TEST_P(SDLGPUImageWindowTest, AColorMadeLaterIsWrittenIntoThePage)
+{
+    const tachyon::VisualColorStyleIndex red = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 255, 0, 0, 255 }));
+    graphics->BeginFrame();
+    RenderFrame([&](tachyon::GUIRenderer* r) { r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x / 2, kSize.y }, kFullClip, red, 0.0f); });
+    tachyon::Image* const page = gradientManager.GetGradientImage(graphics, 0);
+
+    const tachyon::VisualColorStyleIndex green = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 0, 255, 0, 255 }));
+    graphics->BeginFrame();
+    RenderFrame([&](tachyon::GUIRenderer* r) {
+        r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x / 2, kSize.y }, kFullClip, red, 0.0f);
+        r->RenderQuad(tachyon::IntRect{ kSize.x / 2, 0, kSize.x / 2, kSize.y }, kFullClip, green, 0.0f);
+    });
+    EXPECT_EQ(Rgba(kSize.x / 4, kSize.y / 2), (std::array<int, 4>{ 255, 0, 0, 255 })) << "red, still";
+    EXPECT_EQ(Rgba(kSize.x * 3 / 4, kSize.y / 2), (std::array<int, 4>{ 0, 255, 0, 255 })) << "the new green";
+    EXPECT_EQ(gradientManager.GetGradientImage(graphics, 0), page) << "written into, not made again";
+    EXPECT_TRUE(sink.Empty()) << sink.Dump();
+}
+
 // Frames drawn back to back, none waited for (no present holds them either): each frame's work
 // is kept until the GPU is done with it, so nothing is reused or freed while still in flight.
 TEST_P(SDLGPUImageWindowTest, FramesNotWaitedForAreKeptUntilTheGPUIsDone)

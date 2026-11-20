@@ -16,6 +16,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -52,6 +53,8 @@ namespace tachyon::d3d12
         DXGI_FORMAT                 format  = DXGI_FORMAT_UNKNOWN;
         Sampler                     sampler = Sampler::NearestRepeat;
         uint2                       size {};
+        /// Made by CreateImage from pixels of this format: UpdateImageRows can write into it.
+        std::optional<ImageFormat>  sourceFormat;
 
         ID3D12Resource* Resource() const { return allocation ? allocation->GetResource() : external; }
     };
@@ -162,11 +165,15 @@ namespace tachyon::d3d12
         std::vector<Garbage> garbage;
 
         // ---- Uploads, recorded at the start of the next window frame -----------------
+        /// A whole image's pixels, or with `partial` a band of rows from `firstRow` written
+        /// into an image already up (UpdateImageRows): its other rows are kept.
         struct ImageUpload
         {
             D3D12Image*                        image = nullptr;
             Buffer                             staging;
             D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint {};
+            uint32_t                           firstRow = 0;
+            bool                               partial  = false;
         };
         std::mutex               uploadMutex;   ///< images are made on any thread
         std::vector<ImageUpload> imageUploads;

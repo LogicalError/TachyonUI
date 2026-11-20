@@ -20,6 +20,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -49,6 +50,8 @@ namespace tachyon::sdlgpu
         SDL_GPUTexture* texture = nullptr;
         Sampler         sampler = Sampler::NearestRepeat;
         uint2           size {};
+        /// Made by CreateImage from pixels of this format: UpdateImageRows can write into it.
+        std::optional<ImageFormat> sourceFormat;
     };
 
     /// The images the shaders sample, by ImageIndex (1-based; the shaders' slot is one less).
@@ -119,10 +122,14 @@ namespace tachyon::sdlgpu
         void           ReleaseBuffer(SDL_GPUBuffer*& buffer);
 
         // ---- Copies made at the next window frame's start -----------------------------
+        /// A whole image's pixels, or `rows` rows from `firstRow` written into one already up
+        /// (UpdateImageRows); 0 rows is the whole image.
         struct TextureCopy
         {
             SDLGPUImage*           image = nullptr;
             SDL_GPUTransferBuffer* staging = nullptr;
+            uint32_t               firstRow = 0;
+            uint32_t               rows     = 0;
         };
         struct BufferCopy
         {

@@ -79,6 +79,32 @@ namespace
         static constexpr tachyon::IntRect kFullClip{ 0, 0, kSize.x, kSize.y };
     };
 
+    // A color made after the gradient page is on the GPU is written into it, not a page made
+    // again: both colors draw, the page keeps its image, and validation is clean (the rows
+    // go in from the layout the shaders read the page in, after the frame that read it).
+    TEST_F(GpuReadbackTest, AColorMadeLaterIsWrittenIntoThePage)
+    {
+        auto* ctx = CreateReadbackWindow();
+        if (ctx == nullptr)
+            GTEST_SKIP() << "no Vulkan device available";
+        const tachyon::VisualColorStyleIndex red = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 255, 0, 0, 255 }));
+        graphicsContext->BeginFrame();
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) { r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x / 2, kSize.y }, kFullClip, red); });
+        tachyon::Image* const page = gradientManager.GetGradientImage(graphicsContext, 0);
+        sink.Clear();
+
+        const tachyon::VisualColorStyleIndex green = styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(tachyon::color4b{ 0, 255, 0, 255 }));
+        graphicsContext->BeginFrame();
+        RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
+            r->RenderQuad(tachyon::IntRect{ 0, 0, kSize.x / 2, kSize.y }, kFullClip, red);
+            r->RenderQuad(tachyon::IntRect{ kSize.x / 2, 0, kSize.x / 2, kSize.y }, kFullClip, green);
+        });
+        EXPECT_EQ(PixelAt(ctx, kSize.x / 4, kSize.y / 2), 0xFFFF0000u) << "red, still";         // BGRA8
+        EXPECT_EQ(PixelAt(ctx, kSize.x * 3 / 4, kSize.y / 2), 0xFF00FF00u) << "the new green";
+        EXPECT_EQ(gradientManager.GetGradientImage(graphicsContext, 0), page) << "written into, not made again";
+        EXPECT_FALSE(sink.HasErrors()) << sink.Dump();
+    }
+
     TEST_F(GpuReadbackTest, QuadFillChangesCoveredPixels)
     {
         auto* ctx = CreateReadbackWindow();

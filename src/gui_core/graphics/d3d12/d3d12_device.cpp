@@ -169,19 +169,35 @@ namespace tachyon::d3d12
         }
         std::vector<D3D12_RESOURCE_BARRIER> barriers;
         const UINT64 thisSubmit = submitted + 1;
+        constexpr D3D12_RESOURCE_STATES kSampled = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        // The images copied into in this list: in COPY_DEST until the barriers at the end, so a
+        // second copy into one needs no barrier of its own, and gets no second one after.
+        std::vector<const D3D12Image*> copying;
         for (ImageUpload& upload : images)
         {
+            ID3D12Resource* const resource = upload.image->Resource();
+            const bool again = std::find(copying.begin(), copying.end(), upload.image) != copying.end();
+            // Rows into an image already up: out of the state the shaders read it in first,
+            // after the frames before that read it.
+            if (upload.partial && !again)
+            {
+                const D3D12_RESOURCE_BARRIER toCopy = Transition(resource, kSampled, D3D12_RESOURCE_STATE_COPY_DEST);
+                list->ResourceBarrier(1, &toCopy);
+            }
             D3D12_TEXTURE_COPY_LOCATION to{};
-            to.pResource        = upload.image->Resource();
+            to.pResource        = resource;
             to.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
             to.SubresourceIndex = 0;
             D3D12_TEXTURE_COPY_LOCATION from{};
             from.pResource       = upload.staging.Resource();
             from.Type            = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
             from.PlacedFootprint = upload.footprint;
-            list->CopyTextureRegion(&to, 0, 0, 0, &from, nullptr);
-            barriers.push_back(Transition(upload.image->Resource(), D3D12_RESOURCE_STATE_COPY_DEST,
-                                          D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+            list->CopyTextureRegion(&to, 0, upload.firstRow, 0, &from, nullptr);
+            if (!again)
+            {
+                barriers.push_back(Transition(resource, D3D12_RESOURCE_STATE_COPY_DEST, kSampled));
+                copying.push_back(upload.image);
+            }
             DestroyAfterGpu(std::move(upload.staging.allocation), thisSubmit);
         }
         for (auto& [id, resident] : residents)

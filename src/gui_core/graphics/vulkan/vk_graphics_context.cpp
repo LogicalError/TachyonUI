@@ -620,6 +620,11 @@ tachyon::Image* VulkanGraphicsContext::CreateImage(void* data, tachyon::uint2 si
     return deviceContext.CreateImage(data, size, format, sampler, mipmapped);
 }
 
+bool VulkanGraphicsContext::UpdateImageRows(tachyon::Image* image, uint32_t firstRow, uint32_t rowCount, const void* data)
+{
+    return deviceContext.UpdateImageRows(image, firstRow, rowCount, data);
+}
+
 void VulkanGraphicsContext::DestroyImage(tachyon::Image* img)
 {
     deviceContext.DestroyImage(img);
@@ -1613,6 +1618,35 @@ tachyon::Image* tachyon::vulkan::VulkanDeviceContext::CreateImage(const void* da
     return image;
 }
 
+bool tachyon::vulkan::VulkanDeviceContext::UpdateImageRows(tachyon::Image* img, uint32_t firstRow, uint32_t rowCount, const void* data)
+{
+    auto* image = static_cast<VulkanImage*>(img);
+    if (image == nullptr || data == nullptr || rowCount == 0 || image->recipe.mipmapped ||
+        (image->recipe.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0 ||
+        uint64_t(firstRow) + rowCount > image->imageExtent.height)
+        return false;
+    const size_t rowBytes = size_t(image->imageExtent.width) * BytesPerPixel(image->imageFormat);
+    const size_t bytes    = rowBytes * rowCount;
+    const size_t offset   = rowBytes * firstRow;
+
+    Buffer staging = CreateBuffer(bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+    // The rows are the caller's until it returns: kept here. The worker fills the staging
+    // buffer, then writes them into the kept pixels after the copies before it, which read them.
+    std::vector<std::byte> rows(static_cast<const std::byte*>(data), static_cast<const std::byte*>(data) + bytes);
+    std::vector<std::byte> kept = rows;
+    m_uploads.Copy(staging.info.pMappedData, std::move(rows));
+    m_uploads.Then([allocator = allocator, allocation = staging.allocation, image, offset, kept = std::move(kept)]()
+    {
+        vmaFlushAllocation(allocator, allocation, 0, VK_WHOLE_SIZE);
+        std::vector<uint8_t>& pixels = image->recipe.pixels;
+        if (offset + kept.size() <= pixels.size())
+            std::memcpy(pixels.data() + offset, kept.data(), kept.size());
+    });
+    std::lock_guard lock(m_imagesMutex);
+    m_pendingUploads.push_back({ staging, image->image, VkExtent3D{ image->imageExtent.width, rowCount, 1 }, false, firstRow, true });
+    return true;
+}
+
 void tachyon::vulkan::VulkanDeviceContext::RecordPendingUploads(VkCommandBuffer cmd)
 {
     // Taken as they are now: an image made meanwhile goes with the next frame.
@@ -1623,10 +1657,15 @@ void tachyon::vulkan::VulkanDeviceContext::RecordPendingUploads(VkCommandBuffer 
     }
     for (const PendingUpload& upload : uploads)
     {
-        tachyon::vulkan::transition_image(cmd, upload.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        // A band of rows keeps the rest: from the layout the shaders read it in, after the
+        // frames before that read it. A whole image's old contents go.
+        tachyon::vulkan::transition_image(cmd, upload.image,
+                                          upload.partial ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED,
+                                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
         VkBufferImageCopy region {};
         region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         region.imageSubresource.layerCount = 1;
+        region.imageOffset                 = VkOffset3D{ 0, int32_t(upload.firstRow), 0 };
         region.imageExtent                 = upload.extent;
         vkCmdCopyBufferToImage(cmd, upload.staging.buffer, upload.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
         if (upload.mipmapped) // leaves every level in SHADER_READ_ONLY_OPTIMAL

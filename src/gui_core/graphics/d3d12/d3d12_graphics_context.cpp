@@ -475,9 +475,10 @@ namespace tachyon::d3d12
         desc.SampleDesc       = { 1, 0 };
 
         auto image = std::make_unique<D3D12Image>();
-        image->format  = stored.format;
-        image->sampler = sampler;
-        image->size    = size;
+        image->format       = stored.format;
+        image->sampler      = sampler;
+        image->size         = size;
+        image->sourceFormat = format;
         D3D12MA::ALLOCATION_DESC alloc{};
         alloc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
         if (HRESULT hr = d.allocator->CreateResource(&alloc, &desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, &image->allocation, IID_NULL, nullptr);
@@ -504,6 +505,47 @@ namespace tachyon::d3d12
         d.imageUploads.push_back(std::move(upload));
         d.liveImages.insert(image.get());
         return image.release();
+    }
+
+    bool D3D12GraphicsContext::UpdateImageRows(Image* img, uint32_t firstRow, uint32_t rowCount, const void* data)
+    {
+        Impl& d = *m_impl;
+        auto* image = static_cast<D3D12Image*>(img);
+        if (!d.device || image == nullptr || !image->allocation || !image->sourceFormat || data == nullptr ||
+            rowCount == 0 || uint64_t(firstRow) + rowCount > image->size.y)
+            return false;
+        const StoredFormat stored = Stored(*image->sourceFormat);
+
+        // The band's own footprint: its rows, the image's width.
+        D3D12_RESOURCE_DESC desc{};
+        desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width            = image->size.x;
+        desc.Height           = rowCount;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels        = 1;
+        desc.Format           = stored.format;
+        desc.SampleDesc       = { 1, 0 };
+
+        Impl::ImageUpload upload;
+        UINT64 bytes = 0;
+        d.device->GetCopyableFootprints(&desc, 0, 1, 0, &upload.footprint, nullptr, nullptr, &bytes);
+        upload.staging = d.CreateUploadBuffer(bytes);
+        if (!upload.staging)
+            return false;
+        const auto* from = static_cast<const uint8_t*>(data);
+        auto*       to   = static_cast<uint8_t*>(upload.staging.mapped);
+        const size_t sourcePitch = size_t(image->size.x) * stored.sourceBytes;
+        for (uint32_t y = 0; y < rowCount; ++y)
+            CopyRow(to + size_t(y) * upload.footprint.Footprint.RowPitch, from + y * sourcePitch, image->size.x, stored);
+
+        upload.image    = image;
+        upload.firstRow = firstRow;
+        upload.partial  = true;
+        std::lock_guard lock(d.uploadMutex);
+        if (!d.liveImages.contains(image))
+            return false;
+        d.imageUploads.push_back(std::move(upload));
+        return true;
     }
 
     void D3D12GraphicsContext::DestroyImageAtEnd(Image* img, DeviceScope scope, const std::source_location&)

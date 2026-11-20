@@ -89,11 +89,15 @@ namespace tachyon::sdlgpu
         }
         for (const TextureCopy& copy : textures)
         {
-            const SDL_GPUTextureTransferInfo from{ copy.staging, 0, copy.image->size.x, copy.image->size.y };
+            // A band of rows goes over those rows alone; SDL orders it after the draws before
+            // that read the texture.
+            const uint32_t rows = copy.rows != 0 ? copy.rows : copy.image->size.y;
+            const SDL_GPUTextureTransferInfo from{ copy.staging, 0, copy.image->size.x, rows };
             SDL_GPUTextureRegion to{};
             to.texture = copy.image->texture;
+            to.y       = copy.firstRow;
             to.w       = copy.image->size.x;
-            to.h       = copy.image->size.y;
+            to.h       = rows;
             to.d       = 1;
             SDL_UploadToGPUTexture(pass, &from, &to, false);
             SDL_ReleaseGPUTransferBuffer(device, copy.staging);   // freed once the copy is done

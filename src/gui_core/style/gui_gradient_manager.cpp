@@ -109,7 +109,7 @@ namespace tachyon
             page.rowsUsed = 0;
             page.smallRow = -1;
             page.smallCursor = 0;
-            page.modified = true;
+            page.MarkAll();
         }
 
         // Keep slot 0 reserved.
@@ -165,7 +165,7 @@ namespace tachyon
                 // Append transparent rows
                 page->data.resize(size_t(page->width) * size_t(newHeight), color4b{ 0, 0, 0, 0 });
                 page->height = newHeight;
-                page->modified = true;
+                page->resized = true;   // a bigger image
             }
             else
             {
@@ -183,7 +183,6 @@ namespace tachyon
 
         outPageIdx = pageIdx;
         outRow = page->rowsUsed++;
-        page->modified = true;
         return true;
     }
 
@@ -311,7 +310,7 @@ namespace tachyon
         Page& page = m_pages[s.page];
         color4b* dst = &page.data[size_t(s.row) * size_t(page.width) + size_t(s.col)];
         for (uint16_t i = 0; i < width; ++i) dst[i] = colors[i];
-        page.modified = true;
+        page.MarkRows(s.row, s.row);
 
         m_contentDedup[contentHash] = slotIdx;
         return GradientHandle::Make(slotIdx, s.generation);
@@ -344,7 +343,7 @@ namespace tachyon
         Page& page = m_pages[s.page];
         color4b* dst = &page.data[size_t(s.row) * size_t(page.width)];
         std::memcpy(dst, rowPixels.data(), sizeof(color4b) * m_width);
-        page.modified = true;
+        page.MarkRows(s.row, s.row);
 
         m_contentDedup[contentHash] = slotIdx;
         return GradientHandle::Make(slotIdx, s.generation);
@@ -556,7 +555,7 @@ namespace tachyon
     void GradientManager::MarkPageModified(uint32_t pageIndex) noexcept
     {
         if (pageIndex >= m_pages.size()) return;
-        m_pages[pageIndex].modified = true;
+        m_pages[pageIndex].MarkAll();
     }
 
     int32_t GradientManager::GetPagePhysicalImageIndex(uint32_t pageIndex) const noexcept
@@ -580,24 +579,31 @@ namespace tachyon
         if (pageIndex >= m_pages.size()) return nullptr;
         Page& page = m_pages[pageIndex];
 
-        // Re-upload / allocate on first use or if the CPU side changed.
-        if (page.modified || page.image == nullptr)
+        if (graphicsContext == nullptr)
+            return page.image;
+
+        // The rows written since go up into the image it has; one made again (first use, grown,
+        // or a backend that can't write part of one) takes the whole page.
+        bool remake = page.image == nullptr || page.resized;
+        if (!remake && page.HasDirtyRows())
         {
-            if (page.image != nullptr && graphicsContext != nullptr)
-            {
-                graphicsContext->DestroyImageAtEnd(page.image, tachyon::DeviceScope::Frame);
-                page.image = nullptr;
-            }
-            if (graphicsContext != nullptr)
-            {
-                page.image = graphicsContext->CreateImage(
-                    page.data.data(),
-                    uint2{ page.width, page.height },
-                    tachyon::ImageFormat::R8G8B8A8,
-                    tachyon::Sampler::NearestRepeat);
-            }
-            page.modified = false;
+            const uint32_t first = page.dirtyFirst;
+            const uint32_t count = page.dirtyLast - page.dirtyFirst + 1;
+            remake = !graphicsContext->UpdateImageRows(page.image, first, count,
+                                                       &page.data[size_t(first) * size_t(page.width)]);
         }
+        if (remake)
+        {
+            if (page.image != nullptr)
+                graphicsContext->DestroyImageAtEnd(page.image, tachyon::DeviceScope::Frame);
+            page.image = graphicsContext->CreateImage(
+                page.data.data(),
+                uint2{ page.width, page.height },
+                tachyon::ImageFormat::R8G8B8A8,
+                tachyon::Sampler::NearestRepeat);
+            page.resized = false;
+        }
+        page.ClearDirty();
         return page.image;
     }
 
