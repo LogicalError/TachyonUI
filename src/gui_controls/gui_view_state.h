@@ -21,9 +21,9 @@ namespace tachyon
     ///     panel.saveState    = [this] { return SaveViewState(graph); };
     ///     panel.restoreState = [this](std::string_view state) { RestoreViewState(graph, state); };
 
-    /// A node view's pan and zoom (NodeView::transform).
-    std::string SaveViewState(const NodeView& view);
-    bool        RestoreViewState(NodeView& view, std::string_view state);
+    /// A node view's pan and zoom (NodeViewState::transform).
+    std::string SaveViewState(const NodeViewState& view);
+    bool        RestoreViewState(NodeViewState& view, std::string_view state);
 
     /// The part of a timeline in view and its zoom slider.
     std::string SaveViewState(const TimelineView& view);

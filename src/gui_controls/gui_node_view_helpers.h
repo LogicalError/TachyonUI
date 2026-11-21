@@ -4,6 +4,7 @@
 
 #include <gui_core/gui_base_types.h>
 #include <gui_core/gui_id.h>
+#include <gui_core/gui_id_manager.h>
 
 #include <span>
 #include <unordered_map>
@@ -18,24 +19,28 @@ namespace tachyon
     class CustomDrawContext;
     struct LineStyle;
 
+    /// The element a view last built for the node, frame or transition `stableID` names: its
+    /// stable ID scoped to the view's canvas, so another view of the graph has its own.
+    inline ID NodeElementID(const NodeViewState& view, ID stableID) { return IDManager::ScopedID(view.canvasID, stableID); }
+
     /// The node view's zoom (1 = 100%).
-    float NodeViewZoom(const NodeView& view);
+    float NodeViewZoom(ConstNodeViewRef view);
     /// Zooms by `factor` around `pivot` (pixels from the canvas centre), within the view's
     /// minZoom..maxZoom.
-    void  ZoomNodeView(NodeView& view, float factor, int2 pivot = {});
+    void  ZoomNodeView(NodeViewRef view, float factor, int2 pivot = {});
     /// Centres the view on canvas point `center` at `zoom` (clamped to minZoom..maxZoom).
-    void  SetNodeViewCenter(NodeView& view, float2 center, float zoom);
+    void  SetNodeViewCenter(NodeViewRef view, float2 center, float zoom);
     /// Centres and zooms the view on all nodes.
-    void  FrameAllNodes(NodeView& view);
+    void  FrameAllNodes(NodeViewRef view);
     /// Centres and zooms the view on the nodes at `indices` (ones out of range skipped); none
     /// leaves the view as it is. Never past 100%, so a small group shows at its own size.
-    void  FrameNodes(NodeView& view, std::span<const int> indices);
+    void  FrameNodes(NodeViewRef view, std::span<const int> indices);
     /// Centres and zooms the view on the selected nodes, and in a state machine the states
     /// a selected transition joins; on all of them when none is selected (Home, the Fit button).
-    void  FrameSelectedNodes(NodeView& view);
+    void  FrameSelectedNodes(NodeViewRef view);
     /// Pans the view, at the same zoom, by as little as brings node `nodeIdx` inside it with
     /// `margin` pixels to spare; a node larger than the view shows its top-left.
-    void  ScrollNodeIntoView(NodeView& view, int nodeIdx, int32_t margin);
+    void  ScrollNodeIntoView(NodeViewRef view, int nodeIdx, int32_t margin);
 
     /// Infinite background dot grid for a pan/zoom canvas, drawn from a CustomDrawContext
     /// callback in the canvas's layout space (node.pos space): a dot on every grid point.
@@ -127,14 +132,14 @@ namespace tachyon
     // Edits: the node view makes its changes through these, so what it reports is what it did.
 
     /// Redoes `edit` (its `to` values), or with `undo` restores its `from` values.
-    void ApplyNodeViewEdit(NodeView& view, const NodeViewEdit& edit, bool undo = false);
-    /// Applies `edit` and reports it to view.onEdit.
-    void CommitNodeViewEdit(NodeView& view, const NodeViewEdit& edit);
+    void ApplyNodeViewEdit(NodeViewRef view, const NodeViewEdit& edit, bool undo = false);
+    /// Applies `edit` and reports it to view.graph.onEdit.
+    void CommitNodeViewEdit(NodeViewRef view, const NodeViewEdit& edit);
     /// An edit that wires `output` into `input`; the input's old wire goes, the output keeps
     /// its others.
-    NodeViewEdit ConnectEdit(const NodeView& view, PropertyEndpoint output, PropertyEndpoint input);
+    NodeViewEdit ConnectEdit(ConstNodeViewRef view, PropertyEndpoint output, PropertyEndpoint input);
     /// An edit that removes the wire into `input`, with its lane overrides.
-    NodeViewEdit DisconnectEdit(const NodeView& view, PropertyEndpoint input);
+    NodeViewEdit DisconnectEdit(ConstNodeViewRef view, PropertyEndpoint input);
     /// An edit that adds `node` at `index` (-1, or past the end: last), drawn in front of the
     /// others. The nodes from `index` on move up one, and the wires, lanes and z-order with
     /// them. Its own inputs name nodes as they're numbered once it's in. To wire it to
@@ -142,30 +147,30 @@ namespace tachyon
     ///
     ///     NodeViewEdit edit = AddNodeEdit(view, std::move(node));
     ///     edit.rewires.push_back({ .input = { added, 0 }, .from = {}, .to = output });
-    NodeViewEdit AddNodeEdit(const NodeView& view, NodeModel node, int index = -1);
+    NodeViewEdit AddNodeEdit(ConstNodeViewRef view, NodeModel node, int index = -1);
     /// An edit that removes the nodes at `indices` (in any order; ones out of range and
     /// repeats are skipped), with every wire into or out of them and those wires' lanes. The
     /// nodes after each move down, and the wires, lanes and z-order with them; undone, all of
     /// it comes back. A removed node's stableID is the host's to keep while the edit can be
     /// undone.
-    NodeViewEdit RemoveNodesEdit(const NodeView& view, std::span<const int> indices);
+    NodeViewEdit RemoveNodesEdit(ConstNodeViewRef view, std::span<const int> indices);
     /// An edit that puts a reroute (NodeModel::reroute) on the wire `wireKey` (the WireKey of
     /// its input): the wire then runs from its output into the new reroute, and on from it
     /// into the input. The reroute takes `stableID`, which the host keeps as for its other
     /// nodes, and `pos` (its square's top-left; a multiple of the grid puts the dot on a grid
     /// point). The wire's lane overrides go. Empty when there's no such wire.
-    NodeViewEdit RerouteWireEdit(const NodeView& view, uint32_t wireKey, ID stableID, int2 pos);
+    NodeViewEdit RerouteWireEdit(ConstNodeViewRef view, uint32_t wireKey, ID stableID, int2 pos);
     /// An edit that takes the reroute at `node` out, with its wire running on as it did
     /// through it: every input it fed then takes from the output that fed it (or nothing,
     /// when nothing did). The lanes of its wires go. Empty when `node` isn't a reroute.
-    NodeViewEdit RemoveRerouteEdit(const NodeView& view, int node);
+    NodeViewEdit RemoveRerouteEdit(ConstNodeViewRef view, int node);
     /// An edit that adds `frame` at `index` (-1, or past the end: last, in front of the other
     /// frames, still behind every node). The frames from `index` on move up one.
-    NodeViewEdit AddFrameEdit(const NodeView& view, NodeFrame frame, int index = -1);
+    NodeViewEdit AddFrameEdit(ConstNodeViewRef view, NodeFrame frame, int index = -1);
     /// An edit that removes the frames at `indices` (in any order; ones out of range and
     /// repeats are skipped). The nodes in them stay. A removed frame's stableID is the host's
     /// to keep while the edit can be undone.
-    NodeViewEdit RemoveFramesEdit(const NodeView& view, std::span<const int> indices);
+    NodeViewEdit RemoveFramesEdit(ConstNodeViewRef view, std::span<const int> indices);
     /// A frame round the nodes at `indices`, as the view last laid them out: a grid cell of
     /// room on each side, and the title bar above them. On the grid when snapToGrid is. Its
     /// stableID, title and color are the caller's to set. Empty (zero size) without nodes.
@@ -174,7 +179,7 @@ namespace tachyon
     ///     frame.stableID = idManager.CreateStaticID();
     ///     frame.title    = "Lighting";
     ///     CommitNodeViewEdit(view, AddFrameEdit(view, std::move(frame)));
-    NodeFrame FrameAroundNodes(const NodeView& view, std::span<const int> indices);
+    NodeFrame FrameAroundNodes(ConstNodeViewRef view, std::span<const int> indices);
     /// An edit that puts the selected nodes and frames in `frame`: its place and size are set
     /// round them as FrameAroundNodes sets them (a collapsed frame counts at its open size),
     /// and it goes behind the selected frames so they stay in front of it. Its stableID,
@@ -182,19 +187,19 @@ namespace tachyon
     ///
     ///     CommitNodeViewEdit(view, GroupSelectionEdit(view, NodeFrame{
     ///         .stableID = idManager.CreateStaticID(), .title = "Group" }));
-    NodeViewEdit GroupSelectionEdit(const NodeView& view, NodeFrame frame);
+    NodeViewEdit GroupSelectionEdit(ConstNodeViewRef view, NodeFrame frame);
     /// The nodes (indices) frame `frame` holds, which move with it: those lying wholly inside
     /// it as the view last laid them out, or, collapsed, those it held when it collapsed.
-    std::vector<int> NodesInFrame(const NodeView& view, int frame);
+    std::vector<int> NodesInFrame(ConstNodeViewRef view, int frame);
     /// An edit that collapses frame `frame` (or expands it), noting what it holds as it
     /// collapses (NodeFrame::members). Empty when it's that already, or there's no such frame.
-    NodeViewEdit CollapseFrameEdit(const NodeView& view, int frame, bool collapse);
+    NodeViewEdit CollapseFrameEdit(ConstNodeViewRef view, int frame, bool collapse);
     /// The frame whose title bar holds `canvasPos` (node.pos space), the frontmost when
     /// several do; -1 when none does.
-    int FrameTitleAtCanvasPos(const NodeView& view, float2 canvasPos);
+    int FrameTitleAtCanvasPos(ConstNodeViewRef view, float2 canvasPos);
     /// Starts renaming frame `frame` as a double-click on its title does: a field over the
     /// title bar, with the focus in it, from the next RenderNodeView. For a "Rename" menu item.
-    void RenameFrame(NodeView& view, int frame);
+    void RenameFrame(NodeViewRef view, int frame);
 
     /// @name State machines (NodeViewKind::StateMachine)
     ///@{
@@ -203,23 +208,23 @@ namespace tachyon
     ///
     ///     CommitNodeViewEdit(view, AddTransitionEdit(view, StateTransition{
     ///         .stableID = idManager.CreateStaticID(), .from = patrol, .to = chase, .label = "sees player" }));
-    NodeViewEdit AddTransitionEdit(const NodeView& view, StateTransition transition, int index = -1);
+    NodeViewEdit AddTransitionEdit(ConstNodeViewRef view, StateTransition transition, int index = -1);
     /// An edit that removes the transitions with these stableIDs (unknown ones are skipped).
-    NodeViewEdit RemoveTransitionsEdit(const NodeView& view, std::span<const ID> transitions);
+    NodeViewEdit RemoveTransitionsEdit(ConstNodeViewRef view, std::span<const ID> transitions);
     /// An edit that makes `state` (a stableID; Invalid: none) the initial state. Empty when it
     /// is already.
-    NodeViewEdit SetInitialStateEdit(const NodeView& view, ID state);
-    /// Index of the transition with `stableID` in view.transitions; -1 when there's none.
-    int TransitionIndex(const NodeView& view, ID stableID);
-    /// Index of the node with `stableID` in view.nodes; -1 when there's none.
-    int NodeIndex(const NodeView& view, ID stableID);
+    NodeViewEdit SetInitialStateEdit(ConstNodeViewRef view, ID state);
+    /// Index of the transition with `stableID` in view.graph.transitions; -1 when there's none.
+    int TransitionIndex(ConstNodeViewRef view, ID stableID);
+    /// Index of the node with `stableID` in view.graph.nodes; -1 when there's none.
+    int NodeIndex(ConstNodeViewRef view, ID stableID);
     /// Starts relabelling transition `transition` as a double-click on it does: a field on its
     /// arrow, with the focus in it, from the next RenderNodeView. For a "Rename" menu item.
-    void RenameTransition(NodeView& view, int transition);
+    void RenameTransition(NodeViewRef view, int transition);
     /// Starts a transition from state `node` without a drag: it follows the pointer until a
     /// click on a state (the same one too) adds it; a click elsewhere or Escape drops it. The
     /// state's menu offers it ("Add transition"); for a key or a menu of the app's.
-    void StartTransition(NodeView& view, int node);
+    void StartTransition(NodeViewRef view, int node);
 
     /// A transition's arrow, in node.pos space, between the states as last laid out.
     struct TransitionPath
@@ -233,15 +238,15 @@ namespace tachyon
     /// The arrow of `transition`: a straight line between the two states' edges, aimed from
     /// centre to centre; when the states are joined both ways, each arrow runs `gap` pixels to
     /// its own side, so the pair sits side by side. A loop rises `loopSize` above its state.
-    TransitionPath StateTransitionPath(const NodeView& view, const StateTransition& transition, int32_t gap, int32_t loopSize);
+    TransitionPath StateTransitionPath(ConstNodeViewRef view, const StateTransition& transition, int32_t gap, int32_t loopSize);
     /// Where the middle of a label `size` big goes on `path`: half way along it and beside it,
     /// `margin` clear of the line, on the arrow's right as it runs, so the two of a pair both
     /// ways sit on opposite sides; over the top of a loop.
     int2 TransitionLabelCentre(const TransitionPath& path, int2 size, int32_t margin);
     /// The transition whose arrow passes within `tolerance` of `canvasPos` (node.pos space),
-    /// the closest when several do, or whose label (view.transitionLabelBoxes) holds it; none
+    /// the closest when several do, or whose label (view.state.transitionLabelBoxes) holds it; none
     /// when there's no such transition.
-    std::optional<ID> TransitionAt(const NodeView& view, float2 canvasPos, float tolerance, int32_t gap, int32_t loopSize);
+    std::optional<ID> TransitionAt(ConstNodeViewRef view, float2 canvasPos, float tolerance, int32_t gap, int32_t loopSize);
     ///@}
 
     /// Default lane offsets (grid steps) for wires between the same two nodes, so their
@@ -252,7 +257,7 @@ namespace tachyon
     /// size, for the detour routes. Keyed by WireKey.
     /// A dragged wire (`pendingOut` -> `pendingIn`, both valid) counts as connected, under
     /// `pendingIn`'s key, replacing that input's wire.
-    std::unordered_map<uint32_t, WireLane> ComputeWireLaneOffsets(const NodeView& view,
+    std::unordered_map<uint32_t, WireLane> ComputeWireLaneOffsets(ConstNodeViewRef view,
                                                                   PropertyEndpoint pendingOut = {},
                                                                   PropertyEndpoint pendingIn  = {});
 
@@ -271,41 +276,41 @@ namespace tachyon
 
     /// Whether a wire from output `out` to input `in` is allowed: never a same-node loop,
     /// otherwise the view's canConnect delegate decides (none: allowed). Endpoints are
-    /// bounds-checked first, so the delegate can index view.nodes directly.
-    bool ConnectionAllowed(const NodeView& view, PropertyEndpoint out, PropertyEndpoint in);
+    /// bounds-checked first, so the delegate can index view.graph.nodes directly.
+    bool ConnectionAllowed(ConstNodeViewRef view, PropertyEndpoint out, PropertyEndpoint in);
 
     /// The first input of node `nodeIdx`, top to bottom, that a wire from `output` may
     /// connect to; invalid when there is none.
-    PropertyEndpoint FirstInputAccepting(const NodeView& view, PropertyEndpoint output, int nodeIdx);
+    PropertyEndpoint FirstInputAccepting(ConstNodeViewRef view, PropertyEndpoint output, int nodeIdx);
     /// The first output of node `nodeIdx`, top to bottom, that may feed `input`; invalid
     /// when there is none.
-    PropertyEndpoint FirstOutputAccepting(const NodeView& view, PropertyEndpoint input, int nodeIdx);
+    PropertyEndpoint FirstOutputAccepting(ConstNodeViewRef view, PropertyEndpoint input, int nodeIdx);
 
     /// The node whose {pos, lastSize} rect holds `canvasPos` (node.pos space), the frontmost
-    /// in view.ordering when several do; -1 when none does. Only nodes in view.ordering
+    /// in view.graph.ordering when several do; -1 when none does. Only nodes in view.graph.ordering
     /// count, as the view keeps it after each frame.
-    int NodeAtCanvasPos(const NodeView& view, float2 canvasPos);
+    int NodeAtCanvasPos(ConstNodeViewRef view, float2 canvasPos);
 
-    /// Wires `output` into `input` without reporting to view.onEdit. An input has one source,
+    /// Wires `output` into `input` without reporting to view.graph.onEdit. An input has one source,
     /// so its previous wire is replaced; the output keeps its others.
-    void ConnectSockets(NodeView& view, PropertyEndpoint output, PropertyEndpoint input);
+    void ConnectSockets(NodeViewRef view, PropertyEndpoint output, PropertyEndpoint input);
 
     /// Moves `n` to the front (last) of a z-order list, keeping the others' order.
     void BringNodeToFront(std::vector<int>& ordering, int n);
 
     /// A screen point in node.pos space, for a canvas whose padding box is
     /// `canvasInnerRectScreen` (screen pixels) and whose pan/zoom is `viewTransform`
-    /// (view.transform).
+    /// (view.state.transform).
     float2 NodeViewScreenToCanvas(const float3x2& viewTransform, IntRect canvasInnerRectScreen, int2 screen);
     /// A screen point (as events have them) in node.pos space, through the pan/zoom and
     /// place the view was last drawn with.
-    float2 NodeViewScreenToCanvas(const NodeView& view, int2 screen);
+    float2 NodeViewScreenToCanvas(ConstNodeViewRef view, int2 screen);
     /// A point in node.pos space on the screen, where the view last drew it: the other way
     /// round from NodeViewScreenToCanvas.
-    float2 NodeViewCanvasToScreen(const NodeView& view, float2 canvasPos);
+    float2 NodeViewCanvasToScreen(ConstNodeViewRef view, float2 canvasPos);
     /// A screen point in node.pos space, where the nodes' boxes are (NodeViewScreenToCanvas
     /// less the canvas's border and padding, as last laid out).
-    float2 NodeViewScreenToNodePos(const NodeView& view, int2 screen);
+    float2 NodeViewScreenToNodePos(ConstNodeViewRef view, int2 screen);
 
     /// Stable IDs of nodes whose {pos, lastSize} rect lies fully inside the marquee, compared
     /// in node.pos space (canvas inner-rect relative, before the content transform).

@@ -33,14 +33,14 @@ namespace
     TEST(NodeViewDrop, SkipsInputsTheViewRefuses)
     {
         NodeView view = MakeView();
-        view.canConnect = [](const NodeView&, PropertyEndpoint, PropertyEndpoint in) { return in.propIdx != 1; };
+        view.canConnect = [](const NodeGraph&, PropertyEndpoint, PropertyEndpoint in) { return in.propIdx != 1; };
         EXPECT_EQ(FirstInputAccepting(view, kOutput, 1), (PropertyEndpoint{ 1, 2 }));
     }
 
     TEST(NodeViewDrop, NothingWhenNoInputTakesIt)
     {
         NodeView view = MakeView();
-        view.canConnect = [](const NodeView&, PropertyEndpoint, PropertyEndpoint) { return false; };
+        view.canConnect = [](const NodeGraph&, PropertyEndpoint, PropertyEndpoint) { return false; };
         EXPECT_FALSE(FirstInputAccepting(view, kOutput, 1).valid());
     }
 
@@ -69,10 +69,10 @@ namespace
         constexpr PropertyEndpoint kInput{ 1, 1 };
         EXPECT_EQ(FirstOutputAccepting(view, kInput, 0), (PropertyEndpoint{ 0, 1 }));
 
-        view.canConnect = [](const NodeView&, PropertyEndpoint out, PropertyEndpoint) { return out.propIdx != 1; };
+        view.canConnect = [](const NodeGraph&, PropertyEndpoint out, PropertyEndpoint) { return out.propIdx != 1; };
         EXPECT_EQ(FirstOutputAccepting(view, kInput, 0), (PropertyEndpoint{ 0, 2 })) << "skips what the view refuses";
 
-        view.canConnect = [](const NodeView&, PropertyEndpoint, PropertyEndpoint) { return false; };
+        view.canConnect = [](const NodeGraph&, PropertyEndpoint, PropertyEndpoint) { return false; };
         EXPECT_FALSE(FirstOutputAccepting(view, kInput, 0).valid());
         view.canConnect = {};
         view.nodes[1].properties[0].output = true;

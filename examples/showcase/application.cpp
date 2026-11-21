@@ -154,10 +154,10 @@ namespace tachyon
         static const Category categories[] = {
             { "Generator", "--node-generator" }, { "Operator", "--accent" },
             { "Output",    "--node-output" },    { "Input",    "--node-input" } };
-        for (size_t i = 0; i < showcase.nodeView.nodes.size() && i < std::size(categories); ++i)
+        for (size_t i = 0; i < showcase.nodeGraph.nodes.size() && i < std::size(categories); ++i)
         {
-            showcase.nodeView.nodes[i].category      = categories[i].name;
-            showcase.nodeView.nodes[i].categoryColor = theme.GetColor(categories[i].color);
+            showcase.nodeGraph.nodes[i].category      = categories[i].name;
+            showcase.nodeGraph.nodes[i].categoryColor = theme.GetColor(categories[i].color);
         }
     }
 
@@ -188,7 +188,7 @@ namespace tachyon
 
         // Made on first use, so some may never have been.
         const auto release = [this](ID id) { if (id != ID::Invalid()) idManager.ReleaseStaticID(id); };
-        for (const NodeView* view : { &showcase.nodeView, &showcase.enemyMachine, &showcase.combatMachine })
+        for (const NodeGraph* view : { &showcase.nodeGraph, &showcase.enemyMachine, &showcase.combatMachine })
         {
             for (const NodeModel& node : view->nodes)                  release(node.stableID);
             for (const NodeFrame& frame : view->frames)                release(frame.stableID);
@@ -229,6 +229,130 @@ namespace tachyon
         GUIApplication::Cleanup();
     }
 
+    void Application::SetUpNodeGraphView(NodeViewState& view)
+    {
+        NodeViewState* const self = &view;
+        view.commandMode = nodeViewMode;
+        view.breadcrumb  = { "Graphs", "Terrain material" };
+
+        // A new wire dropped on the empty canvas: a reroute there, of the wire's kind, wired
+        // to where the wire came from. An app would offer the nodes it could take.
+        self->onWireDroppedOnCanvas = [this, self](PropertyEndpoint from, bool fromOutput, float2 at)
+        {
+            const NodeViewRef shown{ showcase.nodeGraph, *self };
+            // Added and wired in one step, so one undo takes both back.
+            NodeViewEdit edit = AddNodeEdit(shown, RerouteNode(at,
+                shown.graph.nodes[size_t(from.nodeIdx)].properties[size_t(from.propIdx)].socketColor));
+            const PropertyEndpoint added{ edit.nodes[0].index, 0 };
+            if (fromOutput)
+                edit.rewires.push_back({ .input = added, .from = {}, .to = from });
+            else
+                edit.rewires.push_back({ .input = from, .from = {}, .to = added });
+            CommitNodeViewEdit(shown, edit);
+        };
+
+        // The selection changing, as a properties panel would follow it.
+        self->onSelectionChanged = [this, self]
+        {
+            std::string titles;
+            for (const NodeModel& node : showcase.nodeGraph.nodes)
+                if (self->selectedNodeIDs.contains(node.stableID))
+                    titles += (titles.empty() ? "" : ", ") + node.title;
+            TACHYON_LOG_INFO(kLogShowcase, "Node selection: {}", titles.empty() ? std::string("none") : titles);
+        };
+
+        // Right-click menus: the canvas's adds a node where it was clicked; a node's
+        // collapses or removes the selection (the node is in it).
+        self->onCanvasContextMenu = [this, self](float2 at)
+        {
+            // A node of each kind, its top-left where the menu was opened.
+            if (BeginMenu("Add node"))
+            {
+                MenuItem("Value",  [this, self, at] { AddGraphNode(*self, GraphNodeKind::Value,  at); });
+                MenuItem("Math",   [this, self, at] { AddGraphNode(*self, GraphNodeKind::Math,   at); });
+                MenuItem("Noise",  [this, self, at] { AddGraphNode(*self, GraphNodeKind::Noise,  at); });
+                MenuItem("Switch", [this, self, at] { AddGraphNode(*self, GraphNodeKind::Switch, at); });
+            }
+            EndMenu();   // also while it's closed
+            MenuItem("Add Reroute here", [this, self, at] {
+                CommitNodeViewEdit({ showcase.nodeGraph, *self }, AddNodeEdit({ showcase.nodeGraph, *self }, RerouteNode(at, { 0.20f, 0.75f, 0.72f, 1.0f })));
+            });
+            MenuSeparator();
+            const bool selection = !self->selectedNodeIDs.empty();
+            MenuItem(selection ? "Frame selection" : "Frame all", [this, self] { FrameSelectedNodes({ showcase.nodeGraph, *self }); });
+            const bool curved = showcase.nodeGraph.wireShape == NodeWireShape::Curved;
+            MenuItem(curved ? "Show grid aligned wires" : "Show curved wires", [this, curved] {
+                showcase.nodeGraph.wireShape = curved ? NodeWireShape::Orthogonal : NodeWireShape::Curved;
+            });
+            // An empty frame where it was clicked, its title bar's left end there.
+            MenuItem("Add frame here", [this, self, at] {
+                const int g = std::max(1, theme.nodeGridSize);
+                CommitNodeViewEdit({ showcase.nodeGraph, *self }, AddFrameEdit({ showcase.nodeGraph, *self }, NodeFrame{
+                    .stableID = idManager.CreateStaticID(), .title = "Frame",
+                    .pos = { int32_t(at.x), int32_t(at.y) }, .size = { 24 * g, 14 * g } }));
+            });
+        };
+        // A frame's menu: rename it, tint it, or take it away (its nodes stay).
+        self->onFrameContextMenu = [this, self](int frame)
+        {
+            MenuItem("Rename", [this, self, frame] { RenameFrame({ showcase.nodeGraph, *self }, frame); });
+            const bool collapsed = showcase.nodeGraph.frames[size_t(frame)].collapsed;
+            MenuItem(collapsed ? "Expand" : "Collapse", [this, self, frame, collapsed] {
+                CommitNodeViewEdit({ showcase.nodeGraph, *self }, CollapseFrameEdit({ showcase.nodeGraph, *self }, frame, !collapsed));
+            });
+            if (BeginMenu("Color"))
+            {
+                struct Tint { const char* name; color4f color; };
+                static const Tint tints[] = {
+                    { "None",   {} },
+                    { "Blue",   { 0.42f, 0.61f, 1.00f, 1.0f } },
+                    { "Teal",   { 0.20f, 0.75f, 0.72f, 1.0f } },
+                    { "Orange", { 0.96f, 0.62f, 0.29f, 1.0f } },
+                    { "Violet", { 0.66f, 0.55f, 1.00f, 1.0f } },
+                    { "Pink",   { 0.96f, 0.45f, 0.71f, 1.0f } },
+                };
+                for (const Tint& tint : tints)
+                {
+                    const bool current = showcase.nodeGraph.frames[size_t(frame)].color == tint.color;
+                    if (current) BeginSelected();
+                    MenuItem(tint.name, [this, self, frame, color = tint.color] {
+                        const NodeViewRef shown{ showcase.nodeGraph, *self };
+                        NodeFrame tinted = shown.graph.frames[size_t(frame)];
+                        tinted.color = color;
+                        CommitNodeViewEdit(shown, NodeViewEdit{ .frameChanges = { { frame, shown.graph.frames[size_t(frame)], tinted } } });
+                    });
+                    if (current) EndSelected();
+                }
+            }
+            EndMenu();   // also while it's closed
+            MenuSeparator();
+            MenuItem({ showcase.deleteIcon, "Delete frame" }, [this, self, frame] {
+                const int only[] = { frame };
+                CommitNodeViewEdit({ showcase.nodeGraph, *self }, RemoveFramesEdit({ showcase.nodeGraph, *self }, only));
+            });
+        };
+        self->onNodeContextMenu = [this, self](int node)
+        {
+            // For the selection, which the node is in: collapse (or expand) it like this
+            // node, reroutes aside, or delete it, saying how much that is.
+            const bool collapse = !showcase.nodeGraph.nodes[size_t(node)].collapsed;
+            MenuItem(collapse ? "Collapse" : "Expand", [this, self, collapse] {
+                const NodeViewRef shown{ showcase.nodeGraph, *self };
+                NodeViewEdit edit;
+                for (int n = 0; n < int(shown.graph.nodes.size()); ++n)
+                    if (const NodeModel& other = shown.graph.nodes[size_t(n)];
+                        shown.state.selectedNodeIDs.contains(other.stableID) && !other.reroute && other.collapsed != collapse)
+                        edit.collapses.push_back({ n, other.collapsed, collapse });
+                CommitNodeViewEdit(shown, edit);
+            });
+            // A frame round the selection, the selected frames in it too.
+            MenuItem("Group selection", "Ctrl G", [this, self] { GroupSelection(*self); });
+            const size_t count = self->selectedNodeIDs.size();
+            const std::string deleteLabel = count > 1 ? std::format("Delete {} nodes", count) : std::string("Delete node");
+            MenuItem({ showcase.deleteIcon, deleteLabel }, "Delete", [this, self] { DeleteSelectedNodes(*self); });
+        };
+    }
+
     bool Application::InitializeShowcaseGUI()
     {
         showcase.windowLayoutID1 = idManager.CreateStaticID();
@@ -267,9 +391,9 @@ namespace tachyon
         nodeViewMode = commandManager.RegisterMode("NodeView");
         stateMachineMode = commandManager.RegisterMode("StateMachine");
         commandManager.RegisterCommand(stateMachineMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None,
-                                       [this]() { DeleteSelectedStates(); }, "Delete States");
+                                       [this]() { if (FocusedStateMachine()) DeleteSelectedStates(FocusedMachineView()); }, "Delete States");
         commandManager.RegisterCommand(stateMachineMode, showcase.frameSelectedIcon, tachyon::KeyCode::KeyF, tachyon::KeyModifier::None,
-                                       [this]() { FrameSelectedNodes(showcase.combatOpen ? showcase.combatMachine : showcase.enemyMachine); },
+                                       [this]() { if (FocusedStateMachine()) FrameSelectedNodes(FocusedMachineView()); },
                                        "Frame Selected");
         hierarchyMode = commandManager.RegisterMode("Hierarchy");
         hierarchyDelete = commandManager.RegisterCommand(hierarchyMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None,
@@ -281,7 +405,8 @@ namespace tachyon
             [this]()
             {
                 TACHYON_LOG_INFO(kLogShowcase, "Reset view");
-                showcase.nodeView.transform = tachyon::float3x2::Identity();
+                if (NodeViewState* view = FocusedGraphView())
+                    view->transform = tachyon::float3x2::Identity();
             },
             "Reset view"
         );
@@ -342,10 +467,10 @@ namespace tachyon
             "Pan View (hold)");
 
         // NodeView - graph navigation
-        commandManager.RegisterCommand(nodeViewMode, showcase.frameSelectedIcon, tachyon::KeyCode::KeyF,  tachyon::KeyModifier::None, [this]() { FrameSelectedNodes(showcase.nodeView); }, "Frame Selected");
+        commandManager.RegisterCommand(nodeViewMode, showcase.frameSelectedIcon, tachyon::KeyCode::KeyF,  tachyon::KeyModifier::None, [this]() { if (NodeViewState* view = FocusedGraphView()) FrameSelectedNodes({ showcase.nodeGraph, *view }); }, "Frame Selected");
         commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::KeyA,  tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Frame All"); }, "Frame All");
         commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::Space, tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Search Nodes"); }, "Search Nodes");
-        commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::KeyG,  tachyon::KeyModifier::Control, [this]() { GroupSelection(); }, "Group Selection");
+        commandManager.RegisterCommand(nodeViewMode,                         tachyon::KeyCode::KeyG,  tachyon::KeyModifier::Control, [this]() { if (NodeViewState* view = FocusedGraphView()) GroupSelection(*view); }, "Group Selection");
 
         // Sculpt - brush operations.
         commandManager.RegisterCommand(sculptMode,                  tachyon::KeyCode::LeftBracket,  tachyon::KeyModifier::None, []() { TACHYON_LOG_INFO(kLogShowcase, "Command: {}", "Decrease Brush Size"); }, "Decrease Brush Size");
@@ -357,8 +482,6 @@ namespace tachyon
         // Seed the showcase's node view. Each renderBody fills the row's middle slot;
         // sockets come from input/output presence.
         {
-            showcase.nodeView.commandMode = nodeViewMode;
-
             // Socket colours double as the connection type: canConnect below only
             // allows wires between same-coloured sockets.
             const tachyon::color4f kTeal  { 0.20f, 0.75f, 0.72f, 1.0f };
@@ -461,21 +584,20 @@ namespace tachyon
                 });
             }
 
-            showcase.nodeView.nodes.push_back(std::move(src));
-            showcase.nodeView.nodes.push_back(std::move(mix));
-            showcase.nodeView.nodes.push_back(std::move(out));
-            showcase.nodeView.nodes.push_back(std::move(tex));
+            showcase.nodeGraph.nodes.push_back(std::move(src));
+            showcase.nodeGraph.nodes.push_back(std::move(mix));
+            showcase.nodeGraph.nodes.push_back(std::move(out));
+            showcase.nodeGraph.nodes.push_back(std::move(tex));
 
             // Stable IDs keep per-node state keyed when view.ordering reshuffles.
-            for (auto& node : showcase.nodeView.nodes)
+            for (auto& node : showcase.nodeGraph.nodes)
                 node.stableID = idManager.CreateStaticID();
             ApplyNodeCategories();
-            showcase.nodeView.breadcrumb = { "Graphs", "Terrain material" };
 
             // Connection rule (delegate): only sockets of the same colour may
             // connect. Endpoints are bounds-checked before this is called.
-            showcase.nodeView.canConnect =
-                [](const NodeView& v, PropertyEndpoint o, PropertyEndpoint i)
+            showcase.nodeGraph.canConnect =
+                [](const NodeGraph& v, PropertyEndpoint o, PropertyEndpoint i)
                 {
                     return v.nodes[o.nodeIdx].properties[o.propIdx].socketColor
                          == v.nodes[i.nodeIdx].properties[i.propIdx].socketColor;
@@ -483,142 +605,25 @@ namespace tachyon
 
             // The view reports each edit once it is made; it goes on the app's undo history,
             // with the text edits.
-            showcase.nodeView.onEdit = [this](const NodeViewEdit& edit)
+            showcase.nodeGraph.onEdit = [this](const NodeViewEdit& edit)
             {
                 commandManager.History().Push({ .description = "Edit node graph",
-                    .undo = [this, edit] { ApplyNodeViewEdit(showcase.nodeView, edit, /*undo*/ true); },
-                    .redo = [this, edit] { ApplyNodeViewEdit(showcase.nodeView, edit, /*undo*/ false); } });
+                    .undo = [this, edit] { ApplyNodeViewEdit({ showcase.nodeGraph, showcase.noView }, edit, /*undo*/ true); },
+                    .redo = [this, edit] { ApplyNodeViewEdit({ showcase.nodeGraph, showcase.noView }, edit, /*undo*/ false); } });
                 commandManager.History().EndMerge();
-            };
-
-            // A new wire dropped on the empty canvas: a reroute there, of the wire's kind, wired
-            // to where the wire came from. An app would offer the nodes it could take.
-            showcase.nodeView.onWireDroppedOnCanvas = [this](PropertyEndpoint from, bool fromOutput, float2 at)
-            {
-                NodeView& view = showcase.nodeView;
-                // Added and wired in one step, so one undo takes both back.
-                NodeViewEdit edit = AddNodeEdit(view, RerouteNode(at,
-                    view.nodes[size_t(from.nodeIdx)].properties[size_t(from.propIdx)].socketColor));
-                const PropertyEndpoint added{ edit.nodes[0].index, 0 };
-                if (fromOutput)
-                    edit.rewires.push_back({ .input = added, .from = {}, .to = from });
-                else
-                    edit.rewires.push_back({ .input = from, .from = {}, .to = added });
-                CommitNodeViewEdit(view, edit);
-            };
-
-            // The selection changing, as a properties panel would follow it.
-            showcase.nodeView.onSelectionChanged = [this]
-            {
-                std::string titles;
-                for (const NodeModel& node : showcase.nodeView.nodes)
-                    if (showcase.nodeView.selectedNodeIDs.contains(node.stableID))
-                        titles += (titles.empty() ? "" : ", ") + node.title;
-                TACHYON_LOG_INFO(kLogShowcase, "Node selection: {}", titles.empty() ? std::string("none") : titles);
-            };
-
-            // Right-click menus: the canvas's adds a node where it was clicked; a node's
-            // collapses or removes the selection (the node is in it).
-            showcase.nodeView.onCanvasContextMenu = [this](float2 at)
-            {
-                // A node of each kind, its top-left where the menu was opened.
-                if (BeginMenu("Add node"))
-                {
-                    MenuItem("Value",  [this, at] { AddGraphNode(GraphNodeKind::Value,  at); });
-                    MenuItem("Math",   [this, at] { AddGraphNode(GraphNodeKind::Math,   at); });
-                    MenuItem("Noise",  [this, at] { AddGraphNode(GraphNodeKind::Noise,  at); });
-                    MenuItem("Switch", [this, at] { AddGraphNode(GraphNodeKind::Switch, at); });
-                }
-                EndMenu();   // also while it's closed
-                MenuItem("Add Reroute here", [this, at] {
-                    CommitNodeViewEdit(showcase.nodeView, AddNodeEdit(showcase.nodeView, RerouteNode(at, { 0.20f, 0.75f, 0.72f, 1.0f })));
-                });
-                MenuSeparator();
-                const bool selection = !showcase.nodeView.selectedNodeIDs.empty();
-                MenuItem(selection ? "Frame selection" : "Frame all", [this] { FrameSelectedNodes(showcase.nodeView); });
-                const bool curved = showcase.nodeView.wireShape == NodeWireShape::Curved;
-                MenuItem(curved ? "Show grid aligned wires" : "Show curved wires", [this, curved] {
-                    showcase.nodeView.wireShape = curved ? NodeWireShape::Orthogonal : NodeWireShape::Curved;
-                });
-                // An empty frame where it was clicked, its title bar's left end there.
-                MenuItem("Add frame here", [this, at] {
-                    const int g = std::max(1, theme.nodeGridSize);
-                    CommitNodeViewEdit(showcase.nodeView, AddFrameEdit(showcase.nodeView, NodeFrame{
-                        .stableID = idManager.CreateStaticID(), .title = "Frame",
-                        .pos = { int32_t(at.x), int32_t(at.y) }, .size = { 24 * g, 14 * g } }));
-                });
-            };
-            // A frame's menu: rename it, tint it, or take it away (its nodes stay).
-            showcase.nodeView.onFrameContextMenu = [this](int frame)
-            {
-                MenuItem("Rename", [this, frame] { RenameFrame(showcase.nodeView, frame); });
-                const bool collapsed = showcase.nodeView.frames[size_t(frame)].collapsed;
-                MenuItem(collapsed ? "Expand" : "Collapse", [this, frame, collapsed] {
-                    CommitNodeViewEdit(showcase.nodeView, CollapseFrameEdit(showcase.nodeView, frame, !collapsed));
-                });
-                if (BeginMenu("Color"))
-                {
-                    struct Tint { const char* name; color4f color; };
-                    static const Tint tints[] = {
-                        { "None",   {} },
-                        { "Blue",   { 0.42f, 0.61f, 1.00f, 1.0f } },
-                        { "Teal",   { 0.20f, 0.75f, 0.72f, 1.0f } },
-                        { "Orange", { 0.96f, 0.62f, 0.29f, 1.0f } },
-                        { "Violet", { 0.66f, 0.55f, 1.00f, 1.0f } },
-                        { "Pink",   { 0.96f, 0.45f, 0.71f, 1.0f } },
-                    };
-                    for (const Tint& tint : tints)
-                    {
-                        const bool current = showcase.nodeView.frames[size_t(frame)].color == tint.color;
-                        if (current) BeginSelected();
-                        MenuItem(tint.name, [this, frame, color = tint.color] {
-                            NodeView& view = showcase.nodeView;
-                            NodeFrame tinted = view.frames[size_t(frame)];
-                            tinted.color = color;
-                            CommitNodeViewEdit(view, NodeViewEdit{ .frameChanges = { { frame, view.frames[size_t(frame)], tinted } } });
-                        });
-                        if (current) EndSelected();
-                    }
-                }
-                EndMenu();   // also while it's closed
-                MenuSeparator();
-                MenuItem({ showcase.deleteIcon, "Delete frame" }, [this, frame] {
-                    const int only[] = { frame };
-                    CommitNodeViewEdit(showcase.nodeView, RemoveFramesEdit(showcase.nodeView, only));
-                });
-            };
-            showcase.nodeView.onNodeContextMenu = [this](int node)
-            {
-                // For the selection, which the node is in: collapse (or expand) it like this
-                // node, reroutes aside, or delete it, saying how much that is.
-                const bool collapse = !showcase.nodeView.nodes[size_t(node)].collapsed;
-                MenuItem(collapse ? "Collapse" : "Expand", [this, collapse] {
-                    NodeView& view = showcase.nodeView;
-                    NodeViewEdit edit;
-                    for (int n = 0; n < int(view.nodes.size()); ++n)
-                        if (const NodeModel& other = view.nodes[size_t(n)];
-                            view.selectedNodeIDs.contains(other.stableID) && !other.reroute && other.collapsed != collapse)
-                            edit.collapses.push_back({ n, other.collapsed, collapse });
-                    CommitNodeViewEdit(view, edit);
-                });
-                // A frame round the selection, the selected frames in it too.
-                MenuItem("Group selection", "Ctrl G", [this] { GroupSelection(); });
-                const size_t count = showcase.nodeView.selectedNodeIDs.size();
-                const std::string deleteLabel = count > 1 ? std::format("Delete {} nodes", count) : std::string("Delete node");
-                MenuItem({ showcase.deleteIcon, deleteLabel }, "Delete", [this] { DeleteSelectedNodes(); });
             };
 
             // Delete removes the selected nodes, their wires with them, as one edit. Their IDs
             // stay taken while the edit can be undone (Cleanup releases the ones still shown).
             commandManager.RegisterCommand(nodeViewMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None,
-                                           [this]() { DeleteSelectedNodes(); }, "Delete Nodes");
+                                           [this]() { if (NodeViewState* view = FocusedGraphView()) DeleteSelectedNodes(*view); }, "Delete Nodes");
 
             // One initial connection: Source.Name (0,0) output -> Mix.Strength (1,0) input,
             // through a reroute between them.
-            showcase.nodeView.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
-            const NodeViewEdit reroute = RerouteWireEdit(showcase.nodeView, WireKey(1, 0), idManager.CreateStaticID(),
+            showcase.nodeGraph.nodes[1].properties[0].input = PropertyEndpoint{ 0, 0 };
+            const NodeViewEdit reroute = RerouteWireEdit({ showcase.nodeGraph, showcase.noView }, WireKey(1, 0), idManager.CreateStaticID(),
                                                          { styleManager.Px(-120), styleManager.Px(-180) });
-            ApplyNodeViewEdit(showcase.nodeView, reroute);
+            ApplyNodeViewEdit({ showcase.nodeGraph, showcase.noView }, reroute);
         }
 
         return true;
@@ -1596,32 +1601,8 @@ namespace tachyon
         };
         if (title == "Viewport")
             return CreateViewportPanel(panels, name);
-        if (title == "NodeView")
-            return keepView(CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderNodeViewPanel(); }), showcase.nodeView);
-        if (title == "StateMachine")
-        {
-            // Both machines' views, and which one is open.
-            const ID id = CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderStateMachinePanel(); });
-            panels[id].saveState = [this] {
-                JsonValue state = JsonValue::MakeObject();
-                state.Set("enemy", SaveViewState(showcase.enemyMachine));
-                state.Set("combat", SaveViewState(showcase.combatMachine));
-                state.Set("combatOpen", showcase.combatOpen);
-                return state.Write();
-            };
-            panels[id].restoreState = [this](std::string_view text) {
-                const Result<JsonValue> state = JsonValue::Parse(text);
-                if (!state || !state->IsObject())
-                    return;
-                if (const JsonValue* enemy = state->Find("enemy"); enemy && enemy->IsString())
-                    (void)RestoreViewState(showcase.enemyMachine, enemy->AsString());
-                if (const JsonValue* combat = state->Find("combat"); combat && combat->IsString())
-                    (void)RestoreViewState(showcase.combatMachine, combat->AsString());
-                if (const JsonValue* open = state->Find("combatOpen"); open && open->IsBool())
-                    showcase.combatOpen = open->AsBool();
-            };
-            return id;
-        }
+        if (title == "NodeView")     return CreateNodeGraphPanel(panels, name);
+        if (title == "StateMachine") return CreateStateMachinePanel(panels, name);
         if (title == "BoxTest")   return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderBoxTestPanel(); });
         if (title == "Inspector") return CreateInspectorPanel(panels, name);
         if (title == "Hierarchy") return CreateHierarchyPanel(panels, name);

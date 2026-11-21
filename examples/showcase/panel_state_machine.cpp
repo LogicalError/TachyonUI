@@ -1,6 +1,8 @@
 #include "application.h"
 
-#include <gui_controls/gui_node_view_helpers.h>   // AddTransitionEdit, SetInitialStateEdit, ...
+#include <gui_controls/gui_node_view_helpers.h>
+#include <gui_controls/gui_view_state.h>
+#include <gui_core/gui_json.h>   // AddTransitionEdit, SetInitialStateEdit, ...
 
 #include <algorithm>
 #include <chrono>
@@ -20,7 +22,7 @@ namespace tachyon
         {
             return NodeModel{ .stableID = ids.CreateStaticID(), .title = std::move(title), .pos = pos, .subMachine = subMachine };
         }
-        ID Join(IDManager& ids, NodeView& view, int from, int to, std::string label)
+        ID Join(IDManager& ids, NodeGraph& view, int from, int to, std::string label)
         {
             const ID id = ids.CreateStaticID();
             view.transitions.push_back({ .stableID = id, .from = view.nodes[size_t(from)].stableID,
@@ -42,8 +44,8 @@ namespace tachyon
             { "Sleep", "--state-indigo" }, { "Patrol", "--state-teal" }, { "Chase", "--state-amber" },
             { "Hurt", "--state-red" },     { "Combat", "--state-violet" },
             { "Attack", "--state-red" },   { "Block", "--state-indigo" }, { "Dodge", "--state-teal" } };
-        for (NodeView* view : { &showcase.enemyMachine, &showcase.combatMachine })
-            for (NodeModel& state : view->nodes)
+        for (NodeGraph* machine : { &showcase.enemyMachine, &showcase.combatMachine })
+            for (NodeModel& state : machine->nodes)
                 for (const StateColor& c : colors)
                     if (state.title == c.title)
                         state.categoryColor = theme.GetColor(c.color);
@@ -53,9 +55,8 @@ namespace tachyon
     {
         // The enemy: asleep until it hears something, then patrols, chases what it sees, and
         // fights once it's close; hurt from patrolling or chasing, it goes back to chasing.
-        NodeView& enemy = showcase.enemyMachine;
+        NodeGraph& enemy = showcase.enemyMachine;
         enemy.kind = NodeViewKind::StateMachine;
-        enemy.showMinimap = false;
         enemy.nodes = {
             State(idManager, "Sleep",  { -320, -140 }),
             State(idManager, "Patrol", { 80, -140 }),
@@ -78,9 +79,8 @@ namespace tachyon
         enemy.activeState  = enemy.initialState;
 
         // Combat, inside: attack, block, dodge, round and round.
-        NodeView& combat = showcase.combatMachine;
+        NodeGraph& combat = showcase.combatMachine;
         combat.kind = NodeViewKind::StateMachine;
-        combat.showMinimap = false;
         combat.nodes = {
             State(idManager, "Attack", { -200, -100 }),
             State(idManager, "Block",  { 160, -100 }),
@@ -96,67 +96,125 @@ namespace tachyon
         ApplyStateColors();
         showcase.stateEnteredAt[0] = showcase.stateEnteredAt[1] = Now();
 
-        for (NodeView* view : { &enemy, &combat })
-        {
-            view->commandMode = stateMachineMode;
-            // Each edit on the app's undo history, as the node graph's are.
-            view->onEdit = [this, view](const NodeViewEdit& edit)
+        // Each edit on the app's undo history, as the node graph's are.
+        for (NodeGraph* machine : { &enemy, &combat })
+            machine->onEdit = [this, machine](const NodeViewEdit& edit)
             {
                 commandManager.History().Push({ .description = "Edit state machine",
-                    .undo = [view, edit] { ApplyNodeViewEdit(*view, edit, /*undo*/ true); },
-                    .redo = [view, edit] { ApplyNodeViewEdit(*view, edit, /*undo*/ false); } });
+                    .undo = [this, machine, edit] { ApplyNodeViewEdit({ *machine, showcase.noView }, edit, /*undo*/ true); },
+                    .redo = [this, machine, edit] { ApplyNodeViewEdit({ *machine, showcase.noView }, edit, /*undo*/ false); } });
                 commandManager.History().EndMerge();
             };
-            // A state where the right click was.
-            view->onCanvasContextMenu = [this, view](float2 at)
-            {
-                MenuItem("Add state", [this, view, at] {
-                    NodeModel state = State(idManager, "State", { int32_t(at.x), int32_t(at.y) });
-                    CommitNodeViewEdit(*view, AddNodeEdit(*view, std::move(state)));
-                });
-            };
-            // The state's: start here, or go.
-            view->onNodeContextMenu = [this, view](int node)
-            {
-                const ID id = view->nodes[size_t(node)].stableID;
-                if (id != view->initialState)
-                    MenuItem("Set as initial state", [view, id] { CommitNodeViewEdit(*view, SetInitialStateEdit(*view, id)); });
-                MenuItem({ showcase.deleteIcon, "Delete state" }, "Delete", [this] { DeleteSelectedStates(); });
-            };
-        }
-        // Into Combat, and back out by the toolbar's breadcrumb.
-        enemy.onOpenState = [this](int node)
-        {
-            if (showcase.enemyMachine.nodes[size_t(node)].title == "Combat")
-                showcase.combatOpen = true;
-        };
     }
 
-    void Application::RenderStateMachinePanel()
+    // A StateMachine panel's own: its views of the two machines, and which one it shows.
+    struct StateMachinePanel
+    {
+        NodeViewState enemy, combat;
+        bool          combatOpen = false;   // Combat's machine is the one shown
+    };
+
+    ID Application::CreateStateMachinePanel(std::unordered_map<ID, Panel>& panels, std::string title)
     {
         if (!showcase.stateMachinesSeeded)
         {
             SeedStateMachines();
             showcase.stateMachinesSeeded = true;
         }
-        NodeView& view = showcase.combatOpen ? showcase.combatMachine : showcase.enemyMachine;
-        double& enteredAt = showcase.stateEnteredAt[showcase.combatOpen ? 1 : 0];
+        auto panel = std::make_shared<StateMachinePanel>();
+        StateMachinePanel* const self = panel.get();
+        for (NodeGraph* machine : { &showcase.enemyMachine, &showcase.combatMachine })
+        {
+            NodeViewState* const view = machine == &showcase.enemyMachine ? &self->enemy : &self->combat;
+            view->commandMode = stateMachineMode;
+            view->showMinimap = false;
+            // A state where the right click was.
+            view->onCanvasContextMenu = [this, machine, view](float2 at)
+            {
+                MenuItem("Add state", [this, machine, view, at] {
+                    NodeModel state = State(idManager, "State", { int32_t(at.x), int32_t(at.y) });
+                    CommitNodeViewEdit({ *machine, *view }, AddNodeEdit({ *machine, *view }, std::move(state)));
+                });
+            };
+            // The state's: start here, or go.
+            view->onNodeContextMenu = [this, machine, view](int node)
+            {
+                const ID id = machine->nodes[size_t(node)].stableID;
+                if (id != machine->initialState)
+                    MenuItem("Set as initial state", [machine, view, id] { CommitNodeViewEdit({ *machine, *view }, SetInitialStateEdit({ *machine, *view }, id)); });
+                MenuItem({ showcase.deleteIcon, "Delete state" }, "Delete", [this, machine, view] { DeleteSelectedStates({ *machine, *view }); });
+            };
+        }
+        // Into Combat, and back out by the toolbar's breadcrumb.
+        self->enemy.onOpenState = [this, self](int node)
+        {
+            if (showcase.enemyMachine.nodes[size_t(node)].title == "Combat")
+                self->combatOpen = true;
+        };
+        std::erase_if(m_stateMachinePanels, [](const auto& p) { return p.expired(); });   // closed ones
+        m_stateMachinePanels.push_back(panel);
+
+        const ID id = CreatePanel(panels, std::move(title), showcase.panelNodeViewIcon, [this, panel] { RenderStateMachinePanel(*panel); });
+        // Both machines' views, and which one is open, kept with the layout.
+        panels[id].saveState = [panel] {
+            JsonValue state = JsonValue::MakeObject();
+            state.Set("enemy", SaveViewState(panel->enemy));
+            state.Set("combat", SaveViewState(panel->combat));
+            state.Set("combatOpen", panel->combatOpen);
+            return state.Write();
+        };
+        panels[id].restoreState = [panel](std::string_view text) {
+            const Result<JsonValue> state = JsonValue::Parse(text);
+            if (!state || !state->IsObject())
+                return;
+            if (const JsonValue* enemy = state->Find("enemy"); enemy && enemy->IsString())
+                (void)RestoreViewState(panel->enemy, enemy->AsString());
+            if (const JsonValue* combat = state->Find("combat"); combat && combat->IsString())
+                (void)RestoreViewState(panel->combat, combat->AsString());
+            if (const JsonValue* open = state->Find("combatOpen"); open && open->IsBool())
+                panel->combatOpen = open->AsBool();
+        };
+        return id;
+    }
+
+    StateMachinePanel* Application::FocusedStateMachine()
+    {
+        const auto& interaction = guiStateManager.Interaction();
+        for (const std::weak_ptr<StateMachinePanel>& weak : m_stateMachinePanels)
+            if (const std::shared_ptr<StateMachinePanel> panel = weak.lock();
+                panel && interaction.IsFocusWithin((panel->combatOpen ? panel->combat : panel->enemy).canvasID))
+                return panel.get();
+        return nullptr;
+    }
+
+    NodeViewRef Application::FocusedMachineView()
+    {
+        StateMachinePanel& panel = *FocusedStateMachine();
+        return panel.combatOpen ? NodeViewRef{ showcase.combatMachine, panel.combat } : NodeViewRef{ showcase.enemyMachine, panel.enemy };
+    }
+
+    void Application::RenderStateMachinePanel(StateMachinePanel& panel)
+    {
+        const NodeViewRef view = panel.combatOpen ? NodeViewRef{ showcase.combatMachine, panel.combat }
+                                                  : NodeViewRef{ showcase.enemyMachine, panel.enemy };
+        NodeGraph& machine = view.graph;
+        double& enteredAt = showcase.stateEnteredAt[panel.combatOpen ? 1 : 0];
         BeginVertical(theme.emptyVertStyleRef, LayoutOverride{}.FlexGrow(1));
 
         // The toolbar: Step and Restart, where the machine is, and whether it's running.
         BeginHorizontal(idManager.AllocateDynamicID("state-machine-toolbar"), stateMachineToolbarStyleRef, LayoutOverride::Auto().NoShrink());
         // Step: the machine takes the next transition out of the state it's in, in turn.
-        Button(idManager.AllocateDynamicID("state-machine-step"), { showcase.stepIcon, "Step" }, [this, &view, &enteredAt] {
+        Button(idManager.AllocateDynamicID("state-machine-step"), { showcase.stepIcon, "Step" }, [this, &machine, &enteredAt] {
             std::vector<const StateTransition*> out;
-            for (const StateTransition& t : view.transitions)
-                if (t.from == view.activeState) out.push_back(&t);
+            for (const StateTransition& t : machine.transitions)
+                if (t.from == machine.activeState) out.push_back(&t);
             if (out.empty()) return;
-            view.activeState = out[showcase.stateMachineSteps++ % out.size()]->to;
+            machine.activeState = out[showcase.stateMachineSteps++ % out.size()]->to;
             enteredAt = Now();
         }, stateMachineButtonStyleRef);
         SetTooltip("Take the next transition out of the current state");
-        Button(idManager.AllocateDynamicID("state-machine-restart"), { showcase.restartIcon, "Restart" }, [&view, &enteredAt] {
-            view.activeState = view.initialState;
+        Button(idManager.AllocateDynamicID("state-machine-restart"), { showcase.restartIcon, "Restart" }, [&machine, &enteredAt] {
+            machine.activeState = machine.initialState;
             enteredAt = Now();
         }, stateMachineButtonStyleRef);
         SetTooltip("Back to the initial state");
@@ -165,11 +223,11 @@ namespace tachyon
         static const std::string enemyPath[]  = { "Enemy" };
         static const std::string combatPath[] = { "Enemy", "Combat" };
         Breadcrumb(idManager.AllocateDynamicID("state-machine-breadcrumb"),
-                   showcase.combatOpen ? std::span<const std::string>(combatPath) : std::span<const std::string>(enemyPath),
-                   [this](int segment) { if (segment == 0) showcase.combatOpen = false; });
+                   panel.combatOpen ? std::span<const std::string>(combatPath) : std::span<const std::string>(enemyPath),
+                   [&panel](int segment) { if (segment == 0) panel.combatOpen = false; });
         RegisterElement(Element{ .id = idManager.AllocateDynamicID("state-machine-spacer"), .styleRef = theme.emptyHorzStyleRef,
                                  .flags = ElementFlags::NoInput }, LayoutOverride{}.FlexGrow(1));
-        const bool running = view.activeState != ID::Invalid();
+        const bool running = machine.activeState != ID::Invalid();
         if (running)
             RegisterElement(Element{ .id = idManager.AllocateDynamicID("state-machine-dot"), .styleRef = statusDotOkStyleRef,
                                      .flags = ElementFlags::NoInput }, LayoutOverride{});
@@ -177,36 +235,36 @@ namespace tachyon
         EndHorizontal();
 
         // The time in the current state, counting while it's shown.
-        view.activeStateTime = running ? float(Now() - enteredAt) : -1.0f;
+        machine.activeStateTime = running ? float(Now() - enteredAt) : -1.0f;
         if (running)
             RequestRedrawIn(0.1f);
         RenderNodeView(view);
         EndVertical();
     }
 
-    void Application::DeleteSelectedStates()
+    void Application::DeleteSelectedStates(NodeViewRef view)
     {
         // The selected states, their transitions with them, and the selected transitions, as
         // one edit.
-        NodeView& view = showcase.combatOpen ? showcase.combatMachine : showcase.enemyMachine;
         std::vector<int> selected;
-        for (int n = 0; n < (int)view.nodes.size(); ++n)
-            if (view.selectedNodeIDs.contains(view.nodes[size_t(n)].stableID))
+        for (int n = 0; n < (int)view.graph.nodes.size(); ++n)
+            if (view.state.selectedNodeIDs.contains(view.graph.nodes[size_t(n)].stableID))
                 selected.push_back(n);
         NodeViewEdit edit = RemoveNodesEdit(view, selected);
         // The selected transitions not already going with their states.
         std::vector<ID> transitions;
-        for (const ID id : view.selectedTransitionIDs)
+        for (const ID id : view.state.selectedTransitionIDs)
             if (std::none_of(edit.transitions.begin(), edit.transitions.end(),
                              [id](const NodeViewEdit::Transition& t) { return t.transition.stableID == id; }))
                 transitions.push_back(id);
         // Applied after the states are gone: by then each one's index is as it is without them.
-        NodeView after = view;
-        ApplyNodeViewEdit(after, edit);
-        const NodeViewEdit removed = RemoveTransitionsEdit(after, transitions);
+        NodeGraph     afterGraph = view.graph;
+        NodeViewState afterView  = view.state;
+        ApplyNodeViewEdit({ afterGraph, afterView }, edit);
+        const NodeViewEdit removed = RemoveTransitionsEdit({ afterGraph, afterView }, transitions);
         edit.transitions.insert(edit.transitions.end(), removed.transitions.begin(), removed.transitions.end());
-        if (view.selectedNodeIDs.contains(view.activeState))
-            view.activeState = ID::Invalid();
+        if (view.state.selectedNodeIDs.contains(view.graph.activeState))
+            view.graph.activeState = ID::Invalid();
         CommitNodeViewEdit(view, edit);
     }
 }

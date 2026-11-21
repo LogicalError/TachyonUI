@@ -316,7 +316,7 @@ namespace tachyon
         {
             const ID t = Transition(sleep, patrol, "noise");
             Settle();
-            const IntRect before = app.GetElementRect(sleep);
+            const IntRect before = app.GetElementRect(NodeElementID(view, sleep));
             ASSERT_EQ(view.transitionLabelBoxes.size(), 1u);
             const IntRect chip = view.transitionLabelBoxes[0].second;
             Single();
@@ -327,7 +327,7 @@ namespace tachyon
             app.ClickAt(PathMiddle(t));
             Settle();
             ASSERT_EQ(view.renamingTransition, std::optional<ID>{ t });
-            EXPECT_EQ(app.GetElementRect(sleep), before) << "the field taking the focus scrolls nothing";
+            EXPECT_EQ(app.GetElementRect(NodeElementID(view, sleep)), before) << "the field taking the focus scrolls nothing";
             int fields = 0;
             for (uint32_t d = 0; d < app.elementStorage.NumberOfDepthLevels(); d++)
                 for (uint32_t i = 0; i < app.elementStorage.DepthSizeOf(d); i++)
@@ -346,7 +346,7 @@ namespace tachyon
             Settle();
             EXPECT_FALSE(view.renamingTransition);
             EXPECT_EQ(view.transitions[0].label, "noise heard");
-            EXPECT_EQ(app.GetElementRect(sleep), before) << "the states stay where their arrows are";
+            EXPECT_EQ(app.GetElementRect(NodeElementID(view, sleep)), before) << "the states stay where their arrows are";
             ASSERT_EQ(edits.size(), 1u);
             ASSERT_EQ(edits[0].transitionChanges.size(), 1u);
             EXPECT_EQ(edits[0].transitionChanges[0].from.label, "noise");
@@ -361,7 +361,7 @@ namespace tachyon
             ASSERT_EQ(view.transitions.size(), 1u);
             const ID t = view.transitions[0].stableID;
             Settle();
-            const IntRect before = app.GetElementRect(sleep);
+            const IntRect before = app.GetElementRect(NodeElementID(view, sleep));
             RenameTransition(view, 0);
             Settle();
             ASSERT_EQ(view.renamingTransition, std::optional<ID>{ t });
@@ -369,12 +369,12 @@ namespace tachyon
             {
                 app.InjectText(text);
                 Frame();
-                EXPECT_EQ(app.GetElementRect(sleep), before) << "after typing \"" << text << "\"";
+                EXPECT_EQ(app.GetElementRect(NodeElementID(view, sleep)), before) << "after typing \"" << text << "\"";
             }
             Key(KeyCode::Return);
             Settle();
             EXPECT_EQ(view.transitions[0].label, "hit by the player");
-            EXPECT_EQ(app.GetElementRect(sleep), before);
+            EXPECT_EQ(app.GetElementRect(NodeElementID(view, sleep)), before);
         }
 
         // The canvas never scrolls: its nodes go where its pan and zoom put them, as its arrows
@@ -382,7 +382,7 @@ namespace tachyon
         TEST_F(NodeViewStateMachineTest, TheCanvasNeverScrolls)
         {
             Settle();
-            const IntRect before = app.GetElementRect(sleep);
+            const IntRect before = app.GetElementRect(NodeElementID(view, sleep));
             ID canvas = ID::Invalid();
             for (uint32_t d = 0; d < app.elementStorage.NumberOfDepthLevels() && canvas == ID::Invalid(); d++)
                 for (uint32_t i = 0; i < app.elementStorage.DepthSizeOf(d); i++)
@@ -393,7 +393,7 @@ namespace tachyon
             auto& scrolling = app.guiStateManager.GetScrollManagement();
             scrolling.SetScrollOffset(scrolling.GetOrCreateScrollOffsetHandle(canvas), int2{ -180, -15 });
             Frame();
-            EXPECT_EQ(app.GetElementRect(sleep), before);
+            EXPECT_EQ(app.GetElementRect(NodeElementID(view, sleep)), before);
             EXPECT_EQ(scrolling.GetScrollOffset(scrolling.GetOrCreateScrollOffsetHandle(canvas)), (int2{ 0, 0 }));
         }
 
@@ -572,7 +572,7 @@ namespace tachyon
                         marks.push_back(app.elementStorage.GetElementRectUnsafe(ref).rect);
                 }
             ASSERT_EQ(marks.size(), 1u) << "Patrol's only";
-            const IntRect state = app.GetElementRect(patrol);
+            const IntRect state = app.GetElementRect(NodeElementID(view, patrol));
             const IntRect name = app.GetElementRect(app.FindByText("Patrol"));
             EXPECT_GT(marks[0].w, 0);
             EXPECT_GE(marks[0].x, name.x + name.w) << "after its name";

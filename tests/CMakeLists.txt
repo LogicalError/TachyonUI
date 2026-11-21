@@ -127,6 +127,7 @@ list(APPEND GUI_CORE_TEST_FILES
   color_field_test.cpp
   controls_docking_test.cpp
   controls_documents_test.cpp
+  node_view_two_views_test.cpp
   controls_notifications_test.cpp
   skribidi_shaping_test.cpp
   font_set_test.cpp

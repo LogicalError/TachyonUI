@@ -1,6 +1,7 @@
 #include "application.h"
 
 #include <gui_controls/gui_node_view_helpers.h>   // AddNodeEdit, RemoveNodesEdit, GridLineNearest
+#include <gui_controls/gui_view_state.h>
 
 #include <algorithm>
 #include <span>
@@ -15,12 +16,43 @@
 namespace tachyon
 {
 
-    void Application::RenderNodeViewPanel()
+    // A NodeView panel's own view of the showcase's graph: its pan and zoom, selection and menus.
+    struct NodeGraphPanel
+    {
+        NodeViewState view;
+    };
+
+    ID Application::CreateNodeGraphPanel(std::unordered_map<ID, Panel>& panels, std::string title)
+    {
+        auto panel = std::make_shared<NodeGraphPanel>();
+        SetUpNodeGraphView(panel->view);
+        std::erase_if(m_nodeGraphPanels, [](const auto& p) { return p.expired(); });   // closed ones
+        m_nodeGraphPanels.push_back(panel);
+        const ID id = CreatePanel(panels, std::move(title), showcase.panelNodeViewIcon, [this, panel] { RenderNodeViewPanel(*panel); });
+        // Its pan and zoom, kept with the layout.
+        panels[id].saveState    = [panel] { return SaveViewState(panel->view); };
+        panels[id].restoreState = [panel](std::string_view state) { (void)RestoreViewState(panel->view, state); };
+        // Built again when the graph changes in another view of it.
+        panels[id].cacheSignature = [this]() -> std::optional<uint64_t> { return showcase.nodeGraph.revision; };
+        return id;
+    }
+
+    NodeViewState* Application::FocusedGraphView()
+    {
+        for (const std::weak_ptr<NodeGraphPanel>& weak : m_nodeGraphPanels)
+            if (const std::shared_ptr<NodeGraphPanel> panel = weak.lock();
+                panel && guiStateManager.Interaction().IsFocusWithin(panel->view.canvasID))
+                return &panel->view;
+        return nullptr;
+    }
+
+    void Application::RenderNodeViewPanel(NodeGraphPanel& panel)
     {
         // The "Inputs" frame round Source and Texture, once their sizes are known. Not an edit:
         // it's where the graph starts, not something to undo.
-        NodeView& view = showcase.nodeView;
-        if (!showcase.nodeFramesSeeded && view.nodes.size() >= 4 && view.nodes[0].lastSize.x > 0 && view.nodes[3].lastSize.x > 0)
+        const NodeViewRef view{ showcase.nodeGraph, panel.view };
+        NodeGraph& graph = showcase.nodeGraph;
+        if (!showcase.nodeFramesSeeded && graph.nodes.size() >= 4 && graph.nodes[0].lastSize.x > 0 && graph.nodes[3].lastSize.x > 0)
         {
             const int inputs[] = { 0, 3 };
             NodeFrame frame = FrameAroundNodes(view, inputs);
@@ -33,7 +65,7 @@ namespace tachyon
         RenderNodeView(view);
     }
 
-    void Application::AddGraphNode(GraphNodeKind kind, float2 at)
+    void Application::AddGraphNode(NodeViewState& view, GraphNodeKind kind, float2 at)
     {
         // The graph's socket colors double as its types (canConnect lets only the same color
         // connect): teal for colors and images, amber for numbers, purple for switches.
@@ -101,19 +133,20 @@ namespace tachyon
         // left unset, which shows the accent.
         if (node.category == "Input")   node.categoryColor = theme.GetColor("--node-input");
         if (node.category == "Texture") node.categoryColor = theme.GetColor("--node-generator");
-        CommitNodeViewEdit(showcase.nodeView, AddNodeEdit(showcase.nodeView, std::move(node)));
+        const NodeViewRef shown{ showcase.nodeGraph, view };
+        CommitNodeViewEdit(shown, AddNodeEdit(shown, std::move(node)));
     }
 
-    void Application::GroupSelection()
+    void Application::GroupSelection(NodeViewState& view)
     {
-        NodeView& view = showcase.nodeView;
         if (view.selectedNodeIDs.empty() && view.selectedFrameIDs.empty())
             return;
         const ID group = idManager.CreateStaticID();
-        const NodeViewEdit edit = GroupSelectionEdit(view, NodeFrame{ .stableID = group, .title = "Group" });
+        const NodeViewRef shown{ showcase.nodeGraph, view };
+        const NodeViewEdit edit = GroupSelectionEdit(shown, NodeFrame{ .stableID = group, .title = "Group" });
         if (edit.frames.empty())
             return;
-        CommitNodeViewEdit(view, edit);
+        CommitNodeViewEdit(shown, edit);
         // The new frame selected, so Ctrl+G again puts it in another.
         view.selectedNodeIDs.clear();
         view.selectedFrameIDs = { group };
@@ -132,16 +165,16 @@ namespace tachyon
         return reroute;
     }
 
-    void Application::DeleteSelectedNodes()
+    void Application::DeleteSelectedNodes(NodeViewState& state)
     {
-        NodeView& view = showcase.nodeView;
+        const NodeViewRef view{ showcase.nodeGraph, state };
         std::vector<int> selected;
-        for (int n = 0; n < int(view.nodes.size()); ++n)
-            if (view.selectedNodeIDs.contains(view.nodes[size_t(n)].stableID))
+        for (int n = 0; n < int(view.graph.nodes.size()); ++n)
+            if (view.state.selectedNodeIDs.contains(view.graph.nodes[size_t(n)].stableID))
                 selected.push_back(n);
         std::vector<int> frames;
-        for (int f = 0; f < int(view.frames.size()); ++f)
-            if (view.selectedFrameIDs.contains(view.frames[size_t(f)].stableID))
+        for (int f = 0; f < int(view.graph.frames.size()); ++f)
+            if (view.state.selectedFrameIDs.contains(view.graph.frames[size_t(f)].stableID))
                 frames.push_back(f);
         // One edit, so one undo puts both back.
         NodeViewEdit edit = RemoveNodesEdit(view, selected);

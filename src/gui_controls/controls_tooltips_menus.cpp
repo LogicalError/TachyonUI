@@ -155,7 +155,7 @@ namespace tachyon
         CloseTooltip();
     }
 
-    void GUIApplication::ShowPinTooltip(const NodeView& view, ID socketID, PropertyEndpoint pin, bool isOutput)
+    void GUIApplication::ShowPinTooltip(const NodeGraph& view, ID socketID, PropertyEndpoint pin, bool isOutput)
     {
         const NodeProperty& prop = view.nodes[size_t(pin.nodeIdx)].properties[size_t(pin.propIdx)];
         if ((prop.name.empty() && prop.type.empty() && !prop.value) || !OpenTooltip(socketID, TooltipBox::Lines))
