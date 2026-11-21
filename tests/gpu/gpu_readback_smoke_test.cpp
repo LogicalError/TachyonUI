@@ -1650,11 +1650,21 @@ namespace
             GTEST_SKIP() << "no Vulkan device available";
         RegisterColorStyles();
 
+        // The worker held up for a while. Then runs its job at once when the worker is idle,
+        // and a fast machine may finish the copy before Then is called: the hold-up counts only
+        // when it ran on the worker, so it's queued again until it does.
         std::vector<std::byte> scratch(8 * 1024 * 1024), source(scratch.size(), std::byte(1));
         tachyon::vulkan::UploadWorker& uploads = vk->deviceContext.Uploads();
-        uploads.Copy(scratch.data(), source.data(), source.size());
-        uploads.Then([] { std::this_thread::sleep_for(std::chrono::milliseconds(300)); });
-        ASSERT_TRUE(uploads.Busy());
+        const std::thread::id self = std::this_thread::get_id();
+        for (int tries = 0; tries < 100 && !uploads.Busy(); ++tries)
+        {
+            uploads.Copy(scratch.data(), source.data(), source.size());
+            uploads.Then([self] {
+                if (std::this_thread::get_id() != self)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            });
+        }
+        ASSERT_TRUE(uploads.Busy()) << "test setup: the worker is held up";
 
         RenderFrame(ctx, [&](tachyon::GUIRenderer* r) {
             for (int i = 0; i < 2000; ++i)   // more than is copied inline
