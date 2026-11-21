@@ -276,7 +276,7 @@ namespace tachyon
 
     color4f GUITheme::GetColor(std::string_view varName, color4f fallback) const
     {
-        const auto it = m_paletteColors.find(std::string(varName));
+        const auto it = m_paletteColors.find(varName);
         return it != m_paletteColors.end() ? it->second : fallback;
     }
 

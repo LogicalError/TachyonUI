@@ -45,8 +45,11 @@ namespace tachyon
     {
         // No per-frame reset here (it's in OnPreConstruct): a group may be entered several
         // times per frame (e.g. once per row), and a reset would drop an earlier hover.
-        const auto it = m_states.try_emplace(id, State{ .labelWidth = defaultWidth, .defaultWidth = defaultWidth,
-                                                        .minWidth = minWidth, .maxWidth = maxWidth, .resizable = resizable }).first;
+        // Found first: try_emplace would make the State argument (and what it holds) each call.
+        auto it = m_states.find(id);
+        if (it == m_states.end())
+            it = m_states.emplace(id, State{ .labelWidth = defaultWidth, .defaultWidth = defaultWidth,
+                                             .minWidth = minWidth, .maxWidth = maxWidth, .resizable = resizable }).first;
         it->second.resizable = resizable;
         if (it->second.lastUsedFrame != m_frame)
         {

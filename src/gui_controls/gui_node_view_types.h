@@ -2,6 +2,7 @@
 
 #include <gui_core/gui_base_types.h>     // int2, float3x2, color4f
 #include <gui_core/gui_id.h>
+#include <gui_core/elements/gui_element.h>               // ElementRef
 #include <gui_core/input/gui_command_manager.h>          // CommandMode
 #include <gui_core/input/gui_gesture.h>
 #include <gui_core/graphics/gui_custom_draw_context.h>   // VisualColorStyleIndex
@@ -10,6 +11,7 @@
 
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -315,6 +317,27 @@ namespace tachyon
         std::vector<std::pair<int, tachyon::int2>> nodes;
     };
 
+    /// Internal: a list per node, all in one array, refilled each frame in the storage it has.
+    template <class T>
+    struct NodeLists
+    {
+        std::vector<T>        items;
+        std::vector<uint32_t> first{ 0 };   ///< node n's are items[first[n] .. first[n + 1])
+
+        size_t             size() const                  { return first.size() - 1; }
+        std::span<T>       operator[](size_t n)          { return { items.data() + first[n], first[n + 1] - first[n] }; }
+        std::span<const T> operator[](size_t n) const    { return { items.data() + first[n], first[n + 1] - first[n] }; }
+    };
+
+    /// Internal: a socket of a node hidden in a collapsed frame, on that frame's box edge.
+    struct NodeHiddenPort
+    {
+        int  node   = -1;
+        int  prop   = -1;
+        bool output = false;
+        int  row    = 0;   ///< the box's row it's on
+    };
+
     /// All state of one node-view widget; no global state.
     /// commandMode is active while the view has focus, for per-view shortcuts.
     struct NodeView
@@ -464,6 +487,23 @@ namespace tachyon
         /// Internal: each frame's box as last drawn, by index (node.pos space): a collapsed one's
         /// node-like box, an empty rect for one hidden in a collapsed frame.
         std::vector<tachyon::IntRect> frameBoxes;
+        /// @name Internal: a frame's working lists, kept for their storage
+        ///@{
+        /// Each node's socket elements, [propIdx * 2 + isOutput], as last built: the wire pass
+        /// reads them later in the frame.
+        NodeLists<tachyon::ElementRef>  socketRefs;
+        std::vector<tachyon::ElementRef> nodeRefs;          ///< each node's element, as last built
+        std::vector<uint32_t>           drivenOutputs;      ///< the wired outputs' WireKeys, sorted
+        std::vector<int>                nodeHiddenBy;       ///< the collapsed frame hiding each node, or -1
+        std::vector<tachyon::IntRect>   hiddenBox;          ///< that frame's box, for a hidden node with crossing wires
+        NodeLists<NodeHiddenPort>       hiddenPorts;        ///< a hidden node's sockets on that box
+        /// Each collapsed frame's rows: the inputs wired from outside it, and the outputs inside
+        /// it feeding a node outside.
+        std::vector<std::vector<PropertyEndpoint>> framePortsIn, framePortsOut;
+        std::vector<std::pair<tachyon::ID, int>> nodesByID; ///< (stableID, index), sorted: a collapsed frame's members
+        std::vector<std::pair<tachyon::ID, int>> framesByID;
+        std::string                     portText;           ///< a collapsed frame's port name, as built
+        ///@}
         /// Internal: the view dragged (middle, or Alt + left); once dragged, not a click. The
         /// transform before it, put back by Escape.
         tachyon::Gesture<tachyon::float3x2> pan;
