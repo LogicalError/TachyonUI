@@ -666,6 +666,7 @@ namespace tachyon
 
     bool GUIApplication::BeginDockingFrame()
     {
+        m_closedPanels.clear();   // the last frame that could point into them is drawn
         m_dockingLayoutsThisFrame.clear();
         m_toolbarDocksThisFrame.clear();
         if (!m_reorderable->Drag().IsPressed())
@@ -960,15 +961,22 @@ namespace tachyon
         if (it == layout.panels.end()) return;
         if (it->second.internal.enabled && it->second.onDisable) it->second.onDisable();
         if (it->second.internal.ownsID) idManager.ReleaseStaticID(panelID);
+        // Out of the layout now; destroyed when the next frame starts. Closed while input is
+        // handled, this frame's drawing, recorded after, may still point into what it holds
+        // (a viewport's scene, a custom draw).
+        m_closedPanels.push_back(std::move(it->second));
         layout.panels.erase(it);
     }
 
     void GUIApplication::ErasePanels(DockingLayout& layout)
     {
         DisableAllPanels(layout);
-        for (const auto& [id, panel] : layout.panels)
+        for (auto& [id, panel] : layout.panels)
+        {
             if (panel.internal.ownsID)
                 idManager.ReleaseStaticID(id);
+            m_closedPanels.push_back(std::move(panel));   // as ClosePanel: gone next frame
+        }
         layout.panels.clear();
     }
 

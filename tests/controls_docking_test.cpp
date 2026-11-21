@@ -499,5 +499,47 @@ namespace tachyon
             EXPECT_EQ(right->panelIds.back(), added);
             EXPECT_EQ(right->selectedTab, 2) << "the new tab shows";
         }
+
+        // A panel closed while input is handled (its tab's Ctrl+W, its menu's Close, a button
+        // in it) is out of the layout at once, but what it holds lives until the next frame
+        // starts: what this frame queued to draw may still point into it.
+        TEST(PanelCloseTest, AClosedPanelLivesUntilTheNextFrame)
+        {
+            HeadlessGUIApp app;
+            ASSERT_TRUE(app.Initialize());
+            DockingLayout layout;
+            const ID container = app.idManager.CreateStaticID(), closeButton = app.idManager.CreateStaticID();
+            auto held = std::make_shared<int>(0);
+            const std::weak_ptr<int> watch = held;
+            ID closing = ID::Invalid();
+            closing = app.CreatePanel(layout.panels, "Closing", IconID::Invalid, [&app, &layout, &closing, closeButton, held] {
+                app.Button(closeButton, "Close", [&app, &layout, &closing] { app.ClosePanel(layout, closing); });
+            });
+            layout.panels[closing].cacheSignature = [] { return std::optional<uint64_t>{}; };   // built each frame
+            const ID other = app.CreatePanel(layout.panels, "Other", IconID::Invalid, [] {});
+            layout.root = MakeSplit(DockSplitMode::LeftPinned, 400, MakeLeaf({ closing }), MakeLeaf({ other }));
+            held.reset();
+            auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.BeginDockingContainer(container, &layout, LayoutOverride{}.Size(800, 600));
+                    app.EndDockingContainer();
+                    app.EndRootWindow();
+                });
+            };
+
+            frame();
+            const int2 at = app.CenterOf(closeButton);
+            app.InjectMouseMove(at);
+            frame();
+            app.ClickAt(at);
+            frame();   // closed by the click, during this frame's input
+            EXPECT_FALSE(layout.panels.contains(closing)) << "out of the layout at once";
+            EXPECT_FALSE(app.idManager.IsStaticIDValid(closing)) << "its ID given back";
+            EXPECT_FALSE(watch.expired()) << "what it holds lives through the frame it was closed in";
+            frame();
+            EXPECT_TRUE(watch.expired()) << "and goes when the next one starts";
+            app.Cleanup();
+        }
     } // namespace
 }

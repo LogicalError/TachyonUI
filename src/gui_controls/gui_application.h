@@ -371,8 +371,9 @@ namespace tachyon
         /// Closes the panel at `tabIndex` of a docked leaf, as the tab's Close action does.
         void CloseDockedPanel(DockingLayout& layout, DockNode& leaf, int tabIndex);
         /// Closes a panel of `layout` for good, wherever it is: out of its tree (its leaf
-        /// closing up when it empties), hidden first (onDisable) if it's shown, and destroyed,
-        /// its ID back when CreatePanel made it.
+        /// closing up when it empties), hidden first (onDisable) if it's shown, its ID back when
+        /// CreatePanel made it. Its callbacks, and what they hold, are destroyed when the next
+        /// frame starts, so it can be called from an input handler.
         void ClosePanel(DockingLayout& layout, ID panelID);
 
         /// Adds a document at the end of `set`, with new static IDs and an empty layout, which
@@ -3070,6 +3071,8 @@ namespace tachyon
         /// Docking layouts emitted this frame (cleared at frame start); used by
         /// SyncDockingScrollOffsets and cross-dock drop hit-testing.
         std::vector<DockingLayout*> m_dockingLayoutsThisFrame{};
+        /// Panels closed this frame, kept until the next one starts (ClosePanel).
+        std::vector<Panel> m_closedPanels;
 
         /// Toolbar docks emitted this frame, walked by SyncToolbarDockRects (type in controls_toolbar_dock.h).
         std::vector<struct ToolbarDockState*> m_toolbarDocksThisFrame{};

@@ -460,6 +460,7 @@ namespace tachyon
             release(retired.id);
         m_retiredWindows.clear();
         menuManager.ReleaseWindowIDs(idManager);
+        m_closedPanels.clear();   // what they hold goes before the graphics it may use
     }
 
     void GUIApplication::Cleanup()
