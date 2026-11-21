@@ -16,9 +16,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <functional>
 #include <vector>
 #include <stdint.h>
 #include <type_traits>
+#include <utility>
 
 namespace tachyon
 {
@@ -127,8 +130,34 @@ namespace tachyon
     EventHandler MakeGroupLabelHandler(GUIStateManager& guiStateManager, const ElementStorage& elementStorage, LabelGroupVisualState groupVisual);
     EventHandler MakeGroupDraggableLabelHandler(GUIStateManager& guiStateManager, const ElementStorage& elementStorage, LabelGroupVisualState groupVisual);
 
-    /// Button handler: a left click, or an activation key while focused, calls `onClick`.
-    EventHandler MakeButtonHandler(GUIStateManager& guiStateManager, std::function<void()> onClick);
+    /// A button's handling of `event`: true when it activates the button (a left press, or an
+    /// activation key while focused), after taking the focus and showing the press.
+    bool ButtonActivated(GUIStateManager& guiStateManager, const ElementEvent& event);
+
+    /// Button handler: a left click, or an activation key while focused, calls `onClick` (a
+    /// null one is nothing). The callable is kept in the handler as it is, so a small one
+    /// fits in it without an allocation.
+    template <class OnClick>
+    EventHandler MakeButtonHandler(GUIStateManager& guiStateManager, OnClick&& onClick)
+    {
+        return [&guiStateManager, onClick = std::decay_t<OnClick>(std::forward<OnClick>(onClick))](ElementEvent&& event) -> bool
+        {
+            if (!ButtonActivated(guiStateManager, event))
+                return false;
+            if constexpr (std::is_constructible_v<bool, const std::decay_t<OnClick>&>)
+            {
+                if (static_cast<bool>(onClick))
+                    onClick();
+            }
+            else
+                onClick();
+            return true;
+        };
+    }
+    inline EventHandler MakeButtonHandler(GUIStateManager& guiStateManager, std::nullptr_t)
+    {
+        return MakeButtonHandler(guiStateManager, std::function<void()>{});
+    }
 
     /// Wheel handler that scrolls the element's own scroll offset by `wheelStep` pixels per
     /// notch (StyleManager::Px(kWheelScrollStep)).

@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include "gpu/allocation_count.h"
 #include "headless_gui_app.h"
 #include "skribidi_test_fixture.h"
 
@@ -74,6 +75,33 @@ namespace
         HeadlessGUIApp app;
         Gradient       gradient;
     };
+
+    // A gradient field whose gradient didn't change draws its bar from what it built before:
+    // more fields cost no more allocations a frame.
+    TEST_F(GradientEditorDialog, MoreUnchangedFieldsCostNoMoreAllocationsAFrame)
+    {
+        if (!AllocationCount::ScopedAllocationCount::Supported())
+            GTEST_SKIP() << "allocations are counted in Debug builds with MSVC's CRT";
+        std::vector<Gradient> gradients(8, gradient);
+        const auto allocationsAFrame = [&](int count) {
+            const auto frame = [&] {
+                app.Frame([&] {
+                    app.BeginRootWindow({ 1200, 900 });
+                    for (int i = 0; i < count; ++i)
+                        app.GradientField(gradients[size_t(i)], LayoutOverride{}.Width(300));
+                    app.EndRootWindow();
+                });
+            };
+            for (int i = 0; i < 4; ++i)
+                frame();
+            AllocationCount::ScopedAllocationCount allocations;
+            frame();
+            return allocations.Count();
+        };
+        const uint64_t fewer = allocationsAFrame(4);
+        const uint64_t more  = allocationsAFrame(8);
+        EXPECT_EQ(more, fewer) << "allocations that grow with the fields";
+    }
 
     TEST_F(GradientEditorDialog, TheFieldOpensIt)
     {

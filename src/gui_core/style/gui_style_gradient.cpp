@@ -242,10 +242,16 @@ void GradientF::WriteTo(std::span<color4b> out) const
 GradientF GradientF::From(const Gradient& gradient)
 {
     GradientF out;
-    out.colorSpace = gradient.colorSpace;
-    for (uint8_t i = 0; i < gradient.StopCount(); ++i)
-        out.stops.push_back(GradientStop{ gradient.stops[i].GetOffset(), gradient.stops[i].GetColor4f(), StopInterpolation::Linear });
+    out.Assign(gradient);
     return out;
+}
+
+void GradientF::Assign(const Gradient& gradient)
+{
+    colorSpace = gradient.colorSpace;
+    stops.clear();
+    for (uint8_t i = 0; i < gradient.StopCount(); ++i)
+        stops.push_back(GradientStop{ gradient.stops[i].GetOffset(), gradient.stops[i].GetColor4f(), StopInterpolation::Linear });
 }
 
 Gradient GradientF::ToGradient() const

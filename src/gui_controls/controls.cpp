@@ -14,7 +14,6 @@ namespace tachyon
     // ---------------------------------------------------------------------------
 
     tachyon::EventHandler GUIApplication::MakeToggleHandler(bool& toggle) { return tachyon::MakeButtonHandler(guiStateManager, [&toggle]() { toggle = !toggle; }); }
-    tachyon::EventHandler GUIApplication::MakeButtonHandler(std::function<void()> onClick) { return tachyon::MakeButtonHandler(guiStateManager, onClick); }
     tachyon::EventHandler GUIApplication::MakeLabelHandler() { return tachyon::MakeLabelHandler(guiStateManager, elementStorage); }
 
 
@@ -892,12 +891,17 @@ namespace tachyon
 
     std::string GUIApplication::PendingLabelText() const
     {
+        return std::string(PendingLabelTextView());
+    }
+
+    std::string_view GUIApplication::PendingLabelTextView() const
+    {
         const ID labelID = guiStateManager.Labels().GetPendingLabelID();
         if (labelID == ID::Invalid()) return {};
         const ElementRef ref = elementStorage.FindElementRefByID(labelID);
         if (!ref.IsValid()) return {};
         const TextID textID = elementStorage.GetElementUnsafe(ref).textID;
-        return textID != TextID::Invalid ? std::string(textSystem->GetText(textID)) : std::string{};
+        return textID != TextID::Invalid ? textSystem->GetText(textID) : std::string_view{};
     }
 
     bool GUIApplication::Checkbox(ID id, bool value, std::string_view text, std::function<void(bool)> onToggle, StyleRef style, LayoutOverride&& constraints)

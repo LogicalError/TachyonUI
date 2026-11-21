@@ -221,7 +221,7 @@ namespace tachyon
         if (group) style = m_buttonGroup->NextItemStyleRef(*group);
         // Hovered and focused as a button is, but a click does nothing.
         const ElementRef ref = RegisterControl(
-            Element{ .id = id, .eventHandler = MakeButtonHandler({}), .styleRef = style, .flags = ElementFlags::Animated },
+            Element{ .id = id, .eventHandler = MakeButtonHandler(nullptr), .styleRef = style, .flags = ElementFlags::Animated },
             [this, icon, text](Element& element) {
                 return textSystem->RegisterText(element.id, icon, text, element.styleRef, element.state);
             },
