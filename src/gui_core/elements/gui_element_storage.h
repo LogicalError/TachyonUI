@@ -270,12 +270,15 @@ namespace tachyon
             return true;
         }
 
+        /// The custom draws of `elementRef`, or null when it has none (most elements).
         inline const ElementCustomDraw* GetCustomDraw(const ElementRef& elementRef) const
         {
             if (!IsValidRef(elementRef)) return nullptr;
-            const auto& cd = m_depths[elementRef.depth].elementCustomDraws[elementRef.index];
-            return (cd.callback || cd.afterHead != UINT32_MAX) ? &cd : nullptr;
+            const uint32_t index = m_depths[elementRef.depth].customDraws[elementRef.index];
+            return index != kNoCustomDraw ? &m_customDraws[index] : nullptr;
         }
+        /// How many elements have custom draws: the table holds those alone.
+        inline size_t CustomDrawCount() const { return m_customDraws.size(); }
 
         /// Fired in registration order between layout and rendering.
         struct PostLayoutEntry
@@ -285,9 +288,11 @@ namespace tachyon
         };
         inline const std::vector<PostLayoutEntry>& GetPostLayoutEntries() const { return m_postLayoutEntries; }
 
-        inline ElementCustomDraw& GetElementCustomDrawUnsafe(const ElementRef& elementRef)
+        /// As GetCustomDraw, for a valid ref, to fill in: null when it has none.
+        inline ElementCustomDraw* FindCustomDrawUnsafe(const ElementRef& elementRef)
         {
-            return m_depths[elementRef.depth].elementCustomDraws[elementRef.index];
+            const uint32_t index = m_depths[elementRef.depth].customDraws[elementRef.index];
+            return index != kNoCustomDraw ? &m_customDraws[index] : nullptr;
         }
 
         inline PostDrawEntry& GetPostDrawEntryUnsafe(uint32_t index)
@@ -437,7 +442,9 @@ namespace tachyon
         {
             std::vector<Element> elements;
             std::vector<ElementRect> elementRects;
-            std::vector<ElementCustomDraw> elementCustomDraws;
+            /// Each element's entry in m_customDraws, or kNoCustomDraw: a few elements have one,
+            /// so the draws are kept apart and each element holds just this.
+            std::vector<uint32_t> customDraws;
             std::vector<HierarchyInfo> hierarchy;
 
             inline uint32_t Size() const { return static_cast<uint32_t>(elements.size()); }
@@ -457,13 +464,18 @@ namespace tachyon
                 uint32_t index = Size();
                 elements.push_back(std::move(element));
                 elementRects.push_back(std::move(elementRect));
-                elementCustomDraws.push_back({});
+                customDraws.push_back(kNoCustomDraw);
                 hierarchy.push_back(HierarchyInfo::Initialize(parentIndex));
                 return index;
             }
         };
 
         std::vector<DepthLevel> m_depths;
+        static constexpr uint32_t kNoCustomDraw = UINT32_MAX;
+        /// The custom draws of the elements that have them, in the order they got them.
+        std::vector<ElementCustomDraw> m_customDraws;
+        /// `ref`'s custom draws, made the first time it gets one.
+        ElementCustomDraw& CustomDrawFor(const ElementRef& ref);
 
         struct ParentStackEntry
         {

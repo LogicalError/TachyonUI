@@ -554,7 +554,7 @@ namespace tachyon
                         }));
                     // Its fill under its parts, its ring over them: a row's field fills its height
                     // and would hide a ring drawn first.
-                    if (!elementStorage.GetElementCustomDrawUnsafe(draggedRef).callback)
+                    if (const ElementCustomDraw* draw = elementStorage.FindCustomDrawUnsafe(draggedRef); !draw || !draw->callback)
                         VERIFY(elementStorage.AddCustomDraw(draggedRef, [liftedStyle](CustomDrawContext& ctx)
                             { ctx.RenderBox(ctx.ElementRect(), liftedStyle); }));
                     VERIFY(elementStorage.AddCustomDrawAfter(draggedRef, [ringStyle](CustomDrawContext& ctx)

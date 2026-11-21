@@ -111,8 +111,19 @@ namespace tachyon
         if (!m_constructionModeActive) return ElementStorageResult::NotConstructing;
         if (!IsValidRef(ref)) return ElementStorageResult::UnknownProblem;
 
-        m_depths[ref.depth].elementCustomDraws[ref.index].callback = std::move(callback);
+        CustomDrawFor(ref).callback = std::move(callback);
         return ElementStorageResult::Success;
+    }
+
+    ElementCustomDraw& ElementStorage::CustomDrawFor(const ElementRef& ref)
+    {
+        uint32_t& index = m_depths[ref.depth].customDraws[ref.index];
+        if (index == kNoCustomDraw)
+        {
+            index = static_cast<uint32_t>(m_customDraws.size());
+            m_customDraws.emplace_back();
+        }
+        return m_customDraws[index];
     }
 
     [[nodiscard]] ElementStorageResult ElementStorage::AddCustomDrawAfter(const ElementRef& ref, CustomDrawCallback callback)
@@ -123,7 +134,7 @@ namespace tachyon
         uint32_t newIndex = static_cast<uint32_t>(m_postDrawEntries.size());
         m_postDrawEntries.push_back({ std::move(callback), ref, UINT32_MAX });
 
-        auto& cd = m_depths[ref.depth].elementCustomDraws[ref.index];
+        ElementCustomDraw& cd = CustomDrawFor(ref);
         if (cd.afterHead == UINT32_MAX)
             cd.afterHead = newIndex;
         else
@@ -368,7 +379,7 @@ namespace tachyon
         auto& dl = m_depths[depth];
         std::rotate(dl.elements.begin() + begin, dl.elements.begin() + mid, dl.elements.begin() + end);
         std::rotate(dl.elementRects.begin() + begin, dl.elementRects.begin() + mid, dl.elementRects.begin() + end);
-        std::rotate(dl.elementCustomDraws.begin() + begin, dl.elementCustomDraws.begin() + mid, dl.elementCustomDraws.begin() + end);
+        std::rotate(dl.customDraws.begin() + begin, dl.customDraws.begin() + mid, dl.customDraws.begin() + end);
         std::rotate(dl.hierarchy.begin() + begin, dl.hierarchy.begin() + mid, dl.hierarchy.begin() + end);
     }
 
@@ -579,6 +590,7 @@ namespace tachyon
     void ElementStorage::ClearStorage()
     {
         for (size_t i = 0, end = static_cast<size_t>(m_usedDepthCount); i < end; i++) { m_depths[i].Clear(); }
+        m_customDraws.clear();
         m_postDrawEntries.clear();
         m_postLayoutEntries.clear();
         m_elementCount = 0;
@@ -600,7 +612,7 @@ namespace tachyon
     {
         elements.clear();
         elementRects.clear();
-        elementCustomDraws.clear();
+        customDraws.clear();
         hierarchy.clear();
     }
 
@@ -608,7 +620,7 @@ namespace tachyon
     {
         elements.reserve(capacity);
         elementRects.reserve(capacity);
-        elementCustomDraws.reserve(capacity);
+        customDraws.reserve(capacity);
         hierarchy.reserve(capacity);
     }
 

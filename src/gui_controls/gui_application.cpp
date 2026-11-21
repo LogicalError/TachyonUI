@@ -1283,15 +1283,15 @@ namespace tachyon
             auto& pendingAfter = m_pendingAfterDraws;
             pendingAfter.clear();
             // The window's own after-draws (e.g. a modal dialog's scrim) go over everything in it.
-            if (auto& windowDraw = elementStorage.GetElementCustomDrawUnsafe(windowRef); windowDraw.afterHead != UINT32_MAX)
+            if (ElementCustomDraw* windowDraw = elementStorage.FindCustomDrawUnsafe(windowRef); windowDraw && windowDraw->afterHead != UINT32_MAX)
             {
-                windowDraw.afterDrawClipRectScreen    = windowRect;
-                windowDraw.afterDrawElementRectLayout = windowElementRect.rect;
-                windowDraw.afterDrawInnerRectLayout   = windowElementRect.innerRect;
-                windowDraw.afterDrawRenderTransform   = float3x2::Identity();
-                windowDraw.afterDrawPixelRect         = windowPixelRect;
-                windowDraw.afterDrawSnappedRect       = windowSnappedRect;
-                windowDraw.afterDrawOpacity           = 1.0f;
+                windowDraw->afterDrawClipRectScreen    = windowRect;
+                windowDraw->afterDrawElementRectLayout = windowElementRect.rect;
+                windowDraw->afterDrawInnerRectLayout   = windowElementRect.innerRect;
+                windowDraw->afterDrawRenderTransform   = float3x2::Identity();
+                windowDraw->afterDrawPixelRect         = windowPixelRect;
+                windowDraw->afterDrawSnappedRect       = windowSnappedRect;
+                windowDraw->afterDrawOpacity           = 1.0f;
                 pendingAfter.push_back({ static_cast<uint32_t>(nodes.size()), windowRef });
             }
             auto fireAfterDraws = [&](uint32_t passed, size_t keep)
@@ -1300,7 +1300,7 @@ namespace tachyon
                 {
                     const ElementRef owner = pendingAfter.back().owner;
                     pendingAfter.pop_back();
-                    const auto& ownerDraw = elementStorage.GetElementCustomDrawUnsafe(owner);
+                    const ElementCustomDraw& ownerDraw = *elementStorage.FindCustomDrawUnsafe(owner);   // pushed for having after-draws
                     guiRenderer->SetTransform(ownerDraw.afterDrawRenderTransform);
                     guiRenderer->SetOpacity(ownerDraw.afterDrawOpacity);
                     for (uint32_t idx = ownerDraw.afterHead; idx != UINT32_MAX; )
@@ -1578,7 +1578,7 @@ namespace tachyon
                     const IntRect elementRectAbs     = childElementRect.rect;
                     const IntRect innerRectAbs       = layoutStyle->GetPaddingBoxContentRect(childElementRect.rect);
 
-                    if (const auto* draw = elementStorage.GetCustomDraw(childRef))
+                    if (ElementCustomDraw* draw = elementStorage.FindCustomDrawUnsafe(childRef))
                     {
                         if (draw->callback)
                         {
@@ -1594,26 +1594,22 @@ namespace tachyon
                                                    elementPixelRect, elementSnappedRect };
                             draw->callback(ctx);
                         }
-                    }
-
-                    // Saved so AddCustomDrawAfter callbacks use this element's space wherever they fire.
-                    {
-                        auto& draw = elementStorage.GetElementCustomDrawUnsafe(childRef);
-                        if (draw.afterHead != UINT32_MAX)
+                        // Saved so AddCustomDrawAfter callbacks use this element's space wherever they fire.
+                        if (draw->afterHead != UINT32_MAX)
                         {
-                            draw.afterDrawClipRectScreen    = borderClipRectScreen;
-                            draw.afterDrawElementRectLayout = elementRectAbs;
-                            draw.afterDrawInnerRectLayout   = innerRectAbs;
-                            draw.afterDrawRenderTransform   = customDrawRenderTransform;
-                            draw.afterDrawPixelRect         = elementPixelRect;
-                            draw.afterDrawSnappedRect       = elementSnappedRect;
-                            draw.afterDrawOpacity           = depthStates[depth].opacity;
+                            draw->afterDrawClipRectScreen    = borderClipRectScreen;
+                            draw->afterDrawElementRectLayout = elementRectAbs;
+                            draw->afterDrawInnerRectLayout   = innerRectAbs;
+                            draw->afterDrawRenderTransform   = customDrawRenderTransform;
+                            draw->afterDrawPixelRect         = elementPixelRect;
+                            draw->afterDrawSnappedRect       = elementSnappedRect;
+                            draw->afterDrawOpacity           = depthStates[depth].opacity;
                         }
                     }
                 }
 
                 // After-draws fire once the walk passes this subtree (also for display:none).
-                if (elementStorage.GetElementCustomDrawUnsafe(childRef).afterHead != UINT32_MAX)
+                if (const ElementCustomDraw* draw = elementStorage.FindCustomDrawUnsafe(childRef); draw && draw->afterHead != UINT32_MAX)
                     pendingAfter.push_back({ node.subtreeSkip, childRef });
 
                 // Retained-render cache: a rebuilt scope captures its children as they render;
