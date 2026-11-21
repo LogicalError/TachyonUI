@@ -2918,9 +2918,16 @@ namespace tachyon
         /// listed; empty when none were saved. Taking them clears them. Make each document with
         /// its panels, then RestoreDocumentLayout, and place each window with RestoreWindowPlace.
         std::vector<SavedDocumentWindow> TakeSavedDocuments(std::string_view key);
-        /// Lays a document's panels out as saved: panels by type, else title; ones the saved
-        /// tree doesn't have go to its first leaf. False (the layout stays) when it can't be read.
-        bool RestoreDocumentLayout(Document& document, const SavedDocument& saved);
+        /// Lays a document's panels out as saved, and gives them their own states back:
+        /// - panels by type, else title; with several of one kind, the n-th in the saved tree
+        ///   is the n-th the document has
+        /// - a panel the saved tree names that the document hasn't (a second of a kind, say)
+        ///   is made by `makePanel`, as for ApplyDockLayout; without it, it's left out
+        /// - the document's panels the saved tree doesn't have go to its first leaf
+        ///
+        /// False (the layout stays) when it can't be read.
+        bool RestoreDocumentLayout(Document& document, const SavedDocument& saved,
+                                   const std::function<std::optional<ID>(std::string_view key)>& makePanel = {});
         /// Puts a window where `saved` was when it's next declared, as PersistWindow does
         /// (on its monitor, or the same place on another). Nothing when no place was saved.
         void RestoreWindowPlace(ID windowID, const SavedDocumentWindow& saved);
@@ -2931,6 +2938,8 @@ namespace tachyon
         /// - a panel it names that the layout hasn't is made by `makePanel`, given the panel's
         ///   type, else title; it creates the panel in layout.panels and returns its ID, or
         ///   nullopt to leave it out
+        /// - with several of one kind in the tree, each is a panel of its own: the layout's
+        ///   own first, then ones `makePanel` makes
         /// - panels it doesn't name are closed, as closing their tabs does
         ///
         /// False when the tree can't be read or has no panel left: the layout stays as it was.

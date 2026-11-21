@@ -636,6 +636,13 @@ namespace tachyon
         return root;
     }
 
+    std::vector<ID> PanelsInTree(const DockNode& root)
+    {
+        std::vector<ID> placed;
+        CollectIds(root, placed);
+        return placed;
+    }
+
     std::vector<ID> UnplacedPanels(const DockNode& root, const std::vector<ID>& allPanels)
     {
         std::vector<ID> placed;

@@ -186,6 +186,33 @@ namespace
         EXPECT_EQ(app.SaveDockLayout(layout), tree) << "laid out as saved";
     }
 
+    // A tree with two panels of one kind: the layout's own goes in the first place, and a
+    // second is made for the other.
+    TEST_F(ApplyDockLayoutTest, TwoPanelsOfOneKindBothComeBack)
+    {
+        DockingLayout saved;
+        const ID left = AddPanel(saved, "Timeline"), right = AddPanel(saved, "Timeline");
+        saved.root = MakeSplit(DockSplitMode::LeftPinned, 400, MakeLeaf({ left }), MakeLeaf({ right }));
+        const std::string tree = app.SaveDockLayout(saved);
+
+        DockingLayout layout;
+        const ID own = AddPanel(layout, "Timeline");
+        layout.root = MakeLeaf({ own });
+        int made = 0;
+        ASSERT_TRUE(app.ApplyDockLayout(layout, tree, [&](std::string_view key) -> std::optional<ID> {
+            ++made;
+            return AddPanel(layout, std::string(key).c_str());
+        }));
+        EXPECT_EQ(made, 1) << "one more, beside its own";
+        ASSERT_FALSE(layout.root->isLeaf);
+        ASSERT_EQ(layout.root->first->panelIds.size(), 1u);
+        ASSERT_EQ(layout.root->second->panelIds.size(), 1u);
+        EXPECT_EQ(layout.root->first->panelIds[0], own);
+        EXPECT_NE(layout.root->second->panelIds[0], own) << "a panel of its own";
+        EXPECT_EQ(layout.panels.size(), 2u);
+        EXPECT_EQ(app.SaveDockLayout(layout), tree) << "laid out as saved";
+    }
+
     // Without a way to make them, the panels it lacks are left out, and the tree closes up.
     TEST_F(ApplyDockLayoutTest, PanelsItCantMakeAreLeftOut)
     {

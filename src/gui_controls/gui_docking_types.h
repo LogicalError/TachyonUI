@@ -105,7 +105,8 @@ namespace tachyon
         /// runs as the state is saved; an empty string keeps nothing. restoreState gets that
         /// text back when the layout it was saved with comes back (RestoreUIState for a
         /// PersistDocking layout, RestoreDocumentLayout for a document's), for the panel of
-        /// the same key.
+        /// the same key. With several of one key, each gets its own: they're matched by the
+        /// order they're in in the dock tree.
         ///
         ///     panel.saveState    = [this] { return SaveViewState(graph); };   // gui_view_state.h
         ///     panel.restoreState = [this](std::string_view s) { RestoreViewState(graph, s); };
@@ -262,7 +263,8 @@ namespace tachyon
         std::string extension;
         std::string kind;
         std::string layout;   ///< its dock tree (SerializeDockTree), panels by type, else title
-        /// Its panels' own view states (Panel::saveState), by panel key.
+        /// Its panels' own view states (Panel::saveState), by panel key; several of one key in
+        /// the order they're in the tree.
         std::vector<std::pair<std::string, std::string>> panelStates;
     };
 
