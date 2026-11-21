@@ -126,6 +126,7 @@ list(APPEND GUI_CORE_TEST_FILES
   controls_reorderable_test.cpp
   color_field_test.cpp
   controls_docking_test.cpp
+  static_id_release_test.cpp
   controls_documents_test.cpp
   node_view_two_views_test.cpp
   timeline_two_views_test.cpp

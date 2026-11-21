@@ -132,6 +132,9 @@ namespace tachyon
         {
             /// onEnable fired without a matching onDisable.
             bool enabled = false;
+            /// CreatePanel made its ID: it goes back when the panel is closed. One the app gave
+            /// is the app's to release.
+            bool ownsID = false;
         } internal;  ///< not part of the API
 
         /// Scroll position, kept here so a hidden tab keeps it (ScrollManagement prunes

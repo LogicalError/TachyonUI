@@ -258,8 +258,14 @@ To change the layout from code:
 
 - `FloatPanel(layout, panelID, screenPos)` moves a panel into a window of its own.
 - `CloseDockedPanel(layout, leaf, tabIndex)` closes a docked panel.
+- `ClosePanel(layout, panelID)` closes a panel wherever it is in the layout.
 - `CloseFloatingDockWindow(index)` closes a floating window and its panels.
 - `DisableAllPanels(layout)` hides every panel, for example before a theme reload.
+- `ReleaseDockingLayout(layout)` closes a whole layout for good: its panels, its torn-off
+  windows, and its tree. Call it before you destroy a layout you made, or at exit.
+
+A closed panel gives its ID back when `CreatePanel` made it (the overload without an ID).
+One you gave `CreatePanel` stays yours to release.
 
 ```cpp
 (void)FloatPanel(layout, log, int2{ styleManager.Px(200), styleManager.Px(200) });
@@ -416,6 +422,7 @@ for (const SavedDocumentWindow& window : TakeSavedDocuments("documents"))
 Document& CreateDocument(DocumentSet& set, std::string name, std::string extension,
                          std::string kind, IconID icon);
 void      CloseDocument(DocumentSet& set, int index);
+void      CloseAllDocuments(DocumentSet& set);   // at exit, say
 void      Documents(ID id, DocumentSet& set, LayoutOverride&& constraints = {});
 void      DocumentBar(ID id, DocumentSet& set, StyleRef style, LayoutOverride&& constraints = LayoutOverride::Auto());
 void      DocumentLine(const DocumentSet& set, LayoutOverride&& constraints = LayoutOverride::Auto());

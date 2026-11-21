@@ -182,6 +182,7 @@ namespace
         EXPECT_EQ(layout.root->second->selectedTab, 1);
         EXPECT_EQ(PanelNamed(layout, "Log"), ownLog) << "its own Log, not a new one";
         EXPECT_EQ(PanelNamed(layout, "Help"), ID::Invalid()) << "closed";
+        EXPECT_FALSE(app.idManager.IsStaticIDValid(help)) << "and its ID given back";
         EXPECT_EQ(layout.panels.size(), 3u);
         EXPECT_EQ(app.SaveDockLayout(layout), tree) << "laid out as saved";
     }

@@ -949,10 +949,27 @@ namespace tachyon
 
         // Closing is permanent: the panel and its state are destroyed (a new
         // panel can be created later), after its onDisable if it was shown.
+        ClosePanel(layout, panelID);
+    }
+
+    void GUIApplication::ClosePanel(DockingLayout& layout, ID panelID)
+    {
+        if (layout.root)
+            (void)RemovePanel(layout.root, panelID, &idManager);
         auto it = layout.panels.find(panelID);
         if (it == layout.panels.end()) return;
         if (it->second.internal.enabled && it->second.onDisable) it->second.onDisable();
+        if (it->second.internal.ownsID) idManager.ReleaseStaticID(panelID);
         layout.panels.erase(it);
+    }
+
+    void GUIApplication::ErasePanels(DockingLayout& layout)
+    {
+        DisableAllPanels(layout);
+        for (const auto& [id, panel] : layout.panels)
+            if (panel.internal.ownsID)
+                idManager.ReleaseStaticID(id);
+        layout.panels.clear();
     }
 
     void GUIApplication::CloseFloatingDockWindow(size_t index)
@@ -961,8 +978,9 @@ namespace tachyon
         auto& fw = *m_floatingDockWindows[index];
         // Closing the window closes its panels for good: they're disabled and
         // destroyed with the window's layout, and every ID it held is released.
-        DisableAllPanels(fw.layout);
+        ErasePanels(fw.layout);
         ReleaseDockTreeIDs(fw.layout.root.get(), &idManager);
+        fw.layout.root.reset();
         idManager.ReleaseStaticID(fw.windowID);
         m_floatingDockWindows.erase(m_floatingDockWindows.begin() + (ptrdiff_t)index);
     }

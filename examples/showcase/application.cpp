@@ -169,7 +169,14 @@ namespace tachyon
             graphicsContext->DestroyImageAtEnd(std::exchange(pastedImage, nullptr), DeviceScope::Application);
         }
 
-        // Every static ID the showcase made goes back (the Hierarchy panels' with them).
+        // The documents close, in every window: their panels are hidden and destroyed (the
+        // Hierarchy panels' row IDs with them), and their IDs and trees' go back.
+        CloseAllDocuments(showcase.documents);
+        for (const auto& window : showcase.documentWindows)
+            CloseAllDocuments(window->documents);
+        ReleaseDockingLayout(m_capture.layout);
+
+        // Every static ID the showcase made goes back.
         idManager.ReleaseStaticID(showcase.windowLayoutID1);
         idManager.ReleaseStaticID(showcase.windowLayoutID2);
         idManager.ReleaseStaticID(showcase.exitDialogID);
@@ -207,6 +214,7 @@ namespace tachyon
         release(m_capture.windowID);
         release(m_capture.areaID);
         release(m_capture.documentsID);
+        release(showcase.commandSearch.listWindowID);   // the search's results window, made on its first frame
 #if TACHYON_D3D12
         // The scene renderer's Direct3D 12 objects, once the GPU is done with them (Vulkan's go
         // with the backend's own).
