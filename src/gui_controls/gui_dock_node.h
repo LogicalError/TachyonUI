@@ -208,13 +208,19 @@ namespace tachyon
     /// emptied leaves collapse. Returns nullptr when the text is malformed, deeper than 32
     /// levels, or no panel survives, so the caller can fall back to its default layout. Panels
     /// the saved layout does not mention are not added; see UnplacedPanels().
-    /// Each key is used at most once (a repeated key is dropped).
+    /// Each panel is placed at most once: a tab whose key `idOf` maps to a panel already placed
+    /// is dropped. For a tree with several panels of one kind, have `idOf` give the next one
+    /// each time it's asked for that key.
     std::unique_ptr<DockNode> ParseDockTree(std::string_view text,
         const std::function<std::optional<ID>(std::string_view)>& idOf);
 
     /// Every ID in `allPanels` that does not appear in the tree, in order. A caller restoring a
     /// saved layout uses this to place panels added since the layout was saved.
     std::vector<ID> UnplacedPanels(const DockNode& root, const std::vector<ID>& allPanels);
+
+    /// Every panel in the tree, in the order SerializeDockTree writes them: a split's first
+    /// side before its second, a leaf's tabs left to right.
+    std::vector<ID> PanelsInTree(const DockNode& root);
 
     /// @}
 } // namespace tachyon

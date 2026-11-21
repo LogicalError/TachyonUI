@@ -82,6 +82,10 @@ A panel can keep its own view with its layout: a pan and zoom, a camera, the pag
 - It comes back to the panel of the same key (its type, else its title):
   - in `RestoreUIState`, for a `PersistDocking` layout;
   - in `RestoreDocumentLayout`, for a document.
+- Several panels of one kind each keep their own: they're matched in the order they're in
+  in the dock tree.
+  - For example, of two Viewports side by side, the left one gets the left one's camera
+    back.
 - `gui_view_state.h` has `SaveViewState` and `RestoreViewState` for the library's views:
   - a node view's pan and zoom (`NodeViewState`);
   - the part of a timeline in view (`TimelineViewState`);

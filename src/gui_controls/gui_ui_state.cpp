@@ -47,6 +47,28 @@ namespace tachyon
         // A panel's key: its type when it has one, else its title.
         std::string PanelKey(const Panel& panel) { return panel.panelType.empty() ? panel.title : panel.panelType; }
 
+        // The layout's panel for a saved tab of `key`: the first of that key not handed out
+        // yet, so a tree with two of a kind gets two panels; else the one `makePanel` makes
+        // (it adds it to the layout), recorded in `made`. Nullopt when there's neither.
+        std::optional<ID> PanelForKey(DockingLayout& layout, std::string_view key, std::vector<ID>& handed,
+                                      const std::function<std::optional<ID>(std::string_view)>& makePanel, std::vector<ID>& made)
+        {
+            for (const auto& [id, panel] : layout.panels)
+                if (PanelKey(panel) == key && std::find(handed.begin(), handed.end(), id) == handed.end())
+                {
+                    handed.push_back(id);
+                    return id;
+                }
+            if (!makePanel)
+                return std::nullopt;
+            const std::optional<ID> created = makePanel(key);
+            if (!created || layout.panels.find(*created) == layout.panels.end())
+                return std::nullopt;   // it made none
+            made.push_back(*created);
+            handed.push_back(*created);
+            return created;
+        }
+
         DockNode* FirstLeaf(DockNode* node)
         {
             while (node != nullptr && !node->isLeaf)
@@ -114,18 +136,22 @@ namespace tachyon
             return parsed ? std::optional<JsonValue>(std::move(*parsed)) : std::nullopt;
         }
 
-        // A saved dock tree applied to a layout: panels by key, the ones it hasn't to its
-        // first leaf. False when it can't be read; the layout stays. The old tree's node and
-        // tab-bar IDs go back to `idManager`.
-        bool ApplyDockTree(DockingLayout& layout, std::string_view tree, IDManager& idManager)
+        // A saved dock tree applied to a layout: panels by key, a panel `makePanel` makes for
+        // each it lacks, the ones it hasn't to its first leaf. False when it can't be read; the
+        // layout stays. The old tree's node and tab-bar IDs go back to `idManager`.
+        bool ApplyDockTree(DockingLayout& layout, std::string_view tree, IDManager& idManager,
+                           const std::function<std::optional<ID>(std::string_view)>& makePanel = {})
         {
-            std::unique_ptr<DockNode> root = ParseDockTree(tree, [&layout](std::string_view panelKey) -> std::optional<ID> {
-                for (const auto& [id, panel] : layout.panels)
-                    if (PanelKey(panel) == panelKey) return id;
-                return std::nullopt;
+            std::vector<ID> handed, made;
+            std::unique_ptr<DockNode> root = ParseDockTree(tree, [&](std::string_view panelKey) {
+                return PanelForKey(layout, panelKey, handed, makePanel, made);
             });
             if (!root)
+            {
+                for (const ID id : made)
+                    layout.panels.erase(id);
                 return false;
+            }
             std::vector<ID> all;
             for (const auto& [id, panel] : layout.panels) all.push_back(id);
             if (DockNode* leaf = FirstLeaf(root.get()))
@@ -142,46 +168,91 @@ namespace tachyon
             return v && v->IsString() ? v->AsString() : std::string();
         }
 
-        // A layout's panels' own view states, by panel key: { "NodeView": "..." }; null when
-        // none keeps one.
+        // A layout's panels' own view states, by panel key: { "NodeView": "..." }. Several
+        // panels of one key go in an array, in the order they're in the tree, "" for one that
+        // keeps nothing: { "Timeline": ["...", "..."] }. Null when none keeps one.
         std::optional<JsonValue> PanelStatesJson(const DockingLayout& layout)
         {
-            JsonValue states = JsonValue::MakeObject();
+            if (!layout.root)
+                return std::nullopt;
+            std::vector<std::pair<std::string, std::vector<std::string>>> byKey;
             bool any = false;
-            for (const auto& [id, panel] : layout.panels)
-                if (panel.saveState)
-                    if (std::string state = panel.saveState(); !state.empty())
-                    {
-                        states.Set(PanelKey(panel), std::move(state));
-                        any = true;
-                    }
-            return any ? std::optional<JsonValue>(std::move(states)) : std::nullopt;
+            for (const ID id : PanelsInTree(*layout.root))
+            {
+                const auto it = layout.panels.find(id);
+                if (it == layout.panels.end())
+                    continue;
+                const Panel& panel = it->second;
+                std::string state = panel.saveState ? panel.saveState() : std::string();
+                any |= !state.empty();
+                const std::string key = PanelKey(panel);
+                auto entry = std::find_if(byKey.begin(), byKey.end(), [&key](const auto& e) { return e.first == key; });
+                if (entry == byKey.end())
+                    entry = byKey.insert(byKey.end(), { key, {} });
+                entry->second.push_back(std::move(state));
+            }
+            if (!any)
+                return std::nullopt;
+            JsonValue states = JsonValue::MakeObject();
+            for (auto& [key, list] : byKey)
+            {
+                if (std::all_of(list.begin(), list.end(), [](const std::string& s) { return s.empty(); }))
+                    continue;
+                if (list.size() == 1)
+                {
+                    states.Set(key, std::move(list[0]));
+                    continue;
+                }
+                JsonValue array = JsonValue::MakeArray();
+                for (std::string& state : list)
+                    array.Push(std::move(state));
+                states.Set(key, std::move(array));
+            }
+            return states;
         }
 
-        // Saved view states handed to the layout's panels of the same keys.
+        // Saved view states handed to the layout's panels of the same keys: the n-th saved
+        // for a key to the n-th panel of that key in the tree.
         void ApplyPanelStates(DockingLayout& layout, std::span<const std::pair<std::string, std::string>> states)
         {
-            for (auto& [id, panel] : layout.panels)
+            if (!layout.root)
+                return;
+            std::vector<std::pair<std::string, size_t>> taken;   // per key, how many are handed out
+            for (const ID id : PanelsInTree(*layout.root))
             {
-                if (!panel.restoreState)
+                const auto it = layout.panels.find(id);
+                if (it == layout.panels.end())
                     continue;
+                Panel& panel = it->second;
                 const std::string key = PanelKey(panel);
+                auto count = std::find_if(taken.begin(), taken.end(), [&key](const auto& e) { return e.first == key; });
+                if (count == taken.end())
+                    count = taken.insert(taken.end(), { key, 0 });
+                const size_t n = count->second++;
+                size_t seen = 0;
                 for (const auto& [savedKey, state] : states)
-                    if (savedKey == key)
+                    if (savedKey == key && seen++ == n)
                     {
-                        panel.restoreState(state);
+                        if (panel.restoreState && !state.empty())
+                            panel.restoreState(state);
                         break;
                     }
             }
         }
 
+        // The saved states as pairs, a key's array as one pair each, in order.
         std::vector<std::pair<std::string, std::string>> PanelStatesOf(const JsonValue* states)
         {
             std::vector<std::pair<std::string, std::string>> out;
             if (states && states->IsObject())
                 for (const auto& [key, state] : states->Members())
+                {
                     if (state.IsString())
                         out.emplace_back(key, state.AsString());
+                    else if (state.IsArray())
+                        for (const JsonValue& one : state.Items())
+                            out.emplace_back(key, one.IsString() ? one.AsString() : std::string());
+                }
             return out;
         }
     }
@@ -234,17 +305,9 @@ namespace tachyon
                                          const std::function<std::optional<ID>(std::string_view key)>& makePanel)
     {
         // Each key to a panel: the layout's own, else a new one.
-        std::vector<ID> made;
-        std::unique_ptr<DockNode> root = ParseDockTree(tree, [&](std::string_view panelKey) -> std::optional<ID> {
-            for (const auto& [id, panel] : layout.panels)
-                if (PanelKey(panel) == panelKey) return id;
-            if (!makePanel)
-                return std::nullopt;
-            const std::optional<ID> created = makePanel(panelKey);
-            if (!created || layout.panels.find(*created) == layout.panels.end())
-                return std::nullopt;   // it made none
-            made.push_back(*created);
-            return created;
+        std::vector<ID> handed, made;
+        std::unique_ptr<DockNode> root = ParseDockTree(tree, [&](std::string_view panelKey) {
+            return PanelForKey(layout, panelKey, handed, makePanel, made);
         });
         if (!root)
         {
@@ -273,9 +336,10 @@ namespace tachyon
         return windows;
     }
 
-    bool GUIApplication::RestoreDocumentLayout(Document& document, const SavedDocument& saved)
+    bool GUIApplication::RestoreDocumentLayout(Document& document, const SavedDocument& saved,
+                                               const std::function<std::optional<ID>(std::string_view key)>& makePanel)
     {
-        if (saved.layout.empty() || !ApplyDockTree(document.layout, saved.layout, idManager))
+        if (saved.layout.empty() || !ApplyDockTree(document.layout, saved.layout, idManager, makePanel))
             return false;
         ApplyPanelStates(document.layout, saved.panelStates);
         return true;

@@ -1884,7 +1884,12 @@ namespace tachyon
             }
             for (const SavedDocument& document : saved[w].documents)
             {
-                (void)RestoreDocumentLayout(CreateShowcaseDocument(*set, document.name, document.extension, document.kind), document);
+                // A panel it was saved with that its kind's layout hasn't (a second Viewport,
+                // say) is made again.
+                Document& made = CreateShowcaseDocument(*set, document.name, document.extension, document.kind);
+                DockingLayout& layout = made.layout;
+                (void)RestoreDocumentLayout(made, document, [this, &layout](std::string_view key) -> std::optional<ID> {
+                    return CreateShowcasePanel(layout, key); });
                 if (document.name.starts_with("Untitled "))
                     showcase.untitledCount = std::max(showcase.untitledCount, std::atoi(document.name.c_str() + 9));
             }

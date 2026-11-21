@@ -368,6 +368,9 @@ Restoring needs your app, since the library can't create your panels:
 - For each window:
   - create its documents with their panels
   - lay each one out with `RestoreDocumentLayout`
+    - pass it a `makePanel`, as for `ApplyDockLayout`, to make the panels a document was
+      saved with that it doesn't have now, such as a second Viewport the user opened
+    - each of several panels of one kind gets its own place and its own state back
   - set `active`
 - For extra windows, call `RestoreWindowPlace` before declaring them.
 
@@ -380,7 +383,12 @@ PersistDocuments("documents", [this] { return std::vector<DocumentWindowRef>{ { 
 for (const SavedDocumentWindow& window : TakeSavedDocuments("documents"))
 {
     for (const SavedDocument& saved : window.documents)
-        (void)RestoreDocumentLayout(MakeMyDocument(documents, saved.name, saved.extension, saved.kind), saved);
+    {
+        Document& document = MakeMyDocument(documents, saved.name, saved.extension, saved.kind);
+        (void)RestoreDocumentLayout(document, saved, [this, &document](std::string_view type) -> std::optional<ID> {
+            return MakeMyPanel(document.layout, type);   // CreatePanel by type
+        });
+    }
     documents.active = window.active;
 }
 ```
@@ -449,6 +457,9 @@ preset puts them.
   - A panel the tree names that the layout already has stays, and moves to its new place.
   - A panel the tree names that the layout lacks is made by `makePanel`. It gets the
     panel's type or title, creates the panel in `layout.panels`, and returns its ID.
+  - With several panels of one kind in the tree, each is a panel of its own.
+    - For example, a tree with two Viewports applied to a layout with one keeps that one
+      in the first place and makes a second for the other.
   - A panel the layout has that the tree doesn't name is closed, as closing its tab does.
   - It returns false, and changes nothing, when the tree can't be read or no panel is left.
   - Call it outside the layout's `Docking`, for example at the start of the frame.

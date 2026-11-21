@@ -285,6 +285,51 @@ namespace
         EXPECT_EQ(logState, "untouched") << "it saved nothing";
     }
 
+    // Two panels of one kind each keep their own place and their own state, matched by the
+    // order they're in in the tree.
+    TEST_F(UIStateTest, TwoPanelsOfOneKindKeepTheirOwnState)
+    {
+        auto layoutOf = [](std::initializer_list<const char*> titles) {
+            auto layout = std::make_unique<DockingLayout>();
+            std::vector<ID> ids;
+            uint32_t n = 1;
+            for (const char* title : titles)
+            {
+                ID id = ID::Invalid();
+                id.value.integer = 3000 + n++;
+                layout->panels[id] = Panel{ .id = id, .title = title };
+                ids.push_back(id);
+            }
+            layout->root = MakeLeaf({});
+            layout->root->panelIds = std::move(ids);
+            return layout;
+        };
+        auto first = layoutOf({ "Graph", "Graph", "Log" });
+        const ID a = first->root->panelIds[0], b = first->root->panelIds[1], log = first->root->panelIds[2];
+        first->root = MakeSplit(DockSplitMode::LeftPinned, 300, MakeLeaf({ a, log }), MakeLeaf({ b }));
+        first->panels[a].saveState = [] { return std::string("zoom 2"); };
+        first->panels[b].saveState = [] { return std::string("zoom 5"); };
+        app.PersistDocking("dock", *first);
+        const std::string saved = app.SaveUIState();
+
+        auto fresh = layoutOf({ "Graph", "Log", "Graph" });
+        std::unordered_map<ID, std::string> states;
+        for (auto& [id, panel] : fresh->panels)
+            panel.restoreState = [&states, id = id](std::string_view state) { states[id] = state; };
+        app.PersistDocking("dock", *fresh);
+        ASSERT_TRUE(app.RestoreUIState(saved));
+
+        ASSERT_FALSE(fresh->root->isLeaf);
+        ASSERT_EQ(fresh->root->first->panelIds.size(), 2u);
+        ASSERT_EQ(fresh->root->second->panelIds.size(), 1u) << "the second Graph keeps a place of its own";
+        const ID inFirst = fresh->root->first->panelIds[0], inSecond = fresh->root->second->panelIds[0];
+        EXPECT_EQ(fresh->panels.at(inFirst).title, "Graph");
+        EXPECT_EQ(fresh->panels.at(inSecond).title, "Graph");
+        EXPECT_NE(inFirst, inSecond);
+        EXPECT_EQ(states[inFirst], "zoom 2");
+        EXPECT_EQ(states[inSecond], "zoom 5");
+    }
+
     TEST_F(UIStateTest, ToolbarsComeBackOnTheirSides)
     {
         auto item = [](const char* name) { ToolbarItem i; i.debugName = name; return i; };
@@ -563,6 +608,46 @@ namespace
                 panel.restoreState = [&camera](std::string_view state) { camera = state; };
         ASSERT_TRUE(app.RestoreDocumentLayout(again, windows[0].documents[0]));
         EXPECT_EQ(camera, "camera 1 2 3");
+    }
+
+    // A document saved with two panels of one kind: made again with one, the other is made
+    // for it, and each gets its own state back.
+    TEST_F(UIStateTest, ADocumentsSecondPanelOfAKindIsMadeAgain)
+    {
+        DocumentSet set;
+        Document& forest = AddDocument(app, set, "Forest", ".level", "level", { "Viewport", "Viewport" });
+        const ID a = forest.layout.root->panelIds[0], b = forest.layout.root->panelIds[1];
+        forest.layout.root = MakeSplit(DockSplitMode::LeftPinned, 500, MakeLeaf({ a }), MakeLeaf({ b }));
+        forest.layout.panels[a].saveState = [] { return std::string("camera left"); };
+        forest.layout.panels[b].saveState = [] { return std::string("camera right"); };
+        const ID window = app.idManager.CreateStaticID();
+        app.PersistDocuments("documents", [&] { return std::vector<DocumentWindowRef>{ { window, &set } }; });
+        const std::string saved = app.SaveUIState();
+
+        ASSERT_TRUE(app.RestoreUIState(saved));
+        std::vector<SavedDocumentWindow> windows = app.TakeSavedDocuments("documents");
+        ASSERT_EQ(windows.size(), 1u);
+        DocumentSet fresh;
+        Document& again = AddDocument(app, fresh, "Forest", ".level", "level", { "Viewport" });
+        std::unordered_map<ID, std::string> cameras;
+        auto keep = [&cameras](Panel& panel) {
+            panel.restoreState = [&cameras, id = panel.id](std::string_view state) { cameras[id] = state; };
+        };
+        for (auto& [id, panel] : again.layout.panels)
+            keep(panel);
+        std::vector<std::string> made;
+        ASSERT_TRUE(app.RestoreDocumentLayout(again, windows[0].documents[0], [&](std::string_view key) -> std::optional<ID> {
+            made.emplace_back(key);
+            const ID id = app.CreatePanel(again.layout.panels, std::string(key), IconID::Invalid, [] {});
+            keep(again.layout.panels.at(id));
+            return id;
+        }));
+        EXPECT_EQ(made, (std::vector<std::string>{ "Viewport" }));
+        ASSERT_FALSE(again.layout.root->isLeaf);
+        const ID left = again.layout.root->first->panelIds.at(0), right = again.layout.root->second->panelIds.at(0);
+        EXPECT_NE(left, right);
+        EXPECT_EQ(cameras[left], "camera left");
+        EXPECT_EQ(cameras[right], "camera right");
     }
 
     TEST_F(UIStateTest, WhatCantBeReadOfSavedDocumentsIsSkipped)
