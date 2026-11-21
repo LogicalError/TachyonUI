@@ -193,4 +193,47 @@ namespace tachyon
         EXPECT_TRUE(std::isfinite(r.y)) << "Inverse() of a singular transform produced non-finite y";
     }
 
+    // Half floats: the GPU's 16-bit floats, as the gradient rotation is packed.
+
+    // A value that rounds up past the largest mantissa goes to the next power of two, not to
+    // half of it: the carry goes into the exponent.
+    TEST(HalfFloatTest, RoundingUpCarriesIntoTheExponent)
+    {
+        EXPECT_EQ(FloatToHalf(1.0f), 0x3C00);
+        EXPECT_EQ(FloatToHalf(0.99995f), 0x3C00) << "1.0, not 0.5";
+        EXPECT_EQ(FloatToHalf(1.9999f), 0x4000) << "2.0, not 1.0";
+        EXPECT_EQ(FloatToHalf(-1.9999f), 0xC000) << "-2.0";
+        EXPECT_FLOAT_EQ(HalfToFloat(FloatToHalf(0.99995f)), 1.0f);
+    }
+
+    // The smallest halves, below the normal range: a step of 2^-24.
+    TEST(HalfFloatTest, SubnormalsReadAsTheirValue)
+    {
+        EXPECT_FLOAT_EQ(HalfToFloat(0x0001), std::ldexp(1.0f, -24));
+        EXPECT_FLOAT_EQ(HalfToFloat(0x0200), std::ldexp(1.0f, -15));
+        EXPECT_FLOAT_EQ(HalfToFloat(0x03FF), std::ldexp(1023.0f, -24));
+        EXPECT_FLOAT_EQ(HalfToFloat(0x8001), -std::ldexp(1.0f, -24));
+    }
+
+    // At the top of the range, rounding up past the largest half is infinity.
+    TEST(HalfFloatTest, RoundingPastTheLargestIsInfinity)
+    {
+        EXPECT_EQ(FloatToHalf(65504.0f), 0x7BFF) << "the largest half";
+        EXPECT_EQ(FloatToHalf(65519.0f), 0x7BFF) << "rounds down to it";
+        EXPECT_EQ(FloatToHalf(65530.0f), 0x7C00) << "rounds up, past it";
+        EXPECT_EQ(FloatToHalf(-65530.0f), 0xFC00);
+    }
+
+    // Every finite half comes back as itself through a float: subnormals too, which read as
+    // half their value before.
+    TEST(HalfFloatTest, EveryFiniteHalfRoundTrips)
+    {
+        for (uint32_t h = 0; h < 0x10000; ++h)
+        {
+            if ((h & 0x7C00) == 0x7C00)
+                continue;   // infinity and NaN
+            const uint16_t half = uint16_t(h);
+            ASSERT_EQ(FloatToHalf(HalfToFloat(half)), half) << std::hex << "0x" << h;
+        }
+    }
 }
