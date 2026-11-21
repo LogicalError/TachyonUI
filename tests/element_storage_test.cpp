@@ -852,6 +852,58 @@ namespace tachyon
         ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
     }
 
+    // A custom draw belongs to its element: moved with it, the others still without one.
+    TEST_F(MoveChildRefsTest, CustomDrawsFollowTheMovedElements)
+    {
+        Build();
+        ASSERT_TRUE(storage.AddCustomDraw(bRef, [](CustomDrawContext&) {}) == ElementStorageResult::Success);
+        ASSERT_TRUE(storage.AddCustomDrawAfter(aRef, [](CustomDrawContext&) {}) == ElementStorageResult::Success);
+        ASSERT_TRUE(storage.AddCustomDraw(b1Ref, [](CustomDrawContext&) {}) == ElementStorageResult::Success);
+
+        ASSERT_TRUE(storage.MoveChild(1, aRef.index, 0, 1) == ElementStorageResult::Success);
+        ASSERT_TRUE(storage.EndChildren() == ElementStorageResult::Success);
+
+        const auto drawOf = [&](uint64_t id) { return storage.GetCustomDraw(storage.FindElementRefByID(CreateElement(id).id)); };
+        ASSERT_NE(drawOf(101), nullptr);
+        EXPECT_TRUE(drawOf(101)->callback) << "B's draw, with B";
+        ASSERT_NE(drawOf(100), nullptr);
+        EXPECT_FALSE(drawOf(100)->callback);
+        EXPECT_NE(drawOf(100)->afterHead, UINT32_MAX) << "A's after-draw, with A";
+        ASSERT_NE(drawOf(301), nullptr);
+        EXPECT_TRUE(drawOf(301)->callback);
+        for (uint64_t id : { 1u, 200u, 300u })
+            EXPECT_EQ(drawOf(id), nullptr) << id << " has none";
+        ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
+    }
+
+    // Only the elements with a custom draw keep one; the next construction starts with none.
+    TEST_F(ElementStorageTest, CustomDrawsAreKeptForTheElementsWithOne)
+    {
+        ASSERT_TRUE(storage.BeginConstruction() == ElementStorageResult::Success);
+        const ElementRef root = storage.Add(CreateElement(1)).ref;
+        ASSERT_TRUE(storage.BeginChildren() == ElementStorageResult::Success);
+        std::vector<ElementRef> refs;
+        for (uint64_t i = 0; i < 100; ++i)
+            refs.push_back(storage.Add(CreateElement(100 + i)).ref);
+        ASSERT_TRUE(storage.AddCustomDraw(refs[10], [](CustomDrawContext&) {}) == ElementStorageResult::Success);
+        ASSERT_TRUE(storage.AddCustomDrawAfter(refs[20], [](CustomDrawContext&) {}) == ElementStorageResult::Success);
+        ASSERT_TRUE(storage.AddCustomDrawAfter(refs[20], [](CustomDrawContext&) {}) == ElementStorageResult::Success);
+        ASSERT_TRUE(storage.EndChildren() == ElementStorageResult::Success);
+        ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
+
+        EXPECT_EQ(storage.CustomDrawCount(), 2u) << "one each for the two elements with draws";
+        EXPECT_EQ(storage.GetCustomDraw(root), nullptr);
+        EXPECT_EQ(storage.GetCustomDraw(refs[0]), nullptr);
+        ASSERT_NE(storage.GetCustomDraw(refs[10]), nullptr);
+        EXPECT_TRUE(storage.GetCustomDraw(refs[10])->callback);
+        ASSERT_NE(storage.GetCustomDraw(refs[20]), nullptr);
+        EXPECT_NE(storage.GetCustomDraw(refs[20])->afterTail, storage.GetCustomDraw(refs[20])->afterHead) << "both after-draws";
+
+        ASSERT_TRUE(storage.BeginConstruction() == ElementStorageResult::Success);
+        EXPECT_EQ(storage.CustomDrawCount(), 0u);
+        ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
+    }
+
     // The window registry's pre-order draw list follows the move, so every child
     // still draws after (on top of) its parent.
     TEST_F(MoveChildRefsTest, WindowRegistryDrawOrderFollowsTheMove)
