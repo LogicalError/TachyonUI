@@ -12,7 +12,7 @@ easing over time, a color's channels in a Curves node.
 ## CurveField
 
 ```cpp
-bool CurveField(ID id, CurveView& view, LayoutOverride&& constraints = {});
+bool CurveField(ID id, CurveViewRef view, LayoutOverride&& constraints = {});   // a CurveView, or { data, state }
 ```
 
 - It draws the curves over `view.range`, in a 32px plot, the active channel's on top.
@@ -36,20 +36,25 @@ if (CurveField(idManager.AllocateDynamicID("falloff"), falloff))
 
 ## The view
 
-`CurveView` is yours: keep it from frame to frame, as you would a `TimelineView`.
+`CurveView` is yours: keep it from frame to frame, as you would a `TimelineView`. It's two
+parts in one, which you can also keep apart to show the curves in several places (see
+[Several views of the same curves](#several-views-of-the-same-curves)):
 
-| Field | What it's for |
-| --- | --- |
-| `channels` | The curves: one for a plain curve, four for a color's R, G, B and A |
-| `range` | What the field shows and the editor opens on; keys stay in its time span |
-| `clampValues` | Keys stay in the range's value span too |
-| `activeChannel` | The channel whose keys are added to |
-| `selectedKeys` | The selected keys, by `stableID` |
-| `presets` | The shapes under the plot; empty: the built-in ones |
-| `fps` | Frames a second, for animation curves; 0 (the default): plain times |
-| `playhead` | With `fps`: the time the ruler and the tree show, in seconds |
-| `onPlayheadChanged` | With `fps`: the user moved the playhead (already set) |
-| `onEdit` | A change was made (already applied): put it on your undo history |
+- `CurveData`: the curves themselves, their range and presets, and their edits.
+- `CurveViewState`: how one field or editor shows them, the active channel and the selection.
+
+| Field | On | What it's for |
+| --- | --- | --- |
+| `channels` | `CurveData` | The curves: one for a plain curve, four for a color's R, G, B and A |
+| `range` | `CurveData` | What the field shows and the editor opens on; keys stay in its time span |
+| `clampValues` | `CurveData` | Keys stay in the range's value span too |
+| `presets` | `CurveData` | The shapes under the plot; empty: the built-in ones |
+| `fps` | `CurveData` | Frames a second, for animation curves; 0 (the default): plain times |
+| `playhead` | `CurveData` | With `fps`: the time the ruler and the tree show, in seconds |
+| `onPlayheadChanged` | `CurveData` | With `fps`: the user moved the playhead (already set) |
+| `onEdit` | `CurveData` | A change was made (already applied): put it on your undo history |
+| `activeChannel` | `CurveViewState` | The channel whose keys are added to |
+| `selectedKeys` | `CurveViewState` | The selected keys, by `stableID` |
 
 Each `CurveChannel` has:
 
@@ -243,26 +248,51 @@ On the focused plot:
 Every change comes to `onEdit` as a `CurveEdit`, already done: each changed channel's curve as
 it was (`from`) and is (`to`).
 
-- `ApplyCurveEdit(view, edit, undo)` does it again, or undoes it.
-- `CommitCurveEdit(view, edit)` applies an edit and hands it to `onEdit`.
+- `ApplyCurveEdit(data, edit, undo)` does it again, or undoes it. It takes the curves alone,
+  a `CurveView` or a `CurveData`.
+- `CommitCurveEdit(view, edit)` applies an edit, lets go of the selected keys it removed,
+  and hands it to `onEdit`.
 
 To change the curves from your own code as one undo step, make an edit and commit it:
 
 | Helper | The edit it makes |
 | --- | --- |
-| `AddCurveKeyEdit(view, channel, time, value, keyID)` | A key, kept in the range; none on a hidden channel or where there's one already |
-| `DeleteSelectedCurveKeysEdit(view)` | The selected keys gone |
-| `SetCurveTangentModeEdit(view, mode)` | The selected keys' tangents |
-| `SetCurveInterpolationEdit(view, interpolation)` | The selected keys' interpolation |
-| `ApplyCurvePresetEdit(view, channel, preset, makeID)` | A preset stretched over the range |
-| `SetCurveWrapEdit(view, channel, pre, post)` | A channel's wrap modes |
+| `AddCurveKeyEdit(data, channel, time, value, keyID)` | A key, kept in the range; none on a hidden channel or where there's one already |
+| `DeleteSelectedCurveKeysEdit(view)` | A view's selected keys gone |
+| `SetCurveTangentModeEdit(view, mode)` | A view's selected keys' tangents |
+| `SetCurveInterpolationEdit(view, interpolation)` | A view's selected keys' interpolation |
+| `ApplyCurvePresetEdit(data, channel, preset, makeID)` | A preset stretched over the range |
+| `SetCurveWrapEdit(data, channel, pre, post)` | A channel's wrap modes |
 
 ```cpp
 CommitCurveEdit(falloff, AddCurveKeyEdit(falloff, 0, 0.5f, 0.8f, idManager.CreateStaticID()));
 ```
 
 - With `fps` set, `AddCurveKeyEdit` puts the key on the nearest frame.
-- `SnapToFrame(view, time)` does the same for your own times: 0.43 at 10 fps is 0.4.
+- `SnapToFrame(data, time)` does the same for your own times: 0.43 at 10 fps is 0.4.
+
+## Several views of the same curves
+
+The curves can show in more than one place at once, for example a field in each of two
+inspectors, or two curve editor panels. Keep them once, as a `CurveData`, and a
+`CurveViewState` for each field or editor of them:
+
+```cpp
+CurveData      falloff;         // the curves, their range, onEdit
+CurveViewState left, right;     // each inspector's: the selection, the zoom, its editor window
+
+// Each frame, in each inspector:
+CurveField(idManager.AllocateDynamicID("falloff"), { falloff, left });
+```
+
+- Each opens, zooms and selects on its own.
+  - For example, a click on the left field opens its editor; the right one's stays shut.
+- An edit made in one shows in all of them.
+  - For example, a key dragged in the left editor moves in the right one too.
+  - A key deleted in one leaves the others' selections the next time they draw.
+- A field returns true after a change made in it; the others don't.
+- `SaveViewState` and `RestoreViewState` take a `CurveViewState`, to keep an editor panel's
+  zoom with its layout.
 
 ## Presets
 

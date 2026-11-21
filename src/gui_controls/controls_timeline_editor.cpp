@@ -27,43 +27,43 @@ namespace tachyon
     {
         constexpr float kWheelZoom = 1.25f;   // a wheel notch zooms by this much
 
-        float LengthOf(const TimelineView& view)
+        float LengthOf(ConstTimelineViewRef view)
         {
-            return std::max(0.0f, Finite(view.duration, 0.0f));
+            return std::max(0.0f, Finite(view.data.duration, 0.0f));
         }
 
-        float FrameOf(const TimelineView& view)
+        float FrameOf(ConstTimelineViewRef view)
         {
-            const float fps = Finite(view.fps, 0.0f);
+            const float fps = Finite(view.data.fps, 0.0f);
             return fps > 0.0f ? 1.0f / fps : 0.0f;
         }
 
         // The part of the timeline in view: its start and length, within the whole.
-        TimelineRange ViewRangeOf(const TimelineView& view)
+        TimelineRange ViewRangeOf(ConstTimelineViewRef view)
         {
             const float length = LengthOf(view);
-            const float shown  = Finite(view.viewLength, 0.0f);
+            const float shown  = Finite(view.state.viewLength, 0.0f);
             const float span   = (shown <= 0.0f || shown >= length) ? length : shown;
-            const float start  = std::clamp(Finite(view.viewStart, 0.0f), 0.0f, length - span);
+            const float start  = std::clamp(Finite(view.state.viewStart, 0.0f), 0.0f, length - span);
             return { start, start + span };
         }
 
         // The shortest stretch a zoom shows: ten frames, or a two-hundredth of the length.
-        float MinViewLength(const TimelineView& view)
+        float MinViewLength(ConstTimelineViewRef view)
         {
             const float length = LengthOf(view);
             return std::min(length, std::max(length / 200.0f, 10.0f * FrameOf(view)));
         }
 
         // Shows `span` seconds, keeping the time `anchor` (inside the view) where it is.
-        void ZoomTo(TimelineView& view, float span, float anchor)
+        void ZoomTo(TimelineViewRef view, float span, float anchor)
         {
             const float length = LengthOf(view);
             const TimelineRange now = ViewRangeOf(view);
             span = std::clamp(span, MinViewLength(view), length);
             const float part = now.end > now.start ? (anchor - now.start) / (now.end - now.start) : 0.5f;
-            view.viewLength = span >= length ? 0.0f : span;
-            view.viewStart  = std::clamp(anchor - part * span, 0.0f, length - span);
+            view.state.viewLength = span >= length ? 0.0f : span;
+            view.state.viewStart  = std::clamp(anchor - part * span, 0.0f, length - span);
         }
 
         // Pixels and seconds across a padding box showing `range`.
@@ -87,25 +87,25 @@ namespace tachyon
 
         // The rows shown, by track: those the filter keeps (with the groups they're in),
         // and of those, the ones not inside a collapsed group.
-        std::vector<int> ShownRows(const TimelineView& view)
+        std::vector<int> ShownRows(ConstTimelineViewRef view)
         {
-            const int count = (int)view.tracks.size();
-            std::vector<bool> kept(size_t(count), view.filter.empty());
-            if (!view.filter.empty())
+            const int count = (int)view.data.tracks.size();
+            std::vector<bool> kept(size_t(count), view.state.filter.empty());
+            if (!view.state.filter.empty())
             {
-                const std::string needle = Lower(view.filter);
+                const std::string needle = Lower(view.state.filter);
                 for (int t = 0; t < count; ++t)
                 {
-                    if (Lower(view.tracks[size_t(t)].name).find(needle) == std::string::npos)
+                    if (Lower(view.data.tracks[size_t(t)].name).find(needle) == std::string::npos)
                         continue;
                     // It, and each group it's in.
                     kept[size_t(t)] = true;
-                    int depth = view.tracks[size_t(t)].depth;
+                    int depth = view.data.tracks[size_t(t)].depth;
                     for (int g = t - 1; g >= 0 && depth > 0; --g)
-                        if (view.tracks[size_t(g)].depth < depth)
+                        if (view.data.tracks[size_t(g)].depth < depth)
                         {
                             kept[size_t(g)] = true;
-                            depth = view.tracks[size_t(g)].depth;
+                            depth = view.data.tracks[size_t(g)].depth;
                         }
                 }
             }
@@ -113,7 +113,7 @@ namespace tachyon
             int collapsedAt = INT_MAX;   // the depth of the collapsed group being skipped
             for (int t = 0; t < count; ++t)
             {
-                const TimelineTrack& track = view.tracks[size_t(t)];
+                const TimelineTrack& track = view.data.tracks[size_t(t)];
                 if (track.depth <= collapsedAt)
                     collapsedAt = INT_MAX;
                 else
@@ -128,10 +128,10 @@ namespace tachyon
         }
 
         // A group's summary: the times of the keys in the tracks it holds, each once.
-        std::vector<float> SummaryTimes(const TimelineView& view, int group)
+        std::vector<float> SummaryTimes(ConstTimelineViewRef view, int group)
         {
             std::vector<float> times;
-            for (const TimelineTrack& track : TracksInGroup(view, group))
+            for (const TimelineTrack& track : TracksInGroup(view.data, group))
                 for (const TimelineKey& key : track.keys)
                     times.push_back(key.time);
             std::sort(times.begin(), times.end());
@@ -140,10 +140,10 @@ namespace tachyon
         }
 
         // The keys at `time` (within a hair) in the tracks a group holds.
-        std::vector<ID> KeysAtInGroup(const TimelineView& view, int group, float time)
+        std::vector<ID> KeysAtInGroup(ConstTimelineViewRef view, int group, float time)
         {
             std::vector<ID> ids;
-            for (const TimelineTrack& track : TracksInGroup(view, group))
+            for (const TimelineTrack& track : TracksInGroup(view.data, group))
                 for (const TimelineKey& key : track.keys)
                     if (std::fabs(key.time - time) < 1e-4f)
                         ids.push_back(key.stableID);
@@ -157,12 +157,12 @@ namespace tachyon
             float           time = 0.0f;
         };
 
-        Hit HitOnRow(const TimelineView& view, int track, const Geometry& geometry, float x, float reach)
+        Hit HitOnRow(ConstTimelineViewRef view, int track, const Geometry& geometry, float x, float reach)
         {
             Hit hit;
-            if (track < 0 || track >= (int)view.tracks.size())
+            if (track < 0 || track >= (int)view.data.tracks.size())
                 return hit;
-            const TimelineTrack& t = view.tracks[size_t(track)];
+            const TimelineTrack& t = view.data.tracks[size_t(track)];
             float best = reach + 1.0f;
             auto consider = [&](float time, std::vector<ID> ids) {
                 const float d = std::fabs(geometry.XAt(time) - x);
@@ -186,7 +186,7 @@ namespace tachyon
                     // are gathered once, for it alone.
                     float nearest = best;
                     float time    = 0.0f;
-                    for (const TimelineTrack& held : TracksInGroup(view, track))
+                    for (const TimelineTrack& held : TracksInGroup(view.data, track))
                         for (const TimelineKey& key : held.keys)
                             if (const float d = std::fabs(geometry.XAt(key.time) - x); d < nearest)
                             {
@@ -213,58 +213,58 @@ namespace tachyon
         // unlocked tracks moved by `delta`, kept inside the length. Only the tracks holding
         // selected ones are rewritten, their keys and events alone: a drag calls it each move,
         // and the others (an audio clip's waveform) stay as they are.
-        void MoveSelectedKeys(TimelineView& view, const std::vector<TimelineTrack>& from, float delta)
+        void MoveSelectedKeys(TimelineViewRef view, const std::vector<TimelineTrack>& from, float delta)
         {
             const float length = LengthOf(view);
             auto selected = [&view](const auto& items) {
-                return std::any_of(items.begin(), items.end(), [&view](const auto& item) { return view.selectedKeys.contains(item.stableID); });
+                return std::any_of(items.begin(), items.end(), [&view](const auto& item) { return view.state.selectedKeys.contains(item.stableID); });
             };
             for (int t = 0; t < (int)from.size(); ++t)
             {
                 const TimelineTrack& was = from[size_t(t)];
-                if (IsTrackLocked(view, t) || (!selected(was.keys) && !selected(was.events)))
+                if (IsTrackLocked(view.data, t) || (!selected(was.keys) && !selected(was.events)))
                     continue;
-                TimelineTrack& track = view.tracks[size_t(t)];
+                TimelineTrack& track = view.data.tracks[size_t(t)];
                 track.keys   = was.keys;     // into the storage it has
                 track.events = was.events;
                 for (TimelineKey& key : track.keys)
-                    if (view.selectedKeys.contains(key.stableID)) key.time = std::clamp(key.time + delta, 0.0f, length);
+                    if (view.state.selectedKeys.contains(key.stableID)) key.time = std::clamp(key.time + delta, 0.0f, length);
                 for (TimelineEvent& event : track.events)
-                    if (view.selectedKeys.contains(event.stableID)) event.time = std::clamp(event.time + delta, 0.0f, length);
+                    if (view.state.selectedKeys.contains(event.stableID)) event.time = std::clamp(event.time + delta, 0.0f, length);
                 SortTimes(track);
             }
         }
 
         // The edit taking the tracks from `before` to how they are now.
-        TimelineEdit ChangesSince(const TimelineView& view, const std::vector<TimelineTrack>& before)
+        TimelineEdit ChangesSince(ConstTimelineViewRef view, const std::vector<TimelineTrack>& before)
         {
             TimelineEdit edit;
-            if (before.size() != view.tracks.size())
+            if (before.size() != view.data.tracks.size())
                 return edit;
             for (int t = 0; t < (int)before.size(); ++t)
-                if (!(before[size_t(t)] == view.tracks[size_t(t)]))
-                    edit.changes.push_back({ t, before[size_t(t)], view.tracks[size_t(t)] });
+                if (!(before[size_t(t)] == view.data.tracks[size_t(t)]))
+                    edit.changes.push_back({ t, before[size_t(t)], view.data.tracks[size_t(t)] });
             return edit;
         }
 
         // A delta on frames when the view snaps.
-        float SnappedDelta(const TimelineView& view, float delta)
+        float SnappedDelta(ConstTimelineViewRef view, float delta)
         {
             const float frame = FrameOf(view);
-            return (view.snap && frame > 0.0f) ? std::round(delta / frame) * frame : delta;
+            return (view.data.snap && frame > 0.0f) ? std::round(delta / frame) * frame : delta;
         }
 
-        float SnappedTime(const TimelineView& view, float time)
+        float SnappedTime(ConstTimelineViewRef view, float time)
         {
             const float frame = FrameOf(view);
-            return SnapToFrame(time, view.snap ? frame : 0.0f, LengthOf(view));
+            return SnapToFrame(time, view.data.snap ? frame : 0.0f, LengthOf(view));
         }
 
         // Every key's and event's time, in order: where Previous / Next key go.
-        std::vector<float> AllKeyTimes(const TimelineView& view)
+        std::vector<float> AllKeyTimes(ConstTimelineViewRef view)
         {
             std::vector<float> times;
-            for (const TimelineTrack& track : view.tracks)
+            for (const TimelineTrack& track : view.data.tracks)
             {
                 for (const TimelineKey& key : track.keys) times.push_back(key.time);
                 for (const TimelineEvent& e : track.events) times.push_back(e.time);
@@ -283,7 +283,7 @@ namespace tachyon
         // The wheel over the ruler or the lanes, by `mode`: zooms round the time under the
         // pointer, or scrolls along the time. A scroll up or down is left to the rows' scroll
         // area. A pinch zooms.
-        bool WheelOverTime(TimelineView& view, const ElementEvent& event, const Geometry& g, float x, WheelMode mode)
+        bool WheelOverTime(TimelineViewRef view, const ElementEvent& event, const Geometry& g, float x, WheelMode mode)
         {
             const float length = LengthOf(view);
             const WheelNavigation nav = NavigateByWheel(event.state, mode, kWheelZoom);
@@ -297,7 +297,7 @@ namespace tachyon
             {
                 const TimelineRange after = ViewRangeOf(view);
                 const float shown = after.end - after.start;
-                view.viewStart = std::clamp(after.start + nav.pan.x * shown * 0.1f, 0.0f, std::max(0.0f, length - shown));
+                view.state.viewStart = std::clamp(after.start + nav.pan.x * shown * 0.1f, 0.0f, std::max(0.0f, length - shown));
             }
             return true;
         }
@@ -305,7 +305,7 @@ namespace tachyon
         // The middle button (or Alt + left) held over the ruler or the lanes: the time follows
         // the pointer across, and the rows (with `body`, the area they scroll in) up and down.
         // Escape puts both back.
-        bool DragScroll(TimelineView& view, const ElementEvent& event, const ElementStorage& es, GUIStateManager& gsm,
+        bool DragScroll(TimelineViewRef view, const ElementEvent& event, const ElementStorage& es, GUIStateManager& gsm,
                         const Geometry& g, ID body, int32_t contentHeight, int32_t dragDistance)
         {
             ScrollManagement& scrolling = gsm.GetScrollManagement();
@@ -318,25 +318,25 @@ namespace tachyon
                     const MouseButtons button = PanDragButton(event.state);
                     if (button == MouseButtons::None)
                         return false;
-                    view.dragScroll.Press(event, es, gsm,
+                    view.state.dragScroll.Press(event, es, gsm,
                                           { ViewRangeOf(view).start, vertical ? scrolling.GetScrollOffset(handle).y : 0 },
                                           { .button = button, .focus = false });
                     return true;
                 }
                 case EventType::MouseMove:
                 {
-                    if (!view.dragScroll.IsPressed(event.id))
+                    if (!view.state.dragScroll.IsPressed(event.id))
                         return false;
-                    if (!view.dragScroll.Move(event, dragDistance))
+                    if (!view.state.dragScroll.Move(event, dragDistance))
                         return true;
                     // Screen pixels: the rows move under the pointer as they scroll.
-                    const int2 d = view.dragScroll.drag.ScreenDelta(event.state);
-                    const TimelineView::DragScrollFrom& from = view.dragScroll.before;
+                    const int2 d = view.state.dragScroll.drag.ScreenDelta(event.state);
+                    const TimelineViewState::DragScrollFrom& from = view.state.dragScroll.before;
                     const float length = LengthOf(view);
                     const TimelineRange now = ViewRangeOf(view);
                     const float span = now.end - now.start;
                     if (span < length)
-                        view.viewStart = std::clamp(from.start - float(d.x) * span / std::max(1.0f, g.width), 0.0f, length - span);
+                        view.state.viewStart = std::clamp(from.start - float(d.x) * span / std::max(1.0f, g.width), 0.0f, length - span);
                     if (vertical)
                         if (const ElementRect* area = es.GetElementRectPtr(es.FindElementRefByID(body)))
                         {
@@ -347,13 +347,13 @@ namespace tachyon
                     return true;
                 }
                 case EventType::MouseUp:
-                    return view.dragScroll.IsPressed(event.id) && view.dragScroll.Release(event) != PointerDrag::Ended::No;
+                    return view.state.dragScroll.IsPressed(event.id) && view.state.dragScroll.Release(event) != PointerDrag::Ended::No;
                 case EventType::KeyDown:
-                    if (!view.dragScroll.Cancel(event, gsm))
+                    if (!view.state.dragScroll.Cancel(event, gsm))
                         return false;
-                    view.viewStart = view.dragScroll.before.start;
+                    view.state.viewStart = view.state.dragScroll.before.start;
                     if (vertical)
-                        scrolling.SetScrollOffset(handle, int2{ scrolling.GetScrollOffset(handle).x, view.dragScroll.before.offset });
+                        scrolling.SetScrollOffset(handle, int2{ scrolling.GetScrollOffset(handle).x, view.state.dragScroll.before.offset });
                     return true;
                 default: return false;
             }
@@ -368,28 +368,32 @@ namespace tachyon
         };
     }
 
-    void GUIApplication::TimelineEditor(ID id, TimelineView& view, LayoutOverride&& constraints)
+    void GUIApplication::TimelineEditor(ID id, TimelineViewRef view, LayoutOverride&& constraints)
     {
+        // The tracks changed since this view last built (an edit here, or in another view of
+        // them): let go of what's gone.
+        PruneTimelineSelection(view);
+        view.state.editorID = id;
         const float length = LengthOf(view);
         const float frame  = FrameOf(view);
-        view.playback.time = std::clamp(Finite(view.playback.time, 0.0f), 0.0f, length);
-        TimelineView* v = &view;
+        view.data.playback.time = std::clamp(Finite(view.data.playback.time, 0.0f), 0.0f, length);
+        TimelineViewRef v = view;
         const bool disabled = guiStateManager.Construction().IsDisabled();
 
         // The zoom slider moved last frame: show that much, round the playhead. Then the
         // slider shows the zoom, however it got there.
         {
             const float minimum = MinViewLength(view);
-            if (view.zoom != view.zoomShown && length > 0.0f && minimum < length)
+            if (view.state.zoom != view.state.zoomShown && length > 0.0f && minimum < length)
             {
-                const float part = std::clamp(view.zoom, 0, 100) / 100.0f;
-                ZoomTo(view, length * std::pow(minimum / length, part), view.playback.time);
+                const float part = std::clamp(view.state.zoom, 0, 100) / 100.0f;
+                ZoomTo(view, length * std::pow(minimum / length, part), view.data.playback.time);
             }
             const TimelineRange range = ViewRangeOf(view);
             const float span = range.end - range.start;
-            view.zoom = (length > 0.0f && minimum < length && span > 0.0f)
+            view.state.zoom = (length > 0.0f && minimum < length && span > 0.0f)
                 ? std::clamp(int(std::lround(100.0f * std::log(span / length) / std::log(minimum / length))), 0, 100) : 0;
-            view.zoomShown = view.zoom;
+            view.state.zoomShown = view.state.zoom;
         }
         const TimelineRange range = ViewRangeOf(view);
         const std::vector<int> rows = ShownRows(view);
@@ -397,65 +401,65 @@ namespace tachyon
 
         BeginVertical(id, theme.timelineEditorStyleRef, std::move(constraints));
         [[maybe_unused]] const bool pushed = idManager.PushParent(id);
-        auto playbackChanged = [v] { if (v->onPlaybackChanged) v->onPlaybackChanged(); };
+        auto playbackChanged = [v] { if (v.data.onPlaybackChanged) v.data.onPlaybackChanged(); };
 
         // ---- The toolbar ----------------------------------------------------------
         BeginHorizontal(idManager.AllocateDynamicID("toolbar"), theme.timelineToolbarStyleRef);
         BeginHorizontal(idManager.AllocateDynamicID("transport"), theme.timelineTransportStyleRef);
         Button(idManager.AllocateDynamicID("start"), GUIContent(theme.timelineStartIcon, {}, "Go to the start"),
-               [v, playbackChanged] { v->playback.time = 0.0f; playbackChanged(); }, theme.timelineButtonStyleRef);
+               [v, playbackChanged] { v.data.playback.time = 0.0f; playbackChanged(); }, theme.timelineButtonStyleRef);
         Button(idManager.AllocateDynamicID("prev"), GUIContent(theme.timelinePrevKeyIcon, {}, "The previous key"),
                [v, playbackChanged] {
-                   const std::vector<float> times = AllKeyTimes(*v);
-                   const auto it = std::lower_bound(times.begin(), times.end(), v->playback.time - 1e-4f);
-                   v->playback.time = it == times.begin() ? 0.0f : *std::prev(it);
-                   v->playback.playing = false;
+                   const std::vector<float> times = AllKeyTimes(v);
+                   const auto it = std::lower_bound(times.begin(), times.end(), v.data.playback.time - 1e-4f);
+                   v.data.playback.time = it == times.begin() ? 0.0f : *std::prev(it);
+                   v.data.playback.playing = false;
                    playbackChanged();
                }, theme.timelineButtonStyleRef);
         Button(idManager.AllocateDynamicID("play"),
-               view.playback.playing ? GUIContent(theme.timelinePauseIcon, {}, "Pause") : GUIContent(theme.timelinePlayIcon, {}, "Play"),
-               [v, length, playbackChanged] { TogglePlay(v->playback, length); playbackChanged(); }, theme.timelinePlayStyleRef);
+               view.data.playback.playing ? GUIContent(theme.timelinePauseIcon, {}, "Pause") : GUIContent(theme.timelinePlayIcon, {}, "Play"),
+               [v, length, playbackChanged] { TogglePlay(v.data.playback, length); playbackChanged(); }, theme.timelinePlayStyleRef);
         Button(idManager.AllocateDynamicID("next"), GUIContent(theme.timelineNextKeyIcon, {}, "The next key"),
                [v, length, playbackChanged] {
-                   const std::vector<float> times = AllKeyTimes(*v);
-                   const auto it = std::upper_bound(times.begin(), times.end(), v->playback.time + 1e-4f);
-                   v->playback.time = it == times.end() ? length : *it;
-                   v->playback.playing = false;
+                   const std::vector<float> times = AllKeyTimes(v);
+                   const auto it = std::upper_bound(times.begin(), times.end(), v.data.playback.time + 1e-4f);
+                   v.data.playback.time = it == times.end() ? length : *it;
+                   v.data.playback.playing = false;
                    playbackChanged();
                }, theme.timelineButtonStyleRef);
         Button(idManager.AllocateDynamicID("end"), GUIContent(theme.timelineEndIcon, {}, "Go to the end"),
-               [v, length, playbackChanged] { v->playback.time = length; v->playback.playing = false; playbackChanged(); },
+               [v, length, playbackChanged] { v.data.playback.time = length; v.data.playback.playing = false; playbackChanged(); },
                theme.timelineButtonStyleRef);
-        Toggle(idManager.AllocateDynamicID("loop"), view.playback.loop, GUIContent(theme.timelineLoopIcon, {}, "Loop"),
-               [v](bool loop) { v->playback.loop = loop; }, theme.timelineLoopStyleRef);
+        Toggle(idManager.AllocateDynamicID("loop"), view.data.playback.loop, GUIContent(theme.timelineLoopIcon, {}, "Loop"),
+               [v](bool loop) { v.data.playback.loop = loop; }, theme.timelineLoopStyleRef);
         EndHorizontal();
         RegisterElement(Element{ .id = idManager.AllocateDynamicID("divider"), .styleRef = theme.timelineDividerStyleRef,
                                  .flags = ElementFlags::NoInput }, LayoutOverride{});
 
         BeginHorizontal(idManager.AllocateDynamicID("time"), theme.timelineTimeStyleRef);
-        Text(idManager.AllocateDynamicID("now"), ClockText(view.playback.time), theme.timelineTimeCurrentStyleRef);
+        Text(idManager.AllocateDynamicID("now"), ClockText(view.data.playback.time), theme.timelineTimeCurrentStyleRef);
         Text(idManager.AllocateDynamicID("length"), "/ " + ClockText(length), theme.timelineTimeTotalStyleRef);
         if (frame > 0.0f)
-            Text(idManager.AllocateDynamicID("frame"), FrameText(view.playback.time, frame, length), theme.timelineFrameStyleRef);
+            Text(idManager.AllocateDynamicID("frame"), FrameText(view.data.playback.time, frame, length), theme.timelineFrameStyleRef);
         EndHorizontal();
 
         // The frame rate: the usual ones, and the view's own if it's another.
         {
-            const std::string shown = std::format("{:g} fps", Finite(view.fps, 0.0f));
+            const std::string shown = std::format("{:g} fps", Finite(view.data.fps, 0.0f));
             if (BeginMenu(idManager.AllocateDynamicID("fps"), shown, theme.timelineFpsStyleRef, theme.menuStyleRef, theme.menuItemRowStyleRef))
             {
                 for (const float fps : { 12.0f, 24.0f, 25.0f, 30.0f, 48.0f, 50.0f, 60.0f })
-                    MenuItem(std::format("{:g} fps", fps), [v, fps] { v->fps = fps; });
+                    MenuItem(std::format("{:g} fps", fps), [v, fps] { v.data.fps = fps; });
             }
             EndMenu();
         }
-        Toggle(idManager.AllocateDynamicID("snap"), view.snap, GUIContent(theme.timelineSnapIcon, "Snap", "Keys and the loop range land on frames"),
-               [v](bool snap) { v->snap = snap; }, theme.timelineSnapStyleRef);
+        Toggle(idManager.AllocateDynamicID("snap"), view.data.snap, GUIContent(theme.timelineSnapIcon, "Snap", "Keys and the loop range land on frames"),
+               [v](bool snap) { v.data.snap = snap; }, theme.timelineSnapStyleRef);
 
         BeginHorizontal(idManager.AllocateDynamicID("zoom"), theme.timelineZoomStyleRef);
         RegisterElement(Element{ .id = idManager.AllocateDynamicID("zoomOut"), .iconID = theme.timelineZoomOutIcon,
                                  .styleRef = theme.timelineZoomIconStyleRef, .flags = ElementFlags::NoInput }, LayoutOverride{});
-        Slider(idManager.AllocateDynamicID("zoomSlider"), view.zoom, 0, 100, LayoutOverride{}.Width(110));
+        Slider(idManager.AllocateDynamicID("zoomSlider"), view.state.zoom, 0, 100, LayoutOverride{}.Width(110));
         SetTooltip("Zoom (the wheel over the lanes)");
         RegisterElement(Element{ .id = idManager.AllocateDynamicID("zoomIn"), .iconID = theme.timelineZoomInIcon,
                                  .styleRef = theme.timelineZoomIconStyleRef, .flags = ElementFlags::NoInput }, LayoutOverride{});
@@ -467,15 +471,15 @@ namespace tachyon
         BeginHorizontal(idManager.AllocateDynamicID("header"), theme.timelineHeaderStyleRef);
         BeginHorizontal(idManager.AllocateDynamicID("listHeader"), theme.timelineListHeaderStyleRef);
         Text(idManager.AllocateDynamicID("tracks"), "Tracks", theme.timelineListTitleStyleRef);
-        SearchField(idManager.AllocateDynamicID("filter"), view.filter, theme.searchIcon, TextEditBehavior::ContinuousUpdate,
+        SearchField(idManager.AllocateDynamicID("filter"), view.state.filter, theme.searchIcon, TextEditBehavior::ContinuousUpdate,
                     theme.timelineFilterStyleRef);
-        if (view.onAddTrack)
+        if (view.state.onAddTrack)
             Button(idManager.AllocateDynamicID("addTrack"), GUIContent(theme.addIcon, {}, "Add a track"),
-                   [v] { if (v->onAddTrack) v->onAddTrack(); }, theme.timelineAddTrackStyleRef);
+                   [v] { if (v.state.onAddTrack) v.state.onAddTrack(); }, theme.timelineAddTrackStyleRef);
         EndHorizontal();
 
         // The labels of the ruler's major ticks, for the width it had last frame.
-        const float lastWidth = float(view.lanesWidth > 0 ? view.lanesWidth : styleManager.Px(600));
+        const float lastWidth = float(view.state.lanesWidth > 0 ? view.state.lanesWidth : styleManager.Px(600));
         const float minLabelGap = float(styleManager.Px(56));
         const float labelStep = MajorTickStep(lastWidth / std::max(1e-6f, range.end - range.start), minLabelGap);
         std::vector<TickLabel> rulerLabels;
@@ -493,7 +497,7 @@ namespace tachyon
             }
         }
         const ID pillID = idManager.AllocateDynamicID("playheadLabel");
-        const TextID pillText = textSystem->RegisterText(pillID, std::format("{:.2f}", view.playback.time),
+        const TextID pillText = textSystem->RegisterText(pillID, std::format("{:.2f}", view.data.playback.time),
                                                          theme.timelinePlayheadLabelStyleRef, ElementState::None);
         const TextMeasurement pillSize = textSystem->MeasureText(pillText, TextWrapContext{});
 
@@ -512,13 +516,13 @@ namespace tachyon
                 if (event.rect == nullptr)
                     return false;
                 const IntRect inner = event.rect->innerRect;
-                const Geometry g{ ViewRangeOf(*v), float(inner.x), float(v->lanesWidth > 0 ? v->lanesWidth : inner.w) };
+                const Geometry g{ ViewRangeOf(v), float(inner.x), float(v.state.lanesWidth > 0 ? v.state.lanesWidth : inner.w) };
                 const float x = float(event.LocalCursor(es).x);
-                if (DragScroll(*v, event, es, gsm, g, ID::Invalid(), 0, dragDistance))
+                if (DragScroll(v, event, es, gsm, g, ID::Invalid(), 0, dragDistance))
                     return true;
                 // The loop edge within reach of the pointer: 1 its start, 2 its end, 0 none.
                 auto loopEdgeAt = [&]() {
-                    const TimelineRange loop = v->loopRange;
+                    const TimelineRange loop = v.data.loopRange;
                     if (loop.empty()) return 0;
                     if (std::fabs(x - g.XAt(loop.start)) <= float(edgeReach)) return 1;
                     if (std::fabs(x - g.XAt(loop.end)) <= float(edgeReach)) return 2;
@@ -533,11 +537,11 @@ namespace tachyon
                         TakeFocus(gsm, lanesID);
                         const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                         const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
-                        const TimelineRange loop = v->loopRange;
+                        const TimelineRange loop = v.data.loopRange;
                         if (ctrl)
                         {
                             if (!loop.empty())
-                                CommitTimelineEdit(*v, TimelineEdit{ .loopFrom = loop, .loopTo = TimelineRange{} });
+                                CommitTimelineEdit(v.data, TimelineEdit{ .loopFrom = loop, .loopTo = TimelineRange{} });
                             return true;
                         }
                         int edge = shift ? 0 : -1;
@@ -546,83 +550,83 @@ namespace tachyon
                         if (edge >= 0)
                         {
                             // Captured: the moves, release and Escape come here.
-                            v->loopDrag.Press(event, es, gsm, loop, { .atOnce = true, .focus = false });
-                            v->loopEdge = edge;
-                            v->loopPressTime = SnappedTime(*v, g.TimeAt(x));
+                            v.state.loopDrag.Press(event, es, gsm, loop, { .atOnce = true, .focus = false });
+                            v.state.loopEdge = edge;
+                            v.state.loopPressTime = SnappedTime(v, g.TimeAt(x));
                             return true;
                         }
-                        v->scrub.Press(event, es, gsm, v->playback.time, { .atOnce = true, .focus = false });
-                        v->playback.time = SnappedTime(*v, g.TimeAt(x));
+                        v.state.scrub.Press(event, es, gsm, v.data.playback.time, { .atOnce = true, .focus = false });
+                        v.data.playback.time = SnappedTime(v, g.TimeAt(x));
                         playbackChanged();
                         return true;
                     }
                     case EventType::MouseMove:
                     {
-                        if (v->loopDrag.Move(event, 0))
+                        if (v.state.loopDrag.Move(event, 0))
                         {
-                            const float t = SnappedTime(*v, g.TimeAt(x));
-                            TimelineRange r = v->loopDrag.before;
-                            if (v->loopEdge == 0) r = { std::min(v->loopPressTime, t), std::max(v->loopPressTime, t) };
-                            else if (v->loopEdge == 1) r.start = std::min(t, r.end);
+                            const float t = SnappedTime(v, g.TimeAt(x));
+                            TimelineRange r = v.state.loopDrag.before;
+                            if (v.state.loopEdge == 0) r = { std::min(v.state.loopPressTime, t), std::max(v.state.loopPressTime, t) };
+                            else if (v.state.loopEdge == 1) r.start = std::min(t, r.end);
                             else r.end = std::max(t, r.start);
-                            v->loopRange = r;
+                            v.data.loopRange = r;
                             return true;
                         }
-                        if (v->scrub.Move(event, 0))
+                        if (v.state.scrub.Move(event, 0))
                         {
-                            v->playback.time = SnappedTime(*v, g.TimeAt(x));
+                            v.data.playback.time = SnappedTime(v, g.TimeAt(x));
                             playbackChanged();
                             return true;
                         }
                         // What's under the pointer, for its hover look; not while dragging.
-                        v->loopEdgeHover.Track(AnyHeld(v->loopDrag, v->scrub, v->dragScroll), loopEdgeAt);
+                        v.state.loopEdgeHover.Track(AnyHeld(v.state.loopDrag, v.state.scrub, v.state.dragScroll), loopEdgeAt);
                         return false;
                     }
                     case EventType::MouseUp:
                     {
-                        if (v->loopDrag.Release(event) != PointerDrag::Ended::No)
+                        if (v.state.loopDrag.Release(event) != PointerDrag::Ended::No)
                         {
                             // A Shift + click (no drag) leaves no range: as it was.
-                            const TimelineRange before = v->loopDrag.before;
-                            if (v->loopRange.empty() && v->loopEdge == 0)
-                                v->loopRange = before;
-                            const TimelineRange now = v->loopRange;
+                            const TimelineRange before = v.state.loopDrag.before;
+                            if (v.data.loopRange.empty() && v.state.loopEdge == 0)
+                                v.data.loopRange = before;
+                            const TimelineRange now = v.data.loopRange;
                             if (!(now == before))
                             {
-                                v->loopRange = before;
-                                CommitTimelineEdit(*v, TimelineEdit{ .loopFrom = before, .loopTo = now });
+                                v.data.loopRange = before;
+                                CommitTimelineEdit(v.data, TimelineEdit{ .loopFrom = before, .loopTo = now });
                             }
                             return true;
                         }
-                        return v->scrub.Release(event) != PointerDrag::Ended::No;
+                        return v.state.scrub.Release(event) != PointerDrag::Ended::No;
                     }
                     case EventType::KeyDown:
-                        if (v->loopDrag.Cancel(event, gsm, v->loopRange))
+                        if (v.state.loopDrag.Cancel(event, gsm, v.data.loopRange))
                             return true;
-                        if (v->scrub.Cancel(event, gsm, v->playback.time))
+                        if (v.state.scrub.Cancel(event, gsm, v.data.playback.time))
                         {
                             playbackChanged();
                             return true;
                         }
                         return false;
                     case EventType::MouseScroll:
-                        return WheelOverTime(*v, event, g, x, wheelMode);
+                        return WheelOverTime(v, event, g, x, wheelMode);
                     default: return false;
                 }
             };
         }
         const ElementRef rulerRef = RegisterElement(
             Element{ .id = rulerID, .eventHandler = std::move(rulerHandler), .styleRef = theme.timelineRulerStyleRef,
-                     .flags = view.playback.playing ? ElementFlags::Animated : ElementFlags::None },
+                     .flags = view.data.playback.playing ? ElementFlags::Animated : ElementFlags::None },
             LayoutOverride{});
         {
-            const TimelineRange loop = view.loopRange;
-            const float time = view.playback.time;
+            const TimelineRange loop = view.data.loopRange;
+            const float time = view.data.playback.time;
             // A press anywhere on the ruler moves the playhead, so its pill lights up while
             // the ruler is hovered; a loop edge within reach, or being dragged, does too.
             const bool rulerHovered = (guiStateManager.GetCurrentState(rulerID) & ElementState::Hover) != ElementState::None;
-            const bool scrubbing    = view.scrub.IsHeld();
-            const int  litEdge      = view.loopDrag.IsHeld() ? view.loopEdge : view.loopEdgeHover.Shown(rulerHovered);
+            const bool scrubbing    = view.state.scrub.IsHeld();
+            const int  litEdge      = view.state.loopDrag.IsHeld() ? view.state.loopEdge : view.state.loopEdgeHover.Shown(rulerHovered);
             const ElementState pillState = (rulerHovered && litEdge == 0) || scrubbing ? ElementState::Hover : ElementState::None;
             const VisualBoxStyleIndex tick = theme.timelineTickStyleRef.visualBoxStyleIndex, major = theme.timelineTickMajorStyleRef.visualBoxStyleIndex;
             const VisualBoxStyleIndex band = theme.timelineLoopRangeStyleRef.visualBoxStyleIndex, edge = theme.timelineLoopEdgeStyleRef.visualBoxStyleIndex;
@@ -634,7 +638,7 @@ namespace tachyon
             VERIFY(elementStorage.AddCustomDraw(rulerRef, [=](CustomDrawContext& ctx)
             {
                 const IntRect outer = ctx.ElementRect(), inner = ctx.ElementInnerRect();
-                const Geometry g{ range, float(inner.x), float(v->lanesWidth > 0 ? v->lanesWidth : inner.w) };
+                const Geometry g{ range, float(inner.x), float(v.state.lanesWidth > 0 ? v.state.lanesWidth : inner.w) };
                 if (!loop.empty())
                 {
                     const int32_t a = int32_t(g.XAt(loop.start)), b = int32_t(g.XAt(loop.end));
@@ -682,17 +686,19 @@ namespace tachyon
         const int32_t indent = styleManager.Px(24);
         for (const int t : rows)
         {
-            const TimelineTrack& track = view.tracks[size_t(t)];
-            const ID rowID = track.stableID;
-            const bool locked = IsTrackLocked(view, t);
+            const TimelineTrack& track = view.data.tracks[size_t(t)];
+            // Scoped to the editor: other views of the tracks have rows of their own.
+            const ID trackID = track.stableID;
+            const ID rowID = IDManager::ScopedID(id, trackID);
+            const bool locked = IsTrackLocked(view.data, t);
             const ElementState rowState = guiStateManager.GetCurrentState(rowID)
-                                        | (view.selectedTrack == rowID ? ElementState::Selected : ElementState::None);
+                                        | (view.state.selectedTrack == trackID ? ElementState::Selected : ElementState::None);
             EventHandler rowHandler;
             if (!disabled)
-                rowHandler = [this, v, rowID, lanesID](ElementEvent&& event) -> bool {
+                rowHandler = [this, v, trackID, lanesID](ElementEvent&& event) -> bool {
                     if (event.type != EventType::MouseDown || !event.state.LeftPressed())
                         return false;
-                    v->selectedTrack = rowID;
+                    v.state.selectedTrack = trackID;
                     TakeFocus(guiStateManager, lanesID);
                     return true;
                 };
@@ -708,10 +714,10 @@ namespace tachyon
             // A change to this track, as an edit: what it was and what it'll be.
             auto changeTrack = [v, t](auto change) {
                 return [v, t, change] {
-                    if (t >= (int)v->tracks.size()) return;
-                    TimelineTrack to = v->tracks[size_t(t)];
+                    if (t >= (int)v.data.tracks.size()) return;
+                    TimelineTrack to = v.data.tracks[size_t(t)];
                     change(to);
-                    CommitTimelineEdit(*v, TimelineEdit{ .changes = { { t, v->tracks[size_t(t)], std::move(to) } } });
+                    CommitTimelineEdit(v.data, TimelineEdit{ .changes = { { t, v.data.tracks[size_t(t)], std::move(to) } } });
                 };
             };
             switch (track.kind)
@@ -720,7 +726,7 @@ namespace tachyon
                 {
                     Button(idManager.AllocateDynamicID("chevron"),
                            GUIContent(track.expanded ? theme.treeArrowDown : theme.treeArrowRight, {}, track.expanded ? "Collapse" : "Expand"),
-                           [v, t] { if (t < (int)v->tracks.size()) v->tracks[size_t(t)].expanded = !v->tracks[size_t(t)].expanded; },
+                           [v, t] { if (t < (int)v.data.tracks.size()) v.data.tracks[size_t(t)].expanded = !v.data.tracks[size_t(t)].expanded; },
                            theme.timelineChevronStyleRef);
                     const VisualColorStyleIndex chip = track.color.a > 0.0f
                         ? AppColorStyle(idManager.AllocateDynamicID("chip-color"), track.color) : VisualColorStyleIndex{};
@@ -740,7 +746,7 @@ namespace tachyon
                     Text(idManager.AllocateDynamicID("name"), track.name, theme.timelineTrackNameStyleRef);
                     if (locked) BeginDisabled();
                     Button(idManager.AllocateDynamicID("key"), GUIContent(theme.timelineKeyIcon, {}, "Key at the playhead"),
-                           [this, v, t] { CommitTimelineEdit(*v, AddKeyEdit(*v, t, v->playback.time, idManager.CreateStaticID())); },
+                           [this, v, t] { CommitTimelineEdit(v.data, AddKeyEdit(v.data, t, v.data.playback.time, idManager.CreateStaticID())); },
                            theme.timelineRowButtonStyleRef);
                     if (locked) EndDisabled();
                     break;
@@ -769,12 +775,12 @@ namespace tachyon
             if (inRow)
                 (void)idManager.PopParent();
             VERIFY(elementStorage.EndChildren());
-            if (view.onTrackContextMenu && BeginContextMenu(rowID))
+            if (view.state.onTrackContextMenu && BeginContextMenu(rowID))
             {
-                v->selectedTrack = rowID;
-                view.onTrackContextMenu(t);
+                v.state.selectedTrack = trackID;
+                view.state.onTrackContextMenu(t);
             }
-            if (view.onTrackContextMenu)
+            if (view.state.onTrackContextMenu)
                 EndContextMenu();
         }
         EndVertical();
@@ -788,10 +794,10 @@ namespace tachyon
         const int32_t labelFrom = std::max(1, styleManager.Px(2)) + styleManager.Px(4), labelPad = 2 * styleManager.Px(5);
         for (int r = 0; r < (int)rows.size(); ++r)
         {
-            const TimelineTrack& track = view.tracks[size_t(rows[size_t(r)])];
+            const TimelineTrack& track = view.data.tracks[size_t(rows[size_t(r)])];
             if (track.kind != TimelineTrackKind::Events)
                 continue;
-            [[maybe_unused]] const bool inTrack = idManager.PushParent(track.stableID);
+            [[maybe_unused]] const bool inTrack = idManager.PushParent(IDManager::ScopedID(id, track.stableID));
             const ID labelsID = track.events.empty() ? ID::Invalid() : idManager.AllocateRangedID(uint32_t(track.events.size()), "events");
             for (size_t e = 0; e < track.events.size(); ++e)
             {
@@ -799,7 +805,7 @@ namespace tachyon
                 const TextID text = textSystem->RegisterText(idManager.GetSubID(labelsID, uint32_t(e)), event.name,
                                                              theme.timelineEventLabelStyleRef, ElementState::None);
                 const TextMeasurement m = textSystem->MeasureText(text, TextWrapContext{});
-                eventLabels.push_back({ r, event.time, text, { m.maxWidth, m.maxHeight }, view.selectedKeys.contains(event.stableID) });
+                eventLabels.push_back({ r, event.time, text, { m.maxWidth, m.maxHeight }, view.state.selectedKeys.contains(event.stableID) });
                 labelSpans.push_back({ rows[size_t(r)], event.stableID, event.time, labelFrom, labelFrom + m.maxWidth + labelPad });
             }
             if (inTrack)
@@ -822,28 +828,28 @@ namespace tachyon
                 if (event.rect == nullptr)
                     return false;
                 const IntRect inner = event.rect->innerRect;
-                const Geometry g{ ViewRangeOf(*v), float(inner.x), float(inner.w) };
+                const Geometry g{ ViewRangeOf(v), float(inner.x), float(inner.w) };
                 const int2 at = event.LocalCursor(es);
                 const int row = (at.y - event.rect->rect.y) / std::max(1, rowHeight);
                 // The rows are this frame's; the app may have removed tracks since (from a menu).
                 int track = row >= 0 && row < (int)rows.size() ? rows[size_t(row)] : -1;
-                if (track >= (int)v->tracks.size())
+                if (track >= (int)v.data.tracks.size())
                     track = -1;
                 const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                 const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
-                const float length = LengthOf(*v);
+                const float length = LengthOf(v);
                 auto commitMove = [&](float delta) {
-                    std::vector<TimelineTrack> before = v->tracks;
-                    MoveSelectedKeys(*v, before, delta);
-                    const TimelineEdit edit = ChangesSince(*v, before);
-                    v->tracks = std::move(before);
-                    CommitTimelineEdit(*v, edit);
+                    std::vector<TimelineTrack> before = v.data.tracks;
+                    MoveSelectedKeys(v, before, delta);
+                    const TimelineEdit edit = ChangesSince(v, before);
+                    v.data.tracks = std::move(before);
+                    CommitTimelineEdit(v.data, edit);
                 };
-                if (DragScroll(*v, event, es, gsm, g, bodyID, event.rect->rect.h, dragDistance))
+                if (DragScroll(v, event, es, gsm, g, bodyID, event.rect->rect.h, dragDistance))
                     return true;
                 // A key or event under the pointer, an event's label too.
                 auto hitAt = [&](float x) {
-                    Hit hit = HitOnRow(*v, track, g, x, reach);
+                    Hit hit = HitOnRow(v, track, g, x, reach);
                     if (hit.ids.empty())
                         for (const LabelSpan& span : labelSpans)
                             if (span.track == track && x >= g.XAt(span.time) + float(span.from) && x <= g.XAt(span.time) + float(span.to))
@@ -852,13 +858,13 @@ namespace tachyon
                 };
                 // The part of the row's clip under the pointer: its ends first, they're narrow.
                 auto clipPartAt = [&](float x) {
-                    if (track < 0 || !v->tracks[size_t(track)].clip)
-                        return TimelineView::ClipPart::None;
-                    const TimelineClip& clip = *v->tracks[size_t(track)].clip;
+                    if (track < 0 || !v.data.tracks[size_t(track)].clip)
+                        return TimelineViewState::ClipPart::None;
+                    const TimelineClip& clip = *v.data.tracks[size_t(track)].clip;
                     const float a = g.XAt(clip.start), b = g.XAt(clip.start + clip.length);
-                    if (std::fabs(x - a) <= edgeReach) return TimelineView::ClipPart::Start;
-                    if (std::fabs(x - b) <= edgeReach) return TimelineView::ClipPart::End;
-                    return x > a && x < b ? TimelineView::ClipPart::Body : TimelineView::ClipPart::None;
+                    if (std::fabs(x - a) <= edgeReach) return TimelineViewState::ClipPart::Start;
+                    if (std::fabs(x - b) <= edgeReach) return TimelineViewState::ClipPart::End;
+                    return x > a && x < b ? TimelineViewState::ClipPart::Body : TimelineViewState::ClipPart::None;
                 };
                 switch (event.type)
                 {
@@ -869,92 +875,92 @@ namespace tachyon
                         if (event.state.RightPressed())
                         {
                             const Hit hit = hitAt(float(at.x));
-                            v->menuKeys      = hit.ids;
-                            v->menuTrack     = track;
-                            v->menuTime      = g.TimeAt(float(at.x));
-                            v->menuByPointer = true;
+                            v.state.menuKeys      = hit.ids;
+                            v.state.menuTrack     = track;
+                            v.state.menuTime      = g.TimeAt(float(at.x));
+                            v.state.menuByPointer = true;
                             if (track >= 0)
-                                v->selectedTrack = v->tracks[size_t(track)].stableID;
-                            if (!hit.ids.empty() && !std::all_of(hit.ids.begin(), hit.ids.end(), [v](ID id) { return v->selectedKeys.contains(id); }))
-                                v->selectedKeys = std::unordered_set<ID>(hit.ids.begin(), hit.ids.end());
+                                v.state.selectedTrack = v.data.tracks[size_t(track)].stableID;
+                            if (!hit.ids.empty() && !std::all_of(hit.ids.begin(), hit.ids.end(), [v](ID id) { return v.state.selectedKeys.contains(id); }))
+                                v.state.selectedKeys = std::unordered_set<ID>(hit.ids.begin(), hit.ids.end());
                             return false;   // the context menu opens on it
                         }
                         if (!event.state.LeftPressed())
                             return false;
                         TakeFocus(gsm, event.id);
                         if (track >= 0)
-                            v->selectedTrack = v->tracks[size_t(track)].stableID;
+                            v.state.selectedTrack = v.data.tracks[size_t(track)].stableID;
                         // A clip: its body moves it, its ends trim it (not on a locked track).
-                        if (const TimelineView::ClipPart part = clipPartAt(float(at.x));
-                            part != TimelineView::ClipPart::None && !IsTrackLocked(*v, track))
+                        if (const TimelineViewState::ClipPart part = clipPartAt(float(at.x));
+                            part != TimelineViewState::ClipPart::None && !IsTrackLocked(v.data, track))
                         {
-                            v->clipDrag.Press(event, es, gsm, v->tracks, { .focus = false });
-                            v->clipTrack     = track;
-                            v->clipPart      = part;
-                            v->clipPressTime = g.TimeAt(float(at.x));
-                            v->clipMoved     = false;
+                            v.state.clipDrag.Press(event, es, gsm, v.data.tracks, { .focus = false });
+                            v.state.clipTrack     = track;
+                            v.state.clipPart      = part;
+                            v.state.clipPressTime = g.TimeAt(float(at.x));
+                            v.state.clipMoved     = false;
                             return true;
                         }
                         const Hit hit = hitAt(float(at.x));
                         if (!hit.ids.empty())
                         {
-                            const bool allSelected = std::all_of(hit.ids.begin(), hit.ids.end(), [v](ID id) { return v->selectedKeys.contains(id); });
+                            const bool allSelected = std::all_of(hit.ids.begin(), hit.ids.end(), [v](ID id) { return v.state.selectedKeys.contains(id); });
                             if (ctrl)
                             {
                                 for (const ID id : hit.ids)
-                                    if (allSelected) v->selectedKeys.erase(id); else v->selectedKeys.insert(id);
+                                    if (allSelected) v.state.selectedKeys.erase(id); else v.state.selectedKeys.insert(id);
                             }
                             else if (shift)
-                                v->selectedKeys.insert(hit.ids.begin(), hit.ids.end());
+                                v.state.selectedKeys.insert(hit.ids.begin(), hit.ids.end());
                             else if (!allSelected)
-                                v->selectedKeys = std::unordered_set<ID>(hit.ids.begin(), hit.ids.end());
+                                v.state.selectedKeys = std::unordered_set<ID>(hit.ids.begin(), hit.ids.end());
                             if (!ctrl || !allSelected)
                             {
-                                v->keyDrag.Press(event, es, gsm, v->tracks, { .focus = false, .capture = false });
-                                v->keyPressTime = g.TimeAt(float(at.x));
-                                v->keyMoved = false;
+                                v.state.keyDrag.Press(event, es, gsm, v.data.tracks, { .focus = false, .capture = false });
+                                v.state.keyPressTime = g.TimeAt(float(at.x));
+                                v.state.keyMoved = false;
                             }
                             return true;
                         }
-                        v->boxSelect.Press(event, es, gsm, (shift || ctrl) ? v->selectedKeys : std::unordered_set<ID>{},
+                        v.state.boxSelect.Press(event, es, gsm, (shift || ctrl) ? v.state.selectedKeys : std::unordered_set<ID>{},
                                            { .focus = false, .capture = false });
-                        v->boxFrom = v->boxTo = g.TimeAt(float(at.x));
-                        v->boxFromRow = v->boxToRow = std::clamp(row, 0, std::max(0, (int)rows.size() - 1));
+                        v.state.boxFrom = v.state.boxTo = g.TimeAt(float(at.x));
+                        v.state.boxFromRow = v.state.boxToRow = std::clamp(row, 0, std::max(0, (int)rows.size() - 1));
                         return true;
                     }
                     case EventType::MouseMove:
                     {
                         // What's under the pointer, for its hover look; not while dragging.
-                        v->hover.Track(AnyHeld(v->keyDrag, v->boxSelect, v->dragScroll, v->clipDrag), [&] {
-                            TimelineView::LaneHover under;
+                        v.state.hover.Track(AnyHeld(v.state.keyDrag, v.state.boxSelect, v.state.dragScroll, v.state.clipDrag), [&] {
+                            TimelineViewState::LaneHover under;
                             const Hit hovered = hitAt(float(at.x));
                             under.track    = hovered.ids.empty() ? -1 : track;
                             under.time     = hovered.time;
                             under.clipPart = clipPartAt(float(at.x));
-                            under.clipTrack = under.clipPart != TimelineView::ClipPart::None ? track : -1;
+                            under.clipTrack = under.clipPart != TimelineViewState::ClipPart::None ? track : -1;
                             return under;
                         });
-                        if (v->clipDrag.IsPressed(event.id))
+                        if (v.state.clipDrag.IsPressed(event.id))
                         {
-                            if (!v->clipDrag.Move(event, dragDistance))
+                            if (!v.state.clipDrag.Move(event, dragDistance))
                                 return true;
-                            const int t = v->clipTrack;
-                            if (v->clipDrag.before.size() != v->tracks.size() || t < 0 || !v->clipDrag.before[size_t(t)].clip)
+                            const int t = v.state.clipTrack;
+                            if (v.state.clipDrag.before.size() != v.data.tracks.size() || t < 0 || !v.state.clipDrag.before[size_t(t)].clip)
                             {
-                                v->clipDrag = {};
+                                v.state.clipDrag = {};
                                 return true;
                             }
-                            const TimelineClip& from = *v->clipDrag.before[size_t(t)].clip;
+                            const TimelineClip& from = *v.state.clipDrag.before[size_t(t)].clip;
                             TimelineClip clip = from;
-                            const float delta     = SnappedDelta(*v, g.TimeAt(float(at.x)) - v->clipPressTime);
+                            const float delta     = SnappedDelta(v, g.TimeAt(float(at.x)) - v.state.clipPressTime);
                             const float source    = SourceLengthOf(from);
-                            const float minLength = std::max(FrameOf(*v), 0.01f);
-                            switch (v->clipPart)
+                            const float minLength = std::max(FrameOf(v), 0.01f);
+                            switch (v.state.clipPart)
                             {
-                                case TimelineView::ClipPart::Body:
+                                case TimelineViewState::ClipPart::Body:
                                     clip.start = std::max(0.0f, from.start + delta);
                                     break;
-                                case TimelineView::ClipPart::Start:
+                                case TimelineViewState::ClipPart::Start:
                                 {
                                     // Plays the sound from further in (or back to its start); the end stays.
                                     // A clip already shorter than the minimum can't be trimmed shorter.
@@ -965,173 +971,181 @@ namespace tachyon
                                     clip.sourceLength = source;
                                     break;
                                 }
-                                case TimelineView::ClipPart::End:
+                                case TimelineViewState::ClipPart::End:
                                     clip.length = std::clamp(from.length + delta, minLength, std::max(minLength, source - from.offset));
                                     clip.sourceLength = source;
                                     break;
                                 default: break;
                             }
-                            v->tracks[size_t(t)].clip = clip;
-                            v->clipMoved = true;
+                            v.data.tracks[size_t(t)].clip = clip;
+                            v.state.clipMoved = true;
                             return true;
                         }
-                        if (v->keyDrag.IsPressed(event.id))
+                        if (v.state.keyDrag.IsPressed(event.id))
                         {
-                            if (!v->keyDrag.Move(event, dragDistance))
+                            if (!v.state.keyDrag.Move(event, dragDistance))
                                 return true;
-                            if (v->keyDrag.before.size() != v->tracks.size())
+                            if (v.state.keyDrag.before.size() != v.data.tracks.size())
                             {
-                                v->keyDrag = {};
+                                v.state.keyDrag = {};
                                 return true;
                             }
-                            const float delta = SnappedDelta(*v, g.TimeAt(float(at.x)) - v->keyPressTime);
-                            MoveSelectedKeys(*v, v->keyDrag.before, delta);
-                            v->keyMoved = true;
+                            const float delta = SnappedDelta(v, g.TimeAt(float(at.x)) - v.state.keyPressTime);
+                            MoveSelectedKeys(v, v.state.keyDrag.before, delta);
+                            v.state.keyMoved = true;
                             return true;
                         }
-                        if (v->boxSelect.IsPressed(event.id))
+                        if (v.state.boxSelect.IsPressed(event.id))
                         {
-                            if (!v->boxSelect.Move(event, dragDistance))
+                            if (!v.state.boxSelect.Move(event, dragDistance))
                                 return true;
-                            v->boxTo = g.TimeAt(float(at.x));
-                            v->boxToRow = std::clamp(row, 0, std::max(0, (int)rows.size() - 1));
-                            const float t0 = std::min(v->boxFrom, v->boxTo), t1 = std::max(v->boxFrom, v->boxTo);
-                            const int r0 = std::min(v->boxFromRow, v->boxToRow), r1 = std::max(v->boxFromRow, v->boxToRow);
-                            std::unordered_set<ID> selection = v->boxSelect.before;
-                            auto take = [&](ID id) { if (ctrl && v->boxSelect.before.contains(id)) selection.erase(id); else selection.insert(id); };
+                            v.state.boxTo = g.TimeAt(float(at.x));
+                            v.state.boxToRow = std::clamp(row, 0, std::max(0, (int)rows.size() - 1));
+                            const float t0 = std::min(v.state.boxFrom, v.state.boxTo), t1 = std::max(v.state.boxFrom, v.state.boxTo);
+                            const int r0 = std::min(v.state.boxFromRow, v.state.boxToRow), r1 = std::max(v.state.boxFromRow, v.state.boxToRow);
+                            std::unordered_set<ID> selection = v.state.boxSelect.before;
+                            auto take = [&](ID id) { if (ctrl && v.state.boxSelect.before.contains(id)) selection.erase(id); else selection.insert(id); };
                             for (int r = r0; r <= r1 && r < (int)rows.size(); ++r)
                             {
                                 const int t = rows[size_t(r)];
-                                if (t < 0 || t >= (int)v->tracks.size())
+                                if (t < 0 || t >= (int)v.data.tracks.size())
                                     continue;
-                                const TimelineTrack& tr = v->tracks[size_t(t)];
+                                const TimelineTrack& tr = v.data.tracks[size_t(t)];
                                 for (const TimelineKey& key : tr.keys) if (key.time >= t0 && key.time <= t1) take(key.stableID);
                                 for (const TimelineEvent& e : tr.events) if (e.time >= t0 && e.time <= t1) take(e.stableID);
                                 if (tr.kind == TimelineTrackKind::Group)
-                                    for (const TimelineTrack& held : TracksInGroup(*v, t))
+                                    for (const TimelineTrack& held : TracksInGroup(v.data, t))
                                         for (const TimelineKey& key : held.keys) if (key.time >= t0 && key.time <= t1) take(key.stableID);
                             }
-                            v->selectedKeys = std::move(selection);
+                            v.state.selectedKeys = std::move(selection);
                             return true;
                         }
                         return false;
                     }
                     case EventType::MouseUp:
                     {
-                        if (v->clipDrag.IsPressed(event.id))
+                        if (v.state.clipDrag.IsPressed(event.id))
                         {
-                            v->clipDrag.Release(event);
-                            if (v->clipMoved)
+                            v.state.clipDrag.Release(event);
+                            if (v.state.clipMoved)
                             {
                                 // Already where it's dropped: the edit, for undo.
-                                const TimelineEdit edit = ChangesSince(*v, v->clipDrag.before);
-                                if (!edit.empty() && v->onEdit)
-                                    v->onEdit(edit);
+                                const TimelineEdit edit = ChangesSince(v, v.state.clipDrag.before);
+                                if (!edit.empty())
+                                {
+                                    ++v.data.revision;
+                                    if (v.data.onEdit)
+                                        v.data.onEdit(edit);
+                                }
                             }
-                            v->clipDrag = {};
+                            v.state.clipDrag = {};
                             return true;
                         }
-                        if (v->keyDrag.IsPressed(event.id))
+                        if (v.state.keyDrag.IsPressed(event.id))
                         {
-                            v->keyDrag.Release(event);
-                            if (v->keyMoved)
+                            v.state.keyDrag.Release(event);
+                            if (v.state.keyMoved)
                             {
                                 // Already where it's dropped: the edit, for undo.
-                                const TimelineEdit edit = ChangesSince(*v, v->keyDrag.before);
-                                if (!edit.empty() && v->onEdit)
-                                    v->onEdit(edit);
+                                const TimelineEdit edit = ChangesSince(v, v.state.keyDrag.before);
+                                if (!edit.empty())
+                                {
+                                    ++v.data.revision;
+                                    if (v.data.onEdit)
+                                        v.data.onEdit(edit);
+                                }
                             }
-                            v->keyDrag = {};
+                            v.state.keyDrag = {};
                             return true;
                         }
-                        if (const PointerDrag::Ended ended = v->boxSelect.Release(event); ended != PointerDrag::Ended::No)
+                        if (const PointerDrag::Ended ended = v.state.boxSelect.Release(event); ended != PointerDrag::Ended::No)
                         {
                             // A click on the empty lanes clears the selection.
                             if (ended == PointerDrag::Ended::Click && !shift && !ctrl)
-                                v->selectedKeys.clear();
+                                v.state.selectedKeys.clear();
                             return true;
                         }
                         return false;
                     }
                     case EventType::MouseScroll:
-                        return WheelOverTime(*v, event, g, float(at.x), wheelMode);
+                        return WheelOverTime(v, event, g, float(at.x), wheelMode);
                     case EventType::KeyDown:
                     {
-                        for (Gesture<std::vector<TimelineTrack>>* drag : { &v->clipDrag, &v->keyDrag })
+                        for (Gesture<std::vector<TimelineTrack>>* drag : { &v.state.clipDrag, &v.state.keyDrag })
                             if (drag->Cancel(event, gsm))
                             {
-                                if (drag->before.size() == v->tracks.size())
-                                    v->tracks = drag->before;
+                                if (drag->before.size() == v.data.tracks.size())
+                                    v.data.tracks = drag->before;
                                 *drag = {};
                                 return true;
                             }
-                        if (v->boxSelect.Cancel(event, gsm, v->selectedKeys))
+                        if (v.state.boxSelect.Cancel(event, gsm, v.state.selectedKeys))
                             return true;
                         if (gsm.Interaction().GetFocusedID() != event.id || event.state.consumed)
                             return false;
-                        const float frame = FrameOf(*v);
+                        const float frame = FrameOf(v);
                         const float step = frame > 0.0f ? frame : length / 100.0f;
                         switch (event.state.lastKey)
                         {
                             case KeyCode::Delete: case KeyCode::Backspace:
-                                CommitTimelineEdit(*v, DeleteSelectedKeysEdit(*v));
+                                CommitTimelineEdit(v.data, DeleteSelectedKeysEdit(v));
                                 return true;
                             case KeyCode::Escape:
-                                if (v->selectedKeys.empty())
+                                if (v.state.selectedKeys.empty())
                                     return false;
-                                v->selectedKeys.clear();
+                                v.state.selectedKeys.clear();
                                 return true;
                             case KeyCode::KeyA:
                                 if (!ctrl)
                                     return false;
-                                for (const TimelineTrack& tr : v->tracks)
+                                for (const TimelineTrack& tr : v.data.tracks)
                                 {
-                                    for (const TimelineKey& key : tr.keys) v->selectedKeys.insert(key.stableID);
-                                    for (const TimelineEvent& e : tr.events) v->selectedKeys.insert(e.stableID);
+                                    for (const TimelineKey& key : tr.keys) v.state.selectedKeys.insert(key.stableID);
+                                    for (const TimelineEvent& e : tr.events) v.state.selectedKeys.insert(e.stableID);
                                 }
                                 return true;
                             case KeyCode::KeyK:
                             {
-                                for (int t = 0; t < (int)v->tracks.size(); ++t)
-                                    if (v->tracks[size_t(t)].stableID == v->selectedTrack)
-                                        CommitTimelineEdit(*v, AddKeyEdit(*v, t, v->playback.time, idManager.CreateStaticID()));
+                                for (int t = 0; t < (int)v.data.tracks.size(); ++t)
+                                    if (v.data.tracks[size_t(t)].stableID == v.state.selectedTrack)
+                                        CommitTimelineEdit(v.data, AddKeyEdit(v.data, t, v.data.playback.time, idManager.CreateStaticID()));
                                 return true;
                             }
                             case KeyCode::KeyI: case KeyCode::KeyO:
                             {
                                 // The loop range's start (I) or end (O) at the playhead.
-                                const TimelineRange before = v->loopRange;
+                                const TimelineRange before = v.data.loopRange;
                                 TimelineRange r = before.empty() ? TimelineRange{ 0.0f, length } : before;
-                                if (event.state.lastKey == KeyCode::KeyI) r.start = v->playback.time; else r.end = v->playback.time;
+                                if (event.state.lastKey == KeyCode::KeyI) r.start = v.data.playback.time; else r.end = v.data.playback.time;
                                 if (r.empty())
                                     return true;
-                                CommitTimelineEdit(*v, TimelineEdit{ .loopFrom = before, .loopTo = r });
+                                CommitTimelineEdit(v.data, TimelineEdit{ .loopFrom = before, .loopTo = r });
                                 return true;
                             }
                             case KeyCode::Left: case KeyCode::Right:
                             {
                                 const float delta = event.state.lastKey == KeyCode::Left ? -step : step;
-                                if (!v->selectedKeys.empty())
+                                if (!v.state.selectedKeys.empty())
                                     commitMove(delta);
                                 else
                                 {
-                                    v->playback.time = std::clamp(v->playback.time + delta, 0.0f, length);
-                                    v->playback.playing = false;
+                                    v.data.playback.time = std::clamp(v.data.playback.time + delta, 0.0f, length);
+                                    v.data.playback.playing = false;
                                     playbackChanged();
                                 }
                                 return true;
                             }
                             case KeyCode::Space:
-                                TogglePlay(v->playback, length);
+                                TogglePlay(v.data.playback, length);
                                 playbackChanged();
                                 return true;
                             case KeyCode::Home:
-                                v->playback.time = 0.0f;
+                                v.data.playback.time = 0.0f;
                                 playbackChanged();
                                 return true;
                             case KeyCode::End:
-                                v->playback.time = length;
-                                v->playback.playing = false;
+                                v.data.playback.time = length;
+                                v.data.playback.playing = false;
                                 playbackChanged();
                                 return true;
                             default: return false;
@@ -1144,68 +1158,68 @@ namespace tachyon
         const int lanesHeight = rowHeight * std::max(1, (int)rows.size());
         const ElementRef lanesRef = RegisterControl(
             Element{ .id = lanesID, .eventHandler = std::move(lanesHandler), .styleRef = theme.timelineLanesStyleRef,
-                     .flags = view.playback.playing ? ElementFlags::Animated : ElementFlags::None,
+                     .flags = view.data.playback.playing ? ElementFlags::Animated : ElementFlags::None,
                      .state = guiStateManager.GetCurrentState(lanesID) },
             LayoutOverride{}.MinHeight(Pixels{ lanesHeight }).FlexGrow(1));
-        VERIFY(elementStorage.AddPostLayout(lanesRef, [v](PostLayoutContext& ctx) { v->lanesWidth = ctx.ElementInnerRect().w; }));
+        VERIFY(elementStorage.AddPostLayout(lanesRef, [v](PostLayoutContext& ctx) { v.state.lanesWidth = ctx.ElementInnerRect().w; }));
 
         // The lanes' menu: on a key or event, delete it (the selection, when it's in it); on a
         // lane, a key there, the playhead there, select all.
         if (!disabled && BeginContextMenu(lanesID))
         {
-            if (view.menuOpening != ContextMenuOpenings())
+            if (view.state.menuOpening != ContextMenuOpenings())
             {
-                view.menuOpening = ContextMenuOpenings();
-                if (!view.menuByPointer)
+                view.state.menuOpening = ContextMenuOpenings();
+                if (!view.state.menuByPointer)
                 {
                     // From the keyboard: the selection, or the selected track at the playhead.
-                    view.menuKeys.assign(view.selectedKeys.begin(), view.selectedKeys.end());
-                    view.menuTrack = -1;
-                    for (int t = 0; t < (int)view.tracks.size(); ++t)
-                        if (view.tracks[size_t(t)].stableID == view.selectedTrack)
-                            view.menuTrack = t;
-                    view.menuTime = view.playback.time;
+                    view.state.menuKeys.assign(view.state.selectedKeys.begin(), view.state.selectedKeys.end());
+                    view.state.menuTrack = -1;
+                    for (int t = 0; t < (int)view.data.tracks.size(); ++t)
+                        if (view.data.tracks[size_t(t)].stableID == view.state.selectedTrack)
+                            view.state.menuTrack = t;
+                    view.state.menuTime = view.data.playback.time;
                 }
-                view.menuByPointer = false;
+                view.state.menuByPointer = false;
             }
-            if (!view.menuKeys.empty())
+            if (!view.state.menuKeys.empty())
             {
-                const size_t count = std::max(view.menuKeys.size(), view.selectedKeys.size());
+                const size_t count = std::max(view.state.menuKeys.size(), view.state.selectedKeys.size());
                 bool isEvent = false;
-                for (const TimelineTrack& tr : view.tracks)
+                for (const TimelineTrack& tr : view.data.tracks)
                     for (const TimelineEvent& e : tr.events)
-                        isEvent |= e.stableID == view.menuKeys[0];
+                        isEvent |= e.stableID == view.state.menuKeys[0];
                 const std::string label = count > 1 ? std::format("Delete {} keys", count) : isEvent ? "Delete event" : "Delete key";
-                MenuItem(label, CommandManager::FormatShortcut(KeyCode::Delete, KeyModifier::None), [v] { CommitTimelineEdit(*v, DeleteSelectedKeysEdit(*v)); });
+                MenuItem(label, CommandManager::FormatShortcut(KeyCode::Delete, KeyModifier::None), [v] { CommitTimelineEdit(v.data, DeleteSelectedKeysEdit(v)); });
             }
             else
             {
-                const int t = view.menuTrack;
-                if (t >= 0 && t < (int)view.tracks.size() && view.tracks[size_t(t)].kind == TimelineTrackKind::Property)
+                const int t = view.state.menuTrack;
+                if (t >= 0 && t < (int)view.data.tracks.size() && view.data.tracks[size_t(t)].kind == TimelineTrackKind::Property)
                 {
-                    const bool locked = IsTrackLocked(view, t);   // shown, but it can't add one
+                    const bool locked = IsTrackLocked(view.data, t);   // shown, but it can't add one
                     if (locked) BeginDisabled();
                     MenuItem("Add key", [this, v, t] {
                         const ID keyID = idManager.CreateStaticID();
-                        const TimelineEdit edit = AddKeyEdit(*v, t, v->menuTime, keyID);
+                        const TimelineEdit edit = AddKeyEdit(v.data, t, v.state.menuTime, keyID);
                         if (edit.empty())
                             return;
-                        CommitTimelineEdit(*v, edit);
-                        v->selectedKeys = { keyID };
+                        CommitTimelineEdit(v.data, edit);
+                        v.state.selectedKeys = { keyID };
                     });
                     if (locked) EndDisabled();
                 }
                 MenuItem("Move playhead here", [v, playbackChanged] {
-                    v->playback.time = std::clamp(SnappedTime(*v, v->menuTime), 0.0f, LengthOf(*v));
-                    v->playback.playing = false;
+                    v.data.playback.time = std::clamp(SnappedTime(v, v.state.menuTime), 0.0f, LengthOf(v));
+                    v.data.playback.playing = false;
                     playbackChanged();
                 });
                 MenuSeparator();
                 MenuItem("Select all", CommandManager::FormatShortcut(KeyCode::KeyA, KeyModifier::Control), [v] {
-                    for (const TimelineTrack& tr : v->tracks)
+                    for (const TimelineTrack& tr : v.data.tracks)
                     {
-                        for (const TimelineKey& key : tr.keys) v->selectedKeys.insert(key.stableID);
-                        for (const TimelineEvent& e : tr.events) v->selectedKeys.insert(e.stableID);
+                        for (const TimelineKey& key : tr.keys) v.state.selectedKeys.insert(key.stableID);
+                        for (const TimelineEvent& e : tr.events) v.state.selectedKeys.insert(e.stableID);
                     }
                 });
             }
@@ -1223,31 +1237,31 @@ namespace tachyon
                 std::optional<TimelineClip> clip;
                 std::vector<std::pair<float, bool>> events;
                 std::optional<float> hovered;               // the time of what's under the pointer
-                TimelineView::ClipPart clipHovered = TimelineView::ClipPart::None;
+                TimelineViewState::ClipPart clipHovered = TimelineViewState::ClipPart::None;
             };
             std::vector<RowDraw> drawn;
             drawn.reserve(rows.size());
             const bool lanesHovered = (guiStateManager.GetCurrentState(lanesID) & ElementState::Hover) != ElementState::None;
-            const TimelineView::LaneHover laneHover = view.hover.Shown(lanesHovered);
+            const TimelineViewState::LaneHover laneHover = view.state.hover.Shown(lanesHovered);
             for (const int t : rows)
             {
-                const TimelineTrack& track = view.tracks[size_t(t)];
-                RowDraw row{ track.kind, view.selectedTrack == track.stableID, {}, {}, track.clip, {}, std::nullopt };
+                const TimelineTrack& track = view.data.tracks[size_t(t)];
+                RowDraw row{ track.kind, view.state.selectedTrack == track.stableID, {}, {}, track.clip, {}, std::nullopt };
                 if (t == laneHover.track)
                     row.hovered = laneHover.time;
                 if (t == laneHover.clipTrack)
                     row.clipHovered = laneHover.clipPart;
-                for (const TimelineKey& key : track.keys) row.keys.push_back({ key.time, view.selectedKeys.contains(key.stableID) });
-                for (const TimelineEvent& e : track.events) row.events.push_back({ e.time, view.selectedKeys.contains(e.stableID) });
+                for (const TimelineKey& key : track.keys) row.keys.push_back({ key.time, view.state.selectedKeys.contains(key.stableID) });
+                for (const TimelineEvent& e : track.events) row.events.push_back({ e.time, view.state.selectedKeys.contains(e.stableID) });
                 if (track.kind == TimelineTrackKind::Group)
                     row.summary = SummaryTimes(view, t);
                 drawn.push_back(std::move(row));
             }
-            const bool boxing = view.boxSelect.IsDragging(lanesID);
-            const float boxT0 = std::min(view.boxFrom, view.boxTo), boxT1 = std::max(view.boxFrom, view.boxTo);
-            const int boxR0 = std::min(view.boxFromRow, view.boxToRow), boxR1 = std::max(view.boxFromRow, view.boxToRow);
-            const TimelineRange loop = view.loopRange;
-            const float time = view.playback.time;
+            const bool boxing = view.state.boxSelect.IsDragging(lanesID);
+            const float boxT0 = std::min(view.state.boxFrom, view.state.boxTo), boxT1 = std::max(view.state.boxFrom, view.state.boxTo);
+            const int boxR0 = std::min(view.state.boxFromRow, view.state.boxToRow), boxR1 = std::max(view.state.boxFromRow, view.state.boxToRow);
+            const TimelineRange loop = view.data.loopRange;
+            const float time = view.data.playback.time;
             const GUITheme& th = theme;
             const VisualBoxStyleIndex laneSelected = th.timelineLaneSelectedStyleRef.visualBoxStyleIndex, rowLine = th.timelineRowLineStyleRef.visualBoxStyleIndex;
             const VisualBoxStyleIndex outside = th.timelineOutsideStyleRef.visualBoxStyleIndex, clipBox = th.timelineClipStyleRef.visualBoxStyleIndex;
@@ -1279,10 +1293,10 @@ namespace tachyon
                     {
                         const int32_t a = int32_t(g.XAt(row.clip->start)), b = int32_t(g.XAt(row.clip->start + row.clip->length));
                         const IntRect box{ a, y + px3, b - a, rowHeight - 2 * px3 };
-                        ctx.RenderBox(box, outer, clipBox, row.clipHovered != TimelineView::ClipPart::None ? ElementState::Hover : ElementState::None);
+                        ctx.RenderBox(box, outer, clipBox, row.clipHovered != TimelineViewState::ClipPart::None ? ElementState::Hover : ElementState::None);
                         // An end under the pointer: a bar there, as the loop range's.
-                        if (row.clipHovered == TimelineView::ClipPart::Start || row.clipHovered == TimelineView::ClipPart::End)
-                            ctx.RenderBox(IntRect{ row.clipHovered == TimelineView::ClipPart::Start ? a : b - px2, box.y, px2, box.h }, outer, clipEdge);
+                        if (row.clipHovered == TimelineViewState::ClipPart::Start || row.clipHovered == TimelineViewState::ClipPart::End)
+                            ctx.RenderBox(IntRect{ row.clipHovered == TimelineViewState::ClipPart::Start ? a : b - px2, box.y, px2, box.h }, outer, clipEdge);
                         // The waveform: a bar a few pixels, each the loudest of the peaks it covers, of
                         // the part of the sound the clip plays.
                         const std::vector<float>& peaks = row.clip->peaks;
@@ -1370,8 +1384,8 @@ namespace tachyon
                 if (event.rect == nullptr)
                     return false;
                 const IntRect inner = event.rect->innerRect;
-                const float length = LengthOf(*v);
-                const TimelineRange now = ViewRangeOf(*v);
+                const float length = LengthOf(v);
+                const TimelineRange now = ViewRangeOf(v);
                 const float span = now.end - now.start;
                 if (length <= 0.0f || span >= length)
                     return false;
@@ -1386,20 +1400,20 @@ namespace tachyon
                         // Off the thumb, the thumb comes to the pointer first.
                         const float thumbFrom = float(inner.x) + now.start / perPixel, thumbTo = float(inner.x) + now.end / perPixel;
                         if (x < thumbFrom || x > thumbTo)
-                            v->viewStart = std::clamp((x - float(inner.x)) * perPixel - span * 0.5f, 0.0f, length - span);
-                        if (v->viewLength <= 0.0f) v->viewLength = span;
-                        v->pan.Press(event, es, gsm, v->viewStart, { .atOnce = true, .focus = false, .capture = false });
+                            v.state.viewStart = std::clamp((x - float(inner.x)) * perPixel - span * 0.5f, 0.0f, length - span);
+                        if (v.state.viewLength <= 0.0f) v.state.viewLength = span;
+                        v.state.pan.Press(event, es, gsm, v.state.viewStart, { .atOnce = true, .focus = false, .capture = false });
                         return true;
                     }
                     case EventType::MouseMove:
-                        if (!v->pan.Move(event, 0))
+                        if (!v.state.pan.Move(event, 0))
                             return false;
-                        v->viewStart = std::clamp(v->pan.before + float(v->pan.drag.LocalDelta(event, es).x) * perPixel, 0.0f, length - span);
+                        v.state.viewStart = std::clamp(v.state.pan.before + float(v.state.pan.drag.LocalDelta(event, es).x) * perPixel, 0.0f, length - span);
                         return true;
                     case EventType::MouseUp:
-                        return v->pan.Release(event) != PointerDrag::Ended::No;
+                        return v.state.pan.Release(event) != PointerDrag::Ended::No;
                     case EventType::KeyDown:
-                        return v->pan.Cancel(event, gsm, v->viewStart);
+                        return v.state.pan.Cancel(event, gsm, v.state.viewStart);
                     default: return false;
                 }
             };
@@ -1411,7 +1425,7 @@ namespace tachyon
             const VisualBoxStyleIndex thumb = theme.timelineScrollThumbStyleRef.visualBoxStyleIndex;
             const int32_t thick = styleManager.Px(6);
             // A press anywhere on the bar takes the thumb, so it lights up while the bar is hovered.
-            const ElementState thumbState = view.pan.IsHeld() || (guiStateManager.GetCurrentState(scrollID) & ElementState::Hover) != ElementState::None
+            const ElementState thumbState = view.state.pan.IsHeld() || (guiStateManager.GetCurrentState(scrollID) & ElementState::Hover) != ElementState::None
                                           ? ElementState::Hover : ElementState::None;
             VERIFY(elementStorage.AddCustomDraw(scrollRef, [=](CustomDrawContext& ctx)
             {

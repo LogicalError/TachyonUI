@@ -5,7 +5,8 @@
 
 //
 // The Timeline panel: the timeline editor with tracks of keys, a sound and events. The Curves
-// panel: the sphere's animation curves, on the timeline's playhead.
+// panel: the sphere's animation curves, on the timeline's playhead. Each panel of either kind
+// shows them with a view of its own: its zoom, its selection.
 //
 
 namespace tachyon
@@ -14,7 +15,7 @@ namespace tachyon
     void Application::SeedAnimation()
     {
         animationSeeded = true;
-        TimelineView& view = animation;
+        TimelineData& view = animation;
         view.duration  = 8.0f;
         view.fps       = 30.0f;
         view.loopRange = { 1.0f, 6.0f };
@@ -55,7 +56,6 @@ namespace tachyon
         events.events.push_back({ idManager.CreateStaticID(), 1.5f, "Spawn" });
         events.events.push_back({ idManager.CreateStaticID(), 5.2f, "Explode" });
         view.tracks.push_back(std::move(events));
-        view.selectedTrack = view.tracks[1].stableID;
 
         // Each change goes on the app's undo history.
         view.onEdit = [this](const TimelineEdit& edit)
@@ -65,12 +65,21 @@ namespace tachyon
                 .redo = [this, edit] { ApplyTimelineEdit(animation, edit, /*undo*/ false); } });
             commandManager.History().EndMerge();
         };
+        SeedAnimationCurves();
+    }
+
+    void Application::SetUpTimelineView(TimelineViewState& view)
+    {
+        if (!animationSeeded)
+            SeedAnimation();
+        view.selectedTrack = animation.tracks[1].stableID;
         // "+": a property in the selected track's group (or at the end).
-        view.onAddTrack = [this]
+        TimelineViewState* shown = &view;
+        view.onAddTrack = [this, shown]
         {
             int at = (int)animation.tracks.size(), depth = 0;
             for (int t = 0; t < (int)animation.tracks.size(); ++t)
-                if (animation.tracks[size_t(t)].stableID == animation.selectedTrack)
+                if (animation.tracks[size_t(t)].stableID == shown->selectedTrack)
                 {
                     const TimelineTrack& selected = animation.tracks[size_t(t)];
                     const int group = selected.kind == TimelineTrackKind::Group ? t : -1;
@@ -87,16 +96,15 @@ namespace tachyon
                 }
             TimelineTrack track{ .stableID = idManager.CreateStaticID(), .name = "New property",
                                  .kind = TimelineTrackKind::Property, .depth = depth };
-            animation.selectedTrack = track.stableID;
+            shown->selectedTrack = track.stableID;
             CommitTimelineEdit(animation, AddTrackEdit(animation, std::move(track), at));
         };
-        SeedAnimationCurves();
-        view.onTrackContextMenu = [this](int track)
+        view.onTrackContextMenu = [this, shown](int track)
         {
             MenuItem("Key at the playhead", [this, track] {
                 CommitTimelineEdit(animation, AddKeyEdit(animation, track, animation.playback.time, idManager.CreateStaticID()));
             });
-            MenuItem("Delete the selected keys", [this] { CommitTimelineEdit(animation, DeleteSelectedKeysEdit(animation)); });
+            MenuItem("Delete the selected keys", [this, shown] { CommitTimelineEdit(animation, DeleteSelectedKeysEdit({ animation, *shown })); });
             MenuSeparator();
             MenuItem("Delete track", [this, track] { CommitTimelineEdit(animation, RemoveTrackEdit(animation, track)); });
         };
@@ -104,7 +112,7 @@ namespace tachyon
 
     void Application::SeedAnimationCurves()
     {
-        CurveView& view = animationCurves;
+        CurveData& view = animationCurves;
         view.fps = animation.fps;
         view.range = { 0.0f, animation.duration, -2.0f, 4.0f };
         auto channel = [this](const char* path, const char* name, CurveChannelColor color, std::initializer_list<float2> points) {
@@ -139,17 +147,19 @@ namespace tachyon
         view.onPlayheadChanged = [this](float time) { animation.playback.time = time; };
     }
 
-    void Application::RenderTimelinePanel()
+    void Application::RenderTimelinePanel(TimelineViewState& view)
     {
         // The editor, the whole panel: tracks of keys, a sound and events, played round the
         // loop range (in OnGUI).
-        TimelineEditor(idManager.AllocateDynamicID("editor"), animation, LayoutOverride{}.FlexGrow(1));
+        TimelineEditor(idManager.AllocateDynamicID("editor"), { animation, view }, LayoutOverride{}.FlexGrow(1));
     }
 
-    void Application::RenderCurvesPanel()
+    void Application::RenderCurvesPanel(CurveViewState& view)
     {
         // The curve editor, the whole panel, its playhead the timeline's.
+        if (!animationSeeded)
+            SeedAnimation();
         animationCurves.playhead = animation.playback.time;
-        CurveEditor(idManager.AllocateDynamicID("curves"), animationCurves, LayoutOverride{}.FlexGrow(1));
+        CurveEditor(idManager.AllocateDynamicID("curves"), { animationCurves, view }, LayoutOverride{}.FlexGrow(1));
     }
 }

@@ -6,6 +6,7 @@
 #include <gui_controls/gui_curve_types.h>
 #include <gui_core/input/gui_gesture.h>
 #include <gui_core/gui_base_types.h>
+#include <gui_controls/gui_view_ref.h>
 
 #include <functional>
 #include <span>
@@ -61,8 +62,10 @@ namespace tachyon
         bool empty() const { return from == to; }
     };
 
-    /// A plot: what it shows and how. Keep it from frame to frame, as a CurveView.
-    struct PlotView
+    /// A plot: what it shows and how. Keep it from frame to frame, as a CurveData. Show it with
+    /// Plot: a PlotView for one place, or this and a PlotViewState per view to show it in
+    /// several.
+    struct PlotData
     {
         std::vector<PlotSeries> series;
         float xMin = 0.0f, xMax = 1.0f;
@@ -71,13 +74,19 @@ namespace tachyon
         bool  fitY = true;
         PlotScale yScale = PlotScale::Linear;
         bool  labels = true;       ///< the grid's numbers
-        /// The series shown on its own (its chip picked), or -1 for all of them overlaid.
-        int   shownSeries = -1;
         /// Kept in order, each between its neighbours and inside the x range.
         std::vector<PlotHandle> handles;
 
         /// A handle moved (already applied): put it in the undo history.
         std::function<void(const PlotEdit&)> onEdit;
+    };
+
+    /// How one Plot shows a PlotData: the series picked, the part in view, and what the user
+    /// is doing in it. Keep one per view, from frame to frame.
+    struct PlotViewState
+    {
+        /// The series shown on its own (its chip picked), or -1 for all of them overlaid.
+        int   shownSeries = -1;
 
         /// @name Internal: kept between frames while the user works
         ///@{
@@ -89,32 +98,41 @@ namespace tachyon
         IntRect            plotRect {};           ///< the plot last frame, in screen pixels
         float              hoverX = 0.0f;         ///< where the pointer is, along x
         bool               hovered = false;
-        uint32_t           revision = 0;          ///< counts the edits committed, for Plot's return
-        uint32_t           revisionSeen = 0;
+        uint32_t           edits = 0;             ///< counts the edits committed through this view, for Plot's return
+        uint32_t           editsSeen = 0;
         ///@}
     };
+
+    /// A plot shown in one place: what it shows and the one view of it together.
+    struct PlotView : PlotData, PlotViewState
+    {
+    };
+
+    /// A plot and one view of it, as Plot and the helpers take them.
+    using PlotViewRef      = BasicViewRef<PlotData, PlotViewState>;
+    using ConstPlotViewRef = BasicViewRef<const PlotData, const PlotViewState>;
 
     /// `samples` counted into `bins` equal bins over [min, max]; a sample at max goes in the last
     /// one, and those outside or not finite in none.
     std::vector<float> HistogramBins(std::span<const float> samples, int bins, float min = 0.0f, float max = 1.0f);
 
-    /// Does (or with `undo`, undoes) `edit` on `view`'s handles.
-    void ApplyPlotEdit(PlotView& view, const PlotEdit& edit, bool undo = false);
+    /// Does (or with `undo`, undoes) `edit` on the handles.
+    void ApplyPlotEdit(PlotData& data, const PlotEdit& edit, bool undo = false);
     /// Moves handle `handle` to `x`, kept between its neighbours and inside the x range; the
     /// edit, or an empty one when it doesn't move.
-    PlotEdit MovePlotHandleEdit(const PlotView& view, int handle, float x);
-    /// Applies `edit` and hands it to `view.onEdit`; does nothing for an empty one.
-    void CommitPlotEdit(PlotView& view, const PlotEdit& edit);
+    PlotEdit MovePlotHandleEdit(const PlotData& data, int handle, float x);
+    /// Applies `edit` and hands it to `view.data.onEdit`; does nothing for an empty one.
+    void CommitPlotEdit(PlotViewRef view, const PlotEdit& edit);
 
     /// A span of one axis.
     struct PlotRange { float min, max; };
     /// The part of the x range in view: all of it until the plot is zoomed, then the part
     /// zoomed to, kept inside [xMin, xMax].
-    PlotRange PlotShownX(const PlotView& view);
+    PlotRange PlotShownX(ConstPlotViewRef view);
     /// The y range drawn: yMax from the values in view with fitY, then mapped by yScale.
-    PlotRange PlotShownY(const PlotView& view);
+    PlotRange PlotShownY(ConstPlotViewRef view);
     /// `value` along the drawn y axis, by the view's scale.
-    float PlotScaleY(const PlotView& view, float value);
+    float PlotScaleY(const PlotData& data, float value);
 
     /// @}
 }

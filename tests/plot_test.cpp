@@ -70,7 +70,7 @@ namespace tachyon
             CommitPlotEdit(view, edit);
             EXPECT_EQ(view.handles[2].x, 200.0f);
             ASSERT_EQ(seen.size(), 1u);
-            EXPECT_EQ(view.revision, 1u);
+            EXPECT_EQ(view.edits, 1u);
             ApplyPlotEdit(view, edit, /*undo*/ true);
             EXPECT_EQ(view.handles[2].x, 255.0f);
             ApplyPlotEdit(view, edit);
@@ -78,7 +78,7 @@ namespace tachyon
 
             CommitPlotEdit(view, PlotEdit{});
             EXPECT_EQ(seen.size(), 1u) << "an empty edit isn't reported";
-            EXPECT_EQ(view.revision, 1u);
+            EXPECT_EQ(view.edits, 1u);
             view.handles.pop_back();
             ApplyPlotEdit(view, edit);
             EXPECT_EQ(view.handles.size(), 2u) << "an edit for other handles is left alone";

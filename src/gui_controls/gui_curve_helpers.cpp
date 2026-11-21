@@ -10,7 +10,7 @@ namespace tachyon
 {
     namespace
     {
-        bool ValidChannel(const CurveView& view, int channel)
+        bool ValidChannel(const CurveData& view, int channel)
         {
             return channel >= 0 && channel < (int)view.channels.size();
         }
@@ -63,7 +63,7 @@ namespace tachyon
         // The edit that makes each channel's curve what `change` returns, for the channels it
         // changes.
         template<typename F>
-        CurveEdit ChangeEach(const CurveView& view, F&& change)
+        CurveEdit ChangeEach(const CurveData& view, F&& change)
         {
             CurveEdit edit;
             for (int c = 0; c < (int)view.channels.size(); ++c)
@@ -188,36 +188,49 @@ namespace tachyon
         return presets;
     }
 
-    void ApplyCurveEdit(CurveView& view, const CurveEdit& edit, bool undo)
+    void ApplyCurveEdit(CurveData& data, const CurveEdit& edit, bool undo)
     {
         for (const CurveEdit::Change& change : edit.changes)
-            if (ValidChannel(view, change.channel))
-                view.channels[size_t(change.channel)].curve = undo ? change.from : change.to;
-
-        // Keys that are gone aren't selected.
-        std::unordered_set<ID> present;
-        for (const CurveChannel& channel : view.channels)
-            for (const CurveKey& key : channel.curve.keys)
-                present.insert(key.stableID);
-        std::erase_if(view.selectedKeys, [&present](ID id) { return !present.contains(id); });
+            if (ValidChannel(data, change.channel))
+                data.channels[size_t(change.channel)].curve = undo ? change.from : change.to;
+        ++data.revision;
     }
 
-    void CommitCurveEdit(CurveView& view, const CurveEdit& edit)
+    void CommitCurveEdit(CurveViewRef view, const CurveEdit& edit)
     {
         if (edit.empty())
             return;
-        ApplyCurveEdit(view, edit);
-        ++view.revision;
-        if (view.onEdit)
-            view.onEdit(edit);
+        ApplyCurveEdit(view.data, edit);
+        PruneCurveSelection(view);
+        ++view.state.edits;
+        if (view.data.onEdit)
+            view.data.onEdit(edit);
     }
 
-    float SnapToFrame(const CurveView& view, float time)
+    bool PruneCurveSelection(CurveViewRef view)
+    {
+        if (view.state.seenRevision == view.data.revision)
+            return false;
+        view.state.seenRevision = view.data.revision;
+
+        // Keys that are gone aren't selected, hovered or held.
+        std::unordered_set<ID> present;
+        for (const CurveChannel& channel : view.data.channels)
+            for (const CurveKey& key : channel.curve.keys)
+                present.insert(key.stableID);
+        std::erase_if(view.state.selectedKeys, [&present](ID id) { return !present.contains(id); });
+        view.state.hover = {};
+        if (!present.contains(view.state.menuKey))
+            view.state.menuKey = ID::Invalid();
+        return true;
+    }
+
+    float SnapToFrame(const CurveData& view, float time)
     {
         return view.fps > 0.0f ? std::round(time * view.fps) / view.fps : time;
     }
 
-    CurveEdit AddCurveKeyEdit(const CurveView& view, int channel, float time, float value, ID keyID)
+    CurveEdit AddCurveKeyEdit(const CurveData& view, int channel, float time, float value, ID keyID)
     {
         if (!ValidChannel(view, channel) || !view.channels[size_t(channel)].visible)
             return {};
@@ -238,33 +251,33 @@ namespace tachyon
         return CurveEdit{ .changes = { { channel, from, std::move(to) } } };
     }
 
-    CurveEdit DeleteSelectedCurveKeysEdit(const CurveView& view)
+    CurveEdit DeleteSelectedCurveKeysEdit(ConstCurveViewRef view)
     {
-        return ChangeEach(view, [&view](int, Curve& curve) {
-            std::erase_if(curve.keys, [&view](const CurveKey& k) { return view.selectedKeys.contains(k.stableID); });
+        return ChangeEach(view.data, [&view](int, Curve& curve) {
+            std::erase_if(curve.keys, [&view](const CurveKey& k) { return view.state.selectedKeys.contains(k.stableID); });
         });
     }
 
-    CurveEdit SetCurveTangentModeEdit(const CurveView& view, CurveTangentMode mode)
+    CurveEdit SetCurveTangentModeEdit(ConstCurveViewRef view, CurveTangentMode mode)
     {
         // Free and Aligned keep the slopes the key has; the others work theirs out.
-        return ChangeEach(view, [&view, mode](int, Curve& curve) {
+        return ChangeEach(view.data, [&view, mode](int, Curve& curve) {
             for (CurveKey& k : curve.keys)
-                if (view.selectedKeys.contains(k.stableID))
+                if (view.state.selectedKeys.contains(k.stableID))
                     k.tangents = mode;
         });
     }
 
-    CurveEdit SetCurveInterpolationEdit(const CurveView& view, CurveInterpolation interpolation)
+    CurveEdit SetCurveInterpolationEdit(ConstCurveViewRef view, CurveInterpolation interpolation)
     {
-        return ChangeEach(view, [&view, interpolation](int, Curve& curve) {
+        return ChangeEach(view.data, [&view, interpolation](int, Curve& curve) {
             for (CurveKey& k : curve.keys)
-                if (view.selectedKeys.contains(k.stableID))
+                if (view.state.selectedKeys.contains(k.stableID))
                     k.interpolation = interpolation;
         });
     }
 
-    CurveEdit ApplyCurvePresetEdit(const CurveView& view, int channel, const CurvePreset& preset,
+    CurveEdit ApplyCurvePresetEdit(const CurveData& view, int channel, const CurvePreset& preset,
                                    const std::function<ID()>& makeID)
     {
         if (!ValidChannel(view, channel))
@@ -290,7 +303,7 @@ namespace tachyon
         return CurveEdit{ .changes = { { channel, from, std::move(to) } } };
     }
 
-    CurveEdit SetCurveWrapEdit(const CurveView& view, int channel, CurveWrapMode pre, CurveWrapMode post)
+    CurveEdit SetCurveWrapEdit(const CurveData& view, int channel, CurveWrapMode pre, CurveWrapMode post)
     {
         if (!ValidChannel(view, channel))
             return {};

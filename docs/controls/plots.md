@@ -10,7 +10,7 @@ histogram, a sound's levels, frame times.
 ## Plot
 
 ```cpp
-bool Plot(ID id, PlotView& view, LayoutOverride&& constraints = {});
+bool Plot(ID id, PlotViewRef view, LayoutOverride&& constraints = {});   // a PlotView, or { data, state }
 ```
 
 - It fills the room it's given; give it a height.
@@ -33,19 +33,24 @@ if (Plot(idManager.AllocateDynamicID("levels"), levels, LayoutOverride{}.Height(
 
 ## The view
 
-`PlotView` is yours: keep it from frame to frame, as you would a `CurveView`.
+`PlotView` is yours: keep it from frame to frame, as you would a `CurveView`. It's two parts
+in one, which you can also keep apart to show the plot in several places (see
+[Several views of one plot](#several-views-of-one-plot)):
 
-| Field | What it's for |
-| --- | --- |
-| `series` | The series drawn |
-| `xMin`, `xMax` | The x range the series spread over and the handles stay in |
-| `fitY` | The y range from 0 to the largest value in view (the default) |
-| `yMin`, `yMax` | The y range when `fitY` is off |
-| `yScale` | `Linear`, or `Log`: log(1 + value), so small counts show beside large ones |
-| `labels` | The grid's numbers (the y numbers on a linear scale only) |
-| `shownSeries` | The series shown on its own, or -1 for all; the chips set it |
-| `handles` | The handles under the plot |
-| `onEdit` | A handle moved (already applied): put it on your undo history |
+- `PlotData`: what it shows, its series, ranges and handles, and their edits.
+- `PlotViewState`: how one plot shows it, the series picked and the part in view.
+
+| Field | On | What it's for |
+| --- | --- | --- |
+| `series` | `PlotData` | The series drawn |
+| `xMin`, `xMax` | `PlotData` | The x range the series spread over and the handles stay in |
+| `fitY` | `PlotData` | The y range from 0 to the largest value in view (the default) |
+| `yMin`, `yMax` | `PlotData` | The y range when `fitY` is off |
+| `yScale` | `PlotData` | `Linear`, or `Log`: log(1 + value), so small counts show beside large ones |
+| `labels` | `PlotData` | The grid's numbers (the y numbers on a linear scale only) |
+| `handles` | `PlotData` | The handles under the plot |
+| `onEdit` | `PlotData` | A handle moved (already applied): put it on your undo history |
+| `shownSeries` | `PlotViewState` | The series shown on its own, or -1 for all; the chips set it |
 
 ## Series
 
@@ -94,8 +99,8 @@ levels.handles = { { "Black", 0.0f,   { 0.0f, 0.0f, 0.0f, 1.0f } },
 Every move comes to `onEdit` as a `PlotEdit`, already done: where each handle was (`from`) and
 is (`to`).
 
-- `ApplyPlotEdit(view, edit, undo)` does it again, or undoes it.
-- `MovePlotHandleEdit(view, handle, x)` is the edit that moves one, kept between its
+- `ApplyPlotEdit(data, edit, undo)` does it again, or undoes it.
+- `MovePlotHandleEdit(data, handle, x)` is the edit that moves one, kept between its
   neighbours.
 - `CommitPlotEdit(view, edit)` applies an edit and hands it to `onEdit`.
 
@@ -121,6 +126,23 @@ A plot zooms and scrolls along x, as the other canvases do (see Panning and zoom
 
 The y range follows what's in view: zoomed in, the bins in view fill its height.
 `PlotShownX(view)` and `PlotShownY(view)` give the ranges in view.
+
+## Several views of one plot
+
+A plot can show in more than one place at once, for example in two inspectors. Keep what it
+shows once, as a `PlotData`, and a `PlotViewState` for each place:
+
+```cpp
+PlotData      levels;          // the series, the handles, onEdit
+PlotViewState left, right;     // each inspector's: the series picked, the part in view
+
+// Each frame, in each inspector:
+Plot(idManager.AllocateDynamicID("levels"), { levels, left }, LayoutOverride{}.Height(160));
+```
+
+- Each zooms and picks its series on its own.
+- A handle moved in one is moved in all of them.
+- A plot returns true after a handle moved in it; the others don't.
 
 ## Classes
 

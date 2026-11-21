@@ -4,6 +4,7 @@
 #include <gui_core/gui_id.h>
 #include <gui_core/input/gui_gesture.h>
 #include <gui_controls/gui_widget_state_types.h>   // DoubleClickTracker
+#include <gui_controls/gui_view_ref.h>
 
 #include <cstdint>
 #include <functional>
@@ -141,18 +142,17 @@ namespace tachyon
         bool empty() const { return changes.empty(); }
     };
 
-    /// A CurveField's curves and how they're shown, kept by the app from frame to frame.
-    /// Everything the user changes comes to the app as a CurveEdit (onEdit), already applied,
-    /// for its undo history.
-    struct CurveView
+    /// A CurveField's curves, kept by the app from frame to frame. Everything the user changes
+    /// comes to the app as a CurveEdit (onEdit), already applied, for its undo history. Show
+    /// them with CurveField or CurveEditor: a CurveView for one place, or this and a
+    /// CurveViewState per view to show them in several.
+    struct CurveData
     {
         std::vector<CurveChannel> channels;   ///< one for a plain curve; four for a color's R, G, B and A
         /// What the field shows, and where the editor opens. Keys stay in its time span; in
         /// its value span too with clampValues.
         CurveRange                range;
         bool                      clampValues = false;
-        int                       activeChannel = 0;   ///< the one whose keys can be picked and added to
-        std::unordered_set<ID>    selectedKeys;        ///< by stableID
         /// The thumbnails under the plot; empty: DefaultCurvePresets().
         std::vector<CurvePreset>  presets;
 
@@ -168,6 +168,18 @@ namespace tachyon
 
         /// A change the user made, already applied: put it in the undo history.
         std::function<void(const CurveEdit&)> onEdit;
+
+        /// Raised by each edit applied, so every view of the curves can tell they changed.
+        uint32_t                  revision = 0;
+    };
+
+    /// How one CurveField or CurveEditor shows a CurveData: the channel worked on, the
+    /// selection, the part in view, and what the user is doing in it. Keep one per view, from
+    /// frame to frame.
+    struct CurveViewState
+    {
+        int                       activeChannel = 0;   ///< the one whose keys can be picked and added to
+        std::unordered_set<ID>    selectedKeys;        ///< by stableID
 
         /// @name Internal: kept between frames while the user works
         ///@{
@@ -202,33 +214,48 @@ namespace tachyon
         IntRect           plotRect {};           ///< the plot's grid last frame, in screen pixels
         DoubleClickTracker plotClicks;          ///< a double click on the plot adds a key
         float2            lastClick {};          ///< where the last click on the plot was, in pixels
-        uint32_t          revision = 0;          ///< counts the edits committed, for CurveField's return
-        uint32_t          revisionSeen = 0;      ///< the count CurveField last saw
+        uint32_t          edits = 0;             ///< counts the edits committed through this view, for CurveField's return
+        uint32_t          editsSeen = 0;         ///< the count CurveField last saw
+        uint32_t          seenRevision = 0;      ///< the curves' revision this view last built
         ///@}
     };
 
-    /// Does (or with `undo`, undoes) `edit` on `view`.
-    void ApplyCurveEdit(CurveView& view, const CurveEdit& edit, bool undo = false);
-    /// Applies `edit` and hands it to `view.onEdit`; does nothing for an empty one.
-    void CommitCurveEdit(CurveView& view, const CurveEdit& edit);
+    /// Curves shown in one place: the curves and the one view of them together.
+    struct CurveView : CurveData, CurveViewState
+    {
+    };
 
-    /// A key on `channel` at `time` with `value`, kept in the view's range; none on a hidden
+    /// Curves and one view of them, as CurveField, CurveEditor and the helpers take them.
+    using CurveViewRef      = BasicViewRef<CurveData, CurveViewState>;
+    using ConstCurveViewRef = BasicViewRef<const CurveData, const CurveViewState>;
+
+    /// Does (or with `undo`, undoes) `edit` on the curves, and raises their revision.
+    void ApplyCurveEdit(CurveData& data, const CurveEdit& edit, bool undo = false);
+    /// Applies `edit`, lets go of what it took from the view's selection, and hands it to
+    /// `view.data.onEdit`; does nothing for an empty one.
+    void CommitCurveEdit(CurveViewRef view, const CurveEdit& edit);
+    /// After an edit (through this view or another): lets go of the selected keys that are
+    /// gone, and of what the view kept of them. The curve controls do it as they build;
+    /// returns whether the curves had changed since.
+    bool PruneCurveSelection(CurveViewRef view);
+
+    /// A key on `channel` at `time` with `value`, kept in the curves' range; none on a hidden
     /// channel, or where the channel has a key at that time already.
-    CurveEdit AddCurveKeyEdit(const CurveView& view, int channel, float time, float value, ID keyID);
+    CurveEdit AddCurveKeyEdit(const CurveData& data, int channel, float time, float value, ID keyID);
     /// With fps set, `time` on the nearest frame; as it is without.
-    float SnapToFrame(const CurveView& view, float time);
-    /// The selected keys gone, from every channel.
-    CurveEdit DeleteSelectedCurveKeysEdit(const CurveView& view);
+    float SnapToFrame(const CurveData& data, float time);
+    /// The view's selected keys gone, from every channel.
+    CurveEdit DeleteSelectedCurveKeysEdit(ConstCurveViewRef view);
     /// The selected keys' tangent mode set; to Free or Aligned, each side keeps its slope.
-    CurveEdit SetCurveTangentModeEdit(const CurveView& view, CurveTangentMode mode);
+    CurveEdit SetCurveTangentModeEdit(ConstCurveViewRef view, CurveTangentMode mode);
     /// The selected keys' interpolation to the next key set.
-    CurveEdit SetCurveInterpolationEdit(const CurveView& view, CurveInterpolation interpolation);
-    /// `channel`'s curve made `preset` stretched over the view's range, with new key IDs from
+    CurveEdit SetCurveInterpolationEdit(ConstCurveViewRef view, CurveInterpolation interpolation);
+    /// `channel`'s curve made `preset` stretched over the curves' range, with new key IDs from
     /// `makeID`.
-    CurveEdit ApplyCurvePresetEdit(const CurveView& view, int channel, const CurvePreset& preset,
+    CurveEdit ApplyCurvePresetEdit(const CurveData& data, int channel, const CurvePreset& preset,
                                    const std::function<ID()>& makeID);
     /// A channel's wrap modes set.
-    CurveEdit SetCurveWrapEdit(const CurveView& view, int channel, CurveWrapMode pre, CurveWrapMode post);
+    CurveEdit SetCurveWrapEdit(const CurveData& data, int channel, CurveWrapMode pre, CurveWrapMode post);
 
     /// @}
 }

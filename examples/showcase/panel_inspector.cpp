@@ -34,6 +34,10 @@ namespace tachyon
         bool                      inspectorFilterDirty = true;
         bool                      inspectorSectionOpen[SectionCount] = { true, true, true, true, true };
 
+        // Its views of the demo curves and levels: its own zoom, selection and editor windows.
+        CurveViewState curve, colorCurves;
+        PlotViewState  levels;
+
         // Its lists' and menus' static IDs, its own so another Inspector's don't share them.
         IDManager* ids = nullptr;
         ID stringListID, floatListID, smallMenuID, bigMenuID;
@@ -45,6 +49,10 @@ namespace tachyon
         {
             for (const ID id : { stringListID, floatListID, smallMenuID, bigMenuID })
                 ids->ReleaseStaticID(id);
+            // The curve fields' editor windows, once opened.
+            for (const ID id : { curve.popupID, colorCurves.popupID })
+                if (id != ID::Invalid())
+                    ids->ReleaseStaticID(id);
         }
     };
 
@@ -65,7 +73,7 @@ namespace tachyon
                 k.stableID = idManager.CreateStaticID();
             return curve;
         };
-        auto onEdit = [this](CurveView* view, const char* what) {
+        auto onEdit = [this](CurveData* view, const char* what) {
             return [this, view, what](const CurveEdit& edit) {
                 commandManager.History().Push({ .description = what,
                     .undo = [view, edit] { ApplyCurveEdit(*view, edit, /*undo*/ true); },
@@ -76,7 +84,7 @@ namespace tachyon
 
         // A falloff: full at the center, easing out to nothing at the edge.
         static constexpr float2 kFalloff[] = { { 0.0f, 1.0f }, { 0.35f, 0.85f }, { 1.0f, 0.0f } };
-        CurveView& falloff = showcase.demoCurve;
+        CurveData& falloff = showcase.demoCurve;
         falloff.channels = { CurveChannel{ .name = "Falloff", .curve = withIDs(MakeCurve(kFalloff)) } };
         falloff.channels[0].curve.keys.back().tangents = CurveTangentMode::Flat;
         UpdateCurveTangents(falloff.channels[0].curve);
@@ -85,7 +93,7 @@ namespace tachyon
 
         // A grade's red, green and blue: the red lifted, the green with more contrast, the blue
         // lifted in the shadows.
-        CurveView& color = showcase.demoColorCurves;
+        CurveData& color = showcase.demoColorCurves;
         static constexpr float2 kRed[]   = { { 0.0f, 0.0f }, { 0.5f, 0.62f }, { 1.0f, 1.0f } };
         static constexpr float2 kGreen[] = { { 0.0f, 0.0f }, { 0.3f, 0.16f }, { 0.7f, 0.86f }, { 1.0f, 1.0f } };
         static constexpr float2 kBlue[]  = { { 0.0f, 0.0f }, { 0.25f, 0.36f }, { 1.0f, 1.0f } };
@@ -98,7 +106,7 @@ namespace tachyon
 
     void Application::SeedLevels()
     {
-        PlotView& levels = showcase.demoLevels;
+        PlotData& levels = showcase.demoLevels;
         if (!levels.series.empty() || demoImagePixels.empty())
             return;
         // The demo image's channels, each counted into 64 bins over 0 to 255.
@@ -281,13 +289,13 @@ namespace tachyon
         add("Sky ramp", [this]() { DragLabel("Sky ramp"); GradientField(showcase.demoGradient); });
         add("HDR gradient", [this]() { DragLabel("HDR gradient"); GradientField(showcase.demoGradientF); });
         SeedCurves();
-        add("Curve", [this]() { DragLabel("Curve"); CurveField(showcase.demoCurve); });
-        add("Color curves", [this]() { DragLabel("Color curves"); CurveField(showcase.demoColorCurves); });
-        add("Levels", [this]() {
+        add("Curve", [this, &p]() { DragLabel("Curve"); CurveField({ showcase.demoCurve, p.curve }); });
+        add("Color curves", [this, &p]() { DragLabel("Color curves"); CurveField({ showcase.demoColorCurves, p.colorCurves }); });
+        add("Levels", [this, &p]() {
             SeedLevels();   // once the demo image is made
             Label("Levels", "of the image");
             BeginVertical(idManager.AllocateDynamicID("levelsColumn"), theme.emptyVertStyleRef, LayoutOverride{}.FlexGrow(1));
-            Plot(showcase.demoLevels, LayoutOverride{}.Height(190));
+            Plot({ showcase.demoLevels, p.levels }, LayoutOverride{}.Height(190));
             BeginHorizontal(idManager.AllocateDynamicID("levelsOptions"), inspectorPairHalfStyleRef, LayoutOverride{}.FlexGrow(1));
             // The image whose colors the plot counts.
             Image(demoImageIndex, LayoutOverride::FixedSize(32, 32));

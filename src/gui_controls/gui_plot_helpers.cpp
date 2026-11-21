@@ -23,73 +23,73 @@ namespace tachyon
         return counts;
     }
 
-    void ApplyPlotEdit(PlotView& view, const PlotEdit& edit, bool undo)
+    void ApplyPlotEdit(PlotData& data, const PlotEdit& edit, bool undo)
     {
         const std::vector<float>& xs = undo ? edit.from : edit.to;
-        if (xs.size() != view.handles.size())
+        if (xs.size() != data.handles.size())
             return;
         for (size_t h = 0; h < xs.size(); ++h)
-            view.handles[h].x = xs[h];
+            data.handles[h].x = xs[h];
     }
 
-    PlotEdit MovePlotHandleEdit(const PlotView& view, int handle, float x)
+    PlotEdit MovePlotHandleEdit(const PlotData& data, int handle, float x)
     {
-        if (handle < 0 || handle >= (int)view.handles.size() || !std::isfinite(x))
+        if (handle < 0 || handle >= (int)data.handles.size() || !std::isfinite(x))
             return {};
         PlotEdit edit;
-        for (const PlotHandle& h : view.handles)
+        for (const PlotHandle& h : data.handles)
             edit.from.push_back(h.x);
         edit.to = edit.from;
-        const float lo = handle > 0 ? std::max(view.xMin, edit.from[size_t(handle - 1)]) : view.xMin;
-        const float hi = handle + 1 < (int)edit.from.size() ? std::min(view.xMax, edit.from[size_t(handle + 1)]) : view.xMax;
+        const float lo = handle > 0 ? std::max(data.xMin, edit.from[size_t(handle - 1)]) : data.xMin;
+        const float hi = handle + 1 < (int)edit.from.size() ? std::min(data.xMax, edit.from[size_t(handle + 1)]) : data.xMax;
         edit.to[size_t(handle)] = std::clamp(x, lo, std::max(lo, hi));
         return edit;
     }
 
-    void CommitPlotEdit(PlotView& view, const PlotEdit& edit)
+    void CommitPlotEdit(PlotViewRef view, const PlotEdit& edit)
     {
         if (edit.empty())
             return;
-        ApplyPlotEdit(view, edit);
-        ++view.revision;
-        if (view.onEdit)
-            view.onEdit(edit);
+        ApplyPlotEdit(view.data, edit);
+        ++view.state.edits;
+        if (view.data.onEdit)
+            view.data.onEdit(edit);
     }
 
-    float PlotScaleY(const PlotView& view, float value)
+    float PlotScaleY(const PlotData& data, float value)
     {
-        if (view.yScale == PlotScale::Log)
+        if (data.yScale == PlotScale::Log)
             return value > 0.0f ? std::log10(1.0f + value) : 0.0f;
         return value;
     }
 
-    PlotRange PlotShownX(const PlotView& view)
+    PlotRange PlotShownX(ConstPlotViewRef view)
     {
-        float lo = view.xMin, hi = view.xMax;
+        float lo = view.data.xMin, hi = view.data.xMax;
         if (!std::isfinite(lo)) lo = 0.0f;
         if (!std::isfinite(hi) || !(hi > lo)) hi = lo + 1.0f;
-        if (!view.shownSet || !std::isfinite(view.shownXMin) || !std::isfinite(view.shownXMax) || !(view.shownXMax > view.shownXMin))
+        if (!view.state.shownSet || !std::isfinite(view.state.shownXMin) || !std::isfinite(view.state.shownXMax) || !(view.state.shownXMax > view.state.shownXMin))
             return { lo, hi };
-        const float span = std::min(view.shownXMax - view.shownXMin, hi - lo);
-        const float start = std::clamp(view.shownXMin, lo, hi - span);
+        const float span = std::min(view.state.shownXMax - view.state.shownXMin, hi - lo);
+        const float start = std::clamp(view.state.shownXMin, lo, hi - span);
         return { start, start + span };
     }
 
-    PlotRange PlotShownY(const PlotView& view)
+    PlotRange PlotShownY(ConstPlotViewRef view)
     {
-        float lo = view.yMin, hi = view.yMax;
-        if (view.fitY)
+        float lo = view.data.yMin, hi = view.data.yMax;
+        if (view.data.fitY)
         {
             // From yMin, as far as the values shown reach either way.
-            lo = view.yMin;
-            hi = view.yMin;
-            float xLo = view.xMin, xHi = view.xMax;
+            lo = view.data.yMin;
+            hi = view.data.yMin;
+            float xLo = view.data.xMin, xHi = view.data.xMax;
             if (!(xHi > xLo)) xHi = xLo + 1.0f;
             const PlotRange shown = PlotShownX(view);
-            for (int s = 0; s < (int)view.series.size(); ++s)
+            for (int s = 0; s < (int)view.data.series.size(); ++s)
             {
-                const PlotSeries& series = view.series[size_t(s)];
-                if (!series.visible || (view.shownSeries >= 0 && view.shownSeries != s))
+                const PlotSeries& series = view.data.series[size_t(s)];
+                if (!series.visible || (view.state.shownSeries >= 0 && view.state.shownSeries != s))
                     continue;
                 const int n = (int)series.values.size();
                 const float slot = (xHi - xLo) / float(std::max(1, n));
@@ -107,8 +107,8 @@ namespace tachyon
                 }
             }
         }
-        lo = PlotScaleY(view, lo);
-        hi = PlotScaleY(view, hi);
+        lo = PlotScaleY(view.data, lo);
+        hi = PlotScaleY(view.data, hi);
         if (!(hi > lo))
             hi = lo + 1.0f;
         return { lo, hi };

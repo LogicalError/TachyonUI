@@ -2,7 +2,9 @@
 
 #include <gui_core/gui_base_types.h>     // color4f
 #include <gui_core/gui_id.h>
+#include <gui_core/gui_id_manager.h>
 #include <gui_core/input/gui_gesture.h>
+#include <gui_controls/gui_view_ref.h>
 
 #include <cstdint>
 #include <functional>
@@ -152,10 +154,11 @@ namespace tachyon
         bool empty() const { return changes.empty() && tracks.empty() && !loopTo.has_value(); }
     };
 
-    /// A timeline editor's tracks and how they're shown, kept by the app from frame to frame
-    /// (TimelineEditor). Everything the user changes comes to the app as a TimelineEdit
-    /// (onEdit), already applied, for its undo history.
-    struct TimelineView
+    /// A timeline's tracks and playback, kept by the app from frame to frame. Everything the
+    /// user changes comes to the app as a TimelineEdit (onEdit), already applied, for its undo
+    /// history. Show it with TimelineEditor: a TimelineView for one place, or this and a
+    /// TimelineViewState per view to show it in several.
+    struct TimelineData
     {
         std::vector<TimelineTrack> tracks;
         TimelineState  playback;          ///< the playhead; AdvanceTimeline moves it on
@@ -164,6 +167,19 @@ namespace tachyon
         TimelineRange  loopRange;         ///< where looping playback goes round; empty: the whole length
         bool           snap = true;       ///< dragged keys and the loop range land on frames
 
+        /// A change the user made, already applied: put it in the undo history.
+        std::function<void(const TimelineEdit&)> onEdit;
+        /// The playhead was moved, or playback started or stopped, by the user.
+        std::function<void()>                    onPlaybackChanged;
+
+        /// Raised by each edit applied, so every view of the tracks can tell they changed.
+        uint32_t       revision = 0;
+    };
+
+    /// How one TimelineEditor shows a TimelineData: the part in view, the selection, the track
+    /// filter, and what the user is doing in it. Keep one per view, from frame to frame.
+    struct TimelineViewState
+    {
         /// The part of the timeline in view: from `viewStart`, `viewLength` seconds wide.
         /// A `viewLength` of 0 or less shows the whole length.
         float          viewStart  = 0.0f;
@@ -173,15 +189,11 @@ namespace tachyon
         std::unordered_set<ID> selectedKeys;   ///< keys and events, by stableID
         std::string            filter;          ///< the track list shows the tracks whose name has it (and their groups)
 
-        /// A change the user made, already applied: put it in the undo history.
-        std::function<void(const TimelineEdit&)> onEdit;
         /// The "+" over the track list: add a track.
         std::function<void()>                    onAddTrack;
         /// Builds the menu for a track's row (right click, or the Menu key on the selected
         /// one), with MenuItem and the like, as onCanvasContextMenu does in a node view.
         std::function<void(int track)>           onTrackContextMenu;
-        /// The playhead was moved, or playback started or stopped, by the user.
-        std::function<void()>                    onPlaybackChanged;
 
         /// @name Internal: kept between frames while the user works
         ///@{
@@ -233,30 +245,48 @@ namespace tachyon
         float             menuTime = 0.0f;              ///< the time under the right click
         bool              menuByPointer = false;        ///< a right press set the above since the menu last opened
         uint32_t          menuOpening = 0;              ///< the context menu opening it was worked out for
+        uint32_t          seenRevision = 0;             ///< the tracks' revision this view last built
+        ID                editorID = ID::Invalid();     ///< the editor's ID last frame: its rows' and lanes' IDs are scoped to it
         ///@}
     };
 
-    /// Does (or with `undo`, undoes) `edit` on `view`.
-    void ApplyTimelineEdit(TimelineView& view, const TimelineEdit& edit, bool undo = false);
-    /// Applies `edit` and hands it to `view.onEdit`; does nothing for an empty one.
-    void CommitTimelineEdit(TimelineView& view, const TimelineEdit& edit);
+    /// A timeline shown in one place: the tracks and the one view of them together.
+    struct TimelineView : TimelineData, TimelineViewState
+    {
+    };
 
-    /// The edit that sets a key on `track` at `time` (on a frame when the view snaps), or
+    /// A timeline and one view of it, as TimelineEditor and the helpers take them.
+    using TimelineViewRef      = BasicViewRef<TimelineData, TimelineViewState>;
+    using ConstTimelineViewRef = BasicViewRef<const TimelineData, const TimelineViewState>;
+
+    /// Does (or with `undo`, undoes) `edit` on the tracks, and raises their revision.
+    void ApplyTimelineEdit(TimelineData& data, const TimelineEdit& edit, bool undo = false);
+    /// Applies `edit` and hands it to `data.onEdit`; does nothing for an empty one.
+    void CommitTimelineEdit(TimelineData& data, const TimelineEdit& edit);
+    /// The element of track `track`'s row in a view: rows are scoped to their editor, so each
+    /// view of the tracks has its own.
+    inline ID TimelineRowID(const TimelineViewState& view, ID track) { return IDManager::ScopedID(view.editorID, track); }
+    /// After an edit (through this view or another): lets go of the selected tracks, keys and
+    /// events that are gone, and of what the view kept by track index. TimelineEditor does
+    /// it as it builds; returns whether the tracks had changed since.
+    bool PruneTimelineSelection(TimelineViewRef view);
+
+    /// The edit that sets a key on `track` at `time` (on a frame when the timeline snaps), or
     /// none when there's one there already or the track isn't a property. `keyID` names it.
-    TimelineEdit AddKeyEdit(const TimelineView& view, int track, float time, ID keyID);
-    /// The edit that deletes the selected keys and events from the tracks that aren't
+    TimelineEdit AddKeyEdit(const TimelineData& data, int track, float time, ID keyID);
+    /// The edit that deletes the view's selected keys and events from the tracks that aren't
     /// locked; none when none is selected.
-    TimelineEdit DeleteSelectedKeysEdit(const TimelineView& view);
+    TimelineEdit DeleteSelectedKeysEdit(ConstTimelineViewRef view);
     /// The edit that adds `track` at `index` (the end when out of range).
-    TimelineEdit AddTrackEdit(const TimelineView& view, TimelineTrack track, int index = -1);
+    TimelineEdit AddTrackEdit(const TimelineData& data, TimelineTrack track, int index = -1);
     /// The edit that removes `track` and, for a group, the tracks it holds.
-    TimelineEdit RemoveTrackEdit(const TimelineView& view, int track);
+    TimelineEdit RemoveTrackEdit(const TimelineData& data, int track);
 
     /// The tracks a group at `track` holds: the ones after it indented further, up to the
     /// next one that isn't. Empty for any other track.
-    std::span<const TimelineTrack> TracksInGroup(const TimelineView& view, int track);
+    std::span<const TimelineTrack> TracksInGroup(const TimelineData& data, int track);
     /// Whether `track` is locked: it, or a group holding it, is.
-    bool IsTrackLocked(const TimelineView& view, int track);
+    bool IsTrackLocked(const TimelineData& data, int track);
 
     /// @}
 }

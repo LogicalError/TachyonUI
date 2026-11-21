@@ -13,13 +13,13 @@ namespace tachyon
 
     namespace
     {
-        bool ValidTrack(const TimelineView& view, int track)
+        bool ValidTrack(const TimelineData& view, int track)
         {
             return track >= 0 && track < (int)view.tracks.size();
         }
 
         // `time` on the nearest frame when the view snaps, inside the length.
-        float SnappedTime(const TimelineView& view, float time)
+        float SnappedTime(const TimelineData& view, float time)
         {
             const float length = std::isfinite(view.duration) ? std::max(0.0f, view.duration) : 0.0f;
             if (view.snap && std::isfinite(view.fps) && view.fps > 0.0f)
@@ -28,7 +28,7 @@ namespace tachyon
         }
     }
 
-    void ApplyTimelineEdit(TimelineView& view, const TimelineEdit& edit, bool undo)
+    void ApplyTimelineEdit(TimelineData& view, const TimelineEdit& edit, bool undo)
     {
         auto changes = [&] {
             for (const TimelineEdit::Change& change : edit.changes)
@@ -48,16 +48,7 @@ namespace tachyon
                     view.tracks.insert(view.tracks.begin() + at, t.track);
                 }
                 else if (ValidTrack(view, t.index))
-                {
-                    const TimelineTrack& gone = view.tracks[size_t(t.index)];
-                    if (view.selectedTrack == gone.stableID)
-                        view.selectedTrack = ID::Invalid();
-                    for (const TimelineKey& key : gone.keys)
-                        view.selectedKeys.erase(key.stableID);
-                    for (const TimelineEvent& event : gone.events)
-                        view.selectedKeys.erase(event.stableID);
                     view.tracks.erase(view.tracks.begin() + t.index);
-                }
             }
         };
         // Changes are to tracks as they are with the others in place: done after the adds
@@ -66,18 +57,36 @@ namespace tachyon
         else      { tracks(); changes(); }
         if (edit.loopTo)
             view.loopRange = undo ? edit.loopFrom.value_or(TimelineRange{}) : *edit.loopTo;
+        ++view.revision;
+    }
 
-        // Keys that are gone aren't selected.
+    bool PruneTimelineSelection(TimelineViewRef view)
+    {
+        if (view.state.seenRevision == view.data.revision)
+            return false;
+        view.state.seenRevision = view.data.revision;
+
+        // Tracks, keys and events that are gone aren't selected; what was kept by track index
+        // is let go.
         std::unordered_set<ID> present;
-        for (const TimelineTrack& track : view.tracks)
+        bool trackPresent = false;
+        for (const TimelineTrack& track : view.data.tracks)
         {
+            trackPresent |= track.stableID == view.state.selectedTrack;
             for (const TimelineKey& key : track.keys) present.insert(key.stableID);
             for (const TimelineEvent& event : track.events) present.insert(event.stableID);
         }
-        std::erase_if(view.selectedKeys, [&present](ID id) { return !present.contains(id); });
+        if (!trackPresent)
+            view.state.selectedTrack = ID::Invalid();
+        std::erase_if(view.state.selectedKeys, [&present](ID id) { return !present.contains(id); });
+        view.state.hover = {};
+        if (!view.state.clipDrag.IsHeld())
+            view.state.clipTrack = -1;
+        view.state.menuTrack = -1;
+        return true;
     }
 
-    void CommitTimelineEdit(TimelineView& view, const TimelineEdit& edit)
+    void CommitTimelineEdit(TimelineData& view, const TimelineEdit& edit)
     {
         if (edit.empty())
             return;
@@ -86,7 +95,7 @@ namespace tachyon
             view.onEdit(edit);
     }
 
-    TimelineEdit AddKeyEdit(const TimelineView& view, int track, float time, ID keyID)
+    TimelineEdit AddKeyEdit(const TimelineData& view, int track, float time, ID keyID)
     {
         if (!ValidTrack(view, track) || IsTrackLocked(view, track))
             return {};
@@ -105,31 +114,31 @@ namespace tachyon
         return TimelineEdit{ .changes = { { track, from, std::move(to) } } };
     }
 
-    TimelineEdit DeleteSelectedKeysEdit(const TimelineView& view)
+    TimelineEdit DeleteSelectedKeysEdit(ConstTimelineViewRef view)
     {
         TimelineEdit edit;
-        for (int t = 0; t < (int)view.tracks.size(); ++t)
+        for (int t = 0; t < (int)view.data.tracks.size(); ++t)
         {
-            const TimelineTrack& from = view.tracks[size_t(t)];
-            if (IsTrackLocked(view, t))
+            const TimelineTrack& from = view.data.tracks[size_t(t)];
+            if (IsTrackLocked(view.data, t))
                 continue;
             TimelineTrack to = from;
-            std::erase_if(to.keys,   [&](const TimelineKey& k)   { return view.selectedKeys.contains(k.stableID); });
-            std::erase_if(to.events, [&](const TimelineEvent& e) { return view.selectedKeys.contains(e.stableID); });
+            std::erase_if(to.keys,   [&](const TimelineKey& k)   { return view.state.selectedKeys.contains(k.stableID); });
+            std::erase_if(to.events, [&](const TimelineEvent& e) { return view.state.selectedKeys.contains(e.stableID); });
             if (to.keys.size() != from.keys.size() || to.events.size() != from.events.size())
                 edit.changes.push_back({ t, from, std::move(to) });
         }
         return edit;
     }
 
-    TimelineEdit AddTrackEdit(const TimelineView& view, TimelineTrack track, int index)
+    TimelineEdit AddTrackEdit(const TimelineData& view, TimelineTrack track, int index)
     {
         const int count = (int)view.tracks.size();
         return TimelineEdit{ .tracks = { { .index = (index < 0 || index > count) ? count : index, .added = true,
                                            .track = std::move(track) } } };
     }
 
-    TimelineEdit RemoveTrackEdit(const TimelineView& view, int track)
+    TimelineEdit RemoveTrackEdit(const TimelineData& view, int track)
     {
         if (!ValidTrack(view, track))
             return {};
@@ -141,7 +150,7 @@ namespace tachyon
         return edit;
     }
 
-    std::span<const TimelineTrack> TracksInGroup(const TimelineView& view, int track)
+    std::span<const TimelineTrack> TracksInGroup(const TimelineData& view, int track)
     {
         if (!ValidTrack(view, track) || view.tracks[size_t(track)].kind != TimelineTrackKind::Group)
             return {};
@@ -152,7 +161,7 @@ namespace tachyon
         return std::span<const TimelineTrack>(view.tracks).subspan(size_t(track + 1), size_t(end - track - 1));
     }
 
-    bool IsTrackLocked(const TimelineView& view, int track)
+    bool IsTrackLocked(const TimelineData& view, int track)
     {
         if (!ValidTrack(view, track))
             return false;

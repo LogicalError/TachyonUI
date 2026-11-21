@@ -841,47 +841,49 @@ namespace tachyon
         /// - Keys on the focused lanes: Delete removes the selected keys, Left / Right move
         ///   them a frame, Ctrl+A selects them all, K keys the selected track at the playhead,
         ///   Space plays or pauses, Home / End go to the ends, Escape clears the selection.
-        /// Every change to the tracks or the loop range is a TimelineEdit, handed to
-        /// `view.onEdit` for undo; the playhead and selection change in `view` directly.
-        void        TimelineEditor(ID id, TimelineView& view, LayoutOverride&& constraints = {});
+        /// Every change to the tracks or the loop range is a TimelineEdit, handed to the data's
+        /// `onEdit` for undo; the playhead and selection change directly. `view` is a
+        /// TimelineView, or `{ data, state }` for one of several editors of the same tracks.
+        void        TimelineEditor(ID id, TimelineViewRef view, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
-        inline void TimelineEditor(       TimelineView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { TimelineEditor(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
+        inline void TimelineEditor(       TimelineViewRef view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { TimelineEditor(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
 
         ///@}
 
         /// @name Curves
         ///@{
 
-        /// A curve in a box, over `view.range`: a click opens the curve editor (CurveEditor) in a
-        /// window under it. Every change comes to `view.onEdit`, already applied. True on the
-        /// frame after a change, as a field's is.
+        /// A curve in a box, over the curves' range: a click opens the curve editor (CurveEditor)
+        /// in a window under it. Every change comes to the curves' `onEdit`, already applied.
+        /// True on the frame after a change made in it, as a field's is. `view` is a CurveView,
+        /// or `{ data, state }` for one of several views of the same curves.
         ///     CurveView falloff;   // a member: one channel, keys over 0 to 1
         ///     Label("Falloff");
         ///     CurveField(idManager.AllocateDynamicID("falloff"), falloff);
-        bool        CurveField(ID id, CurveView& view, LayoutOverride&& constraints = {});
+        bool        CurveField(ID id, CurveViewRef view, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
-        inline bool CurveField(       CurveView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return CurveField(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
+        inline bool CurveField(       CurveViewRef view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return CurveField(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
 
         /// The curve editor a CurveField opens, as a control of its own: the channels and the
         /// selected key's time and value over the plot; the keys, their tangent handles and the
         /// grid on it; the presets and the wrap modes under it.
-        void        CurveEditor(ID id, CurveView& view, LayoutOverride&& constraints = {});
+        void        CurveEditor(ID id, CurveViewRef view, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
-        inline void CurveEditor(       CurveView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { CurveEditor(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
+        inline void CurveEditor(       CurveViewRef view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { CurveEditor(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
 
-        /// Series of values as lines, bars or areas over `view`'s x range (a histogram's
-        /// channels), with a chip per series to show one on its own, the values under the
-        /// pointer, and handles dragged along x under the plot. True on the frame after a
-        /// handle moved.
+        /// Series of values as lines, bars or areas over the x range (a histogram's channels),
+        /// with a chip per series to show one on its own, the values under the pointer, and
+        /// handles dragged along x under the plot. True on the frame after a handle moved in
+        /// it. `view` is a PlotView, or `{ data, state }` for one of several views of a plot.
         ///
         ///     PlotView levels;   // a member
         ///     levels.series  = { PlotSeries{ .name = "Luma", .values = HistogramBins(lumas, 256) } };
         ///     levels.handles = { { "Black", 0.0f }, { "White", 1.0f } };
         ///     if (Plot(idManager.AllocateDynamicID("levels"), levels))
         ///         ApplyLevels(levels.handles[0].x, levels.handles[1].x);
-        bool        Plot(ID id, PlotView& view, LayoutOverride&& constraints = {});
+        bool        Plot(ID id, PlotViewRef view, LayoutOverride&& constraints = {});
         /// As above, with the call site as the ID.
-        inline bool Plot(       PlotView& view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Plot(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
+        inline bool Plot(       PlotViewRef view, LayoutOverride&& constraints = {}, std::source_location site = std::source_location::current()) { return Plot(idManager.AllocateDynamicID(site), view, std::move(constraints)); }
 
         /// A 3D view: the app's scene, drawn by `view.onRender` into an image the library keeps
         /// at the view's size, a camera the mouse moves round it, the move, rotate and scale
@@ -3266,8 +3268,8 @@ namespace tachyon
         /// The theme loaded's, made when there are none.
         ThemeVariableOverrides& ThemeVariables();
         /// CurveEditor's channel tree and frame ruler, for views with paths and fps.
-        void CurveTree(CurveView& view);
-        void CurveRuler(CurveView& view);
+        void CurveTree(CurveViewRef view);
+        void CurveRuler(CurveViewRef view);
         /// A theme's path as m_themeVariables keys it: backslashes as forward slashes, then
         /// lexically normal, so one theme written two ways is one key on every platform.
         static std::string ThemePathKey(std::string_view themePath);

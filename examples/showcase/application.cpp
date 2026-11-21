@@ -200,7 +200,7 @@ namespace tachyon
             for (const TimelineKey& key : track.keys)       release(key.stableID);
             for (const TimelineEvent& event : track.events) release(event.stableID);
         }
-        for (const CurveView* view : { &animationCurves, &showcase.demoCurve, &showcase.demoColorCurves })
+        for (const CurveData* view : { &animationCurves, &showcase.demoCurve, &showcase.demoColorCurves })
             for (const CurveChannel& channel : view->channels)
                 for (const CurveKey& key : channel.curve.keys)
                     release(key.stableID);
@@ -1593,12 +1593,7 @@ namespace tachyon
     {
         auto& panels = layout.panels;
         const std::string name(title);
-        // A view that pans, zooms or turns keeps where it is with the layout (Panel::saveState).
-        auto keepView = [&panels](ID id, auto& view) {
-            panels[id].saveState    = [&view] { return SaveViewState(view); };
-            panels[id].restoreState = [&view](std::string_view state) { (void)RestoreViewState(view, state); };
-            return id;
-        };
+
         if (title == "Viewport")
             return CreateViewportPanel(panels, name);
         if (title == "NodeView")     return CreateNodeGraphPanel(panels, name);
@@ -1616,17 +1611,26 @@ namespace tachyon
         if (title == "Sketch")      return CreateSketchPanel(panels, name);
         if (title == "Curves")
         {
-            // Its playhead moves while the timeline plays: never cached.
-            const ID id = CreatePanel(panels, name, theme.curveBezierIcon, [this] { RenderCurvesPanel(); });
+            // Its playhead moves while the timeline plays: never cached. Its pan and zoom go with
+            // the layout (Panel::saveState).
+            auto view = std::make_shared<CurveViewState>();
+            const ID id = CreatePanel(panels, name, theme.curveBezierIcon, [this, view] { RenderCurvesPanel(*view); });
             panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
-            return keepView(id, animationCurves);
+            panels[id].saveState    = [view] { return SaveViewState(*view); };
+            panels[id].restoreState = [view](std::string_view state) { (void)RestoreViewState(*view, state); };
+            return id;
         }
         if (title == "Timeline")
         {
-            // The simulation's fill grows every frame, playing or not: never cached.
-            const ID id = CreatePanel(panels, name, theme.timelinePlayIcon, [this] { RenderTimelinePanel(); });
+            // The simulation's fill grows every frame, playing or not: never cached. Its zoom
+            // goes with the layout.
+            auto view = std::make_shared<TimelineViewState>();
+            SetUpTimelineView(*view);
+            const ID id = CreatePanel(panels, name, theme.timelinePlayIcon, [this, view] { RenderTimelinePanel(*view); });
             panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
-            return keepView(id, animation);
+            panels[id].saveState    = [view] { return SaveViewState(*view); };
+            panels[id].restoreState = [view](std::string_view state) { (void)RestoreViewState(*view, state); };
+            return id;
         }
         if (title == "Settings")
             return CreateSettingsPanel(panels, name);

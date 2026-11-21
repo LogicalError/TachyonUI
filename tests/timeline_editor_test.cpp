@@ -105,13 +105,13 @@ namespace tachyon
                 const std::vector<ID> ids = AllWithStyle(style);
                 return ids.size() == 1 ? ids[0] : ID::Invalid();
             }
-            // The `n`th element in `style` inside row `row`.
+            // The `n`th element in `style` inside track `row`'s row.
             int2 InRow(ID row, StyleRef style, int n = 0) const
             {
                 int seen = 0;
                 for (const ID id : AllWithStyle(style))
                     for (ElementRef ref = app.elementStorage.FindElementRefByID(id); ref.IsValid(); ref = app.elementStorage.GetParentRef(ref))
-                        if (app.elementStorage.GetElementUnsafe(ref).id == row)
+                        if (app.elementStorage.GetElementUnsafe(ref).id == TimelineRowID(view, row))
                         {
                             if (seen++ == n) return app.CenterOf(id);
                             break;
@@ -119,6 +119,8 @@ namespace tachyon
                 ADD_FAILURE() << "no such element in the row";
                 return {};
             }
+            // Track `track`'s row in the editor.
+            ID Row(ID track) const { return TimelineRowID(view, track); }
             ID Focused() const { return app.guiStateManager.Interaction().GetFocusedID(); }
             // A point on the ruler at `time`.
             int2 RulerPoint(float time) const
@@ -432,7 +434,9 @@ namespace tachyon
             EXPECT_EQ(view.tracks[1].keys.size(), 2u);
             EXPECT_EQ(view.tracks[2].keys.size(), 2u);
             EXPECT_EQ(view.tracks[6].events.size(), 1u);
+            EXPECT_TRUE(PruneTimelineSelection(view)) << "the tracks changed";
             EXPECT_EQ(view.selectedKeys, std::unordered_set<ID>{ scaleKeys[0] }) << "what's gone isn't selected";
+            EXPECT_FALSE(PruneTimelineSelection(view)) << "and not since";
             ApplyTimelineEdit(view, edit, /*undo*/ true);
             EXPECT_EQ(view.tracks, before);
             view.selectedKeys.clear();
@@ -518,34 +522,34 @@ namespace tachyon
         TEST_F(TimelineEditorTest, CollapsedGroupsAndTheFilter)
         {
             Settle();
-            EXPECT_TRUE(app.HasElement(sphere));
-            EXPECT_TRUE(app.HasElement(position));
-            EXPECT_FALSE(app.HasElement(intensity)) << "inside a collapsed group";
-            EXPECT_TRUE(app.HasElement(music));
-            EXPECT_TRUE(app.HasElement(events));
+            EXPECT_TRUE(app.HasElement(Row(sphere)));
+            EXPECT_TRUE(app.HasElement(Row(position)));
+            EXPECT_FALSE(app.HasElement(Row(intensity))) << "inside a collapsed group";
+            EXPECT_TRUE(app.HasElement(Row(music)));
+            EXPECT_TRUE(app.HasElement(Row(events)));
 
             Click(InRow(light, app.theme.timelineChevronStyleRef));
             Settle();
             EXPECT_TRUE(view.tracks[3].expanded);
-            EXPECT_TRUE(app.HasElement(intensity));
+            EXPECT_TRUE(app.HasElement(Row(intensity)));
             EXPECT_TRUE(edits.empty()) << "how it's shown, not a change to undo";
 
             // A collapsed group hides only its own tracks: the next group's show.
             Click(InRow(sphere, app.theme.timelineChevronStyleRef));
             Settle();
             EXPECT_FALSE(view.tracks[0].expanded);
-            EXPECT_FALSE(app.HasElement(position));
-            EXPECT_TRUE(app.HasElement(light));
-            EXPECT_TRUE(app.HasElement(intensity)) << "in Light, which is open";
+            EXPECT_FALSE(app.HasElement(Row(position)));
+            EXPECT_TRUE(app.HasElement(Row(light)));
+            EXPECT_TRUE(app.HasElement(Row(intensity))) << "in Light, which is open";
             view.tracks[0].expanded = true;
 
             view.filter = "SCA";
             Settle();
-            EXPECT_TRUE(app.HasElement(sphere)) << "the group of a match";
-            EXPECT_TRUE(app.HasElement(scale));
-            EXPECT_FALSE(app.HasElement(position));
-            EXPECT_FALSE(app.HasElement(light));
-            EXPECT_FALSE(app.HasElement(music));
+            EXPECT_TRUE(app.HasElement(Row(sphere))) << "the group of a match";
+            EXPECT_TRUE(app.HasElement(Row(scale)));
+            EXPECT_FALSE(app.HasElement(Row(position)));
+            EXPECT_FALSE(app.HasElement(Row(light)));
+            EXPECT_FALSE(app.HasElement(Row(music)));
         }
 
         // The row buttons: eye, lock, mute and solo as edits; a property's key at the playhead.
@@ -588,13 +592,13 @@ namespace tachyon
             view.onAddTrack = [&] { ++added; };
             view.onTrackContextMenu = [&](int track) { menuFor = track; app.MenuItem("Delete track", [] {}); };
             Settle();
-            Click(app.CenterOf(music));
+            Click(app.CenterOf(Row(music)));
             EXPECT_EQ(view.selectedTrack, music);
             Click(Rect(app.theme.timelineAddTrackStyleRef));
             EXPECT_EQ(added, 1);
-            app.InjectMouseMove(app.CenterOf(scale));
+            app.InjectMouseMove(app.CenterOf(Row(scale)));
             Frame();
-            app.ClickAt(app.CenterOf(scale), MouseButtons::Right);
+            app.ClickAt(app.CenterOf(Row(scale)), MouseButtons::Right);
             Settle();
             EXPECT_EQ(menuFor, 2);
             EXPECT_EQ(view.selectedTrack, scale);
