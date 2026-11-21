@@ -8,6 +8,7 @@
 #include <gui_core/gui_id.h>
 #include <gui_core/input/gui_gesture.h>
 #include <gui_core/style/gui_style.h>
+#include <gui_controls/subsystems/gui_swatch_styles.h>
 
 namespace tachyon
 {
@@ -115,7 +116,7 @@ namespace tachyon
 
     private:
         ColorPickerState m_state{};
-        std::unordered_map<tachyon::ID, tachyon::VisualColorStyleIndex> m_swatchStyles, m_prevSwatchStyles;
+        SwatchStyles<>   m_swatchStyles;
     };
     /// @}
 }

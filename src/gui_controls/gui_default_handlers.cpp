@@ -74,41 +74,35 @@ namespace tachyon
 
 
 
-    EventHandler MakeButtonHandler(GUIStateManager& guiStateManager, std::function<void()> onClick)
+    bool ButtonActivated(GUIStateManager& guiStateManager, const ElementEvent& event)
     {
-        return [&guiStateManager, onClick](ElementEvent&& event)->bool
+        switch (event.type)
         {
-            switch (event.type)
-            {
-                case EventType::MouseDown:
-                    if (event.state.LeftPressed())
-                    {
-                        TakeFocus(guiStateManager, event.id);
-                        guiStateManager.Interaction().SetClicked(event.id);
-                        if (onClick) onClick();
-                        return true;
-                    }
-                    break;
+            case EventType::MouseDown:
+                if (event.state.LeftPressed())
+                {
+                    TakeFocus(guiStateManager, event.id);
+                    guiStateManager.Interaction().SetClicked(event.id);
+                    return true;
+                }
+                break;
 
-                case EventType::KeyDown:
-                    if ((guiStateManager.GetCurrentState(event.id) & ElementState::Focused) != ElementState::None &&
-                        IsActivationKey(event))
-                    {
-                        guiStateManager.Interaction().SetClicked(event.id);
-                        // No held button drives the Active state on keyboard
-                        // activation - flash it for a frame so the press shows.
-                        guiStateManager.Interaction().FlashActive(event.id);
-                        if (onClick) onClick();
-                        return true;
-                    }
-                    break;
+            case EventType::KeyDown:
+                if ((guiStateManager.GetCurrentState(event.id) & ElementState::Focused) != ElementState::None &&
+                    IsActivationKey(event))
+                {
+                    guiStateManager.Interaction().SetClicked(event.id);
+                    // No held button drives the Active state on keyboard
+                    // activation - flash it for a frame so the press shows.
+                    guiStateManager.Interaction().FlashActive(event.id);
+                    return true;
+                }
+                break;
 
-                default:
-                    break;
-            }
-
-            return false;
-        };
+            default:
+                break;
+        }
+        return false;
     }
 
 

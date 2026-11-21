@@ -1339,24 +1339,41 @@ namespace tachyon
         const int active = view.activeChannel;
         const VisualColorStyleIndex presetColor = channelCount > 0 ? theme.curveChannelColors[size_t(view.channels[size_t(active)].color)]
                                                                    : theme.curveChannelColors[0];
+        // A preset is looked up where it's used, in the view's list or the built-in ones, not
+        // copied (its name and keys) into its handler and its drawing each frame.
+        auto presetAt = [](const CurveView& view, size_t p) -> const CurvePreset* {
+            const std::span<const CurvePreset> list = view.presets.empty() ? DefaultCurvePresets() : std::span<const CurvePreset>(view.presets);
+            return p < list.size() ? &list[p] : nullptr;
+        };
+        const float width = float(std::max(1, styleManager.Px(1))) * 1.25f;
         for (size_t p = 0; p < presets.size(); ++p)
         {
-            const CurvePreset preset = presets[p];
             const ElementRef presetRef = RegisterControl(
                 Element{ .id = idManager.AllocateDynamicID("curve_preset"),
-                         .eventHandler = disabled ? EventHandler{} : MakeButtonHandler([v, preset, active, newKeyID]() {
-                             CommitCurveEdit(*v, ApplyCurvePresetEdit(*v, active, preset, newKeyID));
+                         .eventHandler = disabled ? EventHandler{} : MakeButtonHandler([v, p, active, newKeyID, presetAt]() {
+                             if (const CurvePreset* preset = presetAt(*v, p))
+                                 CommitCurveEdit(*v, ApplyCurvePresetEdit(*v, active, *preset, newKeyID));
                          }),
                          .styleRef = theme.curvePresetStyleRef },
                 LayoutOverride{});
-            SetTooltip(preset.name);
-            const float width = float(std::max(1, styleManager.Px(1))) * 1.25f;
-            VERIFY(elementStorage.AddCustomDraw(presetRef, [preset, presetColor, width](CustomDrawContext& ctx)
+            SetTooltip(presets[p].name);
+            VERIFY(elementStorage.AddCustomDraw(presetRef, [v, p, presetAt, presetColor, width](CustomDrawContext& ctx)
             {
-                Curve shape = preset.curve;
-                shape.preWrap = shape.postWrap = CurveWrapMode::Clamp;
+                const CurvePreset* preset = presetAt(*v, p);
+                if (preset == nullptr)
+                    return;
                 const LineStyle style{ .colorStyleIndex = presetColor, .lineWidth = width };
-                DrawCurve(ctx, CurvePlot{ ctx.ElementInnerRect(), CurveRange{} }, shape, style, style);
+                const CurvePlot plot{ ctx.ElementInnerRect(), CurveRange{} };
+                const Curve& curve = preset->curve;
+                if (curve.preWrap == CurveWrapMode::Clamp && curve.postWrap == CurveWrapMode::Clamp)
+                    DrawCurve(ctx, plot, curve, style, style);
+                else
+                {
+                    // Drawn over its own span alone: a copy that doesn't wrap.
+                    Curve shape = curve;
+                    shape.preWrap = shape.postWrap = CurveWrapMode::Clamp;
+                    DrawCurve(ctx, plot, shape, style, style);
+                }
             }));
         }
         BeginHorizontal(idManager.AllocateDynamicID("curve_bottom_gap"), theme.emptyHorzStyleRef, LayoutOverride{}.FlexGrow(1));

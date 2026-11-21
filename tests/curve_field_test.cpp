@@ -3,9 +3,11 @@
 
 #include <gtest/gtest.h>
 
+#include "gpu/allocation_count.h"
 #include "headless_gui_app.h"
 
 #include <cmath>
+#include <string>
 
 namespace tachyon
 {
@@ -614,6 +616,29 @@ namespace tachyon
             app.ClickAt(app.CenterOf(own[0]));
             Frame();
             EXPECT_FLOAT_EQ(EvaluateCurve(view.channels[0].curve, 0.25f), 0.75f);
+        }
+
+        // The presets are drawn from the view's list each frame, not copied (names and keys)
+        // into each one's handler and drawing: twice as many cost no more allocations a frame.
+        TEST_F(CurveFieldTest, MorePresetsCostNoMoreAllocationsAFrame)
+        {
+            if (!AllocationCount::ScopedAllocationCount::Supported())
+                GTEST_SKIP() << "allocations are counted in Debug builds with MSVC's CRT";
+            Open();
+            const auto allocationsAFrame = [&](int count) {
+                view.presets.clear();
+                for (int p = 0; p < count; ++p)
+                    view.presets.push_back(CurvePreset{ .name = "A preset with a long name " + std::to_string(p),
+                                                        .curve = DefaultCurvePresets()[size_t(p) % DefaultCurvePresets().size()].curve });
+                for (int i = 0; i < 4; ++i)
+                    Frame();
+                AllocationCount::ScopedAllocationCount allocations;
+                Frame();
+                return allocations.Count();
+            };
+            const uint64_t fewer = allocationsAFrame(4);
+            const uint64_t more  = allocationsAFrame(8);
+            EXPECT_EQ(more, fewer) << "allocations that grow with the presets";
         }
 
         // A right click on a key: its menu, which sets its mode or deletes it.

@@ -410,6 +410,7 @@ list(APPEND GUI_CONTROLS_FILES
 
   gui_controls/subsystems/gui_color_picker_subsystem.h
   gui_controls/subsystems/gui_color_picker_subsystem.cpp
+  gui_controls/subsystems/gui_swatch_styles.h
 
   gui_controls/subsystems/gui_gradient_editor_subsystem.h
   gui_controls/subsystems/gui_gradient_editor_subsystem.cpp

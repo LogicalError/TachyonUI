@@ -321,6 +321,8 @@ namespace tachyon
 
         /// The same stops as `gradient`, blending linearly in its color space.
         static GradientF From(const Gradient& gradient);
+        /// As From, into this one's storage.
+        void Assign(const Gradient& gradient);
         /// The first Gradient::kMaxStops stops as a linear Gradient: colors clamped to 0..1 and
         /// stored as 8 bits; the interpolation of each stop is dropped.
         Gradient ToGradient() const;

@@ -592,8 +592,10 @@ namespace tachyon
         //
         /// A handler that flips `toggle` on click.
         tachyon::EventHandler MakeToggleHandler(bool& toggle);
-        /// A handler that calls onClick on click.
-        tachyon::EventHandler MakeButtonHandler(std::function<void()> onClick);
+        /// A handler that calls onClick on click. The callable is kept in the handler as it is,
+        /// so a small one doesn't make the handler allocate.
+        template <class OnClick>
+        tachyon::EventHandler MakeButtonHandler(OnClick&& onClick) { return tachyon::MakeButtonHandler(guiStateManager, std::forward<OnClick>(onClick)); }
         /// A label's handler: a click focuses the control the label belongs to.
         tachyon::EventHandler MakeLabelHandler();
 
@@ -2965,6 +2967,8 @@ namespace tachyon
         VisualColorStyleIndex AppColorStyle(ID owner, color4f color);
         /// The text of the label just before the current control (empty without one).
         std::string PendingLabelText() const;
+        /// As PendingLabelText, the text system's own, valid until the text changes.
+        std::string_view PendingLabelTextView() const;
         /// How color swatches draw a color (the theme's checkerboard and alpha bar).
         struct ColorSwatchLook SwatchLook() const;
 
@@ -3132,6 +3136,8 @@ namespace tachyon
         CutShortText m_cutShort{};
         /// FindCutShortText's walk of the target's elements, kept for its storage.
         mutable std::vector<ElementRef> m_cutShortWalk;
+        /// GradientField(Gradient&)'s gradient as given and as edited, kept for their storage.
+        GradientF m_gradientFieldGiven, m_gradientFieldEdited;
         bool OpenContextMenuWindow(ID targetID);
         bool OpenCached(ID id, StyleRef style, uint64_t signature, LayoutOverride&& constraints);
         static void ReportInvalidControlID(ID id);

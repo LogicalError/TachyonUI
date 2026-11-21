@@ -8,6 +8,7 @@
 #include <gui_core/gui_id.h>
 #include <gui_core/style/gui_style.h>
 #include <gui_core/style/gui_style_gradient.h>
+#include <gui_controls/subsystems/gui_swatch_styles.h>
 
 namespace tachyon
 {
@@ -63,11 +64,24 @@ namespace tachyon
         tachyon::VisualColorStyleIndex stopHaloColor        = tachyon::VisualColorStyleIndex::Invalid;
     };
 
+    /// What a GradientField's swatch keeps besides its style: the gradient it was drawn from,
+    /// so an unchanged one isn't sampled again, and what a click opens the editor with.
+    struct GradientFieldSwatch
+    {
+        tachyon::GradientF drawn {};       ///< the gradient as last drawn
+        bool               drawnSet = false;
+        tachyon::Gradient  original8 {};   ///< a Gradient field's own, restored exactly on Cancel
+        GradientEditLimits limits {};
+        std::string        context;        ///< the field's label
+    };
+
     /// The gradient editor's state plus swatch styles keyed by swatch ID, with the same
     /// lifecycle as ColorPickerSubsystem's. The popup body is GUIApplication::EmitGradientEditor.
     class GradientEditorSubsystem
     {
     public:
+        using Swatch = SwatchStyles<GradientFieldSwatch>::Entry;
+
         explicit GradientEditorSubsystem(FramePipeline& frame);
 
         /// The editor popup's state.
@@ -75,7 +89,11 @@ namespace tachyon
 
         /// The style slot of swatch `swatchID`, kept alive this frame. Invalid for a new
         /// swatch: the caller creates the style and stores it there, reused from then on.
-        tachyon::VisualColorStyleIndex& ClaimSwatchStyle(tachyon::ID swatchID);
+        tachyon::VisualColorStyleIndex& ClaimSwatchStyle(tachyon::ID swatchID) { return ClaimSwatch(swatchID).index; }
+        /// As ClaimSwatchStyle, the whole entry.
+        Swatch& ClaimSwatch(tachyon::ID swatchID) { return m_swatchStyles.Claim(swatchID); }
+        /// Swatch `swatchID` as last claimed, or null.
+        Swatch* FindSwatch(tachyon::ID swatchID) { return m_swatchStyles.Find(swatchID); }
 
         /// Carries `swatchID`'s style over without rebuilding it: a cache-hit scope
         /// doesn't re-claim its swatches, but its blitted primitives still use them.
@@ -86,8 +104,8 @@ namespace tachyon
         void ForgetStyles();
 
     private:
-        GradientEditorState m_state{};
-        std::unordered_map<tachyon::ID, tachyon::VisualColorStyleIndex> m_swatchStyles, m_prevSwatchStyles;
+        GradientEditorState               m_state{};
+        SwatchStyles<GradientFieldSwatch> m_swatchStyles;
     };
     /// @}
 }

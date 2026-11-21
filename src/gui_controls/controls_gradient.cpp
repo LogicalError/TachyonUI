@@ -91,12 +91,17 @@ namespace tachyon
             value.stopCount = Gradient::kMaxStops;
         }
         const Gradient before = value;
-        GradientF edited = GradientF::From(value);
+        // The core edits a copy, not `value`: both in the application's buffers, which keep
+        // their storage from field to field.
+        GradientF& given  = m_gradientFieldGiven;
+        GradientF& edited = m_gradientFieldEdited;
+        given.Assign(value);
+        edited = given;
         bool cancelled = false;
         (void)GradientFieldCore(id, edited, &value, cancelled, style, std::move(constraints));
         if (cancelled)
             value = m_gradientEditorSub->State().originalGradient8;   // exactly as it was
-        else if (!(edited == GradientF::From(value)))
+        else if (!(edited == given))
         {
             // Only an edit writes back: the stops and the blend space, the rest kept.
             Gradient out = edited.ToGradient();
@@ -130,11 +135,9 @@ namespace tachyon
         cancelled = false;
         const GradientEditLimits limits = gradient8 ? GradientEditLimits{ Gradient::kMaxStops, false, false }
                                                     : GradientEditLimits{ GradientF::kMaxStops, true, true };
-        const Gradient original8 = gradient8 ? *gradient8 : Gradient{};
 
         // ---- Gradient swatch (inline preview bar) ----
         const ID swatchID = id;
-        const std::string context = PendingLabelText();
         auto& ge = m_gradientEditorSub->State();
         // Escape is Cancel, and the keyboard goes back to the swatch.
         if (ge.triggerID == swatchID && ge.closeRequest == GradientEditorState::CloseRequest::None && TakeEscapeFor(ge.windowID, swatchID))
@@ -155,43 +158,57 @@ namespace tachyon
         }
         const bool editorIsOpen = (ge.triggerID == swatchID); // this field's editor, not just any
 
-        // Persistent style indices for this swatch: the gradient as it is, and opaque. Copied
-        // out, as a later claim can move the stored ones.
+        // Persistent style indices for this swatch: the gradient as it is, and opaque. The bar
+        // is sampled again only when the gradient changed. Copied out, as a later claim can
+        // add entries.
         NoteSwatchClaim(swatchID);
-        auto& swatchStyle = m_gradientEditorSub->ClaimSwatchStyle(swatchID);
-        SetGradientPreviewStyle(styleManager, swatchStyle, value);
-        const VisualColorStyleIndex withAlpha = swatchStyle;
+        GradientEditorSubsystem::Swatch& field = m_gradientEditorSub->ClaimSwatch(swatchID);
         const ID opaqueID = idManager.AllocateDynamicID("gradient_opaque");
         NoteSwatchClaim(opaqueID);
         auto& opaqueStyle = m_gradientEditorSub->ClaimSwatchStyle(opaqueID);
-        SetGradientPreviewStyle(styleManager, opaqueStyle, value, /*opaque*/ true);
-        const VisualColorStyleIndex opaque = opaqueStyle;
+        const bool redraw = field.index == VisualColorStyleIndex::Invalid || opaqueStyle == VisualColorStyleIndex::Invalid
+                         || !field.data.drawnSet || !(field.data.drawn == value);
+        if (redraw)
+        {
+            SetGradientPreviewStyle(styleManager, field.index, value);
+            SetGradientPreviewStyle(styleManager, opaqueStyle, value, /*opaque*/ true);
+            field.data.drawn    = value;   // into the storage it has
+            field.data.drawnSet = true;
+        }
+        const VisualColorStyleIndex withAlpha = field.index;
+        const VisualColorStyleIndex opaque    = opaqueStyle;
+        // What a click opens the editor with: the gradient as drawn, whatever becomes of the
+        // caller's, kept in the swatch rather than copied into the handler each frame.
+        field.data.original8 = gradient8 ? *gradient8 : Gradient{};
+        field.data.limits    = limits;
+        field.data.context.assign(PendingLabelTextView());
 
         Element swatch {};
         swatch.id              = swatchID;
         swatch.styleRef        = style;
         swatch.state           = guiStateManager.GetCurrentState(swatchID);
-        // A copy: the editor starts from the gradient as drawn, whatever becomes of the caller's.
-        swatch.eventHandler = MakeButtonHandler([this, value, original8, limits, swatchID, editorIsOpen, context]()
+        swatch.eventHandler = MakeButtonHandler([this, swatchID, editorIsOpen]()
         {
             auto& ge = m_gradientEditorSub->State();
             if (editorIsOpen)
             {
                 ge.triggerID = ID::Invalid();
-            } else
-            {
-                ge.triggerID = swatchID;
-                if (ge.windowID == ID::Invalid())
-                    ge.windowID = idManager.CreateStaticID();
-                ge.workingCopy = value;
-                ge.originalGradient = value;
-                ge.originalGradient8 = original8;
-                ge.limits = limits;
-                ge.context = context;
-                ge.selectedStop = 0;
-                ge.press.Reset();
-                ge.dragOff = false;
+                return;
             }
+            const GradientEditorSubsystem::Swatch* drawn = m_gradientEditorSub->FindSwatch(swatchID);
+            if (drawn == nullptr || !drawn->data.drawnSet)
+                return;
+            ge.triggerID = swatchID;
+            if (ge.windowID == ID::Invalid())
+                ge.windowID = idManager.CreateStaticID();
+            ge.workingCopy = drawn->data.drawn;
+            ge.originalGradient = drawn->data.drawn;
+            ge.originalGradient8 = drawn->data.original8;
+            ge.limits = drawn->data.limits;
+            ge.context = drawn->data.context;
+            ge.selectedStop = 0;
+            ge.press.Reset();
+            ge.dragOff = false;
         });
 
         float brightest = 0.0f;
@@ -214,7 +231,8 @@ namespace tachyon
             const ID bandID = idManager.AllocateDynamicID("gradient_hdr_band");
             NoteSwatchClaim(bandID);
             auto& bandStyle = m_gradientEditorSub->ClaimSwatchStyle(bandID);
-            SetHdrBandStyle(styleManager, bandStyle, value);
+            if (redraw || bandStyle == VisualColorStyleIndex::Invalid)
+                SetHdrBandStyle(styleManager, bandStyle, value);
             band = bandStyle;
         }
 
