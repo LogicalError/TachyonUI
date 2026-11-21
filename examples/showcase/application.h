@@ -25,6 +25,13 @@ namespace tachyon
     struct HierarchyPanel;
     struct InspectorPanel;
     struct LogPanel;
+    struct ViewportPanel;
+    struct TablePanel;
+    struct FrozenTablePanel;
+    struct TreeTablePanel;
+    struct SketchPanel;
+    struct ProfilerPanel;
+    struct ReorderablePanel;
 
     // Case-insensitive substring search for the panels' search boxes. Lowercase
     // the query once when it changes, then match each item against it.
@@ -100,22 +107,85 @@ namespace tachyon
         void SetBenchFrames(int frames) { m_bench.frames = frames; }
         bool IsBenching() const { return m_bench.frames > 0; }
 
-        // ---- Toolbar model (used by the View panel) -----------------------------
-        struct ToolbarLayoutModel
+        // A Settings panel's own: the page shown, the page list, and each page's search,
+        // selection and tables. The settings themselves are the app's (ShowcaseState).
+        struct SettingsView
         {
-            std::vector<ToolbarItem>         sides[kToolbarSideCount];
-            ToolbarDockState                 dockState{};
-            // Torn-off toolbars, each in its own OS window; dock-back moves the
-            // item back into a side vector.
-            std::vector<FloatingToolbarItem> floatingItems;
-        };
-        ToolbarLayoutModel toolbars;
-        ToolbarDockCallbacks toolbarCallbacks;
-        FloatingToolbarOptions toolbarOpts;
+            IDManager*         ids = nullptr;   // its pages' static IDs and the Reset dialog's go back to it
+            SettingsPanelState settings;
 
-		bool            showGrid         = true;
-        bool            enableAudio      = true;
-		ViewMode        viewMode         = ViewMode::Default;   // View mode toolbar buttons toggle these flags
+            // The theme editor on the Appearance page: its search, which categories are open,
+            // and the Reset dialog.
+            struct ThemeEditor
+            {
+                std::string                 search;
+                std::map<std::string, bool> open;
+                bool                        confirmReset = false;
+                ID                          resetDialogID {};
+            } themeEditor;
+
+            // The Shortcuts page. Lists shortcuts whose mode is in the category selection; an
+            // empty selection re-selects "All".
+            struct Shortcuts
+            {
+                std::string      search;
+                std::string      searchLower;          // cached lowercased copy of the search
+                MultiSelectState catSelection;
+                int              categoryWidth = 160;  // CSS pixels
+                // Category-list VirtualTreeView. Rows / visible rows are rebuilt each frame;
+                // catInternalMulti is the table's sub-range selection, mapped to/from
+                // catSelection's IDs.
+                std::vector<TreeViewRow> catRows;
+                std::vector<int>         catVisibleIdx;
+                TableState               catTableState;
+                MultiSelectState         catInternalMulti;
+
+                // Must persist across frames: the column-sizer double-click handler
+                // holds &column.internal.maxContentWidth and fires after OnGUI returns.
+                struct VisRow { uint32_t mode; uint32_t entryIdx; };
+                std::vector<VirtualTableColumn> columns;         // persistent column template (built once)
+                std::vector<VirtualTableColumn> activeColumns;   // per-frame active subset (Context dropped in single-category view)
+                std::vector<VisRow>             visRows;
+                // Filter fingerprint: visRows are rebuilt only when it changes. A mask
+                // of 0 never occurs, so it forces a rebuild on the first frame.
+                uint64_t                        filterMask = 0;
+                std::string                     filterQuery;
+                TableState                      tableState;      // Category/Command/Shortcut
+            } shortcuts;
+
+            ~SettingsView()
+            {
+                if (!ids)
+                    return;
+                for (const SettingsPanelState::Page& page : settings.pages)
+                    ids->ReleaseStaticID(page.id);
+                if (themeEditor.resetDialogID != ID::Invalid())
+                    ids->ReleaseStaticID(themeEditor.resetDialogID);
+            }
+        };
+
+        // A TreeTable panel's row (hierarchical rows in a table). Flat row list; a closed node
+        // is skipped by advancing skipCount + 1.
+        struct TreeTableRow {
+            std::string  name;
+            std::string  size;
+            std::string  type;
+            int          depth       = 0;
+            bool         hasChildren = false;
+            bool         isOpen      = true;
+            IconID       icon        = IconID::Invalid;
+            tachyon::ID  id          = tachyon::ID::Invalid();
+            // Descendant count. Recomputed by TreeUtils::RebuildTreeIndex after edits.
+            int          skipCount   = 0;
+            // Guide-line metadata (also recomputed by TreeUtils::RebuildTreeIndex):
+            //   ancestorLineMask - bit d set iff the ancestor at depth d+1 has
+            //       a next sibling, so its connector line passes this row at column d.
+            //   isLastSibling    - last child of its parent; the own-depth guide
+            //       line ends at the row center as an L-tick.
+            uint32_t     ancestorLineMask = 0;
+            bool         isLastSibling    = true;
+        };
+
         CommandMode     nodeViewMode = CommandMode::Default;   // the node view's shortcuts; copied into each NodeView's commandMode
         CommandMode     stateMachineMode = CommandMode::Default;   // the state machines' shortcuts (Delete)
         CommandMode     hierarchyMode = CommandMode::Default;      // a Hierarchy's shortcuts while its tree has the focus
@@ -169,7 +239,6 @@ namespace tachyon
         FileItemStyle fileItemStyles[3];
         // The hierarchy: "streaming" at the end of a row, and a row still loading.
         StyleRef hierarchyStreamingStyleRef, hierarchySkeletonRowStyleRef;
-        int32_t  viewportBusyWidth = 0;         // the viewport's width last frame: its busy bar's
         StyleRef dataTableCellStyleRef, dataTableNumberStyleRef, dataTableCodeStyleRef;
         StyleRef textShadowSampleStyleRef, textGlowSampleStyleRef;
         StyleRef iconVAlignDemoStyleRefs[4][3];   // [IconSide L/R/T/B][top/mid/bot]
@@ -207,11 +276,14 @@ namespace tachyon
                                  glow { ImageIndex::Invalid }, picture { ImageIndex::Invalid };
             std::vector<uint8_t> picturePixels;
             static constexpr uint32_t kPictureWidth = 256, kPictureHeight = 128;
-
+        } misc;
+        // A Misc panel's own: the thumbnail picked and the icon buttons' toggles.
+        struct MiscView
+        {
             int  selectedThumb = 1;
             bool bold = true, italic = false, link = false;   // the group's toggles
             bool liked = false;
-        } misc;
+        };
         // Work under way, shown where it happens: the build in the Build panel, an import in
         // the Files panel, the shaders compiling in the viewport, the hierarchy loading, and
         // the indexing and the background tasks in the status bar. Times are seconds on the
@@ -252,10 +324,10 @@ namespace tachyon
         bool             animationSeeded = false;
         /// The Curves panel: the animated sphere's curves, its playhead the timeline's.
         CurveView        animationCurves;
-        // The Viewport panel's scene: its shapes, the view onto them, and what draws them.
+        // The scene the Viewport panels show (each from its own camera): its shapes, the one
+        // picked, and what draws them.
         std::vector<SceneObject> sceneObjects;
         int              sceneSelected = -1;
-        ViewportView     scene;
 #if TACHYON_VULKAN || TACHYON_D3D12 || TACHYON_SDLGPU
         SceneRenderer    sceneRenderer;
 #endif
@@ -263,11 +335,6 @@ namespace tachyon
         struct SketchPoint  { float2 pos; float width; };
         struct SketchStroke { std::vector<SketchPoint> points; };
         std::vector<SketchStroke> sketchStrokes;
-        PointerDrag      sketchDrag;
-        PenState         sketchPen;          // as of the latest pointer event over the pad
-        float2           sketchCursor {};    // where the pointer is on the pad
-        bool             sketchEraserTool = false;   // the Eraser tool picked; a pen's eraser end erases either way
-        bool             sketchHovered = false;
 
         // ---- Showcase state ----
         // State used by the showcase panels for testing and prototyping GUI features.
@@ -277,24 +344,6 @@ namespace tachyon
             ID windowLayoutID1 { };
             ID windowLayoutID2 { };
             ID dragGhostWindowID {};
-
-            // The theme editor on the Appearance page: its search, which categories are open,
-            // and the Reset dialog.
-            struct ThemeEditor
-            {
-                std::string                 search;
-                std::map<std::string, bool> open;
-                bool                        confirmReset = false;
-                ID                          resetDialogID {};
-            } themeEditor;
-
-            // Reorderable demo state
-            ID reorderTabsID { ID::Invalid() };
-            ID reorderListID { ID::Invalid() };
-            ID reorderWrappedHorzID { ID::Invalid() };
-            ID reorderWrappedVertID { ID::Invalid() };
-            ID reorderStringListID { ID::Invalid() };
-            ID reorderFloatListID { ID::Invalid() };
 
             int testBoxStyleCount = 0;
 
@@ -443,45 +492,6 @@ namespace tachyon
             std::string nodeName     = "Source";
             bool        nodeEnabled  = true;
 
-            // Table demos (Table panel + Shortcuts settings page)
-            TableState tablePanelTableState;         // resizable Name/Type/Value table in panel_table.cpp
-            TableState tablePanelSimpleState;        // 3-column A/B/C demo table in panel_table.cpp
-            TableState tablePanelSizingState;        // column-sizing demo (fixed / resizable / stretch) in panel_table.cpp
-            TableState tablePanelVirtualTableState;  // virtual-scrolled 50k-row demo in panel_table.cpp
-            TableState frozenTableState;             // virtual table with frozenLeftColumns demo in panel_split_scroll.cpp
-            TableState shortcutsTableState;          // Category/Command/Shortcut in the Shortcuts settings page
-
-            // ---- TreeTable demo (hierarchical rows in a table) ----
-            // Flat row list; a closed node is skipped by advancing skipCount + 1.
-            struct TreeTableRow {
-                std::string  name;
-                std::string  size;
-                std::string  type;
-                int          depth       = 0;
-                bool         hasChildren = false;
-                bool         isOpen      = true;
-                IconID       icon        = IconID::Invalid;
-                tachyon::ID      id          = tachyon::ID::Invalid();
-                // Descendant count. Recomputed by RebuildTreeTableIndex() after edits.
-                int          skipCount   = 0;
-                // Guide-line metadata (also recomputed by RebuildTreeTableIndex):
-                //   ancestorLineMask - bit d set iff the ancestor at depth d+1 has
-                //       a next sibling, so its connector line passes this row at column d.
-                //   isLastSibling    - last child of its parent; the own-depth guide
-                //       line ends at the row center as an L-tick.
-                uint32_t     ancestorLineMask = 0;
-                bool         isLastSibling    = true;
-            };
-            std::vector<TreeTableRow> treeTableRows;
-            TableState                treeTableState;
-            MultiSelectState          treeTableMultiSelect;
-            // Row drag-and-drop (TableState.rowDragDrop); payload is the dataset index.
-            ItemDragDropConfig        treeTableDragDrop;
-            // Visible row -> flat row index, rebuilt each frame.
-            std::vector<int>          treeTableVisibleIdx;
-            // Moved row's new flat index, applied to the selection after the next
-            // VirtualTable call (which reallocates the row IDs).
-            int                       treeTablePendingSelectFlatIdx = -1;
 
             // Icon IDs
             IconID circleIcon = IconID::Invalid;
@@ -647,10 +657,6 @@ namespace tachyon
             CommandID cmdRecenter = {}, cmdFrameSelected = {};
             CommandID cmdBrush = {}, cmdEraser = {};
 
-            ID smallMenuID{ ID::Invalid() };
-            ID cameraMenuID{ ID::Invalid() };
-            int cameraView = 0;   // the viewport toolbar's camera menu: perspective, orthographic, ...
-            ID bigMenuID{ ID::Invalid() };
             int quality = 1;      // the inspector's dropdowns
             int fontIndex = 0;
 
@@ -690,10 +696,6 @@ namespace tachyon
             std::string   layoutNameInput;
             ID            layoutNameDialogID { ID::Invalid() };
 
-            // Settings panel chrome (page list, selection, tree width); page content
-            // state lives in the fields below.
-            SettingsPanelState settings;
-
             // Appearance page bound values, kept in the saved UI state
             std::string settingsThemePath;            // the palette loaded
             int     settingsMotionIndex = 0; // 0 = as the OS, 1 = reduced, 2 = full
@@ -707,31 +709,6 @@ namespace tachyon
             bool        settingsAutosave = true;
             bool        settingsLogToConsole = true;   // Diagnostics::SetLogConsoleOutput; on by default
             int         settingsMaxUndo = 64;
-
-            // Shortcuts page state. Lists shortcuts whose mode is in the category
-            // selection; an empty selection re-selects "All".
-            std::string      settingsShortcutsSearch;
-            std::string      settingsShortcutsSearchLower; // cached lowercased copy of the search
-            MultiSelectState settingsShortcutsCatSelection;
-            int              settingsShortcutsCategoryWidth = 160; // CSS pixels
-            // Category-list VirtualTreeView. Rows / VisibleIdx are rebuilt each
-            // frame; InternalMulti is the table's sub-range selection, mapped
-            // to/from settingsShortcutsCatSelection's static IDs.
-            std::vector<TreeViewRow> settingsShortcutsCatRows;
-            std::vector<int>         settingsShortcutsCatVisibleIdx;
-            TableState               settingsShortcutsCatTableState;
-            MultiSelectState         settingsShortcutsCatInternalMulti;
-
-            // Must persist across frames: the column-sizer double-click handler
-            // holds &column.internal.maxContentWidth and fires after OnGUI returns.
-            struct ShortcutVisRow { uint32_t mode; uint32_t entryIdx; };
-            std::vector<VirtualTableColumn> settingsShortcutsColumns;        // persistent column template (built once)
-            std::vector<VirtualTableColumn> settingsShortcutsActiveColumns;  // per-frame active subset (Context dropped in single-category view)
-            std::vector<ShortcutVisRow>     settingsShortcutsVisRows;
-            // Filter fingerprint: visRows are rebuilt only when it changes. A mask
-            // of 0 never occurs, so it forces a rebuild on the first frame.
-            uint64_t                        settingsShortcutsFilterMask = 0;
-            std::string                     settingsShortcutsFilterQuery;
         };
         ShowcaseState showcase;
 
@@ -762,14 +739,16 @@ namespace tachyon
     private:
         // Settings pages (panel_settings.cpp). InitSettingsPages() runs once after
         // icon registration. Appearance mutates global state (theme, font scale).
-        void InitSettingsPages();
-        void RenderSettingsAppearance();
+        ID   CreateSettingsPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        /// A Settings panel's pages, with static IDs of its own.
+        void InitSettingsPages(SettingsView& view);
+        void RenderSettingsAppearance(SettingsView& view);
         void RenderSettingsGeneral();
         void RenderSettingsAdvanced();
         void RenderSettingsAbout();
         /// The font scale, as a percentage: 100 to 300 in steps of 10, the theme reloaded at it.
         void SetFontScale(float percent);
-        void RenderSettingsShortcuts();
+        void RenderSettingsShortcuts(SettingsView::Shortcuts& page);
         /// A table's selection mode as a "Select" label and a Row | Cell segmented control.
         void SelectionModeSwitch(TableSelectionMode& mode);
         /// Reduced motion as settingsMotionIndex says.
@@ -785,18 +764,18 @@ namespace tachyon
 
         // Dock-panel body renderers (one per panel_*.cpp), called each frame
         // while the panel is the active tab.
-        void RenderReorderablePanel();
+        void RenderReorderablePanel(ReorderablePanel& panel);
         void RenderTimelinePanel();
         void RenderCurvesPanel();
-        void RenderSketchPanel();
+        void RenderSketchPanel(SketchPanel& panel);
         void EraseSketchAt(float2 at, float radius);
         /// The Appearance page's theme editor: the theme's colors and sizes by category, each
         /// change kept for that theme (settings_theme.cpp).
-        void RenderThemeEditor();
+        void RenderThemeEditor(SettingsView::ThemeEditor& editor);
         /// A theme variable's row: its label, and a field for its type.
         void ThemeVariableRow(const CustomPropertyInfo& info);
         /// The theme picker's row: Dark or Light, and Reset for the changes made to it.
-        void RenderThemePicker();
+        void RenderThemePicker(SettingsView::ThemeEditor& editor);
         /// The timeline editor demo's tracks, keys, sound and events, and its callbacks.
         void SeedAnimation();
         /// The Curves panel's channels: the sphere's position, rotation and scale.
@@ -838,17 +817,18 @@ namespace tachyon
 
         void RenderBoxTestPanel();
         void RenderInspectorPanel(InspectorPanel& panel);
-        void RenderMiscPanel();
+        void RenderMiscPanel(MiscView& view);
         void RenderBuildPanel();
         /// The status bar's progress: the task running now, and the background tasks' pill.
         void RenderStatusProgress();
-        /// Over the viewport while its shaders compile: a sliding bar along its top and a pill.
-        void RenderViewportBusy(ID viewportID);
+        /// Over a viewport while its shaders compile: a sliding bar along its top (`width`, the
+        /// viewport's last frame) and a pill.
+        void RenderViewportBusy(ID viewportID, int32_t width);
         /// The Misc panel's cards, in RenderMiscPanel's order.
         void MiscVectorDrawingCard();
-        void MiscIconButtonsCard();
+        void MiscIconButtonsCard(MiscView& view);
         void MiscRichTextCard();
-        void MiscThumbnailsCard();
+        void MiscThumbnailsCard(MiscView& view);
         void MiscClipboardWellsCard();
         void MiscExtraCards();
         /// Puts the Copy image well's picture on the clipboard.
@@ -859,20 +839,21 @@ namespace tachyon
         void PasteImageFile(const std::string& path);
         /// Shows `rgba` (straight alpha, rows from the top) in the Paste image well.
         void ShowPastedImage(const uint8_t* rgba, uint2 size);
-        void RenderTablePanel();
+        void RenderTablePanel(TablePanel& panel);
         void RenderLogPanel(LogPanel& panel);
-        void RenderTreeTablePanel();
-        void RenderSplitScrollPanel();
-        void RenderViewportPanel();
-        /// The Viewport panel's shapes and the view onto them, the first time it's shown.
+        void RenderTreeTablePanel(TreeTablePanel& panel);
+        void RenderSplitScrollPanel(FrozenTablePanel& panel);
+        void RenderViewportPanel(ViewportPanel& panel);
+        /// A Viewport panel's toolbars: its file, view, camera and tool items.
+        void MakeViewportToolbars(ViewportPanel& panel);
+        /// The open Viewport panels' torn-off toolbars, each in its own window.
+        void EmitViewportFloatingToolbars();
+        /// The scene's shapes, the first time a Viewport panel is made.
         void SeedScene();
         /// Picks scene object `index` (-1: none) for the viewport's gizmo.
         void SelectSceneObject(int index);
         
-        void EnableProfilerTreePanel();
-        void RenderProfilerTreePanel();
-        /// The profiler panel's static IDs go back (at Cleanup).
-        void ReleaseProfilerTreeIDs();
+        void RenderProfilerTreePanel(ProfilerPanel& panel);
 
         // Main menu bar across the top of the main window (File / Edit / View / Help).
         /// Which of kThemePaths the theme is (however it was picked: the menu, the settings,
@@ -953,6 +934,13 @@ namespace tachyon
         ID CreateHierarchyPanel(std::unordered_map<ID, Panel>& panels, std::string title);
         ID CreateInspectorPanel(std::unordered_map<ID, Panel>& panels, std::string title);
         ID CreateLogPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateViewportPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateTablePanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateFrozenTablePanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateTreeTablePanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateSketchPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateProfilerPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        ID CreateReorderablePanel(std::unordered_map<ID, Panel>& panels, std::string title);
 
         void EnableFilesPanel(FilesPanel& panel);
         void DisableFilesPanel(FilesPanel& panel);
@@ -973,6 +961,8 @@ namespace tachyon
     private:
         // The Files panels made, to let go of their icons before the text system goes.
         std::vector<std::weak_ptr<FilesPanel>> m_filesPanels;
+        // The Viewport panels made, whose torn-off toolbars are emitted each frame.
+        std::vector<std::weak_ptr<ViewportPanel>> m_viewportPanels;
         std::vector<std::string> m_startPanels;
         std::vector<std::string> m_floatPanels;   // --float: start in their own windows
         std::filesystem::path    m_filesRoot;     // --files

@@ -83,13 +83,13 @@ namespace tachyon
         pastedImageSize  = size;
     }
 
-    void Application::RenderMiscPanel()
+    void Application::RenderMiscPanel(MiscView& view)
     {
         BeginHorizontalWrap(idManager.AllocateDynamicID("miscPanel"), misc.panel);
         MiscVectorDrawingCard();
-        MiscIconButtonsCard();
+        MiscIconButtonsCard(view);
         MiscRichTextCard();
-        MiscThumbnailsCard();
+        MiscThumbnailsCard(view);
         MiscClipboardWellsCard();
         MiscExtraCards();
         EndHorizontalWrap();
@@ -153,7 +153,7 @@ namespace tachyon
 
     // Square icon buttons: the states, the four sizes, a group in a well, one with a label,
     // and the primary and destructive kinds.
-    void Application::MiscIconButtonsCard()
+    void Application::MiscIconButtonsCard(MiscView& view)
     {
         BeginVertical(idManager.AllocateDynamicID("iconButtonsCard"), misc.card, LayoutOverride::FixedSize(330, 300));
         Text("Icon buttons · square hit area, state layer, never stretched", misc.caption);
@@ -193,15 +193,15 @@ namespace tachyon
         BeginHorizontal(idManager.AllocateDynamicID("groupRow"), misc.row);
         Text("Group", misc.rowLabel);
         BeginHorizontal(idManager.AllocateDynamicID("group"), misc.iconButtonGroup);
-        Toggle(idManager.AllocateDynamicID("bold"),   misc.bold,   GUIContent{ showcase.boldIcon,   {}, "Bold" },   usual);
-        Toggle(idManager.AllocateDynamicID("italic"), misc.italic, GUIContent{ showcase.italicIcon, {}, "Italic" }, usual);
-        Toggle(idManager.AllocateDynamicID("link"),   misc.link,   GUIContent{ theme.linkIcon,      {}, "Link" },   usual);
+        Toggle(idManager.AllocateDynamicID("bold"),   view.bold,   GUIContent{ showcase.boldIcon,   {}, "Bold" },   usual);
+        Toggle(idManager.AllocateDynamicID("italic"), view.italic, GUIContent{ showcase.italicIcon, {}, "Italic" }, usual);
+        Toggle(idManager.AllocateDynamicID("link"),   view.link,   GUIContent{ theme.linkIcon,      {}, "Link" },   usual);
         EndHorizontal();
         EndHorizontal();
 
         BeginHorizontal(idManager.AllocateDynamicID("labelRow"), misc.row);
         Text("With label", misc.rowLabel);
-        Toggle(idManager.AllocateDynamicID("like"), misc.liked, GUIContent{ showcase.likeIcon, "Like" }, theme.controls->toggle, LayoutOverride::Auto().NoGrow());
+        Toggle(idManager.AllocateDynamicID("like"), view.liked, GUIContent{ showcase.likeIcon, "Like" }, theme.controls->toggle, LayoutOverride::Auto().NoGrow());
         EndHorizontal();
 
         BeginHorizontal(idManager.AllocateDynamicID("kindsRow"), misc.row);
@@ -302,7 +302,7 @@ namespace tachyon
 
     // 76px thumbnails: a picked one, one with alpha over the checkerboard, one still loading,
     // and one whose file has no picture.
-    void Application::MiscThumbnailsCard()
+    void Application::MiscThumbnailsCard(MiscView& view)
     {
         BeginVertical(idManager.AllocateDynamicID("thumbnailsCard"), misc.card, LayoutOverride::FixedSize(470, 220));
         Text("Image thumbnails · selected, alpha, loading, missing", misc.caption);
@@ -313,16 +313,16 @@ namespace tachyon
         for (int i = 0; i < int(std::size(thumbs)); ++i)
         {
             const Thumb thumb = thumbs[i];
-            const bool selected = misc.selectedThumb == i;
+            const bool selected = view.selectedThumb == i;
             BeginVertical(idManager.AllocateDynamicID(std::format("thumbTile{}", i)), misc.thumbTile);
             const ID id = idManager.AllocateDynamicID(std::format("thumb{}", i));
             tachyon::Element tile{ .id = id, .styleRef = selected ? misc.thumbSelected : misc.thumb };
             tile.state = guiStateManager.GetCurrentState(id);
-            tile.eventHandler = [this, i](ElementEvent&& event) -> bool
+            tile.eventHandler = [&view, i](ElementEvent&& event) -> bool
             {
                 if (event.type != EventType::MouseDown || !event.state.LeftPressed())
                     return false;
-                misc.selectedThumb = i;
+                view.selectedThumb = i;
                 return true;
             };
             const ElementRef ref = RegisterElement(std::move(tile), LayoutOverride{});

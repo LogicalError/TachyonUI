@@ -50,13 +50,10 @@ namespace tachyon
         SetDrawCacheEnabled(true);
 
         // The saved UI state (the showcase stores it next to its themes): the main window, the
-        // toolbars, the documents of each window (made again on the first frame), the
-        // Appearance settings, the shortcuts the user changed, and the layouts saved and the file
-        // types' layouts.
+        // documents of each window (made again on the first frame) with their panels' own views
+        // and toolbars, the Appearance settings, the shortcuts the user changed, and the layouts
+        // saved and the file types' layouts.
         showcase.settingsThemePath = GetThemePath();
-        // The Viewport's camera before any saved one replaces it (Panel::restoreState).
-        scene.camera.target   = { 0.0f, 0.6f, 0.0f };
-        scene.camera.distance = 7.0f;
         PersistValue("theme", showcase.settingsThemePath);
         PersistValue("fontSize", showcase.settingsFontScalePct);
         PersistValue("motion", showcase.settingsMotionIndex);
@@ -68,7 +65,6 @@ namespace tachyon
         AddBuiltInLayouts();
         PersistLayoutPresets("layouts", showcase.layoutPresets);
         PersistWindow("main", showcase.windowLayoutID2);
-        PersistToolbars("toolbars", toolbars.sides);
         PersistDocuments("documents", [this] {
             std::vector<DocumentWindowRef> windows;
             if (showcase.mainWindowOpen)
@@ -189,11 +185,6 @@ namespace tachyon
             idManager.ReleaseStaticID(window->windowID);
             idManager.ReleaseStaticID(window->documentsID);
         }
-        for (const auto& page : showcase.settings.pages)
-            idManager.ReleaseStaticID(page.id);
-        for (const auto& row : showcase.treeTableRows)
-            idManager.ReleaseStaticID(row.id);
-        ReleaseProfilerTreeIDs();
 
         // Made on first use, so some may never have been.
         const auto release = [this](ID id) { if (id != ID::Invalid()) idManager.ReleaseStaticID(id); };
@@ -213,35 +204,9 @@ namespace tachyon
             for (const CurveChannel& channel : view->channels)
                 for (const CurveKey& key : channel.curve.keys)
                     release(key.stableID);
-        release(showcase.themeEditor.resetDialogID);
         release(m_capture.windowID);
         release(m_capture.areaID);
         release(m_capture.documentsID);
-
-        idManager.ReleaseStaticID(showcase.smallMenuID);
-        idManager.ReleaseStaticID(showcase.cameraMenuID);
-        idManager.ReleaseStaticID(showcase.bigMenuID);
-
-        idManager.ReleaseStaticID(showcase.reorderTabsID);
-        idManager.ReleaseStaticID(showcase.reorderListID);
-        idManager.ReleaseStaticID(showcase.reorderWrappedHorzID);
-        idManager.ReleaseStaticID(showcase.reorderWrappedVertID);
-        idManager.ReleaseStaticID(showcase.reorderStringListID);
-        idManager.ReleaseStaticID(showcase.reorderFloatListID);
-
-        for (int i = 0; i < kToolbarSideCount; ++i)
-        {
-            for (auto& tb : toolbars.sides[i])
-                if (tb.id != ID::Invalid())
-                    idManager.ReleaseStaticID(tb.id);
-        }
-        for (const FloatingToolbarItem& floating : toolbars.floatingItems)
-        {
-            idManager.ReleaseStaticID(floating.windowID);
-            if (floating.item.id != ID::Invalid())
-                idManager.ReleaseStaticID(floating.item.id);
-        }
-        ReleaseToolbarDockState(toolbars.dockState, *this);
 #if TACHYON_D3D12
         // The scene renderer's Direct3D 12 objects, once the GPU is done with them (Vulkan's go
         // with the backend's own).
@@ -286,19 +251,6 @@ namespace tachyon
                                       color4f{ 0.231f, 0.510f, 0.965f, 1.0f } })
             AddRecentColor(recent);
 
-        showcase.smallMenuID = idManager.CreateStaticID();
-        showcase.bigMenuID = idManager.CreateStaticID();
-
-        showcase.reorderTabsID = idManager.CreateStaticID();
-        showcase.reorderListID = idManager.CreateStaticID();
-        showcase.reorderWrappedHorzID = idManager.CreateStaticID();
-        showcase.reorderWrappedVertID = idManager.CreateStaticID();
-        showcase.reorderStringListID = idManager.CreateStaticID();
-        showcase.cameraMenuID = idManager.CreateStaticID();
-        showcase.reorderFloatListID = idManager.CreateStaticID();
-
-        InitializeToolbarDockState(toolbars.dockState, *this);
-
         // Files or text dropped from another application where nothing takes them (the Files
         // panel does): noted in the log.
         SetFileDropHandler([](const FileDrop& drop)
@@ -308,151 +260,6 @@ namespace tachyon
             if (!drop.text.empty())
                 TACHYON_LOG_INFO(kLogShowcase, "Text dropped where nothing takes it: {}", drop.text);
         });
-
-        // Toolbars on several sides exercise wrap, in-side reorder and cross-side
-        // drag. The dock wraps each renderBody in BeginToolbar / EndToolbar.
-        toolbars.sides[(int)ToolbarSide::Top].push_back(ToolbarItem
-            {
-                .id = idManager.CreateStaticID(), .debugName = "File",
-                .renderBody = [this]()
-                {
-                    // Icon, callback and tooltip (with shortcut) come from the command.
-                    CommandButton(showcase.cmdNew);
-                    CommandButton(showcase.cmdOpen);
-                    CommandButton(showcase.cmdSave);
-                    CommandButton(showcase.cmdSaveAs);
-                    CommandButton(showcase.cmdUndo);
-                    CommandButton(showcase.cmdRedo);
-                }
-            });
-        toolbars.sides[(int)ToolbarSide::Top].push_back(ToolbarItem
-            {
-                .id = idManager.CreateStaticID(), .debugName = "View",
-                .renderBody = [this]()
-                {
-					auto viewModeNoLit = (int)viewMode & ~(int)ViewMode::Lit;
-					auto viewModeLit = (int)viewMode & (int)ViewMode::Lit;
-                    Toggle(viewModeNoLit == (int)ViewMode::Wireframe, showcase.viewWireframe, [this](bool value) { if (value) viewMode = ViewMode::Wireframe; });
-					SetTooltip("Toggle wireframe view mode");
-                    Toggle(viewModeNoLit == (int)ViewMode::Solid,     showcase.viewSolid,     [this, viewModeLit](bool value) { if (value) viewMode = (ViewMode)((int)ViewMode::Solid | viewModeLit); });
-					SetTooltip("Toggle solid view mode");
-                    Toggle(viewModeNoLit == (int)ViewMode::Textured,  showcase.viewTextured,  [this, viewModeLit](bool value) { if (value) viewMode = (ViewMode)((int)ViewMode::Textured | viewModeLit); });
-					SetTooltip("Toggle textured view mode");
-
-                    bool isLit = viewModeLit == (int)ViewMode::Lit;
-                    Button(isLit ? showcase.lightOnIcon : showcase.lightOffIcon,  [this, isLit, viewModeNoLit]()
-                    { 
-                        if (!isLit) 
-                        {
-                            if (viewModeNoLit == (int)ViewMode::Wireframe)
-                                viewMode = ViewMode::TexturedLit;
-                            else
-								viewMode = (ViewMode)((int)viewModeNoLit | (int)ViewMode::Lit);
-                        } else
-                        {
-                            viewMode = (ViewMode)viewModeNoLit;
-                        }
-                    });
-					SetTooltip(isLit ? "Lighting on" : "Lighting off");
-
-                    Button(enableAudio ? showcase.audioOnIcon : showcase.audioOffIcon, [this]()
-                        {
-							enableAudio = !enableAudio;
-                        });
-                    SetTooltip(enableAudio ? "Audio on" : "Audio off");
-
-                    Button(showGrid ? showcase.gridOnIcon : showcase.gridOffIcon, [this]() { showGrid = !showGrid; });
-                    SetTooltip(showGrid ? "Grid on" : "Grid off");
-                }
-            });
-        toolbars.sides[(int)ToolbarSide::Top].push_back(ToolbarItem
-            {
-                .id = idManager.CreateStaticID(), .debugName = "Camera",
-                .renderBody = [this]()
-                {
-                    static const char* const kCameraViews[] = { "Perspective", "Orthographic", "Top", "Front", "Side" };
-                    if (BeginMenu(showcase.cameraMenuID, kCameraViews[showcase.cameraView]))
-                    {
-                        MenuFilter();
-                        for (int i = 0; i < int(std::size(kCameraViews)); ++i)
-                            MenuItem(kCameraViews[i], [this, i]() { showcase.cameraView = i; });
-                    }
-                    EndMenu();
-                    SetTooltip("Camera view");
-                }
-            });
-        toolbars.sides[(int)ToolbarSide::Left].push_back(ToolbarItem
-            {
-                .id = idManager.CreateStaticID(), .debugName = "Tools",
-                .renderBody = [this]()
-                {
-                    // The viewport's tool; Q, W, E and R over the view set it too.
-                    ViewportTool& tool = scene.tool;
-                    Toggle(tool == ViewportTool::Select, showcase.toolSelectIcon, [&tool](bool value) { if (value) tool = ViewportTool::Select; });
-					SetTooltip("Select mode (Q)");
-                    Toggle(tool == ViewportTool::Move,   showcase.toolMoveIcon,   [&tool](bool value) { if (value) tool = ViewportTool::Move;   });
-					SetTooltip("Move mode (W)");
-                    Toggle(tool == ViewportTool::Rotate, showcase.toolRotateIcon, [&tool](bool value) { if (value) tool = ViewportTool::Rotate; });
-					SetTooltip("Rotate mode (E)");
-                    Toggle(tool == ViewportTool::Scale,  showcase.toolScaleIcon,  [&tool](bool value) { if (value) tool = ViewportTool::Scale;  });
-					SetTooltip("Scale mode (R)");
-                }
-            });
-
-        toolbarCallbacks.onReorder = [this](ToolbarSide side, int from, int to)
-        {
-            auto& src = toolbars.sides[(int)side];
-            if (from < 0 || from >= (int)src.size()) return;
-            to = std::clamp(to, 0, (int)src.size() - 1);
-            if (from == to) return;
-            
-            auto item = src[from];
-            src.erase(src.begin() + from);
-            src.insert(src.begin() + to, std::move(item));
-        };
-        toolbarCallbacks.onCrossSideDrop = [this](ToolbarSide srcSide, int from, ToolbarSide targetSide)
-        {
-            auto& src = toolbars.sides[(int)srcSide];
-            if (from < 0 || from >= (int)src.size()) return;
-
-            auto item = src[from];
-            src.erase(src.begin() + from);
-            toolbars.sides[(int)targetSide].push_back(std::move(item));
-        };
-        toolbarCallbacks.onTearOff = [this](ToolbarSide srcSide, int from, tachyon::int2 mousePos)
-        {
-            auto& src = toolbars.sides[(int)srcSide];
-            if (from < 0 || from >= (int)src.size()) return;
-            
-            auto item = src[from];
-            src.erase(src.begin() + from);
-            toolbars.floatingItems.push_back(FloatingToolbarItem
-            {
-                .item          = item,
-                .windowID      = idManager.CreateStaticID(),
-                .spawnPosition = mousePos,
-                .positioned    = false,
-                .title         = item.debugName,
-                .homeSide      = srcSide
-            });
-        };
-                
-        toolbarOpts.dockState = &toolbars.dockState;
-        toolbarOpts.onDockBack = [this](ID windowID, ToolbarSide targetSide)
-        {
-            for (auto it = toolbars.floatingItems.begin();
-                    it != toolbars.floatingItems.end(); ++it)
-            {
-                if (it->windowID != windowID)
-                    continue;
-                
-                windowManager->RequestCloseAllowReopen(windowID);
-                idManager.ReleaseStaticID(windowID);
-                toolbars.sides[(int)targetSide].push_back(std::move(it->item));
-                toolbars.floatingItems.erase(it);
-                break;
-            }
-        };
 
         showcase.textBox1 = "Editable text...";
         showcase.textBox2 = "Multiline\nEditable\ntext2...";
@@ -1493,9 +1300,6 @@ namespace tachyon
                 showcase.iconCollapseAllIcon = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/chevrons-down-up.svg").c_str());
 
 				showcase.keyCommandIcon      = textSystem->RegisterIconFromSVGFile(ResourceFile("icons/lucide/command.svg").c_str());
-
-                // Must run after icon registration; the pages capture IconIDs.
-                InitSettingsPages();
             }
         }
 
@@ -1791,7 +1595,7 @@ namespace tachyon
             return id;
         };
         if (title == "Viewport")
-            return keepView(CreatePanel(panels, name, showcase.panelViewportIcon, [this] { RenderViewportPanel(); }), scene.camera);
+            return CreateViewportPanel(panels, name);
         if (title == "NodeView")
             return keepView(CreatePanel(panels, name, showcase.panelNodeViewIcon, [this] { RenderNodeViewPanel(); }), showcase.nodeView);
         if (title == "StateMachine")
@@ -1823,18 +1627,12 @@ namespace tachyon
         if (title == "Hierarchy") return CreateHierarchyPanel(panels, name);
         if (title == "Log")       return CreateLogPanel(panels, name);
         if (title == "Files")     return CreateFilesPanel(panels, name);
-        if (title == "TreeTable")   return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderTreeTablePanel(); });
-        if (title == "Table")       return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderTablePanel(); });
-        if (title == "FrozenTable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderSplitScrollPanel(); });
-        if (title == "Reorderable") return CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderReorderablePanel(); });
+        if (title == "TreeTable")   return CreateTreeTablePanel(panels, name);
+        if (title == "Table")       return CreateTablePanel(panels, name);
+        if (title == "FrozenTable") return CreateFrozenTablePanel(panels, name);
+        if (title == "Reorderable") return CreateReorderablePanel(panels, name);
         if (title == "Build")       return CreatePanel(panels, name, showcase.panelBuildIcon, [this] { RenderBuildPanel(); });
-        if (title == "Sketch")
-        {
-            // The pen's readout changes with every move: never cached.
-            const ID id = CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderSketchPanel(); });
-            panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
-            return id;
-        }
+        if (title == "Sketch")      return CreateSketchPanel(panels, name);
         if (title == "Curves")
         {
             // Its playhead moves while the timeline plays: never cached.
@@ -1849,24 +1647,18 @@ namespace tachyon
             panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
             return keepView(id, animation);
         }
-        // Pages are registered once in InitSettingsPages.
         if (title == "Settings")
-            return keepView(CreatePanel(panels, name, showcase.panelSettingsIcon, [this] { RenderSettingsPanel(showcase.settings); }), showcase.settings);
+            return CreateSettingsPanel(panels, name);
         if (title == "Profiler")
-        {
-            const ID id = CreatePanel(panels, name, showcase.panelProfilerIcon, [this] { RenderProfilerTreePanel(); }, {},
-                                      [this] { EnableProfilerTreePanel(); });
-            panels[id].cacheSignature = []() -> std::optional<uint64_t> {
-                return Diagnostics::IsProfilingEnabled() ? std::nullopt : std::optional<uint64_t>(0); };
-            return id;
-        }
+            return CreateProfilerPanel(panels, name);
         // Misc is still, so it's kept; while files are dragged over the app it's built every
         // frame, for its Paste image well to show the drag.
-        const ID id = CreatePanel(panels, name, showcase.panelMiscIcon, [this] { RenderMiscPanel(); });
+        auto view = std::make_shared<MiscView>();
+        const ID id = CreatePanel(panels, name, showcase.panelMiscIcon, [this, view] { RenderMiscPanel(*view); });
         panels[id].cacheSignature = [this]() -> std::optional<uint64_t> {
             if (IsFileDragging())
                 return std::nullopt;
-            return uint64_t(pastedImageIndex) ^ (uint64_t(misc.selectedThumb) << 32);
+            return uint64_t(pastedImageIndex);
         };
         return id;
     }
@@ -2580,7 +2372,7 @@ namespace tachyon
                     // their OS owner; otherwise SDL's hidden helper owns them and they
                     // die when it is torn down. The other windows emit their documents' own.
                     EmitFloatingDockWindows(showcase.documents);
-                    EmitFloatingToolbarWindows(toolbars.floatingItems, &toolbarOpts);
+                    EmitViewportFloatingToolbars();
                     UpdateDemoToasts();
                     Toasts();
                 } else

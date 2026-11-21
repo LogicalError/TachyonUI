@@ -55,13 +55,18 @@ namespace tachyon
         EndHorizontal();
     }
 
-    void Application::RenderTablePanel()
+    // A Table panel's own: its sort, widths, selection and column order.
+    struct TablePanel
     {
-        // ---- Virtual-scrolled table (50k rows, click-to-sort, drag-to-reorder)
+        TableState                      state;
+        std::vector<VirtualTableColumn> columns;
+    };
 
+    ID Application::CreateTablePanel(std::unordered_map<ID, Panel>& panels, std::string title)
+    {
+        auto panel = std::make_shared<TablePanel>();
         const auto& rows = GetDemoRows();
-
-        static std::vector<VirtualTableColumn> columns =
+        panel->columns =
         {
             // The row-index column is locked - fixed landmark on the
             // left, and other columns can't be dragged past it.
@@ -96,17 +101,24 @@ namespace tachyon
             },
         };
 
+
         // Drag-to-reorder: rotate the column list (the table moves the
-        // persisted widths itself). `columns` is function-local-static, so
-        // the captured pointer stays valid.
-        auto& ts = showcase.tablePanelVirtualTableState;
-        ts.selectionBar = true;
-        ts.onReorderColumns = [colsPtr = &columns](int from, int to)
+        // persisted widths itself).
+        panel->state.selectionBar = true;
+        panel->state.onReorderColumns = [columns = &panel->columns](int from, int to)
         {
             if (from == to) return;
-            if (from < to) std::rotate(colsPtr->begin() + from, colsPtr->begin() + from + 1, colsPtr->begin() + to + 1);
-            else           std::rotate(colsPtr->begin() + to, colsPtr->begin() + from, colsPtr->begin() + from + 1);
+            if (from < to) std::rotate(columns->begin() + from, columns->begin() + from + 1, columns->begin() + to + 1);
+            else           std::rotate(columns->begin() + to, columns->begin() + from, columns->begin() + from + 1);
         };
+        return CreatePanel(panels, std::move(title), showcase.panelMiscIcon, [this, panel] { RenderTablePanel(*panel); });
+    }
+
+    void Application::RenderTablePanel(TablePanel& panel)
+    {
+        // ---- Virtual-scrolled table (50k rows, click-to-sort, drag-to-reorder)
+        std::vector<VirtualTableColumn>& columns = panel.columns;
+        TableState& state = panel.state;
 
         // The row number is a count: right-aligned, so its digits line up. Hex codes and the
         // multiplications read as text, at the start, in the mono font. Set each frame as
@@ -116,20 +128,20 @@ namespace tachyon
                                : c.column.header == "Name" ? StyleRef::Invalid()
                                                            : dataTableCodeStyleRef;
 
-        const int kTotalRows = int(rows.size());
+        const int kTotalRows = int(GetDemoRows().size());
         std::span<VirtualTableColumn> columnSpan(columns.data(), columns.size());
 
 
         // ---- Mode switcher -------------------------------------------------
         // Row mode selects whole rows; Cell mode selects single cells, with
         // Left/Right arrow navigation.
-        SelectionModeSwitch(showcase.tablePanelVirtualTableState.selectionMode);
+        SelectionModeSwitch(state.selectionMode);
 
         // Fills the panel and scrolls: sized to its 50k rows it would be past the
         // 16-bit layout range and not show at all.
-        showcase.tablePanelVirtualTableState.cellStyle = dataTableCellStyleRef;
+        state.cellStyle = dataTableCellStyleRef;
         VirtualTable(idManager.AllocateDynamicID("tablePanelVirtual"),
-                     showcase.tablePanelVirtualTableState,
+                     state,
                      columnSpan, kTotalRows, 0, theme.tableFillStyleRef,
                      LayoutOverride::Auto().FlexGrow(1).MinHeight(0));
     }

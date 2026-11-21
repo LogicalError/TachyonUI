@@ -76,9 +76,8 @@ namespace tachyon
     // The picker and the editor
     // ---------------------------------------------------------------------------
 
-    void Application::RenderThemePicker()
+    void Application::RenderThemePicker(SettingsView::ThemeEditor& editor)
     {
-        auto& editor = showcase.themeEditor;
         if (editor.resetDialogID == ID::Invalid())
             editor.resetDialogID = idManager.CreateStaticID();
         const int index = CurrentThemeIndex();
@@ -117,9 +116,8 @@ namespace tachyon
             editor.confirmReset = false;
     }
 
-    void Application::RenderThemeEditor()
+    void Application::RenderThemeEditor(SettingsView::ThemeEditor& editor)
     {
-        auto& editor = showcase.themeEditor;
         const std::span<const CustomPropertyInfo> variables = theme.GetVariables();
 
         BeginHorizontal(idManager.AllocateDynamicID("settingsThemeSearchRow"), inspectorSearchRowStyleRef,

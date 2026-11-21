@@ -18,6 +18,9 @@
 
 #include <chrono>
 #include <functional>
+#include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace tachyon
@@ -116,6 +119,13 @@ namespace tachyon
         /// moves the item into that side, releases the windowID and erases the floating entry.
         std::function<void(ID windowID, ToolbarSide tgtSide)> onDockBack;
     };
+
+    /// Each side's items, by debugName, as text: for a dock that saves with something of its
+    /// own (a panel's saveState) rather than under a PersistToolbars key.
+    std::string SaveToolbarLayout(std::span<const std::vector<ToolbarItem>, kToolbarSideCount> sides);
+    /// Puts each item `text` names on its saved side and place; the rest stay where they are.
+    /// False (the sides unchanged) when `text` can't be read.
+    bool ApplyToolbarLayout(std::span<std::vector<ToolbarItem>, kToolbarSideCount> sides, std::string_view text);
 
     // EmitFloatingToolbarWindows is a GUIApplication member (it needs the protected
     // BeginWindow / EndWindow): `app.EmitFloatingToolbarWindows(items, opts)`.

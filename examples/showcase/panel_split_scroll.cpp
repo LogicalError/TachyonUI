@@ -23,10 +23,17 @@
 
 namespace tachyon
 {
-    void Application::RenderSplitScrollPanel()
+    // A FrozenTable panel's own: its sort, widths, selection and column order.
+    struct FrozenTablePanel
     {
-        // Static so column drag-reorder rotations persist across frames.
-        static std::vector<VirtualTableColumn> columns =
+        TableState                      state;
+        std::vector<VirtualTableColumn> columns;
+    };
+
+    ID Application::CreateFrozenTablePanel(std::unordered_map<ID, Panel>& panels, std::string title)
+    {
+        auto panel = std::make_shared<FrozenTablePanel>();
+        panel->columns =
         {
             // ---- Section 0 (2 columns, fit-content - no H scrollbar) ----
             {
@@ -72,20 +79,22 @@ namespace tachyon
             }
         };
 
-        auto& tableStyle = showcase.frozenTableState;
-        // Drag-to-reorder rotates the static columns; the table moves the
+        // Drag-to-reorder rotates the panel's columns; the table moves the
         // persisted widths itself.
-        tableStyle.onReorderColumns = [colsPtr = &columns](int from, int to)
+        panel->state.onReorderColumns = [columns = &panel->columns](int from, int to)
         {
             if (from == to) return;
-            if (from < to) std::rotate(colsPtr->begin() + from, colsPtr->begin() + from + 1, colsPtr->begin() + to + 1);
-            else           std::rotate(colsPtr->begin() + to, colsPtr->begin() + from, colsPtr->begin() + from + 1);
+            if (from < to) std::rotate(columns->begin() + from, columns->begin() + from + 1, columns->begin() + to + 1);
+            else           std::rotate(columns->begin() + to, columns->begin() + from, columns->begin() + from + 1);
         };
+        return CreatePanel(panels, std::move(title), showcase.panelMiscIcon, [this, panel] { RenderSplitScrollPanel(*panel); });
+    }
 
+    void Application::RenderSplitScrollPanel(FrozenTablePanel& panel)
+    {
         constexpr int kTotalRows = 50000;
-
-        std::span<VirtualTableColumn> columnSpan(columns.data(), columns.size());
-
+        TableState& tableStyle = panel.state;
+        std::span<VirtualTableColumn> columnSpan(panel.columns.data(), panel.columns.size());
 
         SelectionModeSwitch(tableStyle.selectionMode);
         

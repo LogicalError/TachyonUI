@@ -83,17 +83,6 @@ namespace tachyon
             int         line = 0;
         };
 
-        // Flame canvas inner width from the previous frame's custom draw (only
-        // known after layout).
-        int s_flameWidth = 0;   // 0: not measured yet
-
-        // Selection shared by the tree and the flame graph: the selected scope's
-        // stable call-path hash (0 = nothing selected).
-        uint64_t s_selectedKey = 0;
-        // Set by a flame-bar click so the tree scrolls to the picked row; tree
-        // clicks leave it false so the tree doesn't move under the cursor.
-        bool s_flameSelectPending = false;
-
         // "Jump to source": emit an MSVC-clickable location to the debugger
         // Output window (and stdout). Clicking it in the IDE navigates to the
         // scope's declaration.
@@ -107,28 +96,16 @@ namespace tachyon
         }
     }
 
-    static std::vector<ProfRow>               rows;
-    static std::unordered_map<uint64_t, bool> openState;
-    static std::vector<int>                   visibleIdx;
-    static tachyon::TableState                    tableState;
-    static tachyon::ID                            prevSelectedRow = tachyon::ID::Invalid();
-    static uint64_t                           prevSelectedKey = 0;
-	static tachyon::ID                            profilerTableID = tachyon::ID::Invalid();
-    static tachyon::ID                            flameRootID = tachyon::ID::Invalid();
-	static tachyon::ID                            flameSizerID = tachyon::ID::Invalid();
-
-    // Flame-bar styles (background-colored boxes). Registered on first use after
-    // the panel is enabled; a theme reload clears every style and re-enables it.
+    // Flame-bar styles (background-colored boxes), the same for every Profiler panel.
+    // Registered on first use after a panel is enabled; a theme reload clears every style and
+    // re-enables it.
     static bool                          flameStylesInit = false;
     static std::array<StyleRef, kPaletteN> barStyles{};
     static StyleRef                      selBarStyle{};
     static StyleRef                      waitBarStyle{};
     static StyleRef                      flameClipStyle{};
-    static int                           flameHeight = 150;   // CSS px: its rows' height, or less once resized
-    static bool                          flameSized  = false; // the sizer made it shorter than its rows
 
-    // Frame-graph (per-frame CPU build-time history) state.
-    static tachyon::ID                       frameGraphID = tachyon::ID::Invalid();
+    // Frame-graph (per-frame CPU build-time history) styles.
     static bool                          frameGraphStylesInit = false;
     static VisualColorStyleIndex         frameGraphBarUnderStyle{};   // build <= budget (green)
     static VisualColorStyleIndex         frameGraphBarOverStyle{};    // build  > budget
@@ -149,76 +126,91 @@ namespace tachyon
     static constexpr int                 kFrameRefCount    = int(std::size(kFrameRefs));
     static constexpr float               kRefLineAt        = 0.72f;
     static constexpr float               kRefPercentile    = 0.9f;    // "most frames"
-    static int                           frameGraphRef     = 5;       // the line now: 16.7 ms to start
-    static tachyon::ID                   frameGraphLabelID = tachyon::ID::Invalid();   // static: its text stays registered
 
-    void Application::EnableProfilerTreePanel()
+    // A Profiler panel's own: its tree's rows and which are open, its table, the scope picked
+    // (shared by its tree and flame graph), the flame's height, the frame held while paused,
+    // and its elements' static IDs.
+    struct ProfilerPanel
     {
-        // Made the first time it shows; ReleaseProfilerTreeIDs gives them back.
-        if (profilerTableID == tachyon::ID::Invalid())
+        IDManager*                         ids = nullptr;   // the IDs below come from it, and go back to it
+        std::vector<ProfRow>               rows;
+        std::unordered_map<uint64_t, bool> openState;
+        std::vector<int>                   visibleIdx;
+        tachyon::TableState                tableState;
+        std::vector<VirtualTableColumn>    columns;
+        tachyon::ID                        prevSelectedRow = tachyon::ID::Invalid();
+        uint64_t                           prevSelectedKey = 0;
+        // The selected scope's stable call-path hash (0 = nothing selected).
+        uint64_t                           selectedKey = 0;
+        // Set by a flame-bar click so the tree scrolls to the picked row; tree clicks leave it
+        // false so the tree doesn't move under the cursor.
+        bool                               flameSelectPending = false;
+        // Flame canvas inner width from the previous frame's custom draw (only known after
+        // layout); 0: not measured yet.
+        int                                flameWidth  = 0;
+        int                                flameHeight = 150;     // CSS px: its rows' height, or less once resized
+        bool                               flameSized  = false;   // the sizer made it shorter than its rows
+        int                                frameGraphRef = 5;     // the line now: 16.7 ms to start
+        // Paused: the panel keeps showing the frame it was paused on.
+        bool                                     paused = false;
+        std::vector<Diagnostics::ProfileSample>  pausedSamples;
+        double                                   pausedFrameMs = 0.0;
+        // Static: the table keeps its scroll state, the flame its bars' IDs apart, the graph's
+        // label its text registered.
+        tachyon::ID tableID, flameRootID, flameSizerID, frameGraphID, frameGraphLabelID;
+
+        explicit ProfilerPanel(IDManager& manager)
+            : ids(&manager), tableID(manager.CreateStaticID()), flameRootID(manager.CreateStaticID()),
+              flameSizerID(manager.CreateStaticID()), frameGraphID(manager.CreateStaticID()),
+              frameGraphLabelID(manager.CreateStaticID()) {}
+        ~ProfilerPanel()
         {
-            profilerTableID = idManager.CreateStaticID();
-            flameRootID     = idManager.CreateStaticID();
-            flameSizerID    = idManager.CreateStaticID();
-            frameGraphID    = idManager.CreateStaticID();
-            frameGraphLabelID = idManager.CreateStaticID();
+            for (const tachyon::ID id : { tableID, flameRootID, flameSizerID, frameGraphID, frameGraphLabelID })
+                ids->ReleaseStaticID(id);
         }
-        flameStylesInit      = false;
-        frameGraphStylesInit = false;
+    };
+
+    ID Application::CreateProfilerPanel(std::unordered_map<ID, Panel>& panels, std::string title)
+    {
+        auto panel = std::make_shared<ProfilerPanel>(idManager);
+        const ID id = CreatePanel(panels, std::move(title), showcase.panelProfilerIcon, [this, panel] { RenderProfilerTreePanel(*panel); }, {},
+                                  [] { flameStylesInit = false; frameGraphStylesInit = false; });
+        panels[id].cacheSignature = []() -> std::optional<uint64_t> {
+            return Diagnostics::IsProfilingEnabled() ? std::nullopt : std::optional<uint64_t>(0); };
+        return id;
     }
 
-    void Application::ReleaseProfilerTreeIDs()
+    void Application::RenderProfilerTreePanel(ProfilerPanel& p)
     {
-        if (profilerTableID == tachyon::ID::Invalid())
-            return;
-        for (tachyon::ID* id : { &profilerTableID, &flameRootID, &flameSizerID, &frameGraphID, &frameGraphLabelID })
-        {
-            idManager.ReleaseStaticID(*id);
-            *id = tachyon::ID::Invalid();
-        }
-    }
-
-    // Paused: the panel keeps showing the frame it was paused on.
-    static bool                                     profilerPaused = false;
-    static std::vector<Diagnostics::ProfileSample>  pausedSamples;
-    static double                                   pausedFrameMs  = 0.0;
-
-    void Application::RenderProfilerTreePanel()
-    {
-        // Its state is the panel's one copy (statics above): a second Profiler tab shown in
-        // the same frame says where the first is instead of fighting it for IDs and rows.
-        static float s_builtAt = -1.0f;
-        const float now = guiStateManager.Interaction().GetFrameTime();
-        if (s_builtAt == now)
-        {
-            Label("The profiler is open in another tab.");
-            return;
-        }
-        s_builtAt = now;
+        std::vector<ProfRow>&               rows       = p.rows;
+        std::unordered_map<uint64_t, bool>& openState  = p.openState;
+        std::vector<int>&                   visibleIdx = p.visibleIdx;
+        tachyon::TableState&                tableState = p.tableState;
+        int&                                frameGraphRef = p.frameGraphRef;
 
         auto& collector = Diagnostics::MainThreadCollector();
         // Recording and not paused, it's a live view: a frame after each one, with its numbers.
         // Otherwise new numbers only when the status bar takes them (see frameTimingsFresh).
-        const bool live = Diagnostics::IsProfilingEnabled() && !profilerPaused;
+        const bool live = Diagnostics::IsProfilingEnabled() && !p.paused;
         if (live)
             RequestRedraw();
-        if (!profilerPaused && (live || frameTimingsFresh))
+        if (!p.paused && (live || frameTimingsFresh))
         {
             const auto latest = Diagnostics::LastFrameSamples(collector);
-            pausedSamples.assign(latest.begin(), latest.end());
-            pausedFrameMs = Diagnostics::LastFrameTotalMs(collector);
+            p.pausedSamples.assign(latest.begin(), latest.end());
+            p.pausedFrameMs = Diagnostics::LastFrameTotalMs(collector);
         }
-        const std::span<const Diagnostics::ProfileSample> samples = pausedSamples;
-        const double frameMs = pausedFrameMs;
+        const std::span<const Diagnostics::ProfileSample> samples = p.pausedSamples;
+        const double frameMs = p.pausedFrameMs;
 
         // Double-clicking a row jumps to the scope's source line. (The chevron
         // still toggles open/close on single click.)
         if (!tableState.onRowDoubleClick)
-            tableState.onRowDoubleClick = [](tachyon::ID rowID) {
+            tableState.onRowDoubleClick = [&p](tachyon::ID rowID) {
                 if (rowID.GetMode() != tachyon::IDMode::SubRange) return;
                 const int vis = int(rowID.value.subRangeParts.index);
-                if (vis < 0 || vis >= int(visibleIdx.size())) return;
-                const ProfRow& r = rows[size_t(visibleIdx[size_t(vis)])];
+                if (vis < 0 || vis >= int(p.visibleIdx.size())) return;
+                const ProfRow& r = p.rows[size_t(p.visibleIdx[size_t(vis)])];
                 OpenSourceFile(r.file, r.line);
             };
 
@@ -270,13 +262,13 @@ namespace tachyon
         // ---- Selection: capture a tree-row click -------------------------
         // The table writes selectedRowID during input (after this build). If it
         // changed since we last forced it, the user clicked a row - adopt it as
-        // the shared selection. (Flame clicks set s_selectedKey directly.)
-        if (tableState.selectedRowID != prevSelectedRow
+        // the shared selection. (Flame clicks set p.selectedKey directly.)
+        if (tableState.selectedRowID != p.prevSelectedRow
             && tableState.selectedRowID.GetMode() == tachyon::IDMode::SubRange)
         {
             const int vis = int(tableState.selectedRowID.value.subRangeParts.index);
             if (vis >= 0 && vis < int(visibleIdx.size()))
-                s_selectedKey = rows[visibleIdx[vis]].key;
+                p.selectedKey = rows[visibleIdx[vis]].key;
         }
 
         // The panel's content, padded. The body has flex-basis 0, as the table's flex-fill row
@@ -292,8 +284,8 @@ namespace tachyon
                    [](bool value) { Diagnostics::SetProfilingEnabled(value); },
                    profilerRecordStyleRef, LayoutOverride{}.NoGrow().NoShrink());
             SetTooltip("Record frame timings");
-            Toggle(idManager.AllocateDynamicID("profilerPause"), profilerPaused, showcase.pauseIcon,
-                   [](bool value) { profilerPaused = value; },
+            Toggle(idManager.AllocateDynamicID("profilerPause"), p.paused, showcase.pauseIcon,
+                   [&p](bool value) { p.paused = value; },
                    profilerPauseStyleRef, LayoutOverride{}.NoGrow().NoShrink());
             SetTooltip("Hold the current frame");
             char msText[32], fpsText[32];
@@ -343,12 +335,12 @@ namespace tachyon
             }
             const FrameRefLine refLine = kFrameRefs[frameGraphRef];
 
-            const tachyon::TextID refLabel = textSystem->RegisterText(frameGraphLabelID, refLine.label,
+            const tachyon::TextID refLabel = textSystem->RegisterText(p.frameGraphLabelID, refLine.label,
                                                                       profilerGraphLabelStyleRef, tachyon::ElementState::None);
             const auto labelSize = textSystem->GetTextMeasurement(refLabel);
 
             tachyon::Element graphEl{};
-            graphEl.id       = frameGraphID;
+            graphEl.id       = p.frameGraphID;
             graphEl.styleRef = profilerGraphStyleRef;
             const auto graphRef = RegisterElement(std::move(graphEl),
                                                   LayoutOverride{}.Height(CssPx(kFrameGraphHeight)).NoShrink());
@@ -426,7 +418,7 @@ namespace tachyon
             const int rowH     = theme.tableRowHeight > 0 ? theme.tableRowHeight : styleManager.Px(18);
             int       maxDepth = 0;
             for (const auto& s : samples) maxDepth = (s.depth > maxDepth) ? s.depth : maxDepth;
-            const int W = s_flameWidth > 0 ? s_flameWidth : styleManager.Px(600);
+            const int W = p.flameWidth > 0 ? p.flameWidth : styleManager.Px(600);
 
             // Icicle layout: one forward pass over the depth-first samples,
             // bucketed per depth (DFS order is already left-to-right at every
@@ -452,21 +444,21 @@ namespace tachyon
             // sizer below it makes it smaller; never taller than its rows.
             const float uiScale      = styleManager.GetUIScale();
             const int   rowsHeight   = (maxDepth + 1) * rowH;
-            const int   rowsUnits    = int(std::ceil(float(rowsHeight) / uiScale));   // flameHeight is CSS px
-            if (!flameSized || flameHeight > rowsUnits)
-                flameHeight = rowsUnits;
+            const int   rowsUnits    = int(std::ceil(float(rowsHeight) / uiScale));   // p.flameHeight is CSS px
+            if (!p.flameSized || p.flameHeight > rowsUnits)
+                p.flameHeight = rowsUnits;
             tachyon::Element flameRoot{};
-            flameRoot.id       = flameRootID;
+            flameRoot.id       = p.flameRootID;
             flameRoot.styleRef = flameClipStyle;   // column + overflow:hidden -> clips the bottom, no scaling
             const auto flameRef = RegisterElement(std::move(flameRoot),
-                                                  LayoutOverride{}.Height(Pixels{ std::min(styleManager.Px(flameHeight), rowsHeight) }).FlexShrink(1));
+                                                  LayoutOverride{}.Height(Pixels{ std::min(styleManager.Px(p.flameHeight), rowsHeight) }).FlexShrink(1));
             VERIFY(elementStorage.AddCustomDraw(flameRef,
-                [](tachyon::CustomDrawContext& ctx) { s_flameWidth = ctx.ElementInnerRect().w; }));
+                [&p](tachyon::CustomDrawContext& ctx) { p.flameWidth = ctx.ElementInnerRect().w; }));
 
             VERIFY(elementStorage.BeginChildren());
             // Variable bar/label count: isolate the flame's internal ids so the
             // counter drift can't leak onto elements emitted after it.
-            (void)idManager.PushParent(flameRootID);
+            (void)idManager.PushParent(p.flameRootID);
             for (int d = 0; d <= maxDepth; ++d)
             {
                 BeginHorizontal(idManager.AllocateDynamicID(), LayoutOverride{}.Height(Pixels{ rowH }).NoShrink());
@@ -493,17 +485,17 @@ namespace tachyon
                     const int      line = b.line;
                     tachyon::Element box{};
                     box.id           = idManager.AllocateDynamicID();
-                    box.eventHandler = [key, file, line](tachyon::ElementEvent&& e) -> bool {
+                    box.eventHandler = [&p, key, file, line](tachyon::ElementEvent&& e) -> bool {
                         if (e.type == tachyon::EventType::MouseDown && e.state.LeftPressed())
                         {
-                            if (s_selectedKey == key) OpenSourceFile(file, line);             // re-click -> jump
-                            else { s_selectedKey = key; s_flameSelectPending = true; }    // first click -> select
+                            if (p.selectedKey == key) OpenSourceFile(file, line);             // re-click -> jump
+                            else { p.selectedKey = key; p.flameSelectPending = true; }    // first click -> select
                             return true;
                         }
                         return false;
                     };
                     box.styleRef = b.isWait     ? waitBarStyle
-                                 : (key == s_selectedKey) ? selBarStyle
+                                 : (key == p.selectedKey) ? selBarStyle
                                  : barStyles[size_t(b.colorIdx)];
                     const int gap = styleManager.Px(1);
                     RegisterElement(std::move(box), LayoutOverride{}.FixedWidth(Pixels{ std::max(1, wpx - gap) }).Height(Pixels{ rowH - gap }));
@@ -523,49 +515,59 @@ namespace tachyon
             // Draggable divider below the flame: drag it to make the flame shorter, down to
             // a row; it's clipped (overflow:hidden), not scaled. Auto-size fits its rows again.
             tachyon::Element flameSizer{};
-            flameSizer.id           = flameSizerID;
+            flameSizer.id           = p.flameSizerID;
             flameSizer.styleRef     = theme.dockSizerVertStyleRef;
             flameSizer.state        = guiStateManager.GetCurrentState(flameSizer.id);
-            const int   rowUnits = int(std::ceil(float(rowH) / uiScale));   // rowH is pixels; flameHeight CSS px
-            flameSizer.eventHandler = tachyon::MakeVerticalSizerHandler(guiStateManager, elementStorage, flameHeight,
+            const int   rowUnits = int(std::ceil(float(rowH) / uiScale));   // rowH is pixels; p.flameHeight CSS px
+            flameSizer.eventHandler = tachyon::MakeVerticalSizerHandler(guiStateManager, elementStorage, p.flameHeight,
                                                                     rowUnits, std::max(rowUnits, rowsUnits),
-                                                                    [](int) { flameSized = true; },
-                                                                    [rowsUnits] { flameSized = false; return rowsUnits; },
+                                                                    [&p](int) { p.flameSized = true; },
+                                                                    [&p, rowsUnits] { p.flameSized = false; return rowsUnits; },
                                                                     false, uiScale);
             RegisterElement(std::move(flameSizer), LayoutOverride::FixedHeight(5));
         }
 
         // ---- Columns -------------------------------------------------------
-        static std::vector<VirtualTableColumn> columns =
+        // Made the first time it's built; the cells read this panel's rows.
+        std::vector<VirtualTableColumn>& columns = p.columns;
+        if (columns.empty()) columns =
         {
             {
                 // Scope takes the width the numbers leave; they keep theirs.
                 { .header = "Scope", .initialWidth = 200, .minWidth = 100, .maxWidth = 600, .locked = true, .sizing = ColumnSizing::Stretch },
-                [this](int rowIdx) {
+                [this, &p](int rowIdx) {
+                    std::vector<ProfRow>& rows = p.rows;
+                    std::vector<int>& visibleIdx = p.visibleIdx;
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     ProfRow& r = rows[visibleIdx[rowIdx]];
                     const bool branch = (r.skipCount > 0);
-                    TreeCell(r.name, r.depth, branch ? &openState[r.key] : nullptr,
+                    TreeCell(r.name, r.depth, branch ? &p.openState[r.key] : nullptr,
                              IconID::Invalid, r.ancestorLineMask, r.isLastSibling);
                 }
             },
             {
                 { .header = "Total ms", .initialWidth = 72, .minWidth = 56, .maxWidth = 160, .sizing = ColumnSizing::Fixed },
-                [this](int rowIdx) {
+                [this, &p](int rowIdx) {
+                    std::vector<ProfRow>& rows = p.rows;
+                    std::vector<int>& visibleIdx = p.visibleIdx;
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     Cell(rows[visibleIdx[rowIdx]].totalStr);
                 }
             },
             {
                 { .header = "Self ms", .initialWidth = 72, .minWidth = 56, .maxWidth = 160, .sizing = ColumnSizing::Fixed },
-                [this](int rowIdx) {
+                [this, &p](int rowIdx) {
+                    std::vector<ProfRow>& rows = p.rows;
+                    std::vector<int>& visibleIdx = p.visibleIdx;
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     Cell(rows[visibleIdx[rowIdx]].selfStr);
                 }
             },
             {
                 { .header = "% frame", .initialWidth = 108, .minWidth = 96, .maxWidth = 160, .sizing = ColumnSizing::Fixed },
-                [this](int rowIdx) {
+                [this, &p](int rowIdx) {
+                    std::vector<ProfRow>& rows = p.rows;
+                    std::vector<int>& visibleIdx = p.visibleIdx;
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     // A bar at the cell's left (so the bars line up), the number right-aligned.
                     const ProfRow& r = rows[visibleIdx[rowIdx]];
@@ -585,7 +587,9 @@ namespace tachyon
             },
             {
                 { .header = "Calls", .initialWidth = 52, .minWidth = 40, .maxWidth = 100, .sizing = ColumnSizing::Fixed },
-                [this](int rowIdx) {
+                [this, &p](int rowIdx) {
+                    std::vector<ProfRow>& rows = p.rows;
+                    std::vector<int>& visibleIdx = p.visibleIdx;
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                     Cell(rows[visibleIdx[rowIdx]].callsStr);
                 }
@@ -608,7 +612,7 @@ namespace tachyon
         // A stable static id keeps the table's scroll state put: AllocateDynamicID
         // folds a per-parent counter, so the flame graph's varying element count
         // would otherwise shift the table id each frame and reset its scroll.
-        VirtualTable(profilerTableID,
+        VirtualTable(p.tableID,
                      tableState, columnSpan,
                      int(visibleIdx.size()), 0, theme.tableStyleRef,
                      LayoutOverride{}.FlexGrow(1));
@@ -617,20 +621,20 @@ namespace tachyon
 
         // ---- Reflect a changed selection onto the tree -------------------
         // Only on change, so the table's own scroll is never fought.
-        if (s_selectedKey != prevSelectedKey)
+        if (p.selectedKey != p.prevSelectedKey)
         {
-            if (s_selectedKey != 0 && tableState.RowIDInRange(0) != tachyon::ID::Invalid())
+            if (p.selectedKey != 0 && tableState.RowIDInRange(0) != tachyon::ID::Invalid())
             {
                 int vis = -1;
                 for (size_t i = 0; i < visibleIdx.size(); ++i)
-                    if (rows[visibleIdx[i]].key == s_selectedKey) { vis = int(i); break; }
+                    if (rows[visibleIdx[i]].key == p.selectedKey) { vis = int(i); break; }
                 if (vis >= 0)
                 {
                     tableState.selectedRowID = tableState.RowIDInRange(vis);
 
                     const int rh     = tableState.internal.actualRowHeight;
                     const int innerH = tableState.internal.lastViewportH;
-                    if (s_flameSelectPending && rh > 0 && innerH > 0)
+                    if (p.flameSelectPending && rh > 0 && innerH > 0)
                     {
                         // The rows actually scroll via the per-section bodies;
                         // internal.bodyID is only the synced wrapper. Drive every section
@@ -662,9 +666,9 @@ namespace tachyon
                     }
                 }
             }
-            prevSelectedKey = s_selectedKey;
+            p.prevSelectedKey = p.selectedKey;
         }
-        s_flameSelectPending = false;
-        prevSelectedRow = tableState.selectedRowID;
+        p.flameSelectPending = false;
+        p.prevSelectedRow = tableState.selectedRowID;
     }
 }
