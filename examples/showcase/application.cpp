@@ -193,9 +193,30 @@ namespace tachyon
             idManager.ReleaseStaticID(page.id);
         for (const auto& row : showcase.treeTableRows)
             idManager.ReleaseStaticID(row.id);
-        for (const auto& node : showcase.nodeView.nodes)
-            idManager.ReleaseStaticID(node.stableID);
         ReleaseProfilerTreeIDs();
+
+        // Made on first use, so some may never have been.
+        const auto release = [this](ID id) { if (id != ID::Invalid()) idManager.ReleaseStaticID(id); };
+        for (const NodeView* view : { &showcase.nodeView, &showcase.enemyMachine, &showcase.combatMachine })
+        {
+            for (const NodeModel& node : view->nodes)                  release(node.stableID);
+            for (const NodeFrame& frame : view->frames)                release(frame.stableID);
+            for (const StateTransition& transition : view->transitions) release(transition.stableID);
+        }
+        for (const TimelineTrack& track : animation.tracks)
+        {
+            release(track.stableID);
+            for (const TimelineKey& key : track.keys)       release(key.stableID);
+            for (const TimelineEvent& event : track.events) release(event.stableID);
+        }
+        for (const CurveView* view : { &animationCurves, &showcase.demoCurve, &showcase.demoColorCurves })
+            for (const CurveChannel& channel : view->channels)
+                for (const CurveKey& key : channel.curve.keys)
+                    release(key.stableID);
+        release(showcase.themeEditor.resetDialogID);
+        release(m_capture.windowID);
+        release(m_capture.areaID);
+        release(m_capture.documentsID);
 
         idManager.ReleaseStaticID(showcase.smallMenuID);
         idManager.ReleaseStaticID(showcase.cameraMenuID);
