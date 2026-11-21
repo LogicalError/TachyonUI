@@ -307,6 +307,31 @@ namespace
         EXPECT_EQ(names(fresh[int(ToolbarSide::Left)]), (std::vector<std::string>{ "Tools" }));
     }
 
+    // The same, as text of its own: a toolbar dock that saves with its panel, not under a key.
+    TEST_F(UIStateTest, AToolbarLayoutComesBackFromItsText)
+    {
+        auto item = [](const char* name) { ToolbarItem i; i.debugName = name; return i; };
+        std::vector<ToolbarItem> sides[kToolbarSideCount];
+        sides[int(ToolbarSide::Right)] = { item("View"), item("File") };
+        sides[int(ToolbarSide::Left)]  = { item("Tools") };
+        const std::string saved = SaveToolbarLayout(sides);
+        ASSERT_FALSE(saved.empty());
+
+        std::vector<ToolbarItem> fresh[kToolbarSideCount];
+        fresh[int(ToolbarSide::Top)] = { item("File"), item("Tools"), item("View"), item("Camera") };
+        ASSERT_TRUE(ApplyToolbarLayout(fresh, saved));
+        auto names = [](const std::vector<ToolbarItem>& side) {
+            std::vector<std::string> n;
+            for (const ToolbarItem& i : side) n.push_back(i.debugName);
+            return n;
+        };
+        EXPECT_EQ(names(fresh[int(ToolbarSide::Right)]), (std::vector<std::string>{ "View", "File" }));
+        EXPECT_EQ(names(fresh[int(ToolbarSide::Left)]), (std::vector<std::string>{ "Tools" }));
+        EXPECT_EQ(names(fresh[int(ToolbarSide::Top)]), (std::vector<std::string>{ "Camera" })) << "one it didn't save stays";
+        EXPECT_FALSE(ApplyToolbarLayout(fresh, "not json"));
+        EXPECT_EQ(names(fresh[int(ToolbarSide::Top)]), (std::vector<std::string>{ "Camera" })) << "unchanged";
+    }
+
     // A window not open yet is laid out at its saved rect (its OS window is made from that);
     // one saved off every monitor keeps only its size.
     TEST_F(UIStateTest, AWindowIsMadeAtItsSavedRect)

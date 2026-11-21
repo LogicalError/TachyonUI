@@ -7,26 +7,65 @@
 namespace tachyon
 {
 
-    void Application::RenderReorderablePanel()
+    // A Reorderable panel's own: its lists, in the order they were dragged into, and its
+    // groups' static IDs.
+    struct ReorderablePanel
+    {
+        std::vector<std::string> tabs  = { "Home", "Settings", "Profile", "Help" };
+        std::vector<std::string> items = { "First", "Second", "Third", "Fourth", "Fifth" };
+        std::vector<std::string> wrappedHorzItems = {
+            "Alpha", "Beta", "Gamma", "Delta", "Epsilon",
+            "Zeta", "Eta", "Theta", "Iota", "Kappa"
+        };
+        std::vector<std::string> wrappedVertItems = {
+            "One", "Two", "Three", "Four", "Five",
+            "Six", "Seven", "Eight", "Nine", "Ten"
+        };
+
+        IDManager* ids = nullptr;
+        ID tabsID, listID, wrappedHorzID, wrappedVertID;
+
+        explicit ReorderablePanel(IDManager& manager)
+            : ids(&manager), tabsID(manager.CreateStaticID()), listID(manager.CreateStaticID()),
+              wrappedHorzID(manager.CreateStaticID()), wrappedVertID(manager.CreateStaticID()) {}
+        ~ReorderablePanel()
+        {
+            for (const ID id : { tabsID, listID, wrappedHorzID, wrappedVertID })
+                ids->ReleaseStaticID(id);
+        }
+    };
+
+    namespace
+    {
+        // Moves item `from` to `to`, as a reorderable group asks.
+        void MoveItem(std::vector<std::string>& list, int from, int to)
+        {
+            auto item = std::move(list[size_t(from)]);
+            list.erase(list.begin() + from);
+            list.insert(list.begin() + to, std::move(item));
+        }
+    }
+
+    ID Application::CreateReorderablePanel(std::unordered_map<ID, Panel>& panels, std::string title)
+    {
+        auto panel = std::make_shared<ReorderablePanel>(idManager);
+        return CreatePanel(panels, std::move(title), showcase.panelMiscIcon, [this, panel] { RenderReorderablePanel(*panel); });
+    }
+
+    void Application::RenderReorderablePanel(ReorderablePanel& panel)
     {
         BeginHorizontalWrap();
 
         // Reorderable tabs demo (horizontal) - items stretch to fill the bar's vertical space
         {
             Label("Reorderable Tabs");
-
-            static std::vector<std::string> reorderTabs = {"Home", "Settings", "Profile", "Help"};
-            if (BeginReorderableGroup(showcase.reorderTabsID, ReorderDirection::Horizontal,
-                [](int from, int to) {
-                    auto item = std::move(reorderTabs[from]);
-                    reorderTabs.erase(reorderTabs.begin() + from);
-                    reorderTabs.insert(reorderTabs.begin() + to, std::move(item));
-                }, theme.emptyHorzStyleRef, tachyon::LayoutOverride{}.Height(40)))
+            if (BeginReorderableGroup(panel.tabsID, ReorderDirection::Horizontal,
+                [&panel](int from, int to) { MoveItem(panel.tabs, from, to); }, theme.emptyHorzStyleRef, tachyon::LayoutOverride{}.Height(40)))
             {
-                for (int i = 0; i < static_cast<int>(reorderTabs.size()); i++)
+                for (int i = 0; i < static_cast<int>(panel.tabs.size()); i++)
                 {
                     BeginReorderableItem();
-                    AddBox(theme.regularControls.button, reorderTabs[i]);
+                    AddBox(theme.regularControls.button, panel.tabs[i]);
                     EndReorderableItem();
                 }
                 EndReorderableGroup();
@@ -36,19 +75,13 @@ namespace tachyon
         // Reorderable list demo (vertical)
         {
             Label("Reorderable List");
-
-            static std::vector<std::string> reorderItems = {"First", "Second", "Third", "Fourth", "Fifth"};
-            if (BeginReorderableGroup(showcase.reorderListID, ReorderDirection::Vertical,
-                [](int from, int to) {
-                    auto item = std::move(reorderItems[from]);
-                    reorderItems.erase(reorderItems.begin() + from);
-                    reorderItems.insert(reorderItems.begin() + to, std::move(item));
-                }, tachyon::LayoutOverride{}.FixedWidth(300)))
+            if (BeginReorderableGroup(panel.listID, ReorderDirection::Vertical,
+                [&panel](int from, int to) { MoveItem(panel.items, from, to); }, tachyon::LayoutOverride{}.FixedWidth(300)))
             {
-                for (int i = 0; i < static_cast<int>(reorderItems.size()); i++)
+                for (int i = 0; i < static_cast<int>(panel.items.size()); i++)
                 {
                     BeginReorderableItem();
-                    AddBox(theme.regularControls.button, reorderItems[i]);
+                    AddBox(theme.regularControls.button, panel.items[i]);
                     EndReorderableItem();
                 }
                 EndReorderableGroup();
@@ -58,22 +91,13 @@ namespace tachyon
         // Wrapped reorderable demo (horizontal, wraps into rows)
         {
             Label("Wrapped Reorderable (horizontal)");
-
-            static std::vector<std::string> wrappedHorzItems = {
-                "Alpha", "Beta", "Gamma", "Delta", "Epsilon",
-                "Zeta", "Eta", "Theta", "Iota", "Kappa"
-            };
-            if (BeginReorderableGroup(showcase.reorderWrappedHorzID, ReorderDirection::Horizontal, true,
-                [](int from, int to) {
-                    auto item = std::move(wrappedHorzItems[from]);
-                    wrappedHorzItems.erase(wrappedHorzItems.begin() + from);
-                    wrappedHorzItems.insert(wrappedHorzItems.begin() + to, std::move(item));
-                }, tachyon::LayoutOverride::FixedSize(400, 200)))
+            if (BeginReorderableGroup(panel.wrappedHorzID, ReorderDirection::Horizontal, true,
+                [&panel](int from, int to) { MoveItem(panel.wrappedHorzItems, from, to); }, tachyon::LayoutOverride::FixedSize(400, 200)))
             {
-                for (int i = 0; i < static_cast<int>(wrappedHorzItems.size()); i++)
+                for (int i = 0; i < static_cast<int>(panel.wrappedHorzItems.size()); i++)
                 {
                     BeginReorderableItem();
-                    AddBox(theme.regularControls.button, wrappedHorzItems[i]);
+                    AddBox(theme.regularControls.button, panel.wrappedHorzItems[i]);
                     EndReorderableItem();
                 }
                 EndReorderableGroup();
@@ -83,22 +107,13 @@ namespace tachyon
         // Wrapped reorderable demo (vertical, wraps into columns)
         {
             Label("Wrapped Reorderable (vertical)");
-
-            static std::vector<std::string> wrappedVertItems = {
-                "One", "Two", "Three", "Four", "Five",
-                "Six", "Seven", "Eight", "Nine", "Ten"
-            };
-            if (BeginReorderableGroup(showcase.reorderWrappedVertID, ReorderDirection::Vertical, true,
-                [](int from, int to) {
-                    auto item = std::move(wrappedVertItems[from]);
-                    wrappedVertItems.erase(wrappedVertItems.begin() + from);
-                    wrappedVertItems.insert(wrappedVertItems.begin() + to, std::move(item));
-                }, tachyon::LayoutOverride::FixedSize(400, 200)))
+            if (BeginReorderableGroup(panel.wrappedVertID, ReorderDirection::Vertical, true,
+                [&panel](int from, int to) { MoveItem(panel.wrappedVertItems, from, to); }, tachyon::LayoutOverride::FixedSize(400, 200)))
             {
-                for (int i = 0; i < static_cast<int>(wrappedVertItems.size()); i++)
+                for (int i = 0; i < static_cast<int>(panel.wrappedVertItems.size()); i++)
                 {
                     BeginReorderableItem();
-                    AddBox(theme.regularControls.button, wrappedVertItems[i]);
+                    AddBox(theme.regularControls.button, panel.wrappedVertItems[i]);
                     EndReorderableItem();
                 }
                 EndReorderableGroup();

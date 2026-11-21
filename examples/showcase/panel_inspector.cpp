@@ -33,11 +33,24 @@ namespace tachyon
         std::string               inspectorSearch;
         bool                      inspectorFilterDirty = true;
         bool                      inspectorSectionOpen[SectionCount] = { true, true, true, true, true };
+
+        // Its lists' and menus' static IDs, its own so another Inspector's don't share them.
+        IDManager* ids = nullptr;
+        ID stringListID, floatListID, smallMenuID, bigMenuID;
+
+        explicit InspectorPanel(IDManager& manager)
+            : ids(&manager), stringListID(manager.CreateStaticID()), floatListID(manager.CreateStaticID()),
+              smallMenuID(manager.CreateStaticID()), bigMenuID(manager.CreateStaticID()) {}
+        ~InspectorPanel()
+        {
+            for (const ID id : { stringListID, floatListID, smallMenuID, bigMenuID })
+                ids->ReleaseStaticID(id);
+        }
     };
 
     ID Application::CreateInspectorPanel(std::unordered_map<ID, Panel>& panels, std::string title)
     {
-        auto panel = std::make_shared<InspectorPanel>();
+        auto panel = std::make_shared<InspectorPanel>(idManager);
         return CreatePanel(panels, std::move(title), showcase.panelInspectorIcon, [this, panel] { RenderInspectorPanel(*panel); }, {},
                            [this, panel] { EnableInspectorPanel(*panel); }, [this, panel] { DisableInspectorPanel(*panel); });
     }
@@ -293,13 +306,13 @@ namespace tachyon
 
         // ---- Lists ----------------------------------------------------------
         section = InspectorPanel::Lists;
-        add("String list", [this]() {
+        add("String list", [this, &p]() {
             Label("String list", std::to_string(showcase.stringList.size()) + " items");
-            Field(showcase.reorderStringListID, showcase.stringList, tachyon::LayoutOverride{}.FlexGrow(1));
+            Field(p.stringListID, showcase.stringList, tachyon::LayoutOverride{}.FlexGrow(1));
         });
-        add("Float list", [this]() {
+        add("Float list", [this, &p]() {
             Label("Float list", std::to_string(showcase.floatList.size()) + " items");
-            Field(showcase.reorderFloatListID, showcase.floatList, tachyon::LayoutOverride{}.FlexGrow(1));
+            Field(p.floatListID, showcase.floatList, tachyon::LayoutOverride{}.FlexGrow(1));
         });
         add("Dictionary", [this]() {
             Label("Dictionary", std::to_string(showcase.dictionary.size()) + " entries");
@@ -309,9 +322,9 @@ namespace tachyon
         // ---- Menus ----------------------------------------------------------
         // The triggers size to their text, no grow or shrink.
         section = InspectorPanel::Menus;
-        add("Small menu", [this]() {
+        add("Small menu", [this, &p]() {
             Label("Small menu");
-            if (BeginMenu(showcase.smallMenuID, "Open",
+            if (BeginMenu(p.smallMenuID, "Open",
                           tachyon::LayoutOverride{}.NoGrow().NoShrink()))
             {
                 ID item1ID = idManager.AllocateDynamicID();
@@ -343,9 +356,9 @@ namespace tachyon
         });
 
         // Scroll test: menu with 100 items
-        add("Big menu", [this]() {
+        add("Big menu", [this, &p]() {
             Label("Big menu");
-            if (BeginMenu(showcase.bigMenuID, "Open",
+            if (BeginMenu(p.bigMenuID, "Open",
                           tachyon::LayoutOverride{}.NoGrow().NoShrink()))
             {
                 for (int i = 0; i < 100; i++)

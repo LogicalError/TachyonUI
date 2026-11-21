@@ -62,6 +62,45 @@ namespace tachyon
             entries.push_back(Entry{ std::move(key), target });
         }
 
+        // Each side's items by debugName: { "Top": ["File", "View"], "Right": [], ... }.
+        JsonValue ToolbarSidesJson(std::span<const std::vector<ToolbarItem>, kToolbarSideCount> sides)
+        {
+            JsonValue bySide = JsonValue::MakeObject();
+            for (int s = 0; s < kToolbarSideCount; ++s)
+            {
+                JsonValue names = JsonValue::MakeArray();
+                for (const ToolbarItem& item : sides[size_t(s)])
+                    names.Push(item.debugName);
+                bySide.Set(kSideNames[s], std::move(names));
+            }
+            return bySide;
+        }
+
+        // Each item `saved` names on its side and place; the rest stay on their own sides, after.
+        void PlaceToolbarItems(std::span<std::vector<ToolbarItem>, kToolbarSideCount> sides, const JsonValue& saved)
+        {
+            std::vector<ToolbarItem> pool;
+            std::vector<int>         poolSide;
+            for (int s = 0; s < kToolbarSideCount; ++s)
+                for (ToolbarItem& item : sides[size_t(s)]) { pool.push_back(std::move(item)); poolSide.push_back(s); }
+            std::vector<bool> placed(pool.size(), false);
+            std::vector<ToolbarItem> rebuilt[kToolbarSideCount];
+            for (int s = 0; s < kToolbarSideCount; ++s)
+                if (const JsonValue* names = saved.Find(kSideNames[s]))
+                    for (const JsonValue& name : names->Items())
+                        for (size_t i = 0; i < pool.size(); ++i)
+                            if (!placed[i] && pool[i].debugName == name.AsString())
+                            {
+                                placed[i] = true;
+                                rebuilt[s].push_back(std::move(pool[i]));
+                                break;
+                            }
+            for (size_t i = 0; i < pool.size(); ++i)
+                if (!placed[i]) rebuilt[poolSide[i]].push_back(std::move(pool[i]));
+            for (int s = 0; s < kToolbarSideCount; ++s)
+                sides[size_t(s)] = std::move(rebuilt[s]);
+        }
+
         // A layout's dock tree as JSON, panels by key; null when it has none.
         std::optional<JsonValue> DockTreeJson(const DockingLayout& layout)
         {
@@ -147,7 +186,21 @@ namespace tachyon
         }
     }
 
-    void GUIApplication::PersistWindow(std::string key, ID windowID)                     { Upsert(m_persistWindows, std::move(key), windowID); }
+    std::string SaveToolbarLayout(std::span<const std::vector<ToolbarItem>, kToolbarSideCount> sides)
+    {
+        return ToolbarSidesJson(sides).Write();
+    }
+
+    bool ApplyToolbarLayout(std::span<std::vector<ToolbarItem>, kToolbarSideCount> sides, std::string_view text)
+    {
+        const Result<JsonValue> saved = JsonValue::Parse(text);
+        if (!saved || !saved->IsObject())
+            return false;
+        PlaceToolbarItems(sides, *saved);
+        return true;
+    }
+
+    void GUIApplication::PersistWindow(std::string key, ID windowID)                    { Upsert(m_persistWindows, std::move(key), windowID); }
     void GUIApplication::PersistDocking(std::string key, DockingLayout& layout)          { Upsert(m_persistDocks, std::move(key), &layout); }
     void GUIApplication::PersistToolbars(std::string key, std::span<std::vector<ToolbarItem>, kToolbarSideCount> sides)
                                                                                          { Upsert(m_persistToolbars, std::move(key), sides); }
@@ -342,17 +395,7 @@ namespace tachyon
 
         JsonValue toolbars = JsonValue::MakeObject();
         for (const auto& [key, sides] : m_persistToolbars)
-        {
-            JsonValue bySide = JsonValue::MakeObject();
-            for (int s = 0; s < kToolbarSideCount; ++s)
-            {
-                JsonValue names = JsonValue::MakeArray();
-                for (const ToolbarItem& item : sides[size_t(s)])
-                    names.Push(item.debugName);
-                bySide.Set(kSideNames[s], std::move(names));
-            }
-            toolbars.Set(key, std::move(bySide));
-        }
+            toolbars.Set(key, ToolbarSidesJson(sides));
         doc.Set("toolbars", std::move(toolbars));
 
         // Only the shortcuts the user changed, so the rest follow the app's own.
@@ -545,28 +588,8 @@ namespace tachyon
         for (const auto& [key, sides] : m_persistToolbars)
         {
             const JsonValue* saved = section("toolbars", key);
-            if (!saved || !saved->IsObject())
-                continue;
-            std::vector<ToolbarItem> pool;
-            std::vector<int>         poolSide;
-            for (int s = 0; s < kToolbarSideCount; ++s)
-                for (ToolbarItem& item : sides[size_t(s)]) { pool.push_back(std::move(item)); poolSide.push_back(s); }
-            std::vector<bool> placed(pool.size(), false);
-            std::vector<ToolbarItem> rebuilt[kToolbarSideCount];
-            for (int s = 0; s < kToolbarSideCount; ++s)
-                if (const JsonValue* names = saved->Find(kSideNames[s]))
-                    for (const JsonValue& name : names->Items())
-                        for (size_t i = 0; i < pool.size(); ++i)
-                            if (!placed[i] && pool[i].debugName == name.AsString())
-                            {
-                                placed[i] = true;
-                                rebuilt[s].push_back(std::move(pool[i]));
-                                break;
-                            }
-            for (size_t i = 0; i < pool.size(); ++i)
-                if (!placed[i]) rebuilt[poolSide[i]].push_back(std::move(pool[i]));
-            for (int s = 0; s < kToolbarSideCount; ++s)
-                sides[size_t(s)] = std::move(rebuilt[s]);
+            if (saved && saved->IsObject())
+                PlaceToolbarItems(sides, *saved);
         }
 
         // Shortcuts: each command by its mode's name and its description (and which of that

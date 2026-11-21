@@ -55,18 +55,37 @@ namespace tachyon
         sketchStrokes = std::move(kept);
     }
 
-    void Application::RenderSketchPanel()
+    // A Sketch panel's own: the stroke being drawn, the pen as it last came, where the pointer
+    // is and the tool picked. The strokes are the app's: every pad shows them.
+    struct SketchPanel
     {
-        const PenState& pen = sketchPen;
+        PointerDrag drag;
+        PenState    pen;              // as of the latest pointer event over the pad
+        float2      cursor {};        // where the pointer is on the pad
+        bool        eraserTool = false;   // the Eraser tool picked; a pen's eraser end erases either way
+    };
+
+    ID Application::CreateSketchPanel(std::unordered_map<ID, Panel>& panels, std::string title)
+    {
+        auto panel = std::make_shared<SketchPanel>();
+        const ID id = CreatePanel(panels, std::move(title), showcase.panelMiscIcon, [this, panel] { RenderSketchPanel(*panel); });
+        // The pen's readout changes with every move: never cached.
+        panels[id].cacheSignature = []() -> std::optional<uint64_t> { return std::nullopt; };
+        return id;
+    }
+
+    void Application::RenderSketchPanel(SketchPanel& panel)
+    {
+        const PenState& pen = panel.pen;
         BeginVertical(theme.emptyVertStyleRef, LayoutOverride{}.FlexGrow(1));
 
         // The tools (Pen and Eraser, one of them on) and Clear, then the pen's values as chips.
         BeginHorizontalWrap(idManager.AllocateDynamicID("sketch-toolbar"), sketchToolbarStyleRef);
         const StyleRef toolStyle = misc.iconButton[1];
-        Toggle(idManager.AllocateDynamicID("sketch-pen"), !sketchEraserTool, GUIContent{ showcase.editIcon, {}, "Pen" },
-               [this](bool) { sketchEraserTool = false; }, toolStyle);
-        Toggle(idManager.AllocateDynamicID("sketch-eraser"), sketchEraserTool, GUIContent{ showcase.eraserIcon, {}, "Eraser" },
-               [this](bool) { sketchEraserTool = true; }, toolStyle);
+        Toggle(idManager.AllocateDynamicID("sketch-pen"), !panel.eraserTool, GUIContent{ showcase.editIcon, {}, "Pen" },
+               [&panel](bool) { panel.eraserTool = false; }, toolStyle);
+        Toggle(idManager.AllocateDynamicID("sketch-eraser"), panel.eraserTool, GUIContent{ showcase.eraserIcon, {}, "Eraser" },
+               [&panel](bool) { panel.eraserTool = true; }, toolStyle);
         Button(idManager.AllocateDynamicID("sketch-clear"), GUIContent{ theme.deleteIcon, {}, "Clear" },
                [this] { sketchStrokes.clear(); }, toolStyle);
         Text(idManager.AllocateDynamicID("sketch-divider"), "", stateMachineDividerStyleRef);
@@ -95,48 +114,48 @@ namespace tachyon
         Element pad{ .id = padID, .styleRef = sketchPadStyleRef };
         pad.state = guiStateManager.GetCurrentState(padID);
         const bool hovered = (pad.state & ElementState::Hover) != ElementState::None;
-        pad.eventHandler = [this](ElementEvent&& e) -> bool
+        pad.eventHandler = [this, &panel](ElementEvent&& e) -> bool
         {
             if (e.type != EventType::MouseDown && e.type != EventType::MouseMove && e.type != EventType::MouseUp)
                 return false;
-            sketchPen    = e.state.pen;
+            panel.pen    = e.state.pen;
             // The pointer in the pad's padding box, the space its drawing is in.
             const int2 local = e.LocalCursor(elementStorage) - e.rect->innerRect.position;
-            sketchCursor = float2{ float(local.x), float(local.y) };
+            panel.cursor = float2{ float(local.x), float(local.y) };
             const float scale = styleManager.Px(1.0f);
-            const bool erasing = sketchPen.eraser || sketchEraserTool;
-            if (sketchDrag.Press(e, elementStorage, MouseButtons::Left, /*atOnce*/ true))
+            const bool erasing = panel.pen.eraser || panel.eraserTool;
+            if (panel.drag.Press(e, elementStorage, MouseButtons::Left, /*atOnce*/ true))
             {
                 if (!erasing)
                     sketchStrokes.push_back({});
             }
             else if (e.type == EventType::MouseUp)
             {
-                sketchDrag.Release(e);
+                panel.drag.Release(e);
                 return true;
             }
-            else if (!sketchDrag.Move(e, 0))
+            else if (!panel.drag.Move(e, 0))
                 return e.type == EventType::MouseMove;
 
             if (erasing)
             {
-                EraseSketchAt(sketchCursor, kEraserRadius * scale);
+                EraseSketchAt(panel.cursor, kEraserRadius * scale);
                 return true;
             }
             if (sketchStrokes.empty())
                 sketchStrokes.push_back({});
             std::vector<SketchPoint>& points = sketchStrokes.back().points;
-            const float width = (kMinWidth + (kMaxWidth - kMinWidth) * std::clamp(sketchPen.pressure, 0.0f, 1.0f)) * scale;
+            const float width = (kMinWidth + (kMaxWidth - kMinWidth) * std::clamp(panel.pen.pressure, 0.0f, 1.0f)) * scale;
             if (!points.empty())
             {
-                const float2 d = sketchCursor - points.back().pos;
+                const float2 d = panel.cursor - points.back().pos;
                 if (d.x * d.x + d.y * d.y < kPointSpacing * kPointSpacing)
                 {
                     points.back().width = std::max(points.back().width, width);
                     return true;
                 }
             }
-            points.push_back({ sketchCursor, width });
+            points.push_back({ panel.cursor, width });
             return true;
         };
         const AddResult added = elementStorage.Add(std::move(pad), LayoutOverride{}.FlexGrow(1));
@@ -144,7 +163,7 @@ namespace tachyon
         if (added)
         {
             VERIFY(windowRegistry.Add(added.ref));
-            VERIFY(elementStorage.AddCustomDraw(added.ref, [this, hovered](CustomDrawContext& ctx)
+            VERIFY(elementStorage.AddCustomDraw(added.ref, [this, &panel, hovered](CustomDrawContext& ctx)
             {
                 const VisualColorStyleIndex ink = theme.curveChannelColors[4];
                 for (const SketchStroke& stroke : sketchStrokes)
@@ -165,9 +184,9 @@ namespace tachyon
                 // Where the pointer is: the eraser's reach, or a small ring where the pen would draw.
                 if (hovered)
                 {
-                    const bool erasing = sketchPen.eraser || sketchEraserTool;
+                    const bool erasing = panel.pen.eraser || panel.eraserTool;
                     const float radius = erasing ? kEraserRadius : kHoverRingRadius;
-                    ctx.RenderCircle(sketchCursor, radius * styleManager.Px(1.0f),
+                    ctx.RenderCircle(panel.cursor, radius * styleManager.Px(1.0f),
                                      LineStyle{ .colorStyleIndex = theme.accentColor, .lineWidth = styleManager.Px(erasing ? 1.0f : 1.5f) });
                 }
             }));

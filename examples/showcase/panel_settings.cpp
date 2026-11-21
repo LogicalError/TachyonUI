@@ -3,6 +3,7 @@
 // The showcase's Settings pages and their registration with `showcase.settings`. The panel
 // chrome lives in gui_controls/controls_settings.cpp.
 
+#include <gui_controls/gui_view_state.h>
 #include <gui_core/diagnostics/gui_logging.h>
 #include <gui_core/diagnostics/gui_profiler.h>
 #include <gui_core/gui_version.h>
@@ -35,24 +36,37 @@ namespace tachyon
     // ---------------------------------------------------------------------------
     // Page registration
     // ---------------------------------------------------------------------------
-    // Call once after icons have been registered (so the IconIDs captured below
-    // are valid). The first registered page becomes the initial selection.
-    void Application::InitSettingsPages()
+    // Each panel's own pages (icons are registered by then). The first registered page becomes
+    // the initial selection.
+    void Application::InitSettingsPages(SettingsView& view)
     {
-        showcase.settings.header = "Preferences";
-        showcase.settings.AddPage(idManager.CreateStaticID(), "Shortcuts",  showcase.settingsShortcutsIcon,  [this]() { RenderSettingsShortcuts(); });
-        showcase.settings.AddPage(idManager.CreateStaticID(), "Appearance", showcase.settingsAppearanceIcon, [this]() { RenderSettingsAppearance(); });
-        showcase.settings.AddPage(idManager.CreateStaticID(), "General",    showcase.settingsGeneralIcon,    [this]() { RenderSettingsGeneral(); });
-        showcase.settings.AddPage(idManager.CreateStaticID(), "Advanced",   showcase.settingsAdvancedIcon,   [this]() { RenderSettingsAdvanced(); });
-        showcase.settings.AddPage(idManager.CreateStaticID(), "About",      showcase.settingsAboutIcon,      [this]() { RenderSettingsAbout(); });
-        showcase.settings.treeWidth = 160; // narrower than the default page list
+        SettingsView* const self = &view;
+        view.settings.header = "Preferences";
+        view.settings.AddPage(idManager.CreateStaticID(), "Shortcuts",  showcase.settingsShortcutsIcon,  [this, self]() { RenderSettingsShortcuts(self->shortcuts); });
+        view.settings.AddPage(idManager.CreateStaticID(), "Appearance", showcase.settingsAppearanceIcon, [this, self]() { RenderSettingsAppearance(*self); });
+        view.settings.AddPage(idManager.CreateStaticID(), "General",    showcase.settingsGeneralIcon,    [this]() { RenderSettingsGeneral(); });
+        view.settings.AddPage(idManager.CreateStaticID(), "Advanced",   showcase.settingsAdvancedIcon,   [this]() { RenderSettingsAdvanced(); });
+        view.settings.AddPage(idManager.CreateStaticID(), "About",      showcase.settingsAboutIcon,      [this]() { RenderSettingsAbout(); });
+        view.settings.treeWidth = 160; // narrower than the default page list
+    }
+
+    ID Application::CreateSettingsPanel(std::unordered_map<ID, Panel>& panels, std::string title)
+    {
+        auto view = std::make_shared<SettingsView>();
+        view->ids = &idManager;
+        InitSettingsPages(*view);
+        const ID id = CreatePanel(panels, std::move(title), showcase.panelSettingsIcon, [this, view] { RenderSettingsPanel(view->settings); });
+        // The page it shows, kept with the layout.
+        panels[id].saveState    = [view] { return SaveViewState(view->settings); };
+        panels[id].restoreState = [view](std::string_view state) { (void)RestoreViewState(view->settings, state); };
+        return id;
     }
 
     // ---------------------------------------------------------------------------
     // Page renderers
     // ---------------------------------------------------------------------------
 
-    void Application::RenderSettingsAppearance()
+    void Application::RenderSettingsAppearance(SettingsView& view)
     {
         BeginVertical(idManager.AllocateDynamicID("settingsBody"), settingsBodyStyleRef, LayoutOverride::Auto().FlexGrow(1));
         // Labels have break-after: avoid, so each stays on one row with its field.
@@ -63,7 +77,7 @@ namespace tachyon
         BeginLabelGroup(140);
 
         // The theme: Dark, Light or one of the user's own, with New, its name and Delete.
-        RenderThemePicker();
+        RenderThemePicker(view.themeEditor);
 
         // The accent: the palette's own blue or another of the design's, in either theme.
         Label("Accent");
@@ -95,7 +109,7 @@ namespace tachyon
         EndLabelGroup();
 
         // The theme's colors and sizes; a change to Dark or Light goes into a copy of it.
-        RenderThemeEditor();
+        RenderThemeEditor(view.themeEditor);
         EndArea();
         EndVertical();
     }
@@ -178,7 +192,7 @@ namespace tachyon
         EndVertical();
     }
 
-    void Application::RenderSettingsShortcuts()
+    void Application::RenderSettingsShortcuts(SettingsView::Shortcuts& page)
     {
         // Layout: the head (title, Reset to defaults, search), then category tree | sizer |
         // shortcuts table, as wide as the page.
@@ -186,9 +200,9 @@ namespace tachyon
         BeginHorizontal(idManager.AllocateDynamicID("shortcutTitleRow"), settingsTitleRowStyleRef);
         Text(idManager.AllocateDynamicID("settingsTitle"), "Shortcuts", settingsTitleStyleRef, LayoutOverride::Auto().FlexGrow(1));
         Button(idManager.AllocateDynamicID("shortcutReset"), "Reset to defaults",
-               [this] {
+               [this, &page] {
                    commandManager.ResetShortcuts();
-                   showcase.settingsShortcutsFilterMask = 0;   // the shortcuts changed: filter and sort again
+                   page.filterMask = 0;   // the shortcuts changed: filter and sort again
                }, LayoutOverride{}.NoGrow().NoShrink());
         SetTooltip("Give every command its own shortcut back");
         EndHorizontal();
@@ -204,26 +218,26 @@ namespace tachyon
         for (uint32_t m = 0; m < cappedCount; m++)
             catIDs[m] = idManager.AllocateDynamicID("shortcutCat");
 
-        auto& selection = showcase.settingsShortcutsCatSelection;
+        auto& selection = page.catSelection;
 
         // Own row so a child's `break-after: avoid` can't mark the outer column
         // keep-with-next, which disables its flex-grow and collapses the split.
         BeginHorizontal(idManager.AllocateDynamicID("shortcutSearchRow"),
                         theme.searchRowStyleRef,
                         tachyon::LayoutOverride::Auto().NoShrink());
-        if (SearchField(showcase.settingsShortcutsSearch, { showcase.findIcon, "Search commands or shortcuts" },
+        if (SearchField(page.search, { showcase.findIcon, "Search commands or shortcuts" },
                         TextEditBehavior::ContinuousUpdate,
                         tachyon::LayoutOverride{}.FlexGrow(1)))
         {
-            showcase.settingsShortcutsSearchLower.clear();
-            showcase.settingsShortcutsSearchLower.reserve(showcase.settingsShortcutsSearch.size());
-            for (char c : showcase.settingsShortcutsSearch)
-                showcase.settingsShortcutsSearchLower += (c >= 'A' && c <= 'Z') ? char(c + 32) : c;
+            page.searchLower.clear();
+            page.searchLower.reserve(page.search.size());
+            for (char c : page.search)
+                page.searchLower += (c >= 'A' && c <= 'Z') ? char(c + 32) : c;
         }
         EndHorizontal();
         EndVertical();   // shortcutHead
 
-        const std::string& query = showcase.settingsShortcutsSearchLower;
+        const std::string& query = page.searchLower;
         auto matchesSearch = [&](std::string_view desc) -> bool
         {
             if (query.empty()) return true;
@@ -249,10 +263,10 @@ namespace tachyon
 
         // Row IDs are the static category IDs, so the sync below can map
         // sub-range row IDs to and from `selection`.
-        auto& catRows       = showcase.settingsShortcutsCatRows;
-        auto& catVisibleIdx = showcase.settingsShortcutsCatVisibleIdx;
-        auto& catTableState = showcase.settingsShortcutsCatTableState;
-        auto& catInternal   = showcase.settingsShortcutsCatInternalMulti;
+        auto& catRows       = page.catRows;
+        auto& catVisibleIdx = page.catVisibleIdx;
+        auto& catTableState = page.catTableState;
+        auto& catInternal   = page.catInternalMulti;
         catTableState.multiSelect = &catInternal;
 
         catRows.clear();
@@ -310,7 +324,7 @@ namespace tachyon
         VirtualTreeView(idManager.AllocateDynamicID("shortcutCatTree"),
                         catRows, catVisibleIdx, catTableState,
                         shortcutCategoryStyleRef,
-                        tachyon::LayoutOverride::Auto().FixedWidth(CssPx(showcase.settingsShortcutsCategoryWidth)).NoGrow(),
+                        tachyon::LayoutOverride::Auto().FixedWidth(CssPx(page.categoryWidth)).NoGrow(),
                         "Category");
 
         {
@@ -320,7 +334,7 @@ namespace tachyon
             sizer.styleRef = theme.settingsSizerStyleRef;
             sizer.state    = guiStateManager.GetCurrentState(sizerID);
             sizer.eventHandler = tachyon::MakeHorizontalSizerHandler(
-                guiStateManager, elementStorage, showcase.settingsShortcutsCategoryWidth, 100, 400, nullptr, nullptr, false, styleManager.GetUIScale());
+                guiStateManager, elementStorage, page.categoryWidth, 100, 400, nullptr, nullptr, false, styleManager.GetUIScale());
             auto sRes = elementStorage.Add(std::move(sizer), tachyon::LayoutOverride::FixedWidth(4));
             VERIFY(sRes.status);
             VERIFY(windowRegistry.Add(sRes.ref));
@@ -348,12 +362,12 @@ namespace tachyon
 
         // visRows and the columns live on showcase state: they're read during input
         // dispatch, after this function returns.
-        auto& visRows = showcase.settingsShortcutsVisRows;
-        if (filterMask != showcase.settingsShortcutsFilterMask
-            || query != showcase.settingsShortcutsFilterQuery)
+        auto& visRows = page.visRows;
+        if (filterMask != page.filterMask
+            || query != page.filterQuery)
         {
-            showcase.settingsShortcutsFilterMask  = filterMask;
-            showcase.settingsShortcutsFilterQuery = query;
+            page.filterMask  = filterMask;
+            page.filterQuery = query;
             visRows.clear();
             for (uint32_t mode = 0; mode < cappedCount; mode++)
             {
@@ -372,14 +386,14 @@ namespace tachyon
                 }
             }
             // Filtered set changed -> the table's cached sort permutation is stale.
-            showcase.shortcutsTableState.InvalidateRowOrder();
+            page.tableState.InvalidateRowOrder();
         }
 
         static const std::string rebindPrompt = "Press a key... (Esc to cancel)";
 
         // Column template, built once. Comparators take visRows indices; the
         // lambdas capture only `this` and read visRows fresh each frame.
-        auto& cols = showcase.settingsShortcutsColumns;
+        auto& cols = page.columns;
         if (cols.empty())
         {
             cols.resize(4);
@@ -388,8 +402,8 @@ namespace tachyon
             // width the other columns leave.
             cols[0].column = { .header = "Command", .initialWidth = 180, .minWidth = 80, .maxWidth = 600,
                                .sizing = ColumnSizing::Stretch };
-            cols[0].sortAscending = [this](int a, int b) {
-                const auto& vr   = showcase.settingsShortcutsVisRows;
+            cols[0].sortAscending = [this, &page](int a, int b) {
+                const auto& vr   = page.visRows;
                 const auto& cmds = commandManager.GetCommands();
                 auto desc = [&](int r) -> std::string_view {
                     const auto& e = cmds[vr[r].entryIdx];
@@ -398,8 +412,8 @@ namespace tachyon
                 };
                 return CaseInsensitiveLess(desc(a), desc(b));
             };
-            cols[0].generateCell = [this](int rowIdx) {
-                auto& vr = showcase.settingsShortcutsVisRows;
+            cols[0].generateCell = [this, &page](int rowIdx) {
+                auto& vr = page.visRows;
                 if (rowIdx < 0 || rowIdx >= int(vr.size())) return;
                 const auto& e = commandManager.GetCommands()[vr[rowIdx].entryIdx];
                 // Copy the label into the cell lambda - Cell may defer it for
@@ -425,28 +439,28 @@ namespace tachyon
 
             // Context - the edit mode the command belongs to.
             cols[1].column = { .header = "Context", .initialWidth = 110, .minWidth = 60, .maxWidth = 400 };
-            cols[1].sortAscending = [this](int a, int b) {
-                const auto& vr = showcase.settingsShortcutsVisRows;
+            cols[1].sortAscending = [this, &page](int a, int b) {
+                const auto& vr = page.visRows;
                 return CaseInsensitiveLess(
                     commandManager.GetModeName(tachyon::CommandMode(vr[a].mode)),
                     commandManager.GetModeName(tachyon::CommandMode(vr[b].mode)));
             };
-            cols[1].generateCell = [this](int rowIdx) {
-                auto& vr = showcase.settingsShortcutsVisRows;
+            cols[1].generateCell = [this, &page](int rowIdx) {
+                auto& vr = page.visRows;
                 if (rowIdx < 0 || rowIdx >= int(vr.size())) return;
                 Cell(commandManager.GetModeName(tachyon::CommandMode(vr[rowIdx].mode)));
             };
 
             // Shortcut - the bound keys as keycaps; a click rebinds them.
             cols[2].column = { .header = "Shortcut", .initialWidth = 160, .minWidth = 80, .maxWidth = 400 };
-            cols[2].sortAscending = [this](int a, int b) {
-                const auto& vr   = showcase.settingsShortcutsVisRows;
+            cols[2].sortAscending = [this, &page](int a, int b) {
+                const auto& vr   = page.visRows;
                 const auto& cmds = commandManager.GetCommands();
                 return CaseInsensitiveLess(cmds[vr[a].entryIdx].displayString,
                                            cmds[vr[b].entryIdx].displayString);
             };
-            cols[2].generateCell = [this](int rowIdx) {
-                auto& vr = showcase.settingsShortcutsVisRows;
+            cols[2].generateCell = [this, &page](int rowIdx) {
+                auto& vr = page.visRows;
                 if (rowIdx < 0 || rowIdx >= int(vr.size())) return;
                 const uint32_t i = vr[rowIdx].entryIdx;
                 // A click starts a rebind, or cancels the one in progress; while one is, the
@@ -469,14 +483,14 @@ namespace tachyon
             // Type - how the shortcut fires: an instant action (one callback on
             // press) or a held begin/end action (RegisterHeldCommand).
             cols[3].column = { .header = "Type", .initialWidth = 80, .minWidth = 56, .maxWidth = 200 };
-            cols[3].sortAscending = [this](int a, int b) {
-                const auto& vr   = showcase.settingsShortcutsVisRows;
+            cols[3].sortAscending = [this, &page](int a, int b) {
+                const auto& vr   = page.visRows;
                 const auto& cmds = commandManager.GetCommands();
                 return CaseInsensitiveLess(cmds[vr[a].entryIdx].IsHeld() ? "Hold" : "Instant",
                                            cmds[vr[b].entryIdx].IsHeld() ? "Hold" : "Instant");
             };
-            cols[3].generateCell = [this](int rowIdx) {
-                auto& vr = showcase.settingsShortcutsVisRows;
+            cols[3].generateCell = [this, &page](int rowIdx) {
+                auto& vr = page.visRows;
                 if (rowIdx < 0 || rowIdx >= int(vr.size())) return;
                 Cell(commandManager.GetCommands()[vr[rowIdx].entryIdx].IsHeld() ? "Hold" : "Instant");
             };
@@ -484,7 +498,7 @@ namespace tachyon
 
         // Active columns, in a persisted vector so the sizer double-click's
         // internal.maxContentWidth pointer outlives the frame.
-        auto& active = showcase.settingsShortcutsActiveColumns;
+        auto& active = page.activeColumns;
         active.clear();
         active.push_back(cols[0]);                       // Command
         active.push_back(cols[2]);                       // Shortcut
@@ -495,16 +509,16 @@ namespace tachyon
         // each index means, so on the transition we drop persisted widths and
         // reset the sort to keep both aligned with the new column layout.
         const size_t colCount = active.size();
-        if (showcase.shortcutsTableState.columnWidths.size() != colCount)
+        if (page.tableState.columnWidths.size() != colCount)
         {
-            showcase.shortcutsTableState.columnWidths.clear();
-            showcase.shortcutsTableState.sortColumn = -1;
-            showcase.shortcutsTableState.InvalidateRowOrder();
+            page.tableState.columnWidths.clear();
+            page.tableState.sortColumn = -1;
+            page.tableState.InvalidateRowOrder();
         }
 
-        showcase.shortcutsTableState.cellStyle = shortcutCellStyleRef;
+        page.tableState.cellStyle = shortcutCellStyleRef;
         VirtualTable(idManager.AllocateDynamicID("shortcutTable"),
-                     showcase.shortcutsTableState,
+                     page.tableState,
                      std::span<VirtualTableColumn>(active.data(), colCount),
                      int(visRows.size()),
                      /*rowHeight*/0,

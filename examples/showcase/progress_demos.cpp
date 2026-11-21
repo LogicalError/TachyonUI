@@ -210,13 +210,13 @@ namespace tachyon
         BackgroundTasks(idManager.AllocateDynamicID("statusTasks"), tasks);
     }
 
-    void Application::RenderViewportBusy(ID viewportID)
+    void Application::RenderViewportBusy(ID viewportID, int32_t width)
     {
-        if (!ShadersCompiling() || viewportBusyWidth <= 0)
+        if (!ShadersCompiling() || width <= 0)
             return;
         // Along the view's top edge, and centered under it, the pill naming the work.
         IndeterminateProgressBar(idManager.AllocateDynamicID("viewportBusyBar"), viewportBusyBarStyleRef,
-                                 LayoutOverride{}.Width(Pixels{ viewportBusyWidth }).Anchored(viewportID, AnchorPlacement::InsideTopLeft));
+                                 LayoutOverride{}.Width(Pixels{ width }).Anchored(viewportID, AnchorPlacement::InsideTopLeft));
         BeginHorizontal(idManager.AllocateDynamicID("viewportBusy"), viewportBusyPillStyleRef,
                         LayoutOverride{}.Anchored(viewportID, AnchorPlacement::InsideTop | AnchorPlacement::CenterHorz,
                                                   { 0, int16_t(styleManager.Px(12)) }));
