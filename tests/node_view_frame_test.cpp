@@ -200,7 +200,7 @@ namespace tachyon
             Settle();
             const ID title = TitleOf("Lighting");
             ASSERT_NE(title, ID::Invalid());
-            const IntRect t = app.GetElementRect(title), a = app.GetElementRect(nodeA);
+            const IntRect t = app.GetElementRect(title), a = app.GetElementRect(NodeElementID(view, nodeA));
             EXPECT_EQ(t.w, 40 * g);
             EXPECT_EQ(t.h, 2 * g);
             EXPECT_EQ(t.x - a.x, (4 - 8) * g) << "where the frame is, in node.pos space";
@@ -251,7 +251,7 @@ namespace tachyon
             EXPECT_TRUE(view.selectedFrameIDs.empty());
 
             Click(Middle(TitleOf("Lighting")));
-            const IntRect b = app.GetElementRect(nodeB);
+            const IntRect b = app.GetElementRect(NodeElementID(view, nodeB));
             Click({ b.x + b.w / 2, b.y + g });
             EXPECT_TRUE(view.selectedFrameIDs.empty());
             EXPECT_EQ(view.selectedNodeIDs, std::unordered_set<ID>{ nodeB });
@@ -716,7 +716,7 @@ namespace tachyon
 
             // B, from below and right of it, to where the open frame's middle would be (well
             // past the collapsed box), on frames of its own, as a pointer goes.
-            const IntRect b = app.GetElementRect(nodeB);
+            const IntRect b = app.GetElementRect(NodeElementID(view, nodeB));
             const int2 from{ b.x + b.w / 2, b.y + g };
             const int2 to{ from.x - 30 * g, from.y - 18 * g };
             Single();
@@ -932,7 +932,7 @@ namespace tachyon
             ASSERT_TRUE(app.menuManager.IsOpen());
             const ID menuWindow = app.menuManager.levels[0].windowID;
             const float3x2 transform = view.transform;
-            const IntRect a = app.GetElementRect(nodeA);
+            const IntRect a = app.GetElementRect(NodeElementID(view, nodeA));
             for (const char* item : { "Add Reroute here", "Frame all", "Add frame here", "Add node", "Add Reroute here" })
             {
                 const ID id = app.FindByText(item);
@@ -945,7 +945,7 @@ namespace tachyon
                     ASSERT_TRUE(app.menuManager.IsOpen()) << item << ", frame " << f;
                     EXPECT_EQ(app.menuManager.levels[0].windowID, menuWindow) << item << ", frame " << f;
                     EXPECT_EQ(view.transform, transform) << item << ", frame " << f;
-                    EXPECT_EQ(app.GetElementRect(nodeA), a) << item << ", frame " << f;
+                    EXPECT_EQ(app.GetElementRect(NodeElementID(view, nodeA)), a) << item << ", frame " << f;
                     EXPECT_EQ(app.FindByText(item), id) << item << " keeps its ID, frame " << f;
                 }
             }

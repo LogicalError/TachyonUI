@@ -11,10 +11,15 @@ A graph editor. It has:
 - a minimap and zoom controls
 - an optional breadcrumb
 
-All its state lives in a `NodeView` that your app owns, so several views can coexist.
+All its state lives in a `NodeView` that your app owns, so several views can coexist. A
+`NodeView` is two parts in one, which can also be kept apart, to show one graph in several
+places (see [Several views of one graph](#several-views-of-one-graph)):
+
+- `NodeGraph`: the graph itself, its nodes, frames and wires, and its edits.
+- `NodeViewState`: how one view shows it, its pan and zoom, selection and menus.
 
 ```cpp
-void RenderNodeView(NodeView& view);
+void RenderNodeView(NodeViewRef view);   // a NodeView, or { graph, state }
 void NodeText(std::string_view text);
 ```
 
@@ -86,7 +91,7 @@ Field(gain, TextEditBehavior::ContinuousUpdate, NumericFieldConfig<float>{ .deci
 - `canConnect(view, output, input)`: return false to refuse a wire.
 
   ```cpp
-  view.canConnect = [](const NodeView& v, PropertyEndpoint o, PropertyEndpoint i)
+  view.canConnect = [](const NodeGraph& v, PropertyEndpoint o, PropertyEndpoint i)
   {
       return v.nodes[o.nodeIdx].properties[o.propIdx].socketColor
           == v.nodes[i.nodeIdx].properties[i.propIdx].socketColor;   // same color only
@@ -430,6 +435,44 @@ view.nodes.push_back(std::move(mix));
 // Each frame, inside a sized container:
 RenderNodeView(view);
 ```
+
+## Several views of one graph
+
+A graph can show in more than one place at once, for example in two panels side by side.
+Keep the graph once, as a `NodeGraph`, and a `NodeViewState` for each view of it:
+
+```cpp
+NodeGraph     graph;          // the document's: nodes, frames, wires, onEdit, canConnect
+NodeViewState left, right;    // each panel's: pan, zoom, selection, menus
+
+// Each frame, in each panel:
+RenderNodeView({ graph, left });
+RenderNodeView({ graph, right });
+```
+
+- Each view pans, zooms and selects on its own.
+  - For example, zooming `left` leaves `right` where it was.
+- An edit made in one view shows in all of them.
+  - For example, a node dragged in `left` moves in `right` too.
+  - A node removed in one view leaves the others' selections on their next frame, and
+    their `onSelectionChanged` is called.
+- The helpers take a view the same way: `FrameSelectedNodes({ graph, left })`,
+  `CommitNodeViewEdit({ graph, left }, edit)`.
+- Set the callbacks that act on what a view shows on its `NodeViewState`: its context
+  menus, `onSelectionChanged`, `onWireDroppedOnCanvas`, `onOpenState`, `onBreadcrumb`.
+  - The graph's own are on the `NodeGraph`: `onEdit` and `canConnect`.
+- Each view has its own elements for the nodes. To find one, for example in a test, use
+  `NodeElementID(state, node.stableID)`.
+- An edit applied outside every view, such as an undo, needs a view state to go through.
+  Keep one spare for that; the views catch up when they next draw.
+
+  ```cpp
+  NodeViewState noView;   // for undo and redo
+  graph.onEdit = [this](const NodeViewEdit& edit) {
+      history.Push({ .undo = [this, edit] { ApplyNodeViewEdit({ graph, noView }, edit, /*undo*/ true); },
+                     .redo = [this, edit] { ApplyNodeViewEdit({ graph, noView }, edit, /*undo*/ false); } });
+  };
+  ```
 
 ## State machines
 

@@ -53,6 +53,21 @@ namespace tachyon
     // Static ID Tests
     // ---------------------
 
+    // An item's ID inside a container: the same for the same pair, another for another
+    // container or item, a dynamic one, and never Invalid.
+    TEST(IDManagerScoped, AScopedIDDependsOnItsScopeAndKeyAlone)
+    {
+        IDManager ids;
+        const ID item = ids.CreateStaticID(), other = ids.CreateStaticID();
+        const ID left = ids.CreateStaticID(), right = ids.CreateStaticID();
+        EXPECT_EQ(IDManager::ScopedID(left, item), IDManager::ScopedID(left, item));
+        EXPECT_NE(IDManager::ScopedID(left, item), IDManager::ScopedID(right, item));
+        EXPECT_NE(IDManager::ScopedID(left, item), IDManager::ScopedID(left, other));
+        EXPECT_NE(IDManager::ScopedID(left, item), item);
+        EXPECT_EQ(IDManager::ScopedID(left, item).GetMode(), IDMode::Dynamic);
+        EXPECT_NE(IDManager::ScopedID(ID::Invalid(), ID::Invalid()), ID::Invalid());
+    }
+
     TEST_F(IDManagerTest, StaticIDCreationAndValidation) {
         ID id = manager.CreateStaticID();
         EXPECT_EQ(id.GetMode(), IDMode::Static);

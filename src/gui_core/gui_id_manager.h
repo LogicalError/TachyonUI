@@ -108,6 +108,20 @@ namespace tachyon
         /// Debug: checks the tracking list (slow). Release: true for any non-Invalid Dynamic ID.
         public: [[nodiscard]] bool IsDynamicIDValid(ID id) const;
 
+        /// The ID of the item `key` names (a node's stableID, say) inside `scope` (the
+        /// container showing it): the same each frame, whatever was built before it, and
+        /// different in another container showing the same item. Not tracked by
+        /// IsDynamicIDValid.
+        public: [[nodiscard]] static ID ScopedID(ID scope, ID key)
+        {
+            uint64_t hash = Hash::Combine(scope.value.integer, key.value.integer);
+            if (hash == 0) hash = 1;
+            ID id = ID::Invalid();
+            id.value.dynamicParts.mode      = IDMode::Dynamic;
+            id.value.dynamicParts.hashValue = hash;
+            return id;
+        }
+
         // ------------------------------------------------------------------------
         // Ranged IDs
         // ------------------------------------------------------------------------

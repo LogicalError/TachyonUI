@@ -12,6 +12,7 @@
 #include <functional>
 #include <optional>
 #include <span>
+#include <type_traits>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -27,7 +28,7 @@ namespace tachyon
     /// A property on a node. Default-constructed is invalid: in a socket it means "present, unwired".
     struct PropertyEndpoint
     {
-        int nodeIdx = -1;   ///< index into NodeView::nodes
+        int nodeIdx = -1;   ///< index into NodeGraph::nodes
         int propIdx = -1;   ///< index into that node's properties
 
         /// True when both indices are set.
@@ -89,7 +90,7 @@ namespace tachyon
         /// Internal: inside a collapsed frame, as last drawn: not shown, clicked or selected.
         bool                       hidden       = false;
         /// In a state machine (NodeViewKind::StateMachine): the state holds a machine of its
-        /// own. It's drawn with a mark, and a double-click on it calls NodeView::onOpenState.
+        /// own. It's drawn with a mark, and a double-click on it calls NodeViewState::onOpenState.
         bool                       subMachine   = false;
     };
 
@@ -202,7 +203,7 @@ namespace tachyon
         bool                           curved = false;
     };
 
-    /// How a node view draws its wires (NodeView::wireShape).
+    /// How a node view draws its wires (NodeGraph::wireShape).
     enum class NodeWireShape : uint8_t
     {
         Orthogonal,   ///< along the grid, round the nodes, with lanes that drag
@@ -220,7 +221,7 @@ namespace tachyon
     };
 
     /// One thing the user did in a node view, as values before and after, so a host can keep
-    /// the undo history (NodeView::onEdit) and undo or redo it (ApplyNodeViewEdit).
+    /// the undo history (NodeGraph::onEdit) and undo or redo it (ApplyNodeViewEdit).
     struct NodeViewEdit
     {
         /// A node (index) moved; positions in node.pos space.
@@ -338,9 +339,17 @@ namespace tachyon
         int  row    = 0;   ///< the box's row it's on
     };
 
-    /// All state of one node-view widget; no global state.
-    /// commandMode is active while the view has focus, for per-view shortcuts.
-    struct NodeView
+    /// What a node view's graph is: its nodes, frames and wires (or a state machine's states
+    /// and transitions), the edits made to it, and how it's laid out on the grid. Several
+    /// views can show one graph, each with a NodeViewState of its own (pan, zoom, selection):
+    ///
+    ///     NodeGraph      graph;              // the document's
+    ///     NodeViewState  left, right;        // a panel's each
+    ///     RenderNodeView({ graph, left });   // in one panel
+    ///     RenderNodeView({ graph, right });  // in the other
+    ///
+    /// NodeView is both in one, for a graph shown in one place.
+    struct NodeGraph
     {
         std::vector<NodeModel>  nodes;   ///< the graph; endpoints and edits refer to nodes by index
         /// A graph of fields and wires, or a state machine. In a state machine the nodes are
@@ -358,6 +367,40 @@ namespace tachyon
         /// How long the machine has been in activeState, in seconds, shown under it ("1.24 s");
         /// negative shows nothing. The app keeps it, and redraws while it counts.
         float                           activeStateTime = -1.0f;
+        ///@}
+        /// Frames, drawn behind the nodes and wires, the first at the back.
+        std::vector<NodeFrame>  frames;
+        /// Z-order, last == front (a clicked node moves there).
+        std::vector<int>        ordering;
+
+        /// Keeps node positions on the grid: dragged nodes land on it, and positions set
+        /// in code are moved onto it. Off: nodes go where they're dropped or put.
+        bool                            snapToGrid       = true;
+        /// Orthogonal: wires run along the grid, round the nodes, their lanes dragged by
+        /// hand. Curved: each wire is one curve, leaving the output and entering the input
+        /// level, with no lanes to drag.
+        NodeWireShape                   wireShape        = NodeWireShape::Orthogonal;
+        /// Pinned wire lanes, keyed by WireKey() of the wire's target endpoint.
+        std::unordered_map<uint32_t, WireRouteOverrides> wireOverrides;
+
+        /// Called once per finished user edit (a whole drag is one), after it is applied.
+        std::function<void(const NodeViewEdit&)> onEdit;
+        /// Whether an output -> input wire is allowed; null allows any. Called only for
+        /// bounds-checked, cross-node endpoints, so it may index graph.nodes directly.
+        std::function<bool(const NodeGraph& graph,
+                           PropertyEndpoint output,
+                           PropertyEndpoint input)> canConnect;
+
+        /// Goes up by one with each edit applied (ApplyNodeViewEdit). A view that last saw
+        /// another drops what it kept by node index.
+        uint32_t                        revision = 0;
+    };
+
+    /// How one view shows a NodeGraph: its pan and zoom, what's selected in it, what the user
+    /// is doing in it, what it shows over the canvas and the callbacks that act on what it
+    /// shows. Keep one for each place the graph is shown.
+    struct NodeViewState
+    {
         std::unordered_set<tachyon::ID> selectedTransitionIDs;   ///< selected transition stableIDs
         /// A double-click on a state that holds a machine of its own (NodeModel::subMachine):
         /// open it, typically by showing that machine's view and extending `breadcrumb`.
@@ -365,9 +408,6 @@ namespace tachyon
         /// As onNodeContextMenu, for transition `transition` (an index into transitions):
         /// a right click on its arrow or label opens it and selects the transition.
         std::function<void(int transition)> onTransitionContextMenu;
-        ///@}
-        /// Frames, drawn behind the nodes and wires, the first at the back.
-        std::vector<NodeFrame>  frames;
         /// Selected frame stableIDs. A click on a frame's title selects it as one on a node
         /// does; selecting is all it does to it.
         std::unordered_set<tachyon::ID> selectedFrameIDs;
@@ -389,13 +429,6 @@ namespace tachyon
         /// the minimap and selection still have it. Tab still reaches its controls: it's
         /// laid out as the focus moves into it. Off: every node, every frame.
         bool                            virtualizeLayout = true;
-        /// Keeps node positions on the grid: dragged nodes land on it, and positions set
-        /// in code are moved onto it. Off: nodes go where they're dropped or put.
-        bool                            snapToGrid       = true;
-        /// Orthogonal: wires run along the grid, round the nodes, their lanes dragged by
-        /// hand. Curved: each wire is one curve, leaving the output and entering the input
-        /// level, with no lanes to drag.
-        NodeWireShape                   wireShape        = NodeWireShape::Orthogonal;
 
         /// Last frame's minimap mapping (canvas = origin + minimap pixels / scale), for clicks.
         float                           minimapScale  = 0.0f;
@@ -414,8 +447,6 @@ namespace tachyon
         tachyon::ID                 focusedNodeID   = tachyon::ID::Invalid();   ///< internal: the node holding the focus last frame
         /// Command mode set while the canvas has focus.
         CommandMode             commandMode = CommandMode::Default;
-        /// Z-order, last == front (a clicked node moves there).
-        std::vector<int>        ordering;
 
         /// Selected node stableIDs.
         std::unordered_set<tachyon::ID>     selectedNodeIDs;
@@ -448,8 +479,6 @@ namespace tachyon
         tachyon::Gesture<MarqueeStart>      marquee;
         tachyon::int2                       marqueeCurrentScreen {};
 
-        /// Pinned wire lanes, keyed by WireKey() of the wire's target endpoint.
-        std::unordered_map<uint32_t, WireRouteOverrides> wireOverrides;
         /// Last frame's draggable segments, since grab elements are laid out before routing.
         std::vector<CachedWireHandle>                    wireHandleCache;
         WireSegmentDrag                                  wireDrag;
@@ -457,8 +486,6 @@ namespace tachyon
         /// The wire under the mouse (by WireKey), from the last frame: highlighted, removed by
         /// a middle click, and offered for deletion by a right click.
         tachyon::HoverPart<std::optional<uint32_t>> hoveredWire;
-        /// Called once per finished user edit (a whole drag is one), after it is applied.
-        std::function<void(const NodeViewEdit&)> onEdit;
         /// A new wire was released over the empty canvas (not on a node), e.g. to offer the
         /// nodes it could connect to. `from` is the socket it was dragged from: an output when
         /// `fromOutput`, else an unwired input. `canvasPos` is where, in node.pos space. A wire
@@ -532,16 +559,38 @@ namespace tachyon
         std::optional<tachyon::ID> renamingTransition;  ///< internal: the transition whose label is being edited
         std::optional<tachyon::ID> transitionMenuTransition;   ///< internal: the transition the open menu is for
 
-        /// Whether an output -> input wire is allowed; null allows any. Called only for
-        /// bounds-checked, cross-node endpoints, so it may index view.nodes directly.
-        std::function<bool(const NodeView& view,
-                           PropertyEndpoint output,
-                           PropertyEndpoint input)> canConnect;
-
         /// This frame's colors from the app (sockets, nodes, frames): packed RGBA -> its color
         /// style, a slot reused from frame to frame. Wires take their source socket's from here,
         /// since RenderPolyline takes a style index.
         std::unordered_map<uint32_t, tachyon::VisualColorStyleIndex> wireColorStyles;
+        /// Internal: the graph's revision this view last saw (NodeGraph::revision).
+        uint32_t                   seenRevision = 0;
+        /// Internal: the canvas element as last built; its nodes' element IDs are scoped
+        /// under it (NodeElementID).
+        tachyon::ID                canvasID = tachyon::ID::Invalid();
     };
+
+    /// A graph shown in one place: the graph and the one view of it together. For several
+    /// views of one graph, keep the NodeGraph and a NodeViewState per view instead.
+    struct NodeView : NodeGraph, NodeViewState
+    {
+    };
+
+    /// A graph and one view of it, as RenderNodeView and the helpers take them: a NodeView
+    /// passes as one, or `{ graph, state }` for one of several views of a graph.
+    template<class Graph, class State>
+    struct BasicNodeViewRef
+    {
+        Graph& graph;
+        State& state;
+
+        BasicNodeViewRef(Graph& g, State& s) : graph(g), state(s) {}
+        template<class View> requires std::is_convertible_v<View&, Graph&> && std::is_convertible_v<View&, State&>
+        BasicNodeViewRef(View& view) : graph(view), state(view) {}
+        template<class G, class S> requires std::is_convertible_v<G&, Graph&> && std::is_convertible_v<S&, State&>
+        BasicNodeViewRef(const BasicNodeViewRef<G, S>& other) : graph(other.graph), state(other.state) {}
+    };
+    using NodeViewRef      = BasicNodeViewRef<NodeGraph, NodeViewState>;
+    using ConstNodeViewRef = BasicNodeViewRef<const NodeGraph, const NodeViewState>;
     /// @}
 }

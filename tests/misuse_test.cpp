@@ -8,6 +8,8 @@
 #include "scoped_temp_dir.h"
 #include "misuse_reports.h"
 
+#include <gui_controls/gui_node_view_helpers.h>
+
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -679,7 +681,7 @@ namespace
         };
         app.Frame(draw);
         app.Frame(draw);
-        const IntRect n = app.GetElementRect(view.nodes[1].stableID);
+        const IntRect n = app.GetElementRect(NodeElementID(view, view.nodes[1].stableID));
         const int2 from{ n.x + n.w / 2, n.y + app.theme.nodeGridSize };
         app.InjectMouseMove(from);
         app.InjectMouseDown(from);

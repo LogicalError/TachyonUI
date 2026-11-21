@@ -1,5 +1,5 @@
 // Node-view edits as values a host can undo and redo: what the view changes is built
-// as a NodeViewEdit, applied with ApplyNodeViewEdit and reported to NodeView::onEdit.
+// as a NodeViewEdit, applied with ApplyNodeViewEdit and reported to NodeGraph::onEdit.
 
 #include <gtest/gtest.h>
 

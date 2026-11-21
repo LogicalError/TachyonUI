@@ -53,7 +53,7 @@ namespace tachyon
         }
     }
 
-    std::string SaveViewState(const NodeView& view)
+    std::string SaveViewState(const NodeViewState& view)
     {
         const float3x2& t = view.transform;
         JsonValue state = JsonValue::MakeObject();
@@ -61,7 +61,7 @@ namespace tachyon
         return state.Write();
     }
 
-    bool RestoreViewState(NodeView& view, std::string_view state)
+    bool RestoreViewState(NodeViewState& view, std::string_view state)
     {
         const std::optional<JsonValue> object = ObjectOf(state);
         float m[6];

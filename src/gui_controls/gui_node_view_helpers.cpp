@@ -11,52 +11,52 @@ namespace tachyon
     namespace
     {
         // The view's zoom range, put right if the app set it wrong (none, or upside down).
-        float MinZoom(const NodeView& view) { return view.minZoom > 0.0f ? view.minZoom : 0.1f; }
-        float MaxZoom(const NodeView& view) { return std::max(view.maxZoom, MinZoom(view)); }
+        float MinZoom(ConstNodeViewRef view) { return view.state.minZoom > 0.0f ? view.state.minZoom : 0.1f; }
+        float MaxZoom(ConstNodeViewRef view) { return std::max(view.state.maxZoom, MinZoom(view)); }
     }
 
-    float NodeViewZoom(const NodeView& view)
+    float NodeViewZoom(ConstNodeViewRef view)
     {
-        const float3x2& t = view.transform;
+        const float3x2& t = view.state.transform;
         float zoom = std::sqrt((t[0].x * t[0].x + t[0].y * t[0].y + t[1].x * t[1].x + t[1].y * t[1].y) * 0.5f);
         if (t[0].x * t[0].y - t[1].x * t[1].y < 0.0f) zoom = -zoom;
         return zoom;
     }
 
-    void ZoomNodeView(NodeView& view, float factor, int2 pivot)
+    void ZoomNodeView(NodeViewRef view, float factor, int2 pivot)
     {
         const float current = NodeViewZoom(view);
         const float target  = current * factor;
         if (current == 0.0f)
             return;
         if (target < MinZoom(view) || target > MaxZoom(view))
-            view.transform = view.transform * float3x2::Scale(std::clamp(target, MinZoom(view), MaxZoom(view)) / current);
+            view.state.transform = view.state.transform * float3x2::Scale(std::clamp(target, MinZoom(view), MaxZoom(view)) / current);
         else
-            view.transform = float3x2::Translate(pivot) * float3x2::Scale(factor) * float3x2::Translate(-pivot) * view.transform;
+            view.state.transform = float3x2::Translate(pivot) * float3x2::Scale(factor) * float3x2::Translate(-pivot) * view.state.transform;
     }
 
-    void SetNodeViewCenter(NodeView& view, float2 center, float zoom)
+    void SetNodeViewCenter(NodeViewRef view, float2 center, float zoom)
     {
-        view.transform = float3x2::Scale(std::clamp(zoom, MinZoom(view), MaxZoom(view)))
+        view.state.transform = float3x2::Scale(std::clamp(zoom, MinZoom(view), MaxZoom(view)))
                        * float3x2::Translate(float2{ -center.x, -center.y });
     }
 
-    void FrameAllNodes(NodeView& view)
+    void FrameAllNodes(NodeViewRef view)
     {
-        std::vector<int> all(view.nodes.size());
+        std::vector<int> all(view.graph.nodes.size());
         for (int n = 0; n < int(all.size()); ++n)
             all[size_t(n)] = n;
         FrameNodes(view, all);
     }
 
-    void FrameSelectedNodes(NodeView& view)
+    void FrameSelectedNodes(NodeViewRef view)
     {
         std::vector<int> selected;
-        for (int n = 0; n < int(view.nodes.size()); ++n)
-            if (view.selectedNodeIDs.contains(view.nodes[size_t(n)].stableID))
+        for (int n = 0; n < int(view.graph.nodes.size()); ++n)
+            if (view.state.selectedNodeIDs.contains(view.graph.nodes[size_t(n)].stableID))
                 selected.push_back(n);
-        for (const StateTransition& t : view.transitions)
-            if (view.selectedTransitionIDs.contains(t.stableID))
+        for (const StateTransition& t : view.graph.transitions)
+            if (view.state.selectedTransitionIDs.contains(t.stableID))
                 for (const ID state : { t.from, t.to })
                     if (const int n = NodeIndex(view, state); n >= 0 && std::find(selected.begin(), selected.end(), n) == selected.end())
                         selected.push_back(n);
@@ -66,15 +66,15 @@ namespace tachyon
             FrameNodes(view, selected);
     }
 
-    void FrameNodes(NodeView& view, std::span<const int> indices)
+    void FrameNodes(NodeViewRef view, std::span<const int> indices)
     {
         bool any = false;
         int2 bmin{}, bmax{};
         for (const int n : indices)
         {
-            if (n < 0 || n >= int(view.nodes.size()))
+            if (n < 0 || n >= int(view.graph.nodes.size()))
                 continue;
-            const NodeModel& node = view.nodes[size_t(n)];
+            const NodeModel& node = view.graph.nodes[size_t(n)];
             const int2 lo = node.pos, hi{ node.pos.x + node.lastSize.x, node.pos.y + node.lastSize.y };
             bmin = any ? int2{ std::min(bmin.x, lo.x), std::min(bmin.y, lo.y) } : lo;
             bmax = any ? int2{ std::max(bmax.x, hi.x), std::max(bmax.y, hi.y) } : hi;
@@ -84,7 +84,7 @@ namespace tachyon
             return;
         const int bw = std::max(1, bmax.x - bmin.x);
         const int bh = std::max(1, bmax.y - bmin.y);
-        const int2 vp = view.lastInnerSize;
+        const int2 vp = view.state.lastInnerSize;
         // Fitting never magnifies past 100%: a small graph shows at its own size.
         const float zoom = (vp.x > 0 && vp.y > 0)
                          ? std::min({ (float)vp.x / (float)bw * 0.9f, (float)vp.y / (float)bh * 0.9f, 1.0f })
@@ -92,16 +92,16 @@ namespace tachyon
         SetNodeViewCenter(view, float2{ (float)((bmin.x + bmax.x) / 2), (float)((bmin.y + bmax.y) / 2) }, zoom);
     }
 
-    void ScrollNodeIntoView(NodeView& view, int nodeIdx, int32_t margin)
+    void ScrollNodeIntoView(NodeViewRef view, int nodeIdx, int32_t margin)
     {
-        if (nodeIdx < 0 || nodeIdx >= (int)view.nodes.size())
+        if (nodeIdx < 0 || nodeIdx >= (int)view.graph.nodes.size())
             return;
-        const int2 vp = view.lastInnerSize;
+        const int2 vp = view.state.lastInnerSize;
         if (vp.x <= 0 || vp.y <= 0)
             return;
-        const NodeModel& node = view.nodes[size_t(nodeIdx)];
-        const float2 a = view.transform.TransformPoint(float2{ (float)node.pos.x, (float)node.pos.y });
-        const float2 b = view.transform.TransformPoint(float2{ (float)(node.pos.x + node.lastSize.x),
+        const NodeModel& node = view.graph.nodes[size_t(nodeIdx)];
+        const float2 a = view.state.transform.TransformPoint(float2{ (float)node.pos.x, (float)node.pos.y });
+        const float2 b = view.state.transform.TransformPoint(float2{ (float)(node.pos.x + node.lastSize.x),
                                                                (float)(node.pos.y + node.lastSize.y) });
         // The smallest move that brings each side in, the top-left winning for a node larger
         // than the view. View space has the canvas centre at 0.
@@ -117,7 +117,7 @@ namespace tachyon
         const float2 d{ shift(std::min(a.x, b.x), std::max(a.x, b.x), vp.x),
                         shift(std::min(a.y, b.y), std::max(a.y, b.y), vp.y) };
         if (d.x != 0.0f || d.y != 0.0f)
-            view.transform = float3x2::Translate(d) * view.transform;
+            view.state.transform = float3x2::Translate(d) * view.state.transform;
     }
 
     void RenderCanvasGrid(CustomDrawContext& ctx, int32_t baseGridSize,
@@ -193,7 +193,7 @@ namespace tachyon
         ctx.SetSpace(DrawSpace::Local);
     }
 
-    std::unordered_map<uint32_t, WireLane> ComputeWireLaneOffsets(const NodeView& view,
+    std::unordered_map<uint32_t, WireLane> ComputeWireLaneOffsets(ConstNodeViewRef view,
                                                                   PropertyEndpoint pendingOut,
                                                                   PropertyEndpoint pendingIn)
     {
@@ -202,10 +202,10 @@ namespace tachyon
 
         // Wires per (source node, target node). Connecting replaces the input's wire.
         std::unordered_map<uint64_t, std::vector<uint32_t>> groups;
-        for (int n = 0; n < (int)view.nodes.size(); ++n)
-            for (int p = 0; p < (int)view.nodes[n].properties.size(); ++p)
+        for (int n = 0; n < (int)view.graph.nodes.size(); ++n)
+            for (int p = 0; p < (int)view.graph.nodes[n].properties.size(); ++p)
             {
-                const auto& input = view.nodes[n].properties[p].input;
+                const auto& input = view.graph.nodes[n].properties[p].input;
                 if (!input.has_value() || !input->valid())
                     continue;
                 if (pending && PropertyEndpoint{ n, p } == pendingIn)
@@ -221,9 +221,9 @@ namespace tachyon
             std::sort(wires.begin(), wires.end());   // input order: same target node, by property
             const int srcNode = int(pair >> 32), tgtNode = int(uint32_t(pair));
             // An endpoint naming a node that is gone draws no wire.
-            if (srcNode < 0 || size_t(srcNode) >= view.nodes.size() || size_t(tgtNode) >= view.nodes.size())
+            if (srcNode < 0 || size_t(srcNode) >= view.graph.nodes.size() || size_t(tgtNode) >= view.graph.nodes.size())
                 continue;
-            const bool up = view.nodes[size_t(tgtNode)].pos.y < view.nodes[size_t(srcNode)].pos.y;
+            const bool up = view.graph.nodes[size_t(tgtNode)].pos.y < view.graph.nodes[size_t(srcNode)].pos.y;
             const int32_t first = (int32_t(wires.size()) - 1) / 2;
             for (size_t i = 0; i < wires.size(); ++i)
                 offsets[wires[i]] = WireLane{ .offset = up ? int32_t(i) - first : first - int32_t(i),
@@ -299,87 +299,87 @@ namespace tachyon
 
     namespace
     {
-        NodeProperty* PropertyAt(NodeView& view, PropertyEndpoint e)
+        NodeProperty* PropertyAt(NodeViewRef view, PropertyEndpoint e)
         {
-            if (e.nodeIdx < 0 || e.nodeIdx >= (int)view.nodes.size()) return nullptr;
-            auto& props = view.nodes[e.nodeIdx].properties;
+            if (e.nodeIdx < 0 || e.nodeIdx >= (int)view.graph.nodes.size()) return nullptr;
+            auto& props = view.graph.nodes[e.nodeIdx].properties;
             return (e.propIdx >= 0 && e.propIdx < (int)props.size()) ? &props[e.propIdx] : nullptr;
         }
 
         // Node indices from `at` on move by `by` (+1: a node goes in at `at`; -1: the one at
         // `at` is gone), in every wire endpoint, WireKey and z-order entry.
-        void ShiftNodeIndices(NodeView& view, int at, int by)
+        void ShiftNodeIndices(NodeViewRef view, int at, int by)
         {
             auto shifted = [at, by](int n) { return n >= at ? n + by : n; };
-            for (NodeModel& node : view.nodes)
+            for (NodeModel& node : view.graph.nodes)
                 for (NodeProperty& prop : node.properties)
                     if (prop.input && prop.input->valid())
                         prop.input->nodeIdx = shifted(prop.input->nodeIdx);
             std::unordered_map<uint32_t, WireRouteOverrides> overrides;
-            for (const auto& [key, lanes] : view.wireOverrides)
+            for (const auto& [key, lanes] : view.graph.wireOverrides)
             {
                 const PropertyEndpoint input = WireInput(key);
                 overrides[WireKey(shifted(input.nodeIdx), input.propIdx)] = lanes;
             }
-            view.wireOverrides = std::move(overrides);
-            for (int& n : view.ordering)
+            view.graph.wireOverrides = std::move(overrides);
+            for (int& n : view.graph.ordering)
                 n = shifted(n);
             // What hovered or was grabbed last frame named wires by the old indices.
-            view.hoveredWire.Clear();
-            view.wireMenuWire.reset();
-            view.wireHandleCache.clear();
+            view.state.hoveredWire.Clear();
+            view.state.wireMenuWire.reset();
+            view.state.wireHandleCache.clear();
         }
 
-        void InsertNode(NodeView& view, const NodeViewEdit::Node& change)
+        void InsertNode(NodeViewRef view, const NodeViewEdit::Node& change)
         {
-            const int at = std::clamp(change.index, 0, (int)view.nodes.size());
+            const int at = std::clamp(change.index, 0, (int)view.graph.nodes.size());
             ShiftNodeIndices(view, at, +1);
-            view.nodes.insert(view.nodes.begin() + at, change.node);
-            view.ordering.push_back(at);   // in front
+            view.graph.nodes.insert(view.graph.nodes.begin() + at, change.node);
+            view.graph.ordering.push_back(at);   // in front
             for (const auto& [input, outputProp] : change.fed)
                 if (NodeProperty* prop = PropertyAt(view, input); prop && prop->input)
                     prop->input = PropertyEndpoint{ at, outputProp };
             for (const auto& [key, lanes] : change.lanes)
-                view.wireOverrides[key] = lanes;
+                view.graph.wireOverrides[key] = lanes;
         }
 
-        void EraseNode(NodeView& view, const NodeViewEdit::Node& change)
+        void EraseNode(NodeViewRef view, const NodeViewEdit::Node& change)
         {
             const int at = change.index;
-            if (at < 0 || at >= (int)view.nodes.size())
+            if (at < 0 || at >= (int)view.graph.nodes.size())
                 return;
             // Its wires go with it: the ones into other nodes, and every one's lanes.
-            for (NodeModel& node : view.nodes)
+            for (NodeModel& node : view.graph.nodes)
                 for (NodeProperty& prop : node.properties)
                     if (prop.input && prop.input->valid() && prop.input->nodeIdx == at)
                         prop.input = PropertyEndpoint{};
-            std::erase_if(view.wireOverrides, [&](const auto& entry) {
+            std::erase_if(view.graph.wireOverrides, [&](const auto& entry) {
                 const PropertyEndpoint input = WireInput(entry.first);
                 return input.nodeIdx == at
                     || std::any_of(change.fed.begin(), change.fed.end(), [&](const auto& f) { return f.first == input; });
             });
-            const ID id = view.nodes[size_t(at)].stableID;
-            view.selectedNodeIDs.erase(id);
-            if (view.lastClickedNodeID == id)
-                view.lastClickedNodeID = ID::Invalid();
-            view.nodes.erase(view.nodes.begin() + at);
-            std::erase(view.ordering, at);
+            const ID id = view.graph.nodes[size_t(at)].stableID;
+            view.state.selectedNodeIDs.erase(id);
+            if (view.state.lastClickedNodeID == id)
+                view.state.lastClickedNodeID = ID::Invalid();
+            view.graph.nodes.erase(view.graph.nodes.begin() + at);
+            std::erase(view.graph.ordering, at);
             ShiftNodeIndices(view, at + 1, -1);
         }
 
         // The removal of the node at `at` as an edit: the node, the wires it feeds, and the
         // lanes of every wire into or out of it.
-        NodeViewEdit::Node RemovalOf(const NodeView& view, int at)
+        NodeViewEdit::Node RemovalOf(ConstNodeViewRef view, int at)
         {
-            NodeViewEdit::Node change{ .index = at, .added = false, .node = view.nodes[size_t(at)] };
-            for (int n = 0; n < (int)view.nodes.size(); ++n)
-                for (int p = 0; p < (int)view.nodes[size_t(n)].properties.size(); ++p)
+            NodeViewEdit::Node change{ .index = at, .added = false, .node = view.graph.nodes[size_t(at)] };
+            for (int n = 0; n < (int)view.graph.nodes.size(); ++n)
+                for (int p = 0; p < (int)view.graph.nodes[size_t(n)].properties.size(); ++p)
                 {
-                    const auto& input = view.nodes[size_t(n)].properties[size_t(p)].input;
+                    const auto& input = view.graph.nodes[size_t(n)].properties[size_t(p)].input;
                     if (n != at && input && input->valid() && input->nodeIdx == at)
                         change.fed.push_back({ PropertyEndpoint{ n, p }, input->propIdx });
                 }
-            for (const auto& [key, lanes] : view.wireOverrides)
+            for (const auto& [key, lanes] : view.graph.wireOverrides)
             {
                 const PropertyEndpoint input = WireInput(key);
                 if (input.nodeIdx == at
@@ -390,28 +390,28 @@ namespace tachyon
         }
     }
 
-    NodeViewEdit AddNodeEdit(const NodeView& view, NodeModel node, int index)
+    NodeViewEdit AddNodeEdit(ConstNodeViewRef view, NodeModel node, int index)
     {
         NodeViewEdit edit;
-        const int count = (int)view.nodes.size();
+        const int count = (int)view.graph.nodes.size();
         edit.nodes.push_back({ .index = (index < 0 || index > count) ? count : index, .added = true, .node = std::move(node) });
         return edit;
     }
 
-    NodeViewEdit RemoveNodesEdit(const NodeView& view, std::span<const int> indices)
+    NodeViewEdit RemoveNodesEdit(ConstNodeViewRef view, std::span<const int> indices)
     {
         // Last first, so each one's index is still its own when it goes; on a copy of the
         // graph, so each is recorded as it is then (its wires to the ones before it gone).
         std::vector<int> order;
         for (const int n : indices)
-            if (n >= 0 && n < (int)view.nodes.size()) order.push_back(n);
+            if (n >= 0 && n < (int)view.graph.nodes.size()) order.push_back(n);
         std::sort(order.begin(), order.end(), std::greater<int>());
         order.erase(std::unique(order.begin(), order.end()), order.end());
 
         NodeViewEdit edit;
         NodeView graph;
-        graph.nodes         = view.nodes;
-        graph.wireOverrides = view.wireOverrides;
+        graph.nodes         = view.graph.nodes;
+        graph.wireOverrides = view.graph.wireOverrides;
         for (const int n : order)
         {
             edit.nodes.push_back(RemovalOf(graph, n));
@@ -421,23 +421,23 @@ namespace tachyon
         // so does its being the initial one.
         std::unordered_set<ID> removed;
         for (const int n : order)
-            removed.insert(view.nodes[size_t(n)].stableID);
-        for (int t = (int)view.transitions.size() - 1; t >= 0; --t)
-            if (const StateTransition& tr = view.transitions[size_t(t)]; removed.contains(tr.from) || removed.contains(tr.to))
+            removed.insert(view.graph.nodes[size_t(n)].stableID);
+        for (int t = (int)view.graph.transitions.size() - 1; t >= 0; --t)
+            if (const StateTransition& tr = view.graph.transitions[size_t(t)]; removed.contains(tr.from) || removed.contains(tr.to))
                 edit.transitions.push_back({ .index = t, .added = false, .transition = tr });
-        if (removed.contains(view.initialState))
-            edit.initial = NodeViewEdit::Initial{ view.initialState, ID::Invalid() };
+        if (removed.contains(view.graph.initialState))
+            edit.initial = NodeViewEdit::Initial{ view.graph.initialState, ID::Invalid() };
         return edit;
     }
 
-    NodeViewEdit RerouteWireEdit(const NodeView& view, uint32_t wireKey, ID stableID, int2 pos)
+    NodeViewEdit RerouteWireEdit(ConstNodeViewRef view, uint32_t wireKey, ID stableID, int2 pos)
     {
         const PropertyEndpoint input = WireInput(wireKey);
-        if (input.nodeIdx >= (int)view.nodes.size() || input.propIdx >= (int)view.nodes[size_t(input.nodeIdx)].properties.size())
+        if (input.nodeIdx >= (int)view.graph.nodes.size() || input.propIdx >= (int)view.graph.nodes[size_t(input.nodeIdx)].properties.size())
             return {};
-        const auto& wired = view.nodes[size_t(input.nodeIdx)].properties[size_t(input.propIdx)].input;
-        if (!wired || !wired->valid() || wired->nodeIdx >= (int)view.nodes.size()
-            || wired->propIdx >= (int)view.nodes[size_t(wired->nodeIdx)].properties.size())
+        const auto& wired = view.graph.nodes[size_t(input.nodeIdx)].properties[size_t(input.propIdx)].input;
+        if (!wired || !wired->valid() || wired->nodeIdx >= (int)view.graph.nodes.size()
+            || wired->propIdx >= (int)view.graph.nodes[size_t(wired->nodeIdx)].properties.size())
             return {};
         const PropertyEndpoint source = *wired;
 
@@ -449,24 +449,24 @@ namespace tachyon
         reroute.properties.push_back(NodeProperty{
             .input       = source,
             .output      = true,
-            .socketColor = view.nodes[size_t(source.nodeIdx)].properties[size_t(source.propIdx)].socketColor });
+            .socketColor = view.graph.nodes[size_t(source.nodeIdx)].properties[size_t(source.propIdx)].socketColor });
         // Added first, so the rewire may name it.
         NodeViewEdit edit = AddNodeEdit(view, std::move(reroute));
         edit.rewires.push_back({ input, source, PropertyEndpoint{ edit.nodes[0].index, 0 } });
-        if (const auto it = view.wireOverrides.find(wireKey); it != view.wireOverrides.end())
+        if (const auto it = view.graph.wireOverrides.find(wireKey); it != view.graph.wireOverrides.end())
             edit.lanes.push_back({ wireKey, it->second, WireRouteOverrides{} });
         return edit;
     }
 
-    NodeViewEdit RemoveRerouteEdit(const NodeView& view, int node)
+    NodeViewEdit RemoveRerouteEdit(ConstNodeViewRef view, int node)
     {
-        if (node < 0 || node >= (int)view.nodes.size() || !view.nodes[size_t(node)].reroute)
+        if (node < 0 || node >= (int)view.graph.nodes.size() || !view.graph.nodes[size_t(node)].reroute)
             return {};
         const int only[] = { node };
         NodeViewEdit edit = RemoveNodesEdit(view, only);
         // The rewires apply after the removal, so they name nodes as numbered without it; the
         // inputs it fed are unwired by then.
-        const auto& row = view.nodes[size_t(node)].properties;
+        const auto& row = view.graph.nodes[size_t(node)].properties;
         const PropertyEndpoint source = !row.empty() && row[0].input ? *row[0].input : PropertyEndpoint{};
         if (!source.valid())
             return edit;
@@ -476,25 +476,25 @@ namespace tachyon
         return edit;
     }
 
-    NodeViewEdit AddFrameEdit(const NodeView& view, NodeFrame frame, int index)
+    NodeViewEdit AddFrameEdit(ConstNodeViewRef view, NodeFrame frame, int index)
     {
         NodeViewEdit edit;
-        const int count = (int)view.frames.size();
+        const int count = (int)view.graph.frames.size();
         edit.frames.push_back({ .index = (index < 0 || index > count) ? count : index, .added = true, .frame = std::move(frame) });
         return edit;
     }
 
-    NodeViewEdit RemoveFramesEdit(const NodeView& view, std::span<const int> indices)
+    NodeViewEdit RemoveFramesEdit(ConstNodeViewRef view, std::span<const int> indices)
     {
         // Last first, so each one's index is still its own when it goes.
         std::vector<int> order;
         for (const int f : indices)
-            if (f >= 0 && f < (int)view.frames.size()) order.push_back(f);
+            if (f >= 0 && f < (int)view.graph.frames.size()) order.push_back(f);
         std::sort(order.begin(), order.end(), std::greater<int>());
         order.erase(std::unique(order.begin(), order.end()), order.end());
         NodeViewEdit edit;
         for (const int f : order)
-            edit.frames.push_back({ .index = f, .added = false, .frame = view.frames[size_t(f)] });
+            edit.frames.push_back({ .index = f, .added = false, .frame = view.graph.frames[size_t(f)] });
         return edit;
     }
 
@@ -517,15 +517,15 @@ namespace tachyon
 
         // A frame round `bounds`: a cell of room on each side, the title bar above, on the
         // grid when snapping. Zero size for empty bounds.
-        NodeFrame FrameAround(const NodeView& view, const Bounds& bounds)
+        NodeFrame FrameAround(ConstNodeViewRef view, const Bounds& bounds)
         {
             if (!bounds.any)
                 return {};
-            const int32_t grid = view.gridSize > 0 ? view.gridSize : 12;
+            const int32_t grid = view.state.gridSize > 0 ? view.state.gridSize : 12;
             const int2 lo = bounds.lo, hi = bounds.hi;
             // A cell of room round them, the title bar (a row pitch) above that.
             int2 from{ lo.x - grid, lo.y - grid - 2 * grid }, to{ hi.x + grid, hi.y + grid };
-            if (view.snapToGrid)
+            if (view.graph.snapToGrid)
             {
                 from = { GridLineLE(from.x, 0, grid), GridLineLE(from.y, 0, grid) };
                 to   = { GridLineGE(to.x, 0, grid), GridLineGE(to.y, 0, grid) };
@@ -534,27 +534,27 @@ namespace tachyon
         }
     }
 
-    NodeFrame FrameAroundNodes(const NodeView& view, std::span<const int> indices)
+    NodeFrame FrameAroundNodes(ConstNodeViewRef view, std::span<const int> indices)
     {
         Bounds bounds;
         for (const int n : indices)
-            if (n >= 0 && n < (int)view.nodes.size())
-                bounds.Add(view.nodes[size_t(n)].pos, view.nodes[size_t(n)].lastSize);
+            if (n >= 0 && n < (int)view.graph.nodes.size())
+                bounds.Add(view.graph.nodes[size_t(n)].pos, view.graph.nodes[size_t(n)].lastSize);
         return FrameAround(view, bounds);
     }
 
-    NodeViewEdit GroupSelectionEdit(const NodeView& view, NodeFrame frame)
+    NodeViewEdit GroupSelectionEdit(ConstNodeViewRef view, NodeFrame frame)
     {
         Bounds bounds;
-        for (const NodeModel& node : view.nodes)
-            if (view.selectedNodeIDs.contains(node.stableID))
+        for (const NodeModel& node : view.graph.nodes)
+            if (view.state.selectedNodeIDs.contains(node.stableID))
                 bounds.Add(node.pos, node.lastSize);
         // Behind the first selected frame, so the frames it holds stay in front of it.
         int index = -1;
-        for (int f = 0; f < (int)view.frames.size(); ++f)
+        for (int f = 0; f < (int)view.graph.frames.size(); ++f)
         {
-            const NodeFrame& held = view.frames[size_t(f)];
-            if (!view.selectedFrameIDs.contains(held.stableID)) continue;
+            const NodeFrame& held = view.graph.frames[size_t(f)];
+            if (!view.state.selectedFrameIDs.contains(held.stableID)) continue;
             bounds.Add(held.pos, held.size);   // a collapsed one at its open size
             if (index < 0) index = f;
         }
@@ -566,22 +566,22 @@ namespace tachyon
         return AddFrameEdit(view, std::move(frame), index);
     }
 
-    std::vector<int> NodesInFrame(const NodeView& view, int frame)
+    std::vector<int> NodesInFrame(ConstNodeViewRef view, int frame)
     {
         std::vector<int> inside;
-        if (frame < 0 || frame >= (int)view.frames.size())
+        if (frame < 0 || frame >= (int)view.graph.frames.size())
             return inside;
-        const NodeFrame& f = view.frames[size_t(frame)];
+        const NodeFrame& f = view.graph.frames[size_t(frame)];
         if (f.collapsed && f.members)
         {
-            for (int n = 0; n < (int)view.nodes.size(); ++n)
-                if (std::find(f.members->begin(), f.members->end(), view.nodes[size_t(n)].stableID) != f.members->end())
+            for (int n = 0; n < (int)view.graph.nodes.size(); ++n)
+                if (std::find(f.members->begin(), f.members->end(), view.graph.nodes[size_t(n)].stableID) != f.members->end())
                     inside.push_back(n);
             return inside;
         }
-        for (int n = 0; n < (int)view.nodes.size(); ++n)
+        for (int n = 0; n < (int)view.graph.nodes.size(); ++n)
         {
-            const NodeModel& node = view.nodes[size_t(n)];
+            const NodeModel& node = view.graph.nodes[size_t(n)];
             if (node.pos.x >= f.pos.x && node.pos.y >= f.pos.y
                 && node.pos.x + node.lastSize.x <= f.pos.x + f.size.x
                 && node.pos.y + node.lastSize.y <= f.pos.y + f.size.y)
@@ -590,11 +590,11 @@ namespace tachyon
         return inside;
     }
 
-    NodeViewEdit CollapseFrameEdit(const NodeView& view, int frame, bool collapse)
+    NodeViewEdit CollapseFrameEdit(ConstNodeViewRef view, int frame, bool collapse)
     {
-        if (frame < 0 || frame >= (int)view.frames.size() || view.frames[size_t(frame)].collapsed == collapse)
+        if (frame < 0 || frame >= (int)view.graph.frames.size() || view.graph.frames[size_t(frame)].collapsed == collapse)
             return {};
-        const NodeFrame& from = view.frames[size_t(frame)];
+        const NodeFrame& from = view.graph.frames[size_t(frame)];
         NodeFrame to = from;
         to.collapsed = collapse;
         to.members.reset();
@@ -603,10 +603,10 @@ namespace tachyon
             // What it holds now: the nodes inside it, and the frames wholly inside it.
             std::vector<ID> members;
             for (const int n : NodesInFrame(view, frame))
-                members.push_back(view.nodes[size_t(n)].stableID);
-            for (int other = 0; other < (int)view.frames.size(); ++other)
+                members.push_back(view.graph.nodes[size_t(n)].stableID);
+            for (int other = 0; other < (int)view.graph.frames.size(); ++other)
             {
-                const NodeFrame& inner = view.frames[size_t(other)];
+                const NodeFrame& inner = view.graph.frames[size_t(other)];
                 if (other != frame && inner.pos.x >= from.pos.x && inner.pos.y >= from.pos.y
                     && inner.pos.x + inner.size.x <= from.pos.x + from.size.x
                     && inner.pos.y + inner.size.y <= from.pos.y + from.size.y)
@@ -617,14 +617,14 @@ namespace tachyon
         return NodeViewEdit{ .frameChanges = { { frame, from, std::move(to) } } };
     }
 
-    int FrameTitleAtCanvasPos(const NodeView& view, float2 canvasPos)
+    int FrameTitleAtCanvasPos(ConstNodeViewRef view, float2 canvasPos)
     {
-        const int32_t bar = 2 * (view.gridSize > 0 ? view.gridSize : 12);
-        for (int f = (int)view.frames.size() - 1; f >= 0; --f)
+        const int32_t bar = 2 * (view.state.gridSize > 0 ? view.state.gridSize : 12);
+        for (int f = (int)view.graph.frames.size() - 1; f >= 0; --f)
         {
             // As last drawn, when it was: a collapsed one by its box, a hidden one not at all.
-            const NodeFrame& frame = view.frames[size_t(f)];
-            const IntRect box = f < (int)view.frameBoxes.size() ? view.frameBoxes[size_t(f)]
+            const NodeFrame& frame = view.graph.frames[size_t(f)];
+            const IntRect box = f < (int)view.state.frameBoxes.size() ? view.state.frameBoxes[size_t(f)]
                                                                 : IntRect{ frame.pos.x, frame.pos.y, frame.size.x, frame.size.y };
             if (canvasPos.x >= float(box.x) && canvasPos.x < float(box.x + box.w)
                 && canvasPos.y >= float(box.y) && canvasPos.y < float(box.y + std::min(bar, box.h)))
@@ -633,75 +633,75 @@ namespace tachyon
         return -1;
     }
 
-    void RenameFrame(NodeView& view, int frame)
+    void RenameFrame(NodeViewRef view, int frame)
     {
-        if (frame < 0 || frame >= (int)view.frames.size())
+        if (frame < 0 || frame >= (int)view.graph.frames.size())
             return;
-        view.renamingFrame = view.frames[size_t(frame)].stableID;
-        view.renameText    = view.frames[size_t(frame)].title;
-        view.renameFocused = false;
+        view.state.renamingFrame = view.graph.frames[size_t(frame)].stableID;
+        view.state.renameText    = view.graph.frames[size_t(frame)].title;
+        view.state.renameFocused = false;
     }
 
-    NodeViewEdit AddTransitionEdit(const NodeView& view, StateTransition transition, int index)
+    NodeViewEdit AddTransitionEdit(ConstNodeViewRef view, StateTransition transition, int index)
     {
         NodeViewEdit edit;
-        const int count = (int)view.transitions.size();
+        const int count = (int)view.graph.transitions.size();
         edit.transitions.push_back({ .index = (index < 0 || index > count) ? count : index, .added = true, .transition = std::move(transition) });
         return edit;
     }
 
-    NodeViewEdit RemoveTransitionsEdit(const NodeView& view, std::span<const ID> transitions)
+    NodeViewEdit RemoveTransitionsEdit(ConstNodeViewRef view, std::span<const ID> transitions)
     {
         // Last first, so each one's index is still its own when it goes.
         NodeViewEdit edit;
-        for (int t = (int)view.transitions.size() - 1; t >= 0; --t)
-            if (std::find(transitions.begin(), transitions.end(), view.transitions[size_t(t)].stableID) != transitions.end())
-                edit.transitions.push_back({ .index = t, .added = false, .transition = view.transitions[size_t(t)] });
+        for (int t = (int)view.graph.transitions.size() - 1; t >= 0; --t)
+            if (std::find(transitions.begin(), transitions.end(), view.graph.transitions[size_t(t)].stableID) != transitions.end())
+                edit.transitions.push_back({ .index = t, .added = false, .transition = view.graph.transitions[size_t(t)] });
         return edit;
     }
 
-    NodeViewEdit SetInitialStateEdit(const NodeView& view, ID state)
+    NodeViewEdit SetInitialStateEdit(ConstNodeViewRef view, ID state)
     {
         NodeViewEdit edit;
-        if (state != view.initialState)
-            edit.initial = NodeViewEdit::Initial{ view.initialState, state };
+        if (state != view.graph.initialState)
+            edit.initial = NodeViewEdit::Initial{ view.graph.initialState, state };
         return edit;
     }
 
-    int TransitionIndex(const NodeView& view, ID stableID)
+    int TransitionIndex(ConstNodeViewRef view, ID stableID)
     {
-        for (int t = 0; t < (int)view.transitions.size(); ++t)
-            if (view.transitions[size_t(t)].stableID == stableID) return t;
+        for (int t = 0; t < (int)view.graph.transitions.size(); ++t)
+            if (view.graph.transitions[size_t(t)].stableID == stableID) return t;
         return -1;
     }
 
-    int NodeIndex(const NodeView& view, ID stableID)
+    int NodeIndex(ConstNodeViewRef view, ID stableID)
     {
-        for (int n = 0; n < (int)view.nodes.size(); ++n)
-            if (view.nodes[size_t(n)].stableID == stableID) return n;
+        for (int n = 0; n < (int)view.graph.nodes.size(); ++n)
+            if (view.graph.nodes[size_t(n)].stableID == stableID) return n;
         return -1;
     }
 
-    void RenameTransition(NodeView& view, int transition)
+    void RenameTransition(NodeViewRef view, int transition)
     {
-        if (transition < 0 || transition >= (int)view.transitions.size())
+        if (transition < 0 || transition >= (int)view.graph.transitions.size())
             return;
-        view.renamingTransition = view.transitions[size_t(transition)].stableID;
-        view.renameText         = view.transitions[size_t(transition)].label;
-        view.renameFocused      = false;
+        view.state.renamingTransition = view.graph.transitions[size_t(transition)].stableID;
+        view.state.renameText         = view.graph.transitions[size_t(transition)].label;
+        view.state.renameFocused      = false;
     }
 
-    void StartTransition(NodeView& view, int node)
+    void StartTransition(NodeViewRef view, int node)
     {
-        if (node < 0 || node >= (int)view.nodes.size())
+        if (node < 0 || node >= (int)view.graph.nodes.size())
             return;
-        const NodeModel& state = view.nodes[size_t(node)];
-        view.transitionFrom    = state.stableID;
-        view.transitionPicking = true;
+        const NodeModel& state = view.graph.nodes[size_t(node)];
+        view.state.transitionFrom    = state.stableID;
+        view.state.transitionPicking = true;
         // From the state's middle until the pointer moves.
-        const float2 centre = NodeViewCanvasToScreen(view, { float(state.pos.x + view.lastGridOrigin.x) + float(state.lastSize.x) * 0.5f,
-                                                             float(state.pos.y + view.lastGridOrigin.y) + float(state.lastSize.y) * 0.5f });
-        view.transitionPointer = { int32_t(std::lround(centre.x)), int32_t(std::lround(centre.y)) };
+        const float2 centre = NodeViewCanvasToScreen(view, { float(state.pos.x + view.state.lastGridOrigin.x) + float(state.lastSize.x) * 0.5f,
+                                                             float(state.pos.y + view.state.lastGridOrigin.y) + float(state.lastSize.y) * 0.5f });
+        view.state.transitionPointer = { int32_t(std::lround(centre.x)), int32_t(std::lround(centre.y)) };
     }
 
     namespace
@@ -745,14 +745,14 @@ namespace tachyon
         float2 F(int2 p) { return { float(p.x), float(p.y) }; }
     }
 
-    TransitionPath StateTransitionPath(const NodeView& view, const StateTransition& transition, int32_t gap, int32_t loopSize)
+    TransitionPath StateTransitionPath(ConstNodeViewRef view, const StateTransition& transition, int32_t gap, int32_t loopSize)
     {
         TransitionPath path;
         const int a = NodeIndex(view, transition.from), b = NodeIndex(view, transition.to);
         if (a < 0 || b < 0)
             return path;
-        const NodeModel& from = view.nodes[size_t(a)];
-        const NodeModel& to   = view.nodes[size_t(b)];
+        const NodeModel& from = view.graph.nodes[size_t(a)];
+        const NodeModel& to   = view.graph.nodes[size_t(b)];
         if (from.lastSize.x <= 0 || from.lastSize.y <= 0 || to.lastSize.x <= 0 || to.lastSize.y <= 0)
             return path;
         const IntRect boxA{ from.pos.x, from.pos.y, from.lastSize.x, from.lastSize.y };
@@ -780,7 +780,7 @@ namespace tachyon
         }
         d = { d.x / length, d.y / length };
         // Joined both ways: each to its own right of the way it goes, so they don't overlap.
-        const bool both = std::any_of(view.transitions.begin(), view.transitions.end(), [&](const StateTransition& t) {
+        const bool both = std::any_of(view.graph.transitions.begin(), view.graph.transitions.end(), [&](const StateTransition& t) {
             return t.from == transition.to && t.to == transition.from;
         });
         const float side = both ? float(gap) : 0.0f;
@@ -813,16 +813,16 @@ namespace tachyon
         return { int32_t(std::lround(mid.x + n.x * reach)), int32_t(std::lround(mid.y + n.y * reach)) };
     }
 
-    std::optional<ID> TransitionAt(const NodeView& view, float2 canvasPos, float tolerance, int32_t gap, int32_t loopSize)
+    std::optional<ID> TransitionAt(ConstNodeViewRef view, float2 canvasPos, float tolerance, int32_t gap, int32_t loopSize)
     {
         // A label first: it lies beside its arrow, maybe over another.
-        for (const auto& [id, box] : view.transitionLabelBoxes)
+        for (const auto& [id, box] : view.state.transitionLabelBoxes)
             if (canvasPos.x >= float(box.x) && canvasPos.y >= float(box.y)
                 && canvasPos.x < float(box.x + box.w) && canvasPos.y < float(box.y + box.h))
                 return id;
         std::optional<ID> best;
         float bestDistance = tolerance;
-        for (const StateTransition& t : view.transitions)
+        for (const StateTransition& t : view.graph.transitions)
         {
             const TransitionPath path = StateTransitionPath(view, t, gap, loopSize);
             if (!path.valid)
@@ -852,8 +852,14 @@ namespace tachyon
         return best;
     }
 
-    void ApplyNodeViewEdit(NodeView& view, const NodeViewEdit& edit, bool undo)
+    void ApplyNodeViewEdit(NodeViewRef view, const NodeViewEdit& edit, bool undo)
     {
+        // The graph's other views learn of it by its revision; this one is kept up to date here.
+        const bool current = view.state.seenRevision == view.graph.revision;
+        ++view.graph.revision;
+        if (current)
+            view.state.seenRevision = view.graph.revision;
+
         // Undo walks the changes backwards, so one that builds on another is undone first.
         auto each = [undo](const auto& changes, auto&& apply)
         {
@@ -874,13 +880,13 @@ namespace tachyon
         auto frames = [&](bool backwards)
         {
             auto apply = [&](const NodeViewEdit::Frame& change) {
-                const int count = (int)view.frames.size();
+                const int count = (int)view.graph.frames.size();
                 if (change.added != backwards)
-                    view.frames.insert(view.frames.begin() + std::clamp(change.index, 0, count), change.frame);
+                    view.graph.frames.insert(view.graph.frames.begin() + std::clamp(change.index, 0, count), change.frame);
                 else if (change.index >= 0 && change.index < count)
                 {
-                    view.selectedFrameIDs.erase(view.frames[size_t(change.index)].stableID);
-                    view.frames.erase(view.frames.begin() + change.index);
+                    view.state.selectedFrameIDs.erase(view.graph.frames[size_t(change.index)].stableID);
+                    view.graph.frames.erase(view.graph.frames.begin() + change.index);
                 }
             };
             if (backwards) for (auto it = edit.frames.rbegin(); it != edit.frames.rend(); ++it) apply(*it);
@@ -890,13 +896,13 @@ namespace tachyon
         auto transitions = [&](bool backwards)
         {
             auto apply = [&](const NodeViewEdit::Transition& change) {
-                const int count = (int)view.transitions.size();
+                const int count = (int)view.graph.transitions.size();
                 if (change.added != backwards)
-                    view.transitions.insert(view.transitions.begin() + std::clamp(change.index, 0, count), change.transition);
+                    view.graph.transitions.insert(view.graph.transitions.begin() + std::clamp(change.index, 0, count), change.transition);
                 else if (change.index >= 0 && change.index < count)
                 {
-                    view.selectedTransitionIDs.erase(view.transitions[size_t(change.index)].stableID);
-                    view.transitions.erase(view.transitions.begin() + change.index);
+                    view.state.selectedTransitionIDs.erase(view.graph.transitions[size_t(change.index)].stableID);
+                    view.graph.transitions.erase(view.graph.transitions.begin() + change.index);
                 }
             };
             if (backwards) for (auto it = edit.transitions.rbegin(); it != edit.transitions.rend(); ++it) apply(*it);
@@ -910,22 +916,22 @@ namespace tachyon
         }
         each(edit.transitionChanges, [&](const NodeViewEdit::TransitionChange& c, const StateTransition& transition)
         {
-            if (c.index >= 0 && c.index < (int)view.transitions.size()) view.transitions[size_t(c.index)] = transition;
+            if (c.index >= 0 && c.index < (int)view.graph.transitions.size()) view.graph.transitions[size_t(c.index)] = transition;
         });
         if (edit.initial)
-            view.initialState = undo ? edit.initial->from : edit.initial->to;
+            view.graph.initialState = undo ? edit.initial->from : edit.initial->to;
         each(edit.frameChanges, [&](const NodeViewEdit::FrameChange& c, const NodeFrame& frame)
         {
-            if (c.frame >= 0 && c.frame < (int)view.frames.size()) view.frames[size_t(c.frame)] = frame;
+            if (c.frame >= 0 && c.frame < (int)view.graph.frames.size()) view.graph.frames[size_t(c.frame)] = frame;
         });
-        const int nodeCount = (int)view.nodes.size();
+        const int nodeCount = (int)view.graph.nodes.size();
         each(edit.moves, [&](const NodeViewEdit::Move& m, int2 pos)
         {
-            if (m.node >= 0 && m.node < nodeCount) view.nodes[m.node].pos = pos;
+            if (m.node >= 0 && m.node < nodeCount) view.graph.nodes[m.node].pos = pos;
         });
         each(edit.collapses, [&](const NodeViewEdit::Collapse& c, bool collapsed)
         {
-            if (c.node >= 0 && c.node < nodeCount) view.nodes[c.node].collapsed = collapsed;
+            if (c.node >= 0 && c.node < nodeCount) view.graph.nodes[c.node].collapsed = collapsed;
         });
         each(edit.rewires, [&](const NodeViewEdit::Rewire& r, PropertyEndpoint source)
         {
@@ -934,8 +940,8 @@ namespace tachyon
         });
         each(edit.lanes, [&](const NodeViewEdit::Lanes& l, const WireRouteOverrides& lanes)
         {
-            if (lanes == WireRouteOverrides{}) view.wireOverrides.erase(l.wireKey);
-            else                               view.wireOverrides[l.wireKey] = lanes;
+            if (lanes == WireRouteOverrides{}) view.graph.wireOverrides.erase(l.wireKey);
+            else                               view.graph.wireOverrides[l.wireKey] = lanes;
         });
         if (undo)
         {
@@ -945,18 +951,18 @@ namespace tachyon
         }
     }
 
-    void CommitNodeViewEdit(NodeView& view, const NodeViewEdit& edit)
+    void CommitNodeViewEdit(NodeViewRef view, const NodeViewEdit& edit)
     {
         if (edit.empty()) return;
         ApplyNodeViewEdit(view, edit);
-        if (view.onEdit) view.onEdit(edit);
+        if (view.graph.onEdit) view.graph.onEdit(edit);
     }
 
-    NodeViewEdit ConnectEdit(const NodeView& view, PropertyEndpoint output, PropertyEndpoint input)
+    NodeViewEdit ConnectEdit(ConstNodeViewRef view, PropertyEndpoint output, PropertyEndpoint input)
     {
         NodeViewEdit edit;
-        if (input.nodeIdx < 0 || input.nodeIdx >= (int)view.nodes.size()) return edit;
-        const auto& props = view.nodes[input.nodeIdx].properties;
+        if (input.nodeIdx < 0 || input.nodeIdx >= (int)view.graph.nodes.size()) return edit;
+        const auto& props = view.graph.nodes[input.nodeIdx].properties;
         if (input.propIdx < 0 || input.propIdx >= (int)props.size() || !props[input.propIdx].input.has_value()) return edit;
         const PropertyEndpoint before = *props[input.propIdx].input;
         if (!(before == output))
@@ -964,30 +970,30 @@ namespace tachyon
         return edit;
     }
 
-    NodeViewEdit DisconnectEdit(const NodeView& view, PropertyEndpoint input)
+    NodeViewEdit DisconnectEdit(ConstNodeViewRef view, PropertyEndpoint input)
     {
         NodeViewEdit edit = ConnectEdit(view, PropertyEndpoint{}, input);
-        if (const auto it = view.wireOverrides.find(WireKey(input.nodeIdx, input.propIdx)); it != view.wireOverrides.end())
+        if (const auto it = view.graph.wireOverrides.find(WireKey(input.nodeIdx, input.propIdx)); it != view.graph.wireOverrides.end())
             edit.lanes.push_back({ it->first, it->second, WireRouteOverrides{} });
         return edit;
     }
 
-    bool ConnectionAllowed(const NodeView& view, PropertyEndpoint out, PropertyEndpoint in)
+    bool ConnectionAllowed(ConstNodeViewRef view, PropertyEndpoint out, PropertyEndpoint in)
     {
         if (out.nodeIdx == in.nodeIdx) return false;
-        const int nodeCount = (int)view.nodes.size();
+        const int nodeCount = (int)view.graph.nodes.size();
         if (out.nodeIdx < 0 || out.nodeIdx >= nodeCount) return false;
         if (in.nodeIdx  < 0 || in.nodeIdx  >= nodeCount) return false;
-        if (out.propIdx < 0 || out.propIdx >= (int)view.nodes[out.nodeIdx].properties.size()) return false;
-        if (in.propIdx  < 0 || in.propIdx  >= (int)view.nodes[in.nodeIdx].properties.size())  return false;
-        return view.canConnect ? view.canConnect(view, out, in) : true;
+        if (out.propIdx < 0 || out.propIdx >= (int)view.graph.nodes[out.nodeIdx].properties.size()) return false;
+        if (in.propIdx  < 0 || in.propIdx  >= (int)view.graph.nodes[in.nodeIdx].properties.size())  return false;
+        return view.graph.canConnect ? view.graph.canConnect(view.graph, out, in) : true;
     }
 
-    PropertyEndpoint FirstInputAccepting(const NodeView& view, PropertyEndpoint output, int nodeIdx)
+    PropertyEndpoint FirstInputAccepting(ConstNodeViewRef view, PropertyEndpoint output, int nodeIdx)
     {
-        if (nodeIdx < 0 || nodeIdx >= (int)view.nodes.size())
+        if (nodeIdx < 0 || nodeIdx >= (int)view.graph.nodes.size())
             return {};
-        const auto& properties = view.nodes[nodeIdx].properties;
+        const auto& properties = view.graph.nodes[nodeIdx].properties;
         for (int p = 0; p < (int)properties.size(); ++p)
         {
             const PropertyEndpoint in{ nodeIdx, p };
@@ -1023,11 +1029,11 @@ namespace tachyon
         return BuildWireRoute(cursor, inPt, IntRect{ cursor.x, cursor.y, 1, 1 }, tgtRect, grid, gridOrigin);
     }
 
-    PropertyEndpoint FirstOutputAccepting(const NodeView& view, PropertyEndpoint input, int nodeIdx)
+    PropertyEndpoint FirstOutputAccepting(ConstNodeViewRef view, PropertyEndpoint input, int nodeIdx)
     {
-        if (nodeIdx < 0 || nodeIdx >= (int)view.nodes.size())
+        if (nodeIdx < 0 || nodeIdx >= (int)view.graph.nodes.size())
             return {};
-        const auto& properties = view.nodes[nodeIdx].properties;
+        const auto& properties = view.graph.nodes[nodeIdx].properties;
         for (int p = 0; p < (int)properties.size(); ++p)
         {
             const PropertyEndpoint out{ nodeIdx, p };
@@ -1037,15 +1043,15 @@ namespace tachyon
         return {};
     }
 
-    int NodeAtCanvasPos(const NodeView& view, float2 canvasPos)
+    int NodeAtCanvasPos(ConstNodeViewRef view, float2 canvasPos)
     {
         auto holds = [&](int n) {
-            const NodeModel& node = view.nodes[size_t(n)];
+            const NodeModel& node = view.graph.nodes[size_t(n)];
             return !node.hidden && canvasPos.x >= float(node.pos.x) && canvasPos.x < float(node.pos.x + node.lastSize.x)
                 && canvasPos.y >= float(node.pos.y) && canvasPos.y < float(node.pos.y + node.lastSize.y);
         };
-        for (auto it = view.ordering.rbegin(); it != view.ordering.rend(); ++it)
-            if (*it >= 0 && *it < (int)view.nodes.size() && holds(*it))
+        for (auto it = view.graph.ordering.rbegin(); it != view.graph.ordering.rend(); ++it)
+            if (*it >= 0 && *it < (int)view.graph.nodes.size() && holds(*it))
                 return *it;
         return -1;
     }
@@ -1205,22 +1211,22 @@ namespace tachyon
             float2{ (float)(screen.x - canvasCenter.x), (float)(screen.y - canvasCenter.y) });
     }
 
-    float2 NodeViewScreenToCanvas(const NodeView& view, int2 screen)
+    float2 NodeViewScreenToCanvas(ConstNodeViewRef view, int2 screen)
     {
-        return NodeViewScreenToCanvas(view.transform, IntRect{ .position = view.lastCanvasRect.position, .size = view.lastInnerSize }, screen);
+        return NodeViewScreenToCanvas(view.state.transform, IntRect{ .position = view.state.lastCanvasRect.position, .size = view.state.lastInnerSize }, screen);
     }
 
-    float2 NodeViewScreenToNodePos(const NodeView& view, int2 screen)
+    float2 NodeViewScreenToNodePos(ConstNodeViewRef view, int2 screen)
     {
         const float2 p = NodeViewScreenToCanvas(view, screen);
-        return { p.x - float(view.lastGridOrigin.x), p.y - float(view.lastGridOrigin.y) };
+        return { p.x - float(view.state.lastGridOrigin.x), p.y - float(view.state.lastGridOrigin.y) };
     }
 
-    float2 NodeViewCanvasToScreen(const NodeView& view, float2 canvasPos)
+    float2 NodeViewCanvasToScreen(ConstNodeViewRef view, float2 canvasPos)
     {
-        const float2 p = view.transform.TransformPoint(canvasPos);
-        return float2{ p.x + float(view.lastCanvasRect.x + view.lastInnerSize.x / 2),
-                       p.y + float(view.lastCanvasRect.y + view.lastInnerSize.y / 2) };
+        const float2 p = view.state.transform.TransformPoint(canvasPos);
+        return float2{ p.x + float(view.state.lastCanvasRect.x + view.state.lastInnerSize.x / 2),
+                       p.y + float(view.state.lastCanvasRect.y + view.state.lastInnerSize.y / 2) };
     }
 
     std::unordered_set<ID> ComputeNodesInMarquee(
@@ -1261,7 +1267,7 @@ namespace tachyon
         return hits;
     }
 
-    void ConnectSockets(NodeView& view, PropertyEndpoint output, PropertyEndpoint input)
+    void ConnectSockets(NodeViewRef view, PropertyEndpoint output, PropertyEndpoint input)
     {
         ApplyNodeViewEdit(view, ConnectEdit(view, output, input));
     }

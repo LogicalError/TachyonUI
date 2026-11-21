@@ -32,6 +32,8 @@ namespace tachyon
     struct SketchPanel;
     struct ProfilerPanel;
     struct ReorderablePanel;
+    struct NodeGraphPanel;
+    struct StateMachinePanel;
 
     // Case-insensitive substring search for the panels' search boxes. Lowercase
     // the query once when it changes, then match each item against it.
@@ -441,13 +443,16 @@ namespace tachyon
             ID textBoxId1 { ID::Invalid() };
             ID textBoxId2 { ID::Invalid() };
 
-            // Each NodeView is an independent graph with its own pan/zoom and drag state.
-            NodeView nodeView;
-            bool     nodeFramesSeeded = false;   // the "Inputs" frame, put round its nodes once they're laid out
-            // The StateMachine panel: an enemy's behaviour, and the machine its Combat state holds.
-            NodeView enemyMachine;
-            NodeView combatMachine;
-            bool     combatOpen = false;            // Combat's machine is the one shown
+            // The NodeView panels' graph; each panel has a view of it of its own (NodeGraphPanel).
+            NodeGraph nodeGraph;
+            bool      nodeFramesSeeded = false;   // the "Inputs" frame, put round its nodes once they're laid out
+            // The StateMachine panels' machines: an enemy's behaviour, and the machine its Combat
+            // state holds. Each panel has its views of them, and which it shows (StateMachinePanel).
+            NodeGraph enemyMachine;
+            NodeGraph combatMachine;
+            // What an edit made outside every view (undo, redo) goes through; the views of the
+            // graph catch up by its revision.
+            NodeViewState noView;
             bool     stateMachinesSeeded = false;
             uint32_t stateMachineSteps = 0;         // Step takes the transitions out of a state in turn
             // When each machine (Enemy, Combat) entered the state it's in, in seconds on the
@@ -794,26 +799,34 @@ namespace tachyon
         /// Deletes `nodes` from `panel`'s tree; several, it asks first (unless told not to this session).
         void RequestHierarchyDelete(HierarchyPanel& panel, std::vector<ID> nodes);
         void AskBeforeDeleting(ID window);
-        void RenderNodeViewPanel();
+        ID   CreateNodeGraphPanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        void RenderNodeViewPanel(NodeGraphPanel& panel);
+        /// A NodeView panel's view of the graph: its menus, what its selection shows, its shortcuts.
+        void SetUpNodeGraphView(NodeViewState& view);
         /// The StateMachine panel: the enemy's machine, or Combat's once opened; Step and Restart.
-        void RenderStateMachinePanel();
+        ID   CreateStateMachinePanel(std::unordered_map<ID, Panel>& panels, std::string title);
+        void RenderStateMachinePanel(StateMachinePanel& panel);
         void SeedStateMachines();
-        /// Removes the shown machine's selected states, their transitions with them, and its
-        /// selected transitions, as one edit.
-        void DeleteSelectedStates();
+        /// Removes the machine's selected states (in `view`), their transitions with them, and
+        /// its selected transitions, as one edit.
+        void DeleteSelectedStates(NodeViewRef view);
         /// A reroute (NodeModel::reroute) in `color`, unwired, its dot on the grid point
         /// nearest `at` (node.pos space).
         NodeModel RerouteNode(float2 at, color4f color);
-        /// Removes the node view's selected nodes, their wires with them, and its selected
+        /// Removes the nodes selected in `view`, their wires with them, and its selected
         /// frames, as one edit.
-        void DeleteSelectedNodes();
-        /// Puts a frame titled `title` round the node view's nodes at `indices`, as one edit.
-        /// A frame round the node view's selected nodes and frames, then selected itself.
-        void GroupSelection();
+        void DeleteSelectedNodes(NodeViewState& view);
+        /// A frame round the nodes and frames selected in `view`, then selected itself.
+        void GroupSelection(NodeViewState& view);
         /// The kinds of node the canvas menu adds.
         enum class GraphNodeKind { Value, Math, Noise, Switch };
         /// Adds a node of `kind` with its top-left at `at` (node.pos space), as one edit.
-        void AddGraphNode(GraphNodeKind kind, float2 at);
+        void AddGraphNode(NodeViewState& view, GraphNodeKind kind, float2 at);
+        /// The NodeView / StateMachine panel whose canvas has the keyboard: what their
+        /// shortcuts (F, Home, Delete, Ctrl+G) act on. Null when none has.
+        NodeViewState*   FocusedGraphView();
+        NodeViewRef      FocusedMachineView();   ///< valid only while FocusedStateMachine() isn't null
+        StateMachinePanel* FocusedStateMachine();
 
         void RenderBoxTestPanel();
         void RenderInspectorPanel(InspectorPanel& panel);
@@ -963,6 +976,9 @@ namespace tachyon
         std::vector<std::weak_ptr<FilesPanel>> m_filesPanels;
         // The Viewport panels made, whose torn-off toolbars are emitted each frame.
         std::vector<std::weak_ptr<ViewportPanel>> m_viewportPanels;
+        // The NodeView and StateMachine panels made: their shortcuts act on the one with the focus.
+        std::vector<std::weak_ptr<NodeGraphPanel>>    m_nodeGraphPanels;
+        std::vector<std::weak_ptr<StateMachinePanel>> m_stateMachinePanels;
         std::vector<std::string> m_startPanels;
         std::vector<std::string> m_floatPanels;   // --float: start in their own windows
         std::filesystem::path    m_filesRoot;     // --files

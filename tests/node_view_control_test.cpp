@@ -111,7 +111,7 @@ namespace tachyon
             // The centre of the first socket inside `node`'s rect.
             tachyon::int2 SocketOf(tachyon::ID node) const
             {
-                const auto n = app.GetElementRect(node);
+                const auto n = app.GetElementRect(NodeElementID(view, node));
                 for (const auto& r : RectsWithStyle(app.theme.nodeSocketStyleRef))
                 {
                     const tachyon::int2 c{ r.x + r.w / 2, r.y + r.h / 2 };
@@ -166,7 +166,7 @@ namespace tachyon
             // A point on `node`'s header, clear of its sockets.
             tachyon::int2 HeaderOf(tachyon::ID node) const
             {
-                const auto n = app.GetElementRect(node);
+                const auto n = app.GetElementRect(NodeElementID(view, node));
                 return { n.x + n.w / 2, n.y + app.theme.nodeGridSize };
             }
         };
@@ -233,7 +233,7 @@ namespace tachyon
                     }
                 return out;
             };
-            const auto nodeRect = app.GetElementRect(nodeA);
+            const auto nodeRect = app.GetElementRect(NodeElementID(view, nodeA));
             tachyon::IntRect header{}, socket{};
             for (const auto& r : rectsWithStyle(app.theme.nodeHeaderStyleRef))
                 if (r.x >= nodeRect.x && r.x < nodeRect.x + nodeRect.w && r.y >= nodeRect.y && r.y < nodeRect.y + nodeRect.h) header = r;
@@ -287,7 +287,7 @@ namespace tachyon
             view.nodes[1].pos = { 10 * grid + 1, 6 * grid + 1 };
             Settle();
             EXPECT_EQ(view.nodes[1].pos, (tachyon::int2{ 10 * grid + 1, 6 * grid + 1 }));
-            EXPECT_EQ(app.GetElementRect(nodeB).x - app.GetElementRect(nodeA).x, 10 * grid + 1 - view.nodes[0].pos.x) << "laid out there";
+            EXPECT_EQ(app.GetElementRect(NodeElementID(view, nodeB)).x - app.GetElementRect(NodeElementID(view, nodeA)).x, 10 * grid + 1 - view.nodes[0].pos.x) << "laid out there";
 
             view.snapToGrid = true;
             Settle();
@@ -407,7 +407,7 @@ namespace tachyon
             {
                 NodeViewControlTest::Settle();
                 for (NodeModel& node : view.nodes)
-                    node.lastSize = app.GetElementRect(node.stableID).size;
+                    node.lastSize = app.GetElementRect(NodeElementID(view, node.stableID)).size;
             }
         };
 
@@ -506,7 +506,7 @@ namespace tachyon
             Settle();
             int drops = 0;
             view.onWireDroppedOnCanvas = [&](PropertyEndpoint, bool, float2) { drops++; };
-            view.canConnect = [](const NodeView&, PropertyEndpoint, PropertyEndpoint) { return false; };
+            view.canConnect = [](const NodeGraph&, PropertyEndpoint, PropertyEndpoint) { return false; };
             Drag(SocketOf(nodeB), SocketOf(nodeA));
             Settle();
             Drag(SocketOf(nodeA), HeaderOf(nodeB));
@@ -535,7 +535,7 @@ namespace tachyon
         TEST_F(NodeViewWireDropTest, AnOutputThatMayNotTakeAWireRefusesIt)
         {
             Settle();
-            view.canConnect = [](const NodeView&, PropertyEndpoint, PropertyEndpoint) { return false; };
+            view.canConnect = [](const NodeGraph&, PropertyEndpoint, PropertyEndpoint) { return false; };
             const tachyon::int2 in = SocketOf(nodeB), out = SocketOf(nodeA);
             app.InjectMouseMove(in);
             app.InjectMouseDown(in);
@@ -814,7 +814,7 @@ namespace tachyon
             // The reroute's two sockets: its input (left edge) and output (right edge).
             std::vector<tachyon::IntRect> RerouteSockets() const
             {
-                const auto square = app.GetElementRect(reroute);
+                const auto square = app.GetElementRect(NodeElementID(view, reroute));
                 std::vector<tachyon::IntRect> out;
                 for (const auto& r : RectsWithStyle(app.theme.nodeSocketStyleRef))
                     if (r.y >= square.y && r.y < square.y + square.h && r.x >= square.x - r.w && r.x < square.x + square.w)
@@ -829,7 +829,7 @@ namespace tachyon
         {
             Settle();
             const int pitch = 2 * app.theme.nodeGridSize;
-            const auto square = app.GetElementRect(reroute);
+            const auto square = app.GetElementRect(NodeElementID(view, reroute));
             EXPECT_EQ(square.w, pitch);
             EXPECT_EQ(square.h, pitch);
             const auto sockets = RerouteSockets();
@@ -847,7 +847,7 @@ namespace tachyon
             Settle();
             int edits = 0;
             view.onEdit = [&](const NodeViewEdit&) { edits++; };
-            const auto square = app.GetElementRect(reroute);
+            const auto square = app.GetElementRect(NodeElementID(view, reroute));
             const tachyon::int2 start = view.nodes[2].pos;   // on the grid
             const tachyon::int2 middle{ square.x + square.w / 2, square.y + square.h / 2 };
             Drag(middle, { middle.x + 4 * app.theme.nodeGridSize, middle.y + 2 * app.theme.nodeGridSize });
@@ -855,7 +855,7 @@ namespace tachyon
             EXPECT_EQ(view.nodes[2].pos, (tachyon::int2{ start.x + 4 * app.theme.nodeGridSize, start.y + 2 * app.theme.nodeGridSize }));
             EXPECT_EQ(edits, 1);
 
-            const auto moved = app.GetElementRect(reroute);
+            const auto moved = app.GetElementRect(NodeElementID(view, reroute));
             const tachyon::int2 at{ moved.x + moved.w / 2, moved.y + moved.h / 2 };
             app.ClickAt(at);
             Frame();
@@ -896,7 +896,7 @@ namespace tachyon
         TEST_F(NodeViewRerouteTest, ARightClickOnARerouteOpensItsMenuNotAWires)
         {
             Settle();
-            const auto square = app.GetElementRect(reroute);
+            const auto square = app.GetElementRect(NodeElementID(view, reroute));
             const tachyon::int2 middle{ square.x + square.w / 2, square.y + square.h / 2 };
             app.InjectMouseMove(middle);
             Frame();
@@ -956,7 +956,7 @@ namespace tachyon
         TEST_F(NodeViewRerouteTest, RemoveRerouteFromItsMenu)
         {
             Settle();
-            const auto square = app.GetElementRect(reroute);
+            const auto square = app.GetElementRect(NodeElementID(view, reroute));
             const tachyon::int2 middle{ square.x + square.w / 2, square.y + square.h / 2 };
             app.InjectMouseMove(middle);
             Frame();
@@ -977,7 +977,7 @@ namespace tachyon
         TEST_F(NodeViewRerouteTest, ARerouteShowsItsPinsWhileHoveredOrSelected)
         {
             auto pinsDrawn = [&] {
-                const auto square = app.GetElementRect(reroute);
+                const auto square = app.GetElementRect(NodeElementID(view, reroute));
                 int drawn = 0;
                 for (uint32_t d = 0; d < app.elementStorage.NumberOfDepthLevels(); d++)
                     for (uint32_t i = 0; i < app.elementStorage.DepthSizeOf(d); i++)
@@ -998,7 +998,7 @@ namespace tachyon
             Settle();
             EXPECT_EQ(pinsDrawn(), 2) << "selected";
             view.selectedNodeIDs.clear();
-            const auto square = app.GetElementRect(reroute);
+            const auto square = app.GetElementRect(NodeElementID(view, reroute));
             app.InjectMouseMove({ square.x + square.w / 2, square.y + square.h / 2 });
             Settle();
             EXPECT_EQ(pinsDrawn(), 2) << "hovered";
@@ -1011,8 +1011,8 @@ namespace tachyon
             app.runPostLayoutCallbacks = true;
             view.nodes[0].title = "A node with a much longer title than B";
             Settle();
-            const tachyon::int2 sizeB = app.GetElementRect(nodeB).size;
-            ASSERT_NE(app.GetElementRect(nodeA).size, sizeB);
+            const tachyon::int2 sizeB = app.GetElementRect(NodeElementID(view, nodeB)).size;
+            ASSERT_NE(app.GetElementRect(NodeElementID(view, nodeA)).size, sizeB);
 
             view.nodes[1].lastSize = {};
             app.Frame([&] {
@@ -1157,7 +1157,7 @@ namespace tachyon
             // The socket rects inside `node`'s rect, relative to it, left to right then top down.
             std::vector<tachyon::IntRect> SocketsOf(tachyon::ID node) const
             {
-                const auto n = app.GetElementRect(node);
+                const auto n = app.GetElementRect(NodeElementID(view, node));
                 std::vector<tachyon::IntRect> out;
                 for (auto r : RectsWithStyle(app.theme.nodeSocketStyleRef))
                     if (r.y >= n.y && r.y < n.y + n.h && r.x >= n.x - r.w && r.x < n.x + n.w + r.w)
@@ -1174,7 +1174,7 @@ namespace tachyon
             view.virtualizeLayout = false;
             Settle();
             Settle();
-            const tachyon::IntRect whole = app.GetElementRect(far);
+            const tachyon::IntRect whole = app.GetElementRect(NodeElementID(view, far));
             const auto wholeSockets = SocketsOf(far);
             ASSERT_EQ(wholeSockets.size(), 2u);
             ASSERT_GT(farBodies, 0);
@@ -1184,7 +1184,7 @@ namespace tachyon
             farBodies = 0;
             Settle();
             EXPECT_EQ(farBodies, 0) << "no renderBody for it";
-            EXPECT_EQ(app.GetElementRect(far).size, whole.size) << "its last size";
+            EXPECT_EQ(app.GetElementRect(NodeElementID(view, far)).size, whole.size) << "its last size";
             EXPECT_EQ(SocketsOf(far), wholeSockets) << "its sockets where they'd be";
             EXPECT_EQ(view.nodes[2].lastSize, whole.size);
             EXPECT_FALSE(app.HasElement(app.FindByText("F"))) << "no header";
@@ -1355,10 +1355,10 @@ namespace tachyon
         TEST_F(NodeViewControlTest, NodesLayOutAtTheirPositions)
         {
             Settle();
-            ASSERT_TRUE(app.HasElement(nodeA));
-            ASSERT_TRUE(app.HasElement(nodeB));
-            const auto a = app.GetElementRect(nodeA);
-            const auto b = app.GetElementRect(nodeB);
+            ASSERT_TRUE(app.HasElement(NodeElementID(view, nodeA)));
+            ASSERT_TRUE(app.HasElement(NodeElementID(view, nodeB)));
+            const auto a = app.GetElementRect(NodeElementID(view, nodeA));
+            const auto b = app.GetElementRect(NodeElementID(view, nodeB));
             EXPECT_GT(a.w, 0);
             EXPECT_GT(b.w, 0);
             // B sits below-right of A (pos {100,80} vs {520,320}).
@@ -1372,8 +1372,8 @@ namespace tachyon
             // every frame; running several proves RenderNodeView opens and
             // closes its element scopes correctly each time.
             for (int i = 0; i < 4; ++i) Frame();
-            EXPECT_TRUE(app.HasElement(nodeA));
-            EXPECT_TRUE(app.HasElement(nodeB));
+            EXPECT_TRUE(app.HasElement(NodeElementID(view, nodeA)));
+            EXPECT_TRUE(app.HasElement(NodeElementID(view, nodeB)));
         }
 
         TEST_F(NodeViewControlTest, BareClickOnEmptyCanvasClearsSelection)
@@ -1561,7 +1561,7 @@ namespace tachyon
             ASSERT_GT(onScreen().x, inner.x + inner.w) << "test setup: the node starts out of view";
 
             auto focusInFar = [&] {
-                return (app.guiStateManager.GetCurrentState(farID) & ElementState::Focused) != ElementState::None;
+                return (app.guiStateManager.GetCurrentState(NodeElementID(view, farID)) & ElementState::Focused) != ElementState::None;
             };
             for (int i = 0; i < 8 && !focusInFar(); ++i)
             {
@@ -1586,7 +1586,7 @@ namespace tachyon
             Settle();
             app.InjectKey(KeyCode::Tab);
             Settle();
-            ASSERT_TRUE((app.guiStateManager.GetCurrentState(nodeA) & ElementState::Focused) != ElementState::None);
+            ASSERT_TRUE((app.guiStateManager.GetCurrentState(NodeElementID(view, nodeA)) & ElementState::Focused) != ElementState::None);
 
             view.transform = tachyon::float3x2::Translate(tachyon::float2{ -5000.0f, 0.0f });
             Settle();
@@ -1609,7 +1609,7 @@ namespace tachyon
             Frame();
             app.InjectMouseMove({ from.x + 2, from.y + 1 }, MouseButtons::Left);
             Frame();
-            EXPECT_TRUE(view.nodeDrag.IsPressed(nodeB));
+            EXPECT_TRUE(view.nodeDrag.IsPressed(NodeElementID(view, nodeB)));
             EXPECT_EQ(view.nodeDrag.Phase(), GesturePhase::Pressed) << "under the drag distance it isn't a move yet";
             app.InjectMouseUp({ from.x + 2, from.y + 1 });
             Settle();
@@ -1759,7 +1759,7 @@ namespace tachyon
             auto frame = [&] { view.wireHandleCache = { handle }; Frame(); };
             frame();
             // Node A's laid-out rect against its pos gives where node.pos space starts.
-            const tachyon::int2 origin = app.GetElementRect(nodeA).position - view.nodes[0].pos;
+            const tachyon::int2 origin = app.GetElementRect(NodeElementID(view, nodeA)).position - view.nodes[0].pos;
             const tachyon::int2 grab = origin + tachyon::int2{ 300, 200 };
             app.InjectMouseMove(grab);
             app.InjectMouseDown(grab);
@@ -1860,7 +1860,7 @@ namespace tachyon
             through.output = true;
             Settle();
             // B's output socket: right of B.
-            const tachyon::IntRect n = app.GetElementRect(nodeB);
+            const tachyon::IntRect n = app.GetElementRect(NodeElementID(view, nodeB));
             tachyon::int2 out{ -1, -1 };
             for (const auto& r : RectsWithStyle(app.theme.nodeSocketStyleRef))
                 if (r.x + r.w / 2 > n.x + n.w / 2 && r.y >= n.y && r.y < n.y + n.h)

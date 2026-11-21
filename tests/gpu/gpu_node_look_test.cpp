@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <gui_controls/gui_application_internal.h>
+#include <gui_controls/gui_node_view_helpers.h>
 
 #include "gpu_injected_input.h"
 
@@ -109,7 +110,7 @@ namespace
         if (!app.Start(NodeViewKind::Graph)) { app.Cleanup(); GTEST_SKIP() << "no GPU device available"; }
         ASSERT_TRUE(app.Frames(4));
         ASSERT_TRUE(app.Read());
-        const ElementRef node = app.elementStorage.FindElementRefByID(app.view.nodes[0].stableID);
+        const ElementRef node = app.elementStorage.FindElementRefByID(NodeElementID(app.view, app.view.nodes[0].stableID));
         ASSERT_TRUE(node.IsValid());
         const ElementRef header = app.elementStorage.GetChildrenSpan(node).empty() ? ElementRef{}
                                 : app.elementStorage.FindElementRefByID(app.elementStorage.GetChildrenSpan(node)[0].id);
@@ -131,7 +132,7 @@ namespace
         if (!app.Start(NodeViewKind::StateMachine)) { app.Cleanup(); GTEST_SKIP() << "no GPU device available"; }
         ASSERT_TRUE(app.Frames(4));
         ASSERT_TRUE(app.Read());
-        const ElementRef state = app.elementStorage.FindElementRefByID(app.view.nodes[0].stableID);
+        const ElementRef state = app.elementStorage.FindElementRefByID(NodeElementID(app.view, app.view.nodes[0].stableID));
         ASSERT_TRUE(state.IsValid());
         const IntRect s = app.OnScreen(state);
         const color4f body = app.theme.GetColor("--node-bg");
@@ -152,7 +153,7 @@ namespace
         app.view.activeStateTime = 1.24f;
         ASSERT_TRUE(app.Frames(4));
         ASSERT_TRUE(app.Read());
-        const IntRect s = app.OnScreen(app.elementStorage.FindElementRefByID(app.view.nodes[0].stableID));
+        const IntRect s = app.OnScreen(app.elementStorage.FindElementRefByID(NodeElementID(app.view, app.view.nodes[0].stableID)));
         const color4f ok = app.theme.GetColor("--ok");
         const Rgb okRgb = Mix(ok, ok, 0.0f);
         const int ring = app.styleManager.Px(3);
@@ -182,7 +183,7 @@ namespace
         app.view.nodes[0].subMachine = true;
         ASSERT_TRUE(app.Frames(4));
         ASSERT_TRUE(app.Read());
-        const IntRect s = app.OnScreen(app.elementStorage.FindElementRefByID(app.view.nodes[0].stableID));
+        const IntRect s = app.OnScreen(app.elementStorage.FindElementRefByID(NodeElementID(app.view, app.view.nodes[0].stableID)));
         // In the state's shadow, so darker than the state, but red where the canvas is grey.
         const int o = app.styleManager.Px(4);
         const Rgb behind = app.At(s.x - o / 2, s.y + s.h / 2);
@@ -202,7 +203,7 @@ namespace
         ASSERT_TRUE(app.Read());
         // The frame where it is from the node, at 100%: its title bar a row pitch tall (two grid
         // cells), the box going on below it.
-        const ElementRef node = app.elementStorage.FindElementRefByID(app.view.nodes[0].stableID);
+        const ElementRef node = app.elementStorage.FindElementRefByID(NodeElementID(app.view, app.view.nodes[0].stableID));
         ASSERT_TRUE(node.IsValid());
         const IntRect n = app.OnScreen(node);
         const NodeFrame& frame = app.view.frames[0];

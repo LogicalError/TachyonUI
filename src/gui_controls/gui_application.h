@@ -1686,9 +1686,11 @@ namespace tachyon
         ///@{
 
         // ---- Node view: self-contained graph editor ----
-        // All state lives in `view`, so several views can coexist.
-        /// Builds `view` (canvas, nodes, wires and overlays) in the current container.
-        void RenderNodeView(NodeView& view);
+        // All state lives in the graph and its view state, so several views can coexist,
+        // of one graph too (a NodeViewState each).
+        /// Builds `view` (canvas, nodes, wires and overlays) in the current container: a NodeView,
+        /// or `{ graph, state }` for one of several views of a graph.
+        void RenderNodeView(NodeViewRef view);
 
         /// Text property body aligned by the row's sockets: left => left, right => right,
         /// both => centre. Call inside NodeProperty::renderBody.
@@ -3111,7 +3113,7 @@ namespace tachyon
         enum class TooltipBox : uint8_t { Plain, Lines, Help, Error };
         bool OpenTooltip(ID targetID, TooltipBox box = TooltipBox::Plain);
         /// A node socket's tooltip: its pin's name, type and value, and a wired input's source.
-        void ShowPinTooltip(const NodeView& view, ID socketID, PropertyEndpoint pin, bool isOutput);
+        void ShowPinTooltip(const NodeGraph& view, ID socketID, PropertyEndpoint pin, bool isOutput);
         /// Closes what OpenTooltip opened: the box and the window.
         void CloseTooltip();
         /// Text cut short, as last frame laid it out.
@@ -3368,7 +3370,7 @@ namespace tachyon
         std::vector<bool> m_windowIdScopeStack;
 
         /// The node view's breadcrumb, zoom controls and minimap, over its canvas.
-        void EmitNodeViewOverlays(NodeView& view, ID canvasID);
+        void EmitNodeViewOverlays(NodeViewRef view, ID canvasID);
 
         /// Each window's title bar, from its last BeginTitleBar / EndTitleBar.
         struct TitleBarInfo { ID barID = ID::Invalid(); ID maximizeID = ID::Invalid(); std::vector<ID> captions; };

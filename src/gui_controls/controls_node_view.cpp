@@ -52,25 +52,25 @@ namespace tachyon
 
         // Connects the dragged wire. Pulled off an input and dropped elsewhere, the detach
         // and the connect are one edit; dropped back where it was, nothing changed.
-        void FinishConnection(NodeView& view, PropertyEndpoint output, PropertyEndpoint input)
+        void FinishConnection(NodeViewRef view, PropertyEndpoint output, PropertyEndpoint input)
         {
-            const std::optional<PropertyEndpoint> detached = view.pendingConnection.detachedInput;
-            view.pendingConnection = {};
+            const std::optional<PropertyEndpoint> detached = view.state.pendingConnection.detachedInput;
+            view.state.pendingConnection = {};
             NodeViewEdit edit = ConnectEdit(view, output, input);
             ApplyNodeViewEdit(view, edit);
             if (detached && *detached == input)
                 return;
             if (detached)
                 edit.rewires.insert(edit.rewires.begin(), NodeViewEdit::Rewire{ *detached, output, PropertyEndpoint{} });
-            if (view.onEdit && !edit.empty())
-                view.onEdit(edit);
+            if (view.graph.onEdit && !edit.empty())
+                view.graph.onEdit(edit);
         }
 
         // Joins `from` to `to` (stableIDs) with a new transition as one edit, unless they're
         // joined that way already.
-        void AddTransitionIfNew(NodeView& view, ID from, ID to, IDManager& ids)
+        void AddTransitionIfNew(NodeViewRef view, ID from, ID to, IDManager& ids)
         {
-            const bool joined = std::any_of(view.transitions.begin(), view.transitions.end(),
+            const bool joined = std::any_of(view.graph.transitions.begin(), view.graph.transitions.end(),
                 [&](const StateTransition& t) { return t.from == from && t.to == to; });
             if (!joined)
                 CommitNodeViewEdit(view, AddTransitionEdit(view, StateTransition{ .stableID = ids.CreateStaticID(), .from = from, .to = to }));
@@ -79,15 +79,15 @@ namespace tachyon
         // The state whose band holds `p` (node.pos space): the ring `band` wide round its box,
         // outside it, where a press starts a transition. The frontmost when several do; -1 for
         // none, or when `p` is in a state's box (that state's, to move it).
-        int StateBandAt(const NodeView& view, float2 p, float band)
+        int StateBandAt(ConstNodeViewRef view, float2 p, float band)
         {
             if (NodeAtCanvasPos(view, p) >= 0)
                 return -1;
-            for (auto it = view.ordering.rbegin(); it != view.ordering.rend(); ++it)
+            for (auto it = view.graph.ordering.rbegin(); it != view.graph.ordering.rend(); ++it)
             {
                 const int n = *it;
-                if (n < 0 || n >= (int)view.nodes.size()) continue;
-                const NodeModel& node = view.nodes[size_t(n)];
+                if (n < 0 || n >= (int)view.graph.nodes.size()) continue;
+                const NodeModel& node = view.graph.nodes[size_t(n)];
                 if (node.hidden || node.lastSize.x <= 0 || node.lastSize.y <= 0) continue;
                 const float x0 = float(node.pos.x) - band, y0 = float(node.pos.y) - band;
                 const float x1 = float(node.pos.x + node.lastSize.x) + band, y1 = float(node.pos.y + node.lastSize.y) + band;
@@ -124,7 +124,7 @@ namespace tachyon
         //   - a state whose edge is hovered (or being drawn from): a ring round it
         //   - each transition: an arrow, lit hovered, in the accent selected, its label on it
         //   - a transition being drawn: dashed, to the state under the pointer, or the pointer
-        void DrawStateMachine(CustomDrawContext& ctx, const GUITheme& theme, const StyleManager& styles, const NodeView& view,
+        void DrawStateMachine(CustomDrawContext& ctx, const GUITheme& theme, const StyleManager& styles, ConstNodeViewRef view,
                               int2 gridOrigin, std::span<const TransitionLabel> labels, const StateMarks& marks, int32_t gap, int32_t loop,
                               bool canvasHovered, int2 pointer, ID pointedState, ID bandLit, int32_t band)
         {
@@ -149,7 +149,7 @@ namespace tachyon
             {
                 const int n = NodeIndex(view, nested.state);
                 if (n < 0) continue;
-                const NodeModel& node = view.nodes[size_t(n)];
+                const NodeModel& node = view.graph.nodes[size_t(n)];
                 if (node.hidden || node.lastSize.x <= 0 || node.lastSize.y <= 0) continue;
                 const int32_t o = styles.Px(4);
                 const IntRect b = box(node);
@@ -159,11 +159,11 @@ namespace tachyon
                 ctx.RenderQuad(back, nested.fill, r ? float(r->topLeft) : 0.0f);
                 ctx.RenderBox(back, nested.edge);
             }
-            for (const NodeModel& node : view.nodes)
+            for (const NodeModel& node : view.graph.nodes)
             {
                 if (node.hidden || node.lastSize.x <= 0 || node.lastSize.y <= 0) continue;
                 const IntRect b = box(node);
-                if (node.stableID == view.activeState)
+                if (node.stableID == view.graph.activeState)
                 {
                     const int32_t halo = styles.Px(3);
                     const VisualBoxStyle* active = styles.GetVisualBoxStyle(theme.nodeStateActiveStyleRef.visualBoxStyleIndex, ElementState::None);
@@ -176,7 +176,7 @@ namespace tachyon
                 if (node.stableID == pointedState)
                     ctx.RenderBox(around(b, band / 2), theme.nodeStateEdgeStyleRef.visualBoxStyleIndex,
                                   node.stableID == bandLit ? ElementState::Hover : ElementState::None);
-                if (node.stableID == view.initialState)
+                if (node.stableID == view.graph.initialState)
                 {
                     const int32_t reach = styles.Px(28), radius = styles.Px(4);
                     const int2 into{ b.x, b.y + b.h / 2 };
@@ -187,14 +187,14 @@ namespace tachyon
                 }
             }
 
-            const std::optional<ID> hovered = view.hoveredTransition.Shown(canvasHovered);
-            for (const StateTransition& t : view.transitions)
+            const std::optional<ID> hovered = view.state.hoveredTransition.Shown(canvasHovered);
+            for (const StateTransition& t : view.graph.transitions)
             {
                 TransitionPath path = StateTransitionPath(view, t, gap, loop);
                 if (!path.valid) continue;
                 for (int2* p : { &path.from, &path.to, &path.c1, &path.c2, &path.labelAt })
                     *p = *p + gridOrigin;
-                const bool selected = view.selectedTransitionIDs.contains(t.stableID);
+                const bool selected = view.state.selectedTransitionIDs.contains(t.stableID);
                 const bool lit = hovered == t.stableID;
                 const VisualColorStyleIndex color = selected ? theme.nodeTransitionSelectedColor
                                                   : lit      ? theme.nodeTransitionHoverColor : theme.nodeTransitionColor;
@@ -222,9 +222,9 @@ namespace tachyon
             }
             // How long the machine has been in its state, in a pill under it, over the arrows as
             // the labels are.
-            if (const int active = NodeIndex(view, view.activeState); active >= 0 && marks.timeSize.x > 0)
+            if (const int active = NodeIndex(view, view.graph.activeState); active >= 0 && marks.timeSize.x > 0)
             {
-                const NodeModel& node = view.nodes[size_t(active)];
+                const NodeModel& node = view.graph.nodes[size_t(active)];
                 if (!node.hidden && node.lastSize.x > 0 && node.lastSize.y > 0)
                 {
                     const IntRect b = box(node);
@@ -239,11 +239,11 @@ namespace tachyon
             }
 
             // The transition being drawn: dashed, to the state under the pointer, or to it.
-            if (view.transitionDrag.Phase() == GesturePhase::Dragging || view.transitionPicking)
+            if (view.state.transitionDrag.Phase() == GesturePhase::Dragging || view.state.transitionPicking)
             {
-                const int from = NodeIndex(view, view.transitionFrom);
+                const int from = NodeIndex(view, view.state.transitionFrom);
                 if (from < 0) return;
-                const IntRect a = box(view.nodes[size_t(from)]);
+                const IntRect a = box(view.graph.nodes[size_t(from)]);
                 const float2 ca{ float(a.x) + float(a.w) * 0.5f, float(a.y) + float(a.h) * 0.5f };
                 float2 to = f(pointer);
                 const int target = NodeAtCanvasPos(view, float2{ float(pointer.x - gridOrigin.x), float(pointer.y - gridOrigin.y) });
@@ -251,7 +251,7 @@ namespace tachyon
                 {
                     // Onto the edge of the state it would join: where the line from that state's
                     // centre towards this one leaves it.
-                    const IntRect b = box(view.nodes[size_t(target)]);
+                    const IntRect b = box(view.graph.nodes[size_t(target)]);
                     const float2 cb{ float(b.x) + float(b.w) * 0.5f, float(b.y) + float(b.h) * 0.5f };
                     const float2 d{ ca.x - cb.x, ca.y - cb.y };
                     float t = 1.0f;
@@ -270,15 +270,15 @@ namespace tachyon
         }
 
         // The dragged wire was released nowhere: pulled off an input, it is a disconnect.
-        void CancelConnection(NodeView& view)
+        void CancelConnection(NodeViewRef view)
         {
-            const PendingConnection pending = view.pendingConnection;
-            view.pendingConnection = {};
-            if (pending.detachedInput && view.onEdit)
+            const PendingConnection pending = view.state.pendingConnection;
+            view.state.pendingConnection = {};
+            if (pending.detachedInput && view.graph.onEdit)
             {
                 NodeViewEdit edit;
                 edit.rewires.push_back({ *pending.detachedInput, pending.source, PropertyEndpoint{} });
-                view.onEdit(edit);
+                view.graph.onEdit(edit);
             }
         }
 
@@ -301,7 +301,7 @@ namespace tachyon
     }
 
 
-    void GUIApplication::RenderNodeView(NodeView& view)
+    void GUIApplication::RenderNodeView(NodeViewRef view)
     {
         // Coordinate spaces inside the node-view (read this before touching marquee math):
         //
@@ -315,30 +315,44 @@ namespace tachyon
         //                ctx.ScreenToCurrent(screenPos) converts a SCREEN input into CANVAS_LAY.
         //
         // Event handlers (which have no custom-draw context) convert by hand using
-        // view.transform plus the canvas-center offset in canvas.contentTransform
-        // (= T(innerSize/2) * view.transform):
+        // view.state.transform plus the canvas-center offset in canvas.contentTransform
+        // (= T(innerSize/2) * view.state.transform):
         //
-        //   CANVAS_LAY = view.transform.Inverse()(SCREEN - innerRect.position - innerSize/2)
-        //   SCREEN     = innerRect.position + innerSize/2 + view.transform(CANVAS_LAY)
+        //   CANVAS_LAY = view.state.transform.Inverse()(SCREEN - innerRect.position - innerSize/2)
+        //   SCREEN     = innerRect.position + innerSize/2 + view.state.transform(CANVAS_LAY)
         //
         // A drag that ended without a Drop on us (e.g. released in empty space) leaves
         // a stale pending wire; clear it.
-        if (view.pendingConnection.IsActive() && !guiStateManager.Drag().IsDragging())
+        if (view.state.pendingConnection.IsActive() && !guiStateManager.Drag().IsDragging())
             CancelConnection(view);
-        view.pendingConnection.target = {};
+        view.state.pendingConnection.target = {};
 
         // A state machine: its nodes are states, without fields, and transitions join them.
-        const bool    stateMachine    = view.kind == NodeViewKind::StateMachine;
+        const bool    stateMachine    = view.graph.kind == NodeViewKind::StateMachine;
         const int32_t transitionGap   = styleManager.Px(6);    // a pair both ways: each this far to its side
         const int32_t transitionLoop  = styleManager.Px(24);   // how far a loop rises over its state
         const float   transitionReach = float(styleManager.Px(7)) / std::max(NodeViewZoom(view), 0.01f);   // node.pos units
         const float   stateBand       = float(styleManager.Px(12)) / std::max(NodeViewZoom(view), 0.01f);   // node.pos units
-        if (view.renamingTransition && TransitionIndex(view, *view.renamingTransition) < 0)
-            view.renamingTransition.reset();
-        std::erase_if(view.selectedTransitionIDs, [&view](ID id) { return TransitionIndex(view, id) < 0; });
+        if (view.state.renamingTransition && TransitionIndex(view, *view.state.renamingTransition) < 0)
+            view.state.renamingTransition.reset();
+        std::erase_if(view.state.selectedTransitionIDs, [view](ID id) { return TransitionIndex(view, id) < 0; });
+        // The graph edited through another view of it: what this one kept by node index (the
+        // wire hovered, its menu, the wires' grab handles) may name other nodes now, and nodes
+        // it selected may be gone.
+        if (view.state.seenRevision != view.graph.revision)
+        {
+            view.state.seenRevision = view.graph.revision;
+            view.state.hoveredWire = {};
+            view.state.wireMenuWire.reset();
+            view.state.wireHandleCache.clear();
+            std::erase_if(view.state.selectedNodeIDs, [view](ID id) { return NodeIndex(view, id) < 0; });
+            if (NodeIndex(view, view.state.lastClickedNodeID) < 0)
+                view.state.lastClickedNodeID = ID::Invalid();
+        }
 
         ID canvasID = idManager.AllocateDynamicID();
-        // The canvas places its nodes by pan and zoom (view.transform), never by scrolling: a
+        view.state.canvasID = canvasID;
+        // The canvas places its nodes by pan and zoom (view.state.transform), never by scrolling: a
         // scroll (a field bringing its caret into view) would move the nodes away from what the
         // canvas draws itself, its wires and arrows. Whatever scrolled it is undone here.
         {
@@ -354,120 +368,120 @@ namespace tachyon
         const ID transitionMenuID = idManager.AllocateDynamicID("transition-menu");   // a transition's
 
         // Opens one of the view's context menus at `screen`; the others close.
-        auto openMenu = [this, &view](ID menuID, int2 screen, std::optional<uint32_t> wire,
+        auto openMenu = [this, view](ID menuID, int2 screen, std::optional<uint32_t> wire,
                                       std::optional<float2> canvasPos, std::optional<ID> node,
                                       std::optional<ID> frame = std::nullopt, std::optional<ID> transition = std::nullopt)
         {
-            view.wireMenuWire   = wire;
-            view.canvasMenuPos  = canvasPos;
-            view.nodeMenuNode   = node;
-            view.frameMenuFrame = frame;
-            view.transitionMenuTransition = transition;
+            view.state.wireMenuWire   = wire;
+            view.state.canvasMenuPos  = canvasPos;
+            view.state.nodeMenuNode   = node;
+            view.state.frameMenuFrame = frame;
+            view.state.transitionMenuTransition = transition;
             OpenContextMenu(menuID, screen);
         };
 
         // The open context menus, before anything else: what one of their items does (add
         // or remove nodes, rewire) is done before this frame's nodes and wires are built.
         // The menu a right click on a wire opened.
-        if (view.wireMenuWire)
+        if (view.state.wireMenuWire)
         {
             if (BeginContextMenu(wireMenuID))
             {
-                const PropertyEndpoint input = WireInput(*view.wireMenuWire);
-                MenuItem("Delete wire", [&view, input] { CommitNodeViewEdit(view, DisconnectEdit(view, input)); });
+                const PropertyEndpoint input = WireInput(*view.state.wireMenuWire);
+                MenuItem("Delete wire", [view, input] { CommitNodeViewEdit(view, DisconnectEdit(view, input)); });
                 // A reroute where it was clicked, its dot on the grid point nearest when
                 // snapping. Its ID is the app's to release, as for its own nodes.
-                MenuItem("Add reroute here", [this, &view, wire = *view.wireMenuWire] {
+                MenuItem("Add reroute here", [this, view, wire = *view.state.wireMenuWire] {
                     const int32_t grid = std::max(1, theme.nodeGridSize);
-                    const int2 at{ int32_t(std::lround(view.wireMenuPos.x)) - grid, int32_t(std::lround(view.wireMenuPos.y)) - grid };
-                    const int2 pos = view.snapToGrid ? int2{ GridLineNearest(at.x, 0, grid), GridLineNearest(at.y, 0, grid) } : at;
+                    const int2 at{ int32_t(std::lround(view.state.wireMenuPos.x)) - grid, int32_t(std::lround(view.state.wireMenuPos.y)) - grid };
+                    const int2 pos = view.graph.snapToGrid ? int2{ GridLineNearest(at.x, 0, grid), GridLineNearest(at.y, 0, grid) } : at;
                     CommitNodeViewEdit(view, RerouteWireEdit(view, wire, idManager.CreateStaticID(), pos));
                 });
             }
             else
-                view.wireMenuWire.reset();
+                view.state.wireMenuWire.reset();
             EndContextMenu();
         }
         // The app's menus for the canvas and for a node, built by it while open.
-        if (view.canvasMenuPos)
+        if (view.state.canvasMenuPos)
         {
             if (BeginContextMenu(canvasMenuID))
             {
-                if (view.onCanvasContextMenu)
-                    view.onCanvasContextMenu(*view.canvasMenuPos);
+                if (view.state.onCanvasContextMenu)
+                    view.state.onCanvasContextMenu(*view.state.canvasMenuPos);
             }
             else
-                view.canvasMenuPos.reset();
+                view.state.canvasMenuPos.reset();
             EndContextMenu();
         }
-        if (view.nodeMenuNode)
+        if (view.state.nodeMenuNode)
         {
             // By its stableID: an edit may have moved it to another index meanwhile, or removed it.
-            const auto it = std::find_if(view.nodes.begin(), view.nodes.end(),
-                                         [&](const NodeModel& node) { return node.stableID == *view.nodeMenuNode; });
-            const bool there = it != view.nodes.end();
+            const auto it = std::find_if(view.graph.nodes.begin(), view.graph.nodes.end(),
+                                         [&](const NodeModel& node) { return node.stableID == *view.state.nodeMenuNode; });
+            const bool there = it != view.graph.nodes.end();
             const bool open  = there && BeginContextMenu(nodeMenuID);
-            const int  node  = there ? int(it - view.nodes.begin()) : -1;
+            const int  node  = there ? int(it - view.graph.nodes.begin()) : -1;
             // A reroute's menu is its own: take it out, its wire running on as it did through
             // it. The app's node menu is for its nodes.
             if (open && it->reroute)
-                MenuItem("Remove reroute", [&view, node] { CommitNodeViewEdit(view, RemoveRerouteEdit(view, node)); });
+                MenuItem("Remove reroute", [view, node] { CommitNodeViewEdit(view, RemoveRerouteEdit(view, node)); });
             else
             {
                 // A state's own first: a transition from it, as a drag from its band draws.
-                if (open && view.kind == NodeViewKind::StateMachine)
-                    MenuItem("Add transition", [&view, node] { StartTransition(view, node); });
-                if (open && view.onNodeContextMenu)
-                    view.onNodeContextMenu(node);
+                if (open && view.graph.kind == NodeViewKind::StateMachine)
+                    MenuItem("Add transition", [view, node] { StartTransition(view, node); });
+                if (open && view.state.onNodeContextMenu)
+                    view.state.onNodeContextMenu(node);
             }
             if (there)
                 EndContextMenu();
             if (!open)
-                view.nodeMenuNode.reset();
+                view.state.nodeMenuNode.reset();
         }
-        if (view.frameMenuFrame)
+        if (view.state.frameMenuFrame)
         {
             // By its stableID, as a node's.
-            const auto it = std::find_if(view.frames.begin(), view.frames.end(),
-                                         [&](const NodeFrame& frame) { return frame.stableID == *view.frameMenuFrame; });
-            const bool there = it != view.frames.end();
+            const auto it = std::find_if(view.graph.frames.begin(), view.graph.frames.end(),
+                                         [&](const NodeFrame& frame) { return frame.stableID == *view.state.frameMenuFrame; });
+            const bool there = it != view.graph.frames.end();
             const bool open  = there && BeginContextMenu(frameMenuID);
-            if (open && view.onFrameContextMenu)
-                view.onFrameContextMenu(int(it - view.frames.begin()));
+            if (open && view.state.onFrameContextMenu)
+                view.state.onFrameContextMenu(int(it - view.graph.frames.begin()));
             if (there)
                 EndContextMenu();
             if (!open)
-                view.frameMenuFrame.reset();
+                view.state.frameMenuFrame.reset();
         }
         // A transition's: relabel it, delete it, and the app's items after.
-        if (view.transitionMenuTransition)
+        if (view.state.transitionMenuTransition)
         {
-            const int  t    = TransitionIndex(view, *view.transitionMenuTransition);
+            const int  t    = TransitionIndex(view, *view.state.transitionMenuTransition);
             const bool open = t >= 0 && BeginContextMenu(transitionMenuID);
             if (open)
             {
-                MenuItem("Rename", [&view, t] { RenameTransition(view, t); });
-                MenuItem("Delete transition", [&view, id = *view.transitionMenuTransition] {
+                MenuItem("Rename", [view, t] { RenameTransition(view, t); });
+                MenuItem("Delete transition", [view, id = *view.state.transitionMenuTransition] {
                     const ID only[] = { id };
                     CommitNodeViewEdit(view, RemoveTransitionsEdit(view, only));
                 });
-                if (view.onTransitionContextMenu)
-                    view.onTransitionContextMenu(t);
+                if (view.state.onTransitionContextMenu)
+                    view.state.onTransitionContextMenu(t);
             }
             if (t >= 0)
                 EndContextMenu();
             if (!open)
-                view.transitionMenuTransition.reset();
+                view.state.transitionMenuTransition.reset();
         }
 
         // Edit-mode wiring: while this canvas has focus, set the command
         // manager to the view's mode; restore Default when focus leaves.
         if (guiStateManager.Interaction().GetFocusedID() == canvasID)
         {
-            if (commandManager.GetMode() != view.commandMode)
-                commandManager.SetMode(view.commandMode);
+            if (commandManager.GetMode() != view.state.commandMode)
+                commandManager.SetMode(view.state.commandMode);
         } else
-        if (commandManager.GetMode() == view.commandMode)
+        if (commandManager.GetMode() == view.state.commandMode)
             commandManager.SetMode(CommandMode::Default);
 
         // ---- Canvas: pan/zoom + focus capture. Everything below renders as
@@ -475,7 +489,7 @@ namespace tachyon
         tachyon::Element canvas
         {
             .id = canvasID,
-            .eventHandler = [this, &view, canvasID, wireMenuID, canvasMenuID, nodeMenuID, frameMenuID, transitionMenuID, openMenu,
+            .eventHandler = [this, view, canvasID, wireMenuID, canvasMenuID, nodeMenuID, frameMenuID, transitionMenuID, openMenu,
                              stateMachine, transitionGap, transitionLoop, transitionReach, stateBand](ElementEvent&& event)->bool
             {
                 switch (event.type)
@@ -486,31 +500,31 @@ namespace tachyon
                         // that doesn't move removes the wire under the mouse, at the release.
                         if (const MouseButtons panButton = PanDragButton(event.state); panButton != MouseButtons::None)
                         {
-                            view.pan.Press(event, elementStorage, this->guiStateManager, view.transform,
+                            view.state.pan.Press(event, elementStorage, this->guiStateManager, view.state.transform,
                                            { .button = panButton, .focusID = canvasID, .capture = false });
                             return true;
                         }
                         // A right click opens a menu, at the release.
-                        if (view.menuPress.Press(event, elementStorage, this->guiStateManager, {},
+                        if (view.state.menuPress.Press(event, elementStorage, this->guiStateManager, {},
                                                  { .button = MouseButtons::Right, .focusID = canvasID, .capture = false }))
                             return true;
                         if (!event.state.LeftDown())
                             return false;
                         TakeFocus(this->guiStateManager, canvasID);
                         // A transition from a menu, waiting for a state: a press off the states drops it.
-                        if (view.transitionPicking)
+                        if (view.state.transitionPicking)
                         {
-                            view.transitionPicking = false;
-                            view.transitionFrom    = ID::Invalid();
+                            view.state.transitionPicking = false;
+                            view.state.transitionFrom    = ID::Invalid();
                             return true;
                         }
                         // The band round a state: a transition drawn from it.
                         if (stateMachine)
                             if (const int s = StateBandAt(view, NodeViewScreenToNodePos(view, event.state.screenPos), stateBand); s >= 0)
                             {
-                                view.transitionDrag.Press(event, elementStorage, this->guiStateManager, {}, { .focus = false });
-                                view.transitionFrom    = view.nodes[size_t(s)].stableID;
-                                view.transitionPointer = event.state.screenPos;
+                                view.state.transitionDrag.Press(event, elementStorage, this->guiStateManager, {}, { .focus = false });
+                                view.state.transitionFrom    = view.graph.nodes[size_t(s)].stableID;
+                                view.state.transitionPointer = event.state.screenPos;
                                 return true;
                             }
                         // A state machine's arrow: selected (Shift adds it, Ctrl toggles it); a
@@ -519,7 +533,7 @@ namespace tachyon
                             if (const std::optional<ID> t = TransitionAt(view, NodeViewScreenToNodePos(view, event.state.screenPos),
                                                                          transitionReach, transitionGap, transitionLoop))
                             {
-                                if (view.transitionClicks.IsDoubleClick(*t))
+                                if (view.state.transitionClicks.IsDoubleClick(*t))
                                 {
                                     RenameTransition(view, TransitionIndex(view, *t));
                                     return true;
@@ -527,86 +541,86 @@ namespace tachyon
                                 const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                                 const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
                                 if (shift)
-                                    view.selectedTransitionIDs.insert(*t);
+                                    view.state.selectedTransitionIDs.insert(*t);
                                 else if (ctrl)
                                 {
-                                    if (!view.selectedTransitionIDs.erase(*t)) view.selectedTransitionIDs.insert(*t);
+                                    if (!view.state.selectedTransitionIDs.erase(*t)) view.state.selectedTransitionIDs.insert(*t);
                                 }
                                 else
                                 {
-                                    view.selectedTransitionIDs = { *t };
-                                    view.selectedNodeIDs.clear();
-                                    view.selectedFrameIDs.clear();
+                                    view.state.selectedTransitionIDs = { *t };
+                                    view.state.selectedNodeIDs.clear();
+                                    view.state.selectedFrameIDs.clear();
                                 }
                                 return true;
                             }
                         // Begin marquee. Only SCREEN positions are captured here; the
                         // screen->CANVAS_LAY conversion is done from the LIVE canvas rect each
                         // MouseMove (see screenToCanvasLay below).
-                        if (view.marquee.Press(event, elementStorage, this->guiStateManager,
-                                               { view.selectedNodeIDs, view.selectedFrameIDs,
+                        if (view.state.marquee.Press(event, elementStorage, this->guiStateManager,
+                                               { view.state.selectedNodeIDs, view.state.selectedFrameIDs,
                                                  (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None,
                                                  (event.state.modifiers & KeyModifier::Control) != KeyModifier::None },
                                                { .focus = false, .capture = false }))
-                            view.marqueeCurrentScreen = event.state.screenPos;
+                            view.state.marqueeCurrentScreen = event.state.screenPos;
                         return true;
                     }
                     case tachyon::EventType::MouseMove:
                     {
-                        if (view.transitionPicking)
-                            view.transitionPointer = event.state.screenPos;
+                        if (view.state.transitionPicking)
+                            view.state.transitionPointer = event.state.screenPos;
                         // A transition being drawn follows the pointer.
-                        if (view.transitionDrag.IsPressed(event.id))
+                        if (view.state.transitionDrag.IsPressed(event.id))
                         {
-                            view.transitionDrag.Move(event, styleManager.Px(kDragStartDistance));
-                            view.transitionPointer = event.state.screenPos;
+                            view.state.transitionDrag.Move(event, styleManager.Px(kDragStartDistance));
+                            view.state.transitionPointer = event.state.screenPos;
                             return true;
                         }
                         // A right press moved past the drag distance opens no menu at its release.
-                        if (view.menuPress.IsPressed(event.id))
+                        if (view.state.menuPress.IsPressed(event.id))
                         {
-                            view.menuPress.Move(event, styleManager.Px(kDragStartDistance));
+                            view.state.menuPress.Move(event, styleManager.Px(kDragStartDistance));
                             return true;
                         }
-                        if (view.pan.IsPressed(event.id) && (event.state.buttons & view.pan.drag.button) != MouseButtons::None)
+                        if (view.state.pan.IsPressed(event.id) && (event.state.buttons & view.state.pan.drag.button) != MouseButtons::None)
                         {
                             // Pans from the first move; past the drag distance the release isn't a click.
-                            view.pan.Move(event, styleManager.Px(kDragStartDistance));
+                            view.state.pan.Move(event, styleManager.Px(kDragStartDistance));
                             this->guiStateManager.Interaction().SetFocusID(canvasID);
                             tachyon::float3x2 translate = tachyon::float3x2::Translate(event.state.screenDelta);
-                            view.transform = translate * view.transform;
+                            view.state.transform = translate * view.state.transform;
                             return true;
                         }
-                        if (view.marquee.IsPressed(event.id))
+                        if (view.state.marquee.IsPressed(event.id))
                         {
-                            view.marqueeCurrentScreen = event.state.screenPos;
-                            if (view.marquee.Move(event, styleManager.Px(kDragStartDistance)))
+                            view.state.marqueeCurrentScreen = event.state.screenPos;
+                            if (view.state.marquee.Move(event, styleManager.Px(kDragStartDistance)))
                             {
                                 // Select nodes fully inside the marquee (CANVAS_LAY), using the
                                 // live canvas rect in case the panel moved since MouseDown.
                                 std::unordered_set<ID> hit = ComputeNodesInMarquee(
-                                    view.nodes,
+                                    view.graph.nodes,
                                     event.rect->innerRect,
-                                    view.transform,
-                                    view.marquee.drag.pressScreen,
-                                    view.marqueeCurrentScreen);
-                                std::erase_if(hit, [&view](ID id) {   // not what a collapsed frame hides
-                                    return std::any_of(view.nodes.begin(), view.nodes.end(),
+                                    view.state.transform,
+                                    view.state.marquee.drag.pressScreen,
+                                    view.state.marqueeCurrentScreen);
+                                std::erase_if(hit, [view](ID id) {   // not what a collapsed frame hides
+                                    return std::any_of(view.graph.nodes.begin(), view.graph.nodes.end(),
                                                        [id](const NodeModel& node) { return node.hidden && node.stableID == id; });
                                 });
                                 // The frames wholly inside it too, compared the same way, as they're
                                 // drawn: a collapsed one by its box, a hidden one not at all.
                                 std::unordered_set<ID> framesHit;
                                 {
-                                    const float2 a = NodeViewScreenToCanvas(view.transform, event.rect->innerRect, view.marquee.drag.pressScreen);
-                                    const float2 b = NodeViewScreenToCanvas(view.transform, event.rect->innerRect, view.marqueeCurrentScreen);
+                                    const float2 a = NodeViewScreenToCanvas(view.state.transform, event.rect->innerRect, view.state.marquee.drag.pressScreen);
+                                    const float2 b = NodeViewScreenToCanvas(view.state.transform, event.rect->innerRect, view.state.marqueeCurrentScreen);
                                     const float2 lo{ std::min(a.x, b.x), std::min(a.y, b.y) }, hi{ std::max(a.x, b.x), std::max(a.y, b.y) };
-                                    for (size_t f = 0; f < view.frames.size() && f < view.frameBoxes.size(); ++f)
+                                    for (size_t f = 0; f < view.graph.frames.size() && f < view.state.frameBoxes.size(); ++f)
                                     {
-                                        const IntRect box = view.frameBoxes[f];
+                                        const IntRect box = view.state.frameBoxes[f];
                                         if (box.w > 0 && float(box.x) >= lo.x && float(box.y) >= lo.y
                                             && float(box.x + box.w) <= hi.x && float(box.y + box.h) <= hi.y)
-                                            framesHit.insert(view.frames[f].stableID);
+                                            framesHit.insert(view.graph.frames[f].stableID);
                                     }
                                 }
 
@@ -614,7 +628,7 @@ namespace tachyon
                                 auto apply = [&](std::unordered_set<ID>& selection, const std::unordered_set<ID>& base,
                                                  const std::unordered_set<ID>& inside)
                                 {
-                                    const NodeView::MarqueeStart& start = view.marquee.before;
+                                    const NodeViewState::MarqueeStart& start = view.state.marquee.before;
                                     if (start.shift || start.ctrl)
                                     {
                                         selection = base;
@@ -624,20 +638,20 @@ namespace tachyon
                                     else
                                         selection = inside;
                                 };
-                                apply(view.selectedNodeIDs, view.marquee.before.nodes, hit);
-                                apply(view.selectedFrameIDs, view.marquee.before.frames, framesHit);
+                                apply(view.state.selectedNodeIDs, view.state.marquee.before.nodes, hit);
+                                apply(view.state.selectedFrameIDs, view.state.marquee.before.frames, framesHit);
                             }
                             return true;
                         }
                         // A state's band, or a state machine's arrow, under the pointer, for their
                         // hover looks.
                         if (stateMachine)
-                            view.stateEdgeHover.Track(AnyHeld(view.marquee, view.pan, view.transitionDrag), [&] {
+                            view.state.stateEdgeHover.Track(AnyHeld(view.state.marquee, view.state.pan, view.state.transitionDrag), [&] {
                                 const int s = StateBandAt(view, NodeViewScreenToNodePos(view, event.state.screenPos), stateBand);
-                                return s >= 0 ? view.nodes[size_t(s)].stableID : ID::Invalid();
+                                return s >= 0 ? view.graph.nodes[size_t(s)].stableID : ID::Invalid();
                             });
                         if (stateMachine)
-                            view.hoveredTransition.Track(AnyHeld(view.marquee, view.pan, view.transitionDrag), [&] {
+                            view.state.hoveredTransition.Track(AnyHeld(view.state.marquee, view.state.pan, view.state.transitionDrag), [&] {
                                 return TransitionAt(view, NodeViewScreenToNodePos(view, event.state.screenPos),
                                                     transitionReach, transitionGap, transitionLoop);
                             });
@@ -647,91 +661,91 @@ namespace tachyon
                     {
                         // A transition let go over a state (or back over its own) joins them,
                         // unless they're joined that way already.
-                        if (view.transitionDrag.IsPressed(event.id))
+                        if (view.state.transitionDrag.IsPressed(event.id))
                         {
-                            if (view.transitionDrag.Release(event) == PointerDrag::Ended::Drag)
+                            if (view.state.transitionDrag.Release(event) == PointerDrag::Ended::Drag)
                             {
                                 const int target = NodeAtCanvasPos(view, NodeViewScreenToNodePos(view, event.state.screenPos));
-                                if (target >= 0 && !view.nodes[size_t(target)].hidden)
-                                    AddTransitionIfNew(view, view.transitionFrom, view.nodes[size_t(target)].stableID, idManager);
+                                if (target >= 0 && !view.graph.nodes[size_t(target)].hidden)
+                                    AddTransitionIfNew(view, view.state.transitionFrom, view.graph.nodes[size_t(target)].stableID, idManager);
                             }
-                            view.transitionFrom = ID::Invalid();
+                            view.state.transitionFrom = ID::Invalid();
                             return true;
                         }
                         // A middle click that didn't drag the view: the wire under the mouse goes.
-                        const MouseButtons panButton = view.pan.drag.button;
-                        if (const PointerDrag::Ended panned = view.pan.Release(event); panned != PointerDrag::Ended::No)
+                        const MouseButtons panButton = view.state.pan.drag.button;
+                        if (const PointerDrag::Ended panned = view.state.pan.Release(event); panned != PointerDrag::Ended::No)
                         {
-                            if (panned == PointerDrag::Ended::Click && panButton == MouseButtons::Middle && view.hoveredWire.part)
+                            if (panned == PointerDrag::Ended::Click && panButton == MouseButtons::Middle && view.state.hoveredWire.part)
                             {
-                                CommitNodeViewEdit(view, DisconnectEdit(view, WireInput(*view.hoveredWire.part)));
-                                view.hoveredWire.Clear();
+                                CommitNodeViewEdit(view, DisconnectEdit(view, WireInput(*view.state.hoveredWire.part)));
+                                view.state.hoveredWire.Clear();
                             }
                             return true;
                         }
                         // A right click: on a wire it offers to delete it; on a node or the
                         // empty canvas it opens the app's menu for it, if there is one. A node
                         // passes its right presses here.
-                        if (view.menuPress.Release(event) == PointerDrag::Ended::Click)
+                        if (view.state.menuPress.Release(event) == PointerDrag::Ended::Click)
                         {
                             // A node under the pointer, a reroute too, comes before a wire: the
                             // wire hovered last can reach into it (a lane handle at a reroute).
-                            const float2 at = NodeViewScreenToCanvas(view.transform,
-                                IntRect{ .position = event.rect->innerRect.position, .size = view.lastInnerSize }, event.state.screenPos);
+                            const float2 at = NodeViewScreenToCanvas(view.state.transform,
+                                IntRect{ .position = event.rect->innerRect.position, .size = view.state.lastInnerSize }, event.state.screenPos);
                             const int n = NodeAtCanvasPos(view, at);
                             // A state machine's arrow: its menu, the transition selected.
                             if (stateMachine && n < 0)
                                 if (const std::optional<ID> t = TransitionAt(view, NodeViewScreenToNodePos(view, event.state.screenPos), transitionReach, transitionGap, transitionLoop))
                                 {
-                                    if (!view.selectedTransitionIDs.contains(*t))
-                                        view.selectedTransitionIDs = { *t };
+                                    if (!view.state.selectedTransitionIDs.contains(*t))
+                                        view.state.selectedTransitionIDs = { *t };
                                     openMenu(transitionMenuID, event.state.screenPos, std::nullopt, std::nullopt, std::nullopt, std::nullopt, *t);
                                     return true;
                                 }
-                            if (n < 0 && view.hoveredWire.part)
+                            if (n < 0 && view.state.hoveredWire.part)
                             {
-                                openMenu(wireMenuID, event.state.screenPos, view.hoveredWire.part, std::nullopt, std::nullopt);
-                                view.wireMenuPos = at;
+                                openMenu(wireMenuID, event.state.screenPos, view.state.hoveredWire.part, std::nullopt, std::nullopt);
+                                view.state.wireMenuPos = at;
                                 return true;
                             }
                             if (n >= 0)
                             {
                                 // A reroute has a menu of its own (Remove reroute).
-                                if (!view.onNodeContextMenu && !view.nodes[size_t(n)].reroute)
+                                if (!view.state.onNodeContextMenu && !view.graph.nodes[size_t(n)].reroute)
                                     return false;
-                                const ID id = view.nodes[size_t(n)].stableID;
-                                if (!view.selectedNodeIDs.contains(id))
-                                    view.selectedNodeIDs = { id };
-                                view.lastClickedNodeID = id;
+                                const ID id = view.graph.nodes[size_t(n)].stableID;
+                                if (!view.state.selectedNodeIDs.contains(id))
+                                    view.state.selectedNodeIDs = { id };
+                                view.state.lastClickedNodeID = id;
                                 openMenu(nodeMenuID, event.state.screenPos, std::nullopt, std::nullopt, id);
                                 return true;
                             }
                             // On a frame's title, its menu, the frame selected as a node is.
-                            if (const int f = FrameTitleAtCanvasPos(view, at); f >= 0 && view.onFrameContextMenu)
+                            if (const int f = FrameTitleAtCanvasPos(view, at); f >= 0 && view.state.onFrameContextMenu)
                             {
-                                const ID id = view.frames[size_t(f)].stableID;
-                                if (!view.selectedFrameIDs.contains(id))
+                                const ID id = view.graph.frames[size_t(f)].stableID;
+                                if (!view.state.selectedFrameIDs.contains(id))
                                 {
-                                    view.selectedNodeIDs.clear();
-                                    view.selectedFrameIDs = { id };
+                                    view.state.selectedNodeIDs.clear();
+                                    view.state.selectedFrameIDs = { id };
                                 }
                                 openMenu(frameMenuID, event.state.screenPos, std::nullopt, std::nullopt, std::nullopt, id);
                                 return true;
                             }
-                            if (view.onCanvasContextMenu)
+                            if (view.state.onCanvasContextMenu)
                             {
                                 openMenu(canvasMenuID, event.state.screenPos, std::nullopt, at, std::nullopt);
                                 return true;
                             }
                         }
-                        if (const PointerDrag::Ended ended = view.marquee.Release(event); ended != PointerDrag::Ended::No)
+                        if (const PointerDrag::Ended ended = view.state.marquee.Release(event); ended != PointerDrag::Ended::No)
                         {
                             // Bare click on empty background - clear selection.
-                            if (ended == PointerDrag::Ended::Click && !view.marquee.before.shift && !view.marquee.before.ctrl)
+                            if (ended == PointerDrag::Ended::Click && !view.state.marquee.before.shift && !view.state.marquee.before.ctrl)
                             {
-                                view.selectedNodeIDs.clear();
-                                view.selectedFrameIDs.clear();
-                                view.selectedTransitionIDs.clear();
+                                view.state.selectedNodeIDs.clear();
+                                view.state.selectedFrameIDs.clear();
+                                view.state.selectedTransitionIDs.clear();
                             }
                             return true;
                         }
@@ -751,7 +765,7 @@ namespace tachyon
                         }
                         const float step = float(styleManager.Px(40));   // a notch scrolls this far
                         if (nav.pan.x != 0.0f || nav.pan.y != 0.0f)
-                            view.transform = tachyon::float3x2::Translate(tachyon::float2{ -nav.pan.x * step, -nav.pan.y * step }) * view.transform;
+                            view.state.transform = tachyon::float3x2::Translate(tachyon::float2{ -nav.pan.x * step, -nav.pan.y * step }) * view.state.transform;
                         return true;
                     }
                     // A new wire over the empty canvas, when the app takes it there
@@ -763,35 +777,35 @@ namespace tachyon
                     {
                         const bool fromInput = event.state.dragPayloadType == kInputSocketPayload;
                         if (event.state.dragPayloadType != kSocketPayload && !fromInput) return false;
-                        if (!view.onWireDroppedOnCanvas || view.pendingConnection.detachedInput) return false;
+                        if (!view.state.onWireDroppedOnCanvas || view.state.pendingConnection.detachedInput) return false;
                         // Through the transform the canvas was drawn with (centred for lastInnerSize).
-                        const float2 at = NodeViewScreenToCanvas(view.transform, IntRect{ .position = event.rect->innerRect.position, .size = view.lastInnerSize },
+                        const float2 at = NodeViewScreenToCanvas(view.state.transform, IntRect{ .position = event.rect->innerRect.position, .size = view.state.lastInnerSize },
                                                                  event.state.screenPos);
                         if (NodeAtCanvasPos(view, at) >= 0) return false;
                         if (event.type == tachyon::EventType::Drop)
                         {
-                            view.pendingConnection = {};
-                            view.onWireDroppedOnCanvas(DecodeEndpoint(event.state.dragPayloadValue), !fromInput, at);
+                            view.state.pendingConnection = {};
+                            view.state.onWireDroppedOnCanvas(DecodeEndpoint(event.state.dragPayloadValue), !fromInput, at);
                         }
                         return true;
                     }
                     case tachyon::EventType::KeyDown:
                     {
                         // Escape during a marquee or a pan puts the selection or the view back.
-                        if (view.transitionDrag.Cancel(event, guiStateManager)
-                            || (view.transitionPicking && IsDragCancelKey(event.state)))
+                        if (view.state.transitionDrag.Cancel(event, guiStateManager)
+                            || (view.state.transitionPicking && IsDragCancelKey(event.state)))
                         {
-                            view.transitionPicking = false;
-                            view.transitionFrom    = ID::Invalid();
+                            view.state.transitionPicking = false;
+                            view.state.transitionFrom    = ID::Invalid();
                             return true;
                         }
-                        if (view.marquee.Cancel(event, guiStateManager))
+                        if (view.state.marquee.Cancel(event, guiStateManager))
                         {
-                            view.selectedNodeIDs  = view.marquee.before.nodes;
-                            view.selectedFrameIDs = view.marquee.before.frames;
+                            view.state.selectedNodeIDs  = view.state.marquee.before.nodes;
+                            view.state.selectedFrameIDs = view.state.marquee.before.frames;
                             return true;
                         }
-                        if (view.pan.Cancel(event, guiStateManager, view.transform))
+                        if (view.state.pan.Cancel(event, guiStateManager, view.state.transform))
                             return true;
                         // With the canvas focused, the keys do what the mouse does: Home frames the
                         // selected nodes, or all of them; the arrows move the selected nodes a grid step (Shift: four), or pan
@@ -807,30 +821,30 @@ namespace tachyon
                         if (key == KeyCode::Application || key == KeyCode::Menu || (key == KeyCode::F10 && shift))
                         {
                             int selected = -1;
-                            for (int i = 0; i < (int)view.nodes.size(); ++i)
-                                if (view.selectedNodeIDs.contains(view.nodes[size_t(i)].stableID)
-                                    && (selected < 0 || view.nodes[size_t(i)].stableID == view.lastClickedNodeID))
+                            for (int i = 0; i < (int)view.graph.nodes.size(); ++i)
+                                if (view.state.selectedNodeIDs.contains(view.graph.nodes[size_t(i)].stableID)
+                                    && (selected < 0 || view.graph.nodes[size_t(i)].stableID == view.state.lastClickedNodeID))
                                     selected = i;
-                            if (selected >= 0 && (view.onNodeContextMenu || view.nodes[size_t(selected)].reroute))
+                            if (selected >= 0 && (view.state.onNodeContextMenu || view.graph.nodes[size_t(selected)].reroute))
                             {
-                                const NodeModel& node = view.nodes[size_t(selected)];
+                                const NodeModel& node = view.graph.nodes[size_t(selected)];
                                 const float2 below = NodeViewCanvasToScreen(view, float2{ float(node.pos.x), float(node.pos.y + node.lastSize.y) });
                                 openMenu(nodeMenuID, int2{ int32_t(below.x), int32_t(below.y) }, std::nullopt, std::nullopt, node.stableID);
                                 return true;
                             }
                             // No node selected but a frame: the frame's, under its title bar.
-                            if (selected < 0 && view.onFrameContextMenu)
-                                for (const NodeFrame& frame : view.frames)
-                                    if (view.selectedFrameIDs.contains(frame.stableID))
+                            if (selected < 0 && view.state.onFrameContextMenu)
+                                for (const NodeFrame& frame : view.graph.frames)
+                                    if (view.state.selectedFrameIDs.contains(frame.stableID))
                                     {
-                                        const int32_t bar = 2 * std::max(1, view.gridSize);
+                                        const int32_t bar = 2 * std::max(1, view.state.gridSize);
                                         const float2 below = NodeViewCanvasToScreen(view, float2{ float(frame.pos.x), float(frame.pos.y + bar) });
                                         openMenu(frameMenuID, int2{ int32_t(below.x), int32_t(below.y) }, std::nullopt, std::nullopt, std::nullopt, frame.stableID);
                                         return true;
                                     }
-                            if (selected < 0 && view.onCanvasContextMenu)
+                            if (selected < 0 && view.state.onCanvasContextMenu)
                             {
-                                const int2 centre = view.lastCanvasRect.position + int2{ view.lastCanvasRect.w / 2, view.lastCanvasRect.h / 2 };
+                                const int2 centre = view.state.lastCanvasRect.position + int2{ view.state.lastCanvasRect.w / 2, view.state.lastCanvasRect.h / 2 };
                                 openMenu(canvasMenuID, centre, std::nullopt, NodeViewScreenToCanvas(view, centre), std::nullopt);
                                 return true;
                             }
@@ -847,19 +861,19 @@ namespace tachyon
                         }
                         if (dir.x != 0 || dir.y != 0)
                         {
-                            if (!view.selectedNodeIDs.empty())
+                            if (!view.state.selectedNodeIDs.empty())
                             {
                                 const int32_t grid = std::max<int32_t>(1, theme.nodeGridSize) * (shift ? 4 : 1);
                                 NodeViewEdit edit;
-                                for (int i = 0; i < (int)view.nodes.size(); ++i)
-                                    if (view.selectedNodeIDs.count(view.nodes[i].stableID))
-                                        edit.moves.push_back({ i, view.nodes[i].pos, view.nodes[i].pos + int2{ dir.x * grid, dir.y * grid } });
+                                for (int i = 0; i < (int)view.graph.nodes.size(); ++i)
+                                    if (view.state.selectedNodeIDs.count(view.graph.nodes[i].stableID))
+                                        edit.moves.push_back({ i, view.graph.nodes[i].pos, view.graph.nodes[i].pos + int2{ dir.x * grid, dir.y * grid } });
                                 CommitNodeViewEdit(view, edit);
                             }
                             else
                             {
                                 const float pan = float(styleManager.Px(shift ? 200 : 40));
-                                view.transform = tachyon::float3x2::Translate(tachyon::float2{ -float(dir.x) * pan, -float(dir.y) * pan }) * view.transform;
+                                view.state.transform = tachyon::float3x2::Translate(tachyon::float2{ -float(dir.x) * pan, -float(dir.y) * pan }) * view.state.transform;
                             }
                             return true;
                         }
@@ -875,32 +889,32 @@ namespace tachyon
                                 ZoomNodeView(view, 1.0f / 1.1f);
                                 return true;
                             case KeyCode::Escape:
-                                if (view.selectedNodeIDs.empty() && view.selectedFrameIDs.empty())
+                                if (view.state.selectedNodeIDs.empty() && view.state.selectedFrameIDs.empty())
                                     return false;
-                                view.selectedNodeIDs.clear();
-                                view.selectedFrameIDs.clear();
+                                view.state.selectedNodeIDs.clear();
+                                view.state.selectedFrameIDs.clear();
                                 return true;
                             case KeyCode::KeyA:
                                 if (!ctrl)
                                     return false;
                                 // All that shows: what a collapsed frame hides leaves the
                                 // selection again as the frame is built.
-                                for (const NodeModel& node : view.nodes)
-                                    view.selectedNodeIDs.insert(node.stableID);
-                                for (size_t f = 0; f < view.frames.size(); ++f)
-                                    if (f >= view.frameBoxes.size() || view.frameBoxes[f].w > 0)
-                                        view.selectedFrameIDs.insert(view.frames[f].stableID);
+                                for (const NodeModel& node : view.graph.nodes)
+                                    view.state.selectedNodeIDs.insert(node.stableID);
+                                for (size_t f = 0; f < view.graph.frames.size(); ++f)
+                                    if (f >= view.state.frameBoxes.size() || view.state.frameBoxes[f].w > 0)
+                                        view.state.selectedFrameIDs.insert(view.graph.frames[f].stableID);
                                 return true;
                             case KeyCode::Return: case KeyCode::Return2: case KeyCode::KeyPadEnter:
                             {
                                 NodeViewEdit edit;
-                                for (int i = 0; i < (int)view.nodes.size(); ++i)
-                                    if (view.selectedNodeIDs.count(view.nodes[i].stableID) && !view.nodes[i].reroute)   // a dot doesn't collapse
-                                        edit.collapses.push_back({ i, view.nodes[i].collapsed, !view.nodes[i].collapsed });
+                                for (int i = 0; i < (int)view.graph.nodes.size(); ++i)
+                                    if (view.state.selectedNodeIDs.count(view.graph.nodes[i].stableID) && !view.graph.nodes[i].reroute)   // a dot doesn't collapse
+                                        edit.collapses.push_back({ i, view.graph.nodes[i].collapsed, !view.graph.nodes[i].collapsed });
                                 // And the selected frames.
-                                for (int f = 0; f < (int)view.frames.size(); ++f)
-                                    if (view.selectedFrameIDs.contains(view.frames[size_t(f)].stableID))
-                                        for (const auto& change : CollapseFrameEdit(view, f, !view.frames[size_t(f)].collapsed).frameChanges)
+                                for (int f = 0; f < (int)view.graph.frames.size(); ++f)
+                                    if (view.state.selectedFrameIDs.contains(view.graph.frames[size_t(f)].stableID))
+                                        for (const auto& change : CollapseFrameEdit(view, f, !view.graph.frames[size_t(f)].collapsed).frameChanges)
                                             edit.frameChanges.push_back(change);
                                 if (edit.collapses.empty() && edit.frameChanges.empty())
                                     return false;
@@ -923,22 +937,22 @@ namespace tachyon
         auto canvasRes = elementStorage.Add(std::move(canvas), LayoutOverride{}.Auto());
         VERIFY(canvasRes.status);
         const tachyon::float3x2 effective =
-            tachyon::float3x2::Translate(tachyon::float2{ (float)(view.lastInnerSize.x / 2),
-                                                  (float)(view.lastInnerSize.y / 2) })
-            * view.transform;
+            tachyon::float3x2::Translate(tachyon::float2{ (float)(view.state.lastInnerSize.x / 2),
+                                                  (float)(view.state.lastInnerSize.y / 2) })
+            * view.state.transform;
         elementStorage.SetContentTransform(canvasRes.ref, effective);
         VERIFY(windowRegistry.Add(canvasRes.ref));
         VERIFY(elementStorage.BeginChildren());
 
-        const int nodeCount = (int)view.nodes.size();
+        const int nodeCount = (int)view.graph.nodes.size();
 
         // Z-order: last == front. Keep stable across frames; if the node count
         // changed (nodes added / removed), rebuild from scratch.
-        if ((int)view.ordering.size() != nodeCount)
+        if ((int)view.graph.ordering.size() != nodeCount)
         {
-            view.ordering.clear();
-            view.ordering.reserve(nodeCount);
-            for (int i = 0; i < nodeCount; ++i) view.ordering.push_back(i);
+            view.graph.ordering.clear();
+            view.graph.ordering.reserve(nodeCount);
+            for (int i = 0; i < nodeCount; ++i) view.graph.ordering.push_back(i);
         }
 
         // The colors the app gives (sockets, nodes, frames) as styles: one slot per color shown
@@ -950,20 +964,20 @@ namespace tachyon
         const ID paletteID = idManager.AllocateRangedID(kPaletteSize, "node-view-palette");
         if (pushedPalette)
             (void)idManager.PopParent();
-        view.wireColorStyles.clear();
+        view.state.wireColorStyles.clear();
         auto appColor = [&](tachyon::color4f c) -> tachyon::VisualColorStyleIndex
         {
             const uint32_t key = PackColor(c);
-            if (const auto it = view.wireColorStyles.find(key); it != view.wireColorStyles.end())
+            if (const auto it = view.state.wireColorStyles.find(key); it != view.state.wireColorStyles.end())
                 return it->second;
-            const uint32_t slot = uint32_t(view.wireColorStyles.size());
+            const uint32_t slot = uint32_t(view.state.wireColorStyles.size());
             const tachyon::VisualColorStyleIndex style = slot < kPaletteSize
                 ? AppColorStyle(idManager.GetSubID(paletteID, slot), c)
                 : styleManager.RegisterColorStyle(tachyon::ColorStyle::Create(c));   // past the palette: rare
-            view.wireColorStyles.emplace(key, style);
+            view.state.wireColorStyles.emplace(key, style);
             return style;
         };
-        for (const auto& cnode : view.nodes)
+        for (const auto& cnode : view.graph.nodes)
             for (const auto& cprop : cnode.properties)
                 (void)appColor(cprop.socketColor);
 
@@ -971,21 +985,21 @@ namespace tachyon
         const int kSocketSize = theme.socketSize;
 
         // This frame's socket refs for the wire pass. Index: [nodeIdx][propIdx * 2 + isOutput]
-        NodeLists<ElementRef>& socketRefs = view.socketRefs;
+        NodeLists<ElementRef>& socketRefs = view.state.socketRefs;
         socketRefs.first.resize(size_t(nodeCount) + 1);
         socketRefs.first[0] = 0;
         for (int n = 0; n < nodeCount; ++n)
-            socketRefs.first[size_t(n) + 1] = socketRefs.first[size_t(n)] + uint32_t(view.nodes[n].properties.size() * 2);
+            socketRefs.first[size_t(n) + 1] = socketRefs.first[size_t(n)] + uint32_t(view.graph.nodes[n].properties.size() * 2);
         socketRefs.items.assign(socketRefs.first.back(), ElementRef::Invalid());   // not ElementRef{}: that's the root
 
         // This frame's node refs; the wire pass routes around the node bodies.
-        std::vector<ElementRef>& nodeRefs = view.nodeRefs;
+        std::vector<ElementRef>& nodeRefs = view.state.nodeRefs;
         nodeRefs.assign(static_cast<size_t>(nodeCount), ElementRef::Invalid());
 
         // Outputs that drive at least one input, by WireKey of the output's endpoint.
-        std::vector<uint32_t>& drivenOutputs = view.drivenOutputs;
+        std::vector<uint32_t>& drivenOutputs = view.state.drivenOutputs;
         drivenOutputs.clear();
-        for (const auto& cnode : view.nodes)
+        for (const auto& cnode : view.graph.nodes)
             for (const auto& cprop : cnode.properties)
                 if (cprop.input.has_value() && cprop.input->valid())
                     drivenOutputs.push_back(WireKey(cprop.input->nodeIdx, cprop.input->propIdx));
@@ -1006,7 +1020,7 @@ namespace tachyon
             Element sockElem
             {
                 .id = sockID,
-                .eventHandler = [this, &view, self, isOutput, readonly, sockID](ElementEvent&& event)->bool
+                .eventHandler = [this, view, self, isOutput, readonly, sockID](ElementEvent&& event)->bool
                 {
                     if (readonly) return false;
 
@@ -1018,8 +1032,8 @@ namespace tachyon
                             {
                                 if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
                                 // Arm the drag; pendingConnection activates only once it passes the threshold.
-                                view.pendingConnection = {};
-                                view.pendingConnection.press.Press(event, elementStorage, guiStateManager, {}, { .focus = false, .capture = false });
+                                view.state.pendingConnection = {};
+                                view.state.pendingConnection.press.Press(event, elementStorage, guiStateManager, {}, { .focus = false, .capture = false });
                                 guiStateManager.Drag().Begin(
                                     sockID, kSocketPayload, EncodeEndpoint(self),
                                     event.state.screenPos, std::any(),
@@ -1033,9 +1047,9 @@ namespace tachyon
                                 // Post-threshold: the pending wire is real and tracks the cursor.
                                 if (guiStateManager.Drag().GetDraggedID() == sockID)
                                 {
-                                    view.pendingConnection.press.Move(event, 0);
-                                    view.pendingConnection.source        = self;
-                                    view.pendingConnection.currentScreen = event.state.screenPos;
+                                    view.state.pendingConnection.press.Move(event, 0);
+                                    view.state.pendingConnection.source        = self;
+                                    view.state.pendingConnection.currentScreen = event.state.screenPos;
                                     return true;
                                 }
                                 return false;
@@ -1076,10 +1090,10 @@ namespace tachyon
                                 // new wire towards an output. Either starts on the first real move,
                                 // so a plain click is harmless.
                                 if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
-                                auto& prop = view.nodes[self.nodeIdx].properties[self.propIdx];
+                                auto& prop = view.graph.nodes[self.nodeIdx].properties[self.propIdx];
                                 const bool wired = prop.input.has_value() && prop.input->valid();
-                                view.pendingConnection = {};
-                                view.pendingConnection.press.Press(event, elementStorage, guiStateManager, {}, { .focus = false, .capture = false });
+                                view.state.pendingConnection = {};
+                                view.state.pendingConnection.press.Press(event, elementStorage, guiStateManager, {}, { .focus = false, .capture = false });
                                 guiStateManager.Drag().Begin(
                                     sockID, wired ? kSocketPayload : kInputSocketPayload, EncodeEndpoint(wired ? *prop.input : self),
                                     event.state.screenPos, std::any(), DragVisualizer{});
@@ -1094,23 +1108,23 @@ namespace tachyon
                                 // source and the loose end handed to the dragged wire, which
                                 // starts at the source output and follows the cursor. An unwired
                                 // one's wire starts here.
-                                if (!view.pendingConnection.IsActive())
+                                if (!view.state.pendingConnection.IsActive())
                                 {
-                                    auto& prop = view.nodes[self.nodeIdx].properties[self.propIdx];
+                                    auto& prop = view.graph.nodes[self.nodeIdx].properties[self.propIdx];
                                     if (prop.input.has_value() && prop.input->valid())
                                     {
-                                        view.pendingConnection.source        = *prop.input;
-                                        view.pendingConnection.detachedInput = self;
+                                        view.state.pendingConnection.source        = *prop.input;
+                                        view.state.pendingConnection.detachedInput = self;
                                         prop.input = PropertyEndpoint{};
                                     }
                                     else
                                     {
-                                        view.pendingConnection.source    = self;
-                                        view.pendingConnection.fromInput = true;
+                                        view.state.pendingConnection.source    = self;
+                                        view.state.pendingConnection.fromInput = true;
                                     }
-                                    view.pendingConnection.press.Move(event, 0);
+                                    view.state.pendingConnection.press.Move(event, 0);
                                 }
-                                view.pendingConnection.currentScreen = event.state.screenPos;
+                                view.state.pendingConnection.currentScreen = event.state.screenPos;
                                 return true;
                             }
                             case EventType::MouseUp:
@@ -1151,31 +1165,31 @@ namespace tachyon
             //    connect (IsDropTargetFor is live; GetDropTargetID is only set on release).
             //  - INPUT, mid-drag: while the drag hovers it and the connection is allowed.
             //  - INPUT, at rest: on hover when it has a connection to drag out.
-            const tachyon::color4f dotColor = view.nodes[n].properties[propIdx].socketColor;
+            const tachyon::color4f dotColor = view.graph.nodes[n].properties[propIdx].socketColor;
             const bool hovered = (guiStateManager.GetCurrentState(sockID) & ElementState::Hover) != ElementState::None;
             bool highlight;
             if (isOutput)
             {
                 const bool dropTarget = guiStateManager.Drag().IsDropTargetFor(sockID, kInputSocketPayload) &&
-                                        ConnectionAllowed(view, self, view.pendingConnection.source);
+                                        ConnectionAllowed(view, self, view.state.pendingConnection.source);
                 if (dropTarget)
-                    view.pendingConnection.target = self;
+                    view.state.pendingConnection.target = self;
                 highlight = hovered || dropTarget;
             }
             else
             {
-                const auto& p = view.nodes[n].properties[propIdx];
+                const auto& p = view.graph.nodes[n].properties[propIdx];
                 const bool connected = p.input.has_value() && p.input->valid();
                 const bool dropTarget = guiStateManager.Drag().IsDropTargetFor(sockID, kSocketPayload) &&
-                                        ConnectionAllowed(view, view.pendingConnection.source, self);
+                                        ConnectionAllowed(view, view.state.pendingConnection.source, self);
                 if (dropTarget)
-                    view.pendingConnection.target = self;
-                highlight = dropTarget || (!readonly && connected && hovered && !view.pendingConnection.IsActive());
+                    view.state.pendingConnection.target = self;
+                highlight = dropTarget || (!readonly && connected && hovered && !view.state.pendingConnection.IsActive());
             }
 
             // A pin on the node's edge: filled when connected, a ring when not, with an
             // outline in the node's color. The hit region is the full element rect.
-            const auto& socketProp = view.nodes[n].properties[propIdx];
+            const auto& socketProp = view.graph.nodes[n].properties[propIdx];
             const bool  connected  = isOutput ? std::binary_search(drivenOutputs.begin(), drivenOutputs.end(), WireKey(n, propIdx))
                                               : socketProp.input.has_value() && socketProp.input->valid();
             if (pinShown || highlight)
@@ -1201,7 +1215,7 @@ namespace tachyon
                     }));
             }
 
-            ShowPinTooltip(view, sockID, self, isOutput);
+            ShowPinTooltip(view.graph, sockID, self, isOutput);
             return res.ref;
         };
 
@@ -1245,7 +1259,7 @@ namespace tachyon
             return tachyon::color4f{ mix(nodeBody.r, color.r), mix(nodeBody.g, color.g), mix(nodeBody.b, color.b), 1.0f };
         };
 
-        // A field over a title or a label being renamed, the focus in it (view.renameText).
+        // A field over a title or a label being renamed, the focus in it (view.state.renameText).
         // Enter keeps the new text, as does going elsewhere; Escape keeps the old one. True
         // once it's done, with `keep` saying which. The key is taken: the focus goes back to
         // the canvas, where Enter would otherwise collapse a frame and Escape clear the selection.
@@ -1253,9 +1267,9 @@ namespace tachyon
         {
             const ID fieldID = idManager.AllocateDynamicID(name);
             const ID focused = guiStateManager.Interaction().GetFocusedID();
-            keep = view.renameFocused && focused != fieldID;
+            keep = view.state.renameFocused && focused != fieldID;
             bool cancel = false;
-            if (inputManager && view.renameFocused && focused == fieldID)
+            if (inputManager && view.state.renameFocused && focused == fieldID)
             {
                 const auto& events = inputManager->GetRecordedEvents();
                 for (size_t e = 0; e < events.size(); ++e)
@@ -1278,15 +1292,15 @@ namespace tachyon
                     guiStateManager.Interaction().SetFocusID(canvasID);
                 return true;
             }
-            if (!view.renameFocused)
+            if (!view.state.renameFocused)
             {
                 // Without scrolling to it: it opens where it was asked for, and the canvas's
                 // scroll would move the nodes away from what the canvas draws itself (wires,
                 // arrows), which its pan and zoom place instead.
                 guiStateManager.Interaction().SetFocusIDNoScroll(fieldID);
-                view.renameFocused = true;
+                view.state.renameFocused = true;
             }
-            Field(fieldID, view.renameText, TextEditBehavior::ContinuousUpdate, style,
+            Field(fieldID, view.state.renameText, TextEditBehavior::ContinuousUpdate, style,
                   LayoutOverride{}.FixedSize(Pixels{ rect.w }, Pixels{ rect.h }).Absolute(rect.x, rect.y));
             return false;
         };
@@ -1296,10 +1310,10 @@ namespace tachyon
         // The time in the active state, its text and size; and each nested state's stacked
         // box behind it, in the state's colors.
         StateMarks stateMarks;
-        if (stateMachine && view.activeStateTime >= 0.0f && view.activeState != ID::Invalid())
+        if (stateMachine && view.graph.activeStateTime >= 0.0f && view.graph.activeState != ID::Invalid())
         {
             char time[32];
-            std::snprintf(time, sizeof(time), "%.2f s", double(view.activeStateTime));
+            std::snprintf(time, sizeof(time), "%.2f s", double(view.graph.activeStateTime));
             stateMarks.timeText = textSystem->RegisterText(idManager.AllocateDynamicID("state-time"), time, theme.nodeStateTimeStyleRef, ElementState::None);
             const TextMeasurement m = textSystem->MeasureText(stateMarks.timeText, TextWrapContext{});
             stateMarks.timeSize = { m.maxWidth, m.maxHeight };
@@ -1314,20 +1328,20 @@ namespace tachyon
         }
         const int2    labelPad{ styleManager.Px(6), styleManager.Px(1) };   // the chip round a label's text
         const int32_t labelMargin = styleManager.Px(4);                     // between a label and its arrow
-        view.transitionLabelBoxes.clear();
+        view.state.transitionLabelBoxes.clear();
         if (stateMachine)
         {
             // The transition under the pointer last frame, its arrow or its label.
             const std::optional<ID> hoveredTransition =
-                view.hoveredTransition.Shown(guiStateManager.Interaction().GetHoveredID() == canvasID);
-            for (const StateTransition& t : view.transitions)
+                view.state.hoveredTransition.Shown(guiStateManager.Interaction().GetHoveredID() == canvasID);
+            for (const StateTransition& t : view.graph.transitions)
             {
-                if (t.label.empty() || view.renamingTransition == t.stableID)
+                if (t.label.empty() || view.state.renamingTransition == t.stableID)
                     continue;
                 ElementState labelState = ElementState::None;
                 if (hoveredTransition == t.stableID)                labelState |= ElementState::Hover;
-                if (view.selectedTransitionIDs.contains(t.stableID)) labelState |= ElementState::Selected;
-                [[maybe_unused]] const bool pushedLabel = idManager.PushParent(t.stableID);
+                if (view.state.selectedTransitionIDs.contains(t.stableID)) labelState |= ElementState::Selected;
+                [[maybe_unused]] const bool pushedLabel = idManager.PushParent(IDManager::ScopedID(canvasID, t.stableID));
                 const ID labelID = idManager.AllocateDynamicID("transition-label");
                 if (pushedLabel)
                     (void)idManager.PopParent();
@@ -1340,17 +1354,17 @@ namespace tachyon
                 const int2 centre = TransitionLabelCentre(path, size, labelMargin);
                 const IntRect chip{ centre.x - size.x / 2, centre.y - size.y / 2, size.x, size.y };
                 transitionLabels.push_back({ t.stableID, text, { m.maxWidth, m.maxHeight }, chip, labelState });
-                view.transitionLabelBoxes.push_back({ t.stableID, chip });
+                view.state.transitionLabelBoxes.push_back({ t.stableID, chip });
             }
-            if (view.renamingTransition)
+            if (view.state.renamingTransition)
             {
-                const int t = TransitionIndex(view, *view.renamingTransition);
-                const StateTransition& transition = view.transitions[size_t(t)];
+                const int t = TransitionIndex(view, *view.state.renamingTransition);
+                const StateTransition& transition = view.graph.transitions[size_t(t)];
                 const TransitionPath path = StateTransitionPath(view, transition, transitionGap, transitionLoop);
                 // Exactly where the label is: its chip round the text as typed so far (an
                 // empty one a few characters wide), growing as it's typed.
                 const TextID measured = textSystem->RegisterText(idManager.AllocateDynamicID("transition-rename-measure"),
-                                                                 view.renameText.empty() ? std::string("    ") : view.renameText,
+                                                                 view.state.renameText.empty() ? std::string("    ") : view.state.renameText,
                                                                  theme.nodeTransitionLabelStyleRef, ElementState::None);
                 const TextMeasurement m = textSystem->MeasureText(measured, TextWrapContext{});
                 const int2 size{ m.maxWidth + 2 * labelPad.x, m.maxHeight + 2 * labelPad.y };
@@ -1359,13 +1373,13 @@ namespace tachyon
                 if (renameField("transition-rename", theme.nodeTransitionRenameStyleRef,
                                 IntRect{ centre.x - size.x / 2, centre.y - size.y / 2, size.x, size.y }, keep))
                 {
-                    if (keep && view.renameText != transition.label)
+                    if (keep && view.state.renameText != transition.label)
                     {
                         StateTransition relabelled = transition;
-                        relabelled.label = view.renameText;
+                        relabelled.label = view.state.renameText;
                         CommitNodeViewEdit(view, NodeViewEdit{ .transitionChanges = { { t, transition, relabelled } } });
                     }
-                    view.renamingTransition.reset();
+                    view.state.renamingTransition.reset();
                 }
             }
         }
@@ -1376,7 +1390,7 @@ namespace tachyon
         // drag moves the frame and what's inside it, a double-click renames it) and the right
         // and bottom edges and the corner between (a drag resizes it). The rest of the box
         // takes no input, so a marquee or a pan starts inside it as anywhere on the canvas.
-        view.gridSize = theme.nodeGridSize;
+        view.state.gridSize = theme.nodeGridSize;
         const int32_t frameGrid = std::max(1, theme.nodeGridSize);
         const int32_t frameBar  = 2 * frameGrid;   // the title bar: one row pitch, as a node's header
         struct DrawnFrame { ElementRef title; int2 size; ElementState state; tachyon::VisualColorStyleIndex fill, band; VisualBoxStyleIndex edge; };
@@ -1395,33 +1409,33 @@ namespace tachyon
         std::vector<DrawnFrame> drawnFrames;
         // Nodes inside a collapsed frame: which frame (-1: none), and, for those with wires
         // crossing its edge, the box and their sockets on it (property, output, row).
-        std::vector<int>&           nodeHiddenBy = view.nodeHiddenBy;
-        std::vector<IntRect>&       hiddenBox    = view.hiddenBox;
-        NodeLists<NodeHiddenPort>&  hiddenPorts  = view.hiddenPorts;
+        std::vector<int>&           nodeHiddenBy = view.state.nodeHiddenBy;
+        std::vector<IntRect>&       hiddenBox    = view.state.hiddenBox;
+        NodeLists<NodeHiddenPort>&  hiddenPorts  = view.state.hiddenPorts;
         nodeHiddenBy.assign(size_t(nodeCount), -1);
         hiddenBox.assign(size_t(nodeCount), IntRect{});
         hiddenPorts.items.clear();
         hiddenPorts.first.assign(size_t(nodeCount) + 1, 0);
         {
             // Frames gone (the app's own edit, an undo) drop out of the selection and the drag.
-            std::erase_if(view.selectedFrameIDs, [&view](ID id) {
-                return std::none_of(view.frames.begin(), view.frames.end(), [id](const NodeFrame& f) { return f.stableID == id; });
+            std::erase_if(view.state.selectedFrameIDs, [view](ID id) {
+                return std::none_of(view.graph.frames.begin(), view.graph.frames.end(), [id](const NodeFrame& f) { return f.stableID == id; });
             });
-            auto frameIndex = [&view](ID id) {
-                for (int f = 0; f < (int)view.frames.size(); ++f)
-                    if (view.frames[size_t(f)].stableID == id) return f;
+            auto frameIndex = [view](ID id) {
+                for (int f = 0; f < (int)view.graph.frames.size(); ++f)
+                    if (view.graph.frames[size_t(f)].stableID == id) return f;
                 return -1;
             };
-            if (view.frameDrag.press.IsHeld() && frameIndex(view.frameDrag.frameID) < 0)
-                view.frameDrag = {};
-            if (view.renamingFrame && frameIndex(*view.renamingFrame) < 0)
-                view.renamingFrame.reset();
+            if (view.state.frameDrag.press.IsHeld() && frameIndex(view.state.frameDrag.frameID) < 0)
+                view.state.frameDrag = {};
+            if (view.state.renamingFrame && frameIndex(*view.state.renamingFrame) < 0)
+                view.state.renamingFrame.reset();
 
             const int32_t minWidth = 6 * frameGrid, minHeight = 2 * frameBar;
             const int32_t grip = styleManager.Px(6);
-            const bool    snap = theme.nodeGridSize > 0 && view.snapToGrid;
-            const int     frameCount = (int)view.frames.size();
-            for (NodeFrame& frame : view.frames)
+            const bool    snap = theme.nodeGridSize > 0 && view.graph.snapToGrid;
+            const int     frameCount = (int)view.graph.frames.size();
+            for (NodeFrame& frame : view.graph.frames)
             {
                 // On the grid when nodes are, whole cells big, and never smaller than a title
                 // bar over a row.
@@ -1436,7 +1450,7 @@ namespace tachyon
             // setting the flag notes it now. Expanded, it goes by what lies inside it again.
             for (int f = 0; f < frameCount; ++f)
             {
-                NodeFrame& frame = view.frames[size_t(f)];
+                NodeFrame& frame = view.graph.frames[size_t(f)];
                 if (!frame.collapsed)
                     frame.members.reset();
                 else if (!frame.members)
@@ -1451,7 +1465,7 @@ namespace tachyon
             // one standing for them (the largest first). A member is found by its stableID in
             // the nodes and frames sorted by it, not by a search of the members for each node.
             std::vector<int> frameHiddenBy(size_t(frameCount), -1);
-            const bool anyCollapsed = std::any_of(view.frames.begin(), view.frames.end(), [](const NodeFrame& f) { return f.collapsed; });
+            const bool anyCollapsed = std::any_of(view.graph.frames.begin(), view.graph.frames.end(), [](const NodeFrame& f) { return f.collapsed; });
             if (anyCollapsed)
             {
                 auto byID = [](std::vector<std::pair<ID, int>>& table, const auto& items) {
@@ -1460,46 +1474,46 @@ namespace tachyon
                         table.push_back({ items[size_t(i)].stableID, i });
                     std::sort(table.begin(), table.end());
                 };
-                byID(view.nodesByID, view.nodes);
-                byID(view.framesByID, view.frames);
+                byID(view.state.nodesByID, view.graph.nodes);
+                byID(view.state.framesByID, view.graph.frames);
                 auto find = [](const std::vector<std::pair<ID, int>>& table, ID id) {
                     const auto it = std::lower_bound(table.begin(), table.end(), std::pair<ID, int>{ id, INT_MIN });
                     return it != table.end() && it->first == id ? it->second : -1;
                 };
                 std::vector<int> byArea(static_cast<size_t>(frameCount));
                 for (int f = 0; f < frameCount; ++f) byArea[size_t(f)] = f;
-                std::stable_sort(byArea.begin(), byArea.end(), [&view](int a, int b) {
-                    const int2 sa = view.frames[size_t(a)].size, sb = view.frames[size_t(b)].size;
+                std::stable_sort(byArea.begin(), byArea.end(), [view](int a, int b) {
+                    const int2 sa = view.graph.frames[size_t(a)].size, sb = view.graph.frames[size_t(b)].size;
                     return int64_t(sa.x) * sa.y > int64_t(sb.x) * sb.y;
                 });
                 for (const int f : byArea)
                 {
-                    const NodeFrame& outer = view.frames[size_t(f)];
+                    const NodeFrame& outer = view.graph.frames[size_t(f)];
                     if (!outer.collapsed || !outer.members || frameHiddenBy[size_t(f)] >= 0) continue;
                     for (const ID member : *outer.members)
                     {
-                        if (const int n = find(view.nodesByID, member); n >= 0)
+                        if (const int n = find(view.state.nodesByID, member); n >= 0)
                         {
                             if (nodeHiddenBy[size_t(n)] < 0)
                                 nodeHiddenBy[size_t(n)] = f;
                         }
-                        else if (const int other = find(view.framesByID, member); other >= 0 && other != f && frameHiddenBy[size_t(other)] < 0)
+                        else if (const int other = find(view.state.framesByID, member); other >= 0 && other != f && frameHiddenBy[size_t(other)] < 0)
                             frameHiddenBy[size_t(other)] = f;
                     }
                 }
             }
             for (int n = 0; n < nodeCount; ++n)
             {
-                NodeModel& node = view.nodes[size_t(n)];
+                NodeModel& node = view.graph.nodes[size_t(n)];
                 node.hidden = nodeHiddenBy[size_t(n)] >= 0;
                 if (node.hidden)
-                    view.selectedNodeIDs.erase(node.stableID);   // what can't be seen isn't selected
+                    view.state.selectedNodeIDs.erase(node.stableID);   // what can't be seen isn't selected
             }
 
             // A collapsed frame's rows: an input for each wire coming in from outside it, an
             // output for each output inside it feeding a node outside, in node order.
-            std::vector<std::vector<PropertyEndpoint>>& portsIn  = view.framePortsIn;
-            std::vector<std::vector<PropertyEndpoint>>& portsOut = view.framePortsOut;
+            std::vector<std::vector<PropertyEndpoint>>& portsIn  = view.state.framePortsIn;
+            std::vector<std::vector<PropertyEndpoint>>& portsOut = view.state.framePortsOut;
             for (auto* ports : { &portsIn, &portsOut })
             {
                 ports->resize(size_t(frameCount));
@@ -1509,12 +1523,12 @@ namespace tachyon
             for (int n = 0; n < nodeCount; ++n)
             {
                 const int inside = nodeHiddenBy[size_t(n)];
-                const auto& props = view.nodes[size_t(n)].properties;
+                const auto& props = view.graph.nodes[size_t(n)].properties;
                 for (int p = 0; p < (int)props.size(); ++p)
                 {
                     const auto& source = props[size_t(p)].input;
                     if (!source || !source->valid() || source->nodeIdx >= nodeCount ||
-                        size_t(source->propIdx) >= view.nodes[size_t(source->nodeIdx)].properties.size()) continue;
+                        size_t(source->propIdx) >= view.graph.nodes[size_t(source->nodeIdx)].properties.size()) continue;
                     const int from = nodeHiddenBy[size_t(source->nodeIdx)];
                     if (inside >= 0 && from != inside)
                         portsIn[size_t(inside)].push_back({ n, p });
@@ -1531,10 +1545,10 @@ namespace tachyon
                     return a.nodeIdx != b.nodeIdx ? a.nodeIdx < b.nodeIdx : a.propIdx < b.propIdx;
                 });
 
-            view.frameBoxes.assign(size_t(frameCount), IntRect{});
+            view.state.frameBoxes.assign(size_t(frameCount), IntRect{});
             for (int f = 0; f < frameCount; ++f)
             {
-                NodeFrame& frame = view.frames[size_t(f)];
+                NodeFrame& frame = view.graph.frames[size_t(f)];
                 if (frameHiddenBy[size_t(f)] >= 0)
                     continue;   // inside a collapsed frame: not shown
 
@@ -1543,7 +1557,7 @@ namespace tachyon
                 const IntRect box = frame.collapsed
                     ? IntRect{ frame.pos.x, frame.pos.y, std::min(frame.size.x, 16 * frameGrid), frameBar + rows * frameBar + (rows > 0 ? frameGrid : 0) }
                     : IntRect{ frame.pos.x, frame.pos.y, frame.size.x, frame.size.y };
-                view.frameBoxes[size_t(f)] = box;
+                view.state.frameBoxes[size_t(f)] = box;
                 if (frame.collapsed)
                 {
                     // Where each hidden node's crossing sockets go: on the box's edges, by row.
@@ -1562,7 +1576,7 @@ namespace tachyon
                 }
 
                 const ID frameID = frame.stableID;
-                [[maybe_unused]] const bool pushed = idManager.PushParent(frameID);
+                [[maybe_unused]] const bool pushed = idManager.PushParent(IDManager::ScopedID(canvasID, frameID));
                 const ID titleID = idManager.AllocateDynamicID("frame-title");
                 const ID gripIDs[3] = { idManager.AllocateDynamicID("frame-right"), idManager.AllocateDynamicID("frame-bottom"),
                                         idManager.AllocateDynamicID("frame-corner") };
@@ -1571,27 +1585,27 @@ namespace tachyon
                 ElementState state = guiStateManager.GetCurrentState(titleID) & (ElementState::Hover | ElementState::Active);
                 for (const ID g : gripIDs)
                     state |= guiStateManager.GetCurrentState(g) & ElementState::Hover;
-                if (view.selectedFrameIDs.contains(frameID))
+                if (view.state.selectedFrameIDs.contains(frameID))
                     state |= ElementState::Selected;
 
                 // A press on the title or a grip: what it moves, as it is now.
-                auto press = [this, &view, frameID, frameIndex](const ElementEvent& event, FrameEdges edges)
+                auto press = [this, view, frameID, frameIndex](const ElementEvent& event, FrameEdges edges)
                 {
                     const int index = frameIndex(frameID);
                     if (index < 0) return;
-                    FrameDrag& drag = view.frameDrag;
+                    FrameDrag& drag = view.state.frameDrag;
                     drag = FrameDrag{ .frameID = frameID, .edges = edges };
                     // The canvas has the focus already; the moves, release and Escape come here.
                     drag.press.Press(event, elementStorage, guiStateManager, {}, { .atOnce = edges != FrameEdges::None, .focus = false });
-                    drag.frames.push_back({ index, view.frames[size_t(index)] });
+                    drag.frames.push_back({ index, view.graph.frames[size_t(index)] });
                     if (edges == FrameEdges::None)
                     {
                         // A move takes the frames it holds along (wholly inside it, or, collapsed,
                         // the ones it held then), and the nodes any of them holds.
-                        const NodeFrame& outer = view.frames[size_t(index)];
-                        for (int other = 0; other < (int)view.frames.size(); ++other)
+                        const NodeFrame& outer = view.graph.frames[size_t(index)];
+                        for (int other = 0; other < (int)view.graph.frames.size(); ++other)
                         {
-                            const NodeFrame& inner = view.frames[size_t(other)];
+                            const NodeFrame& inner = view.graph.frames[size_t(other)];
                             const bool held = outer.collapsed && outer.members
                                 ? std::find(outer.members->begin(), outer.members->end(), inner.stableID) != outer.members->end()
                                 : inner.pos.x >= outer.pos.x && inner.pos.y >= outer.pos.y
@@ -1604,28 +1618,28 @@ namespace tachyon
                         for (const auto& [moved, before] : drag.frames)
                             for (const int n : NodesInFrame(view, moved))
                                 if (nodes.insert(n).second)
-                                    drag.nodes.push_back({ n, view.nodes[size_t(n)].pos });
+                                    drag.nodes.push_back({ n, view.graph.nodes[size_t(n)].pos });
                     }
                 };
                 // The frames and nodes as they were at the press: Escape, or before a move.
-                auto restore = [&view]
+                auto restore = [view]
                 {
-                    for (const auto& [index, before] : view.frameDrag.frames)
-                        if (index < (int)view.frames.size()) view.frames[size_t(index)] = before;
-                    for (const auto& [index, pos] : view.frameDrag.nodes)
-                        if (index < (int)view.nodes.size()) view.nodes[size_t(index)].pos = pos;
+                    for (const auto& [index, before] : view.state.frameDrag.frames)
+                        if (index < (int)view.graph.frames.size()) view.graph.frames[size_t(index)] = before;
+                    for (const auto& [index, pos] : view.state.frameDrag.nodes)
+                        if (index < (int)view.graph.nodes.size()) view.graph.nodes[size_t(index)].pos = pos;
                 };
                 // The drag let go: one edit, from the frames and nodes as they were to as they are.
-                auto finish = [&view]
+                auto finish = [view]
                 {
                     NodeViewEdit edit;
-                    for (const auto& [index, before] : view.frameDrag.frames)
-                        if (index < (int)view.frames.size() && !(view.frames[size_t(index)] == before))
-                            edit.frameChanges.push_back({ index, before, view.frames[size_t(index)] });
-                    for (const auto& [index, pos] : view.frameDrag.nodes)
-                        if (index < (int)view.nodes.size() && !(view.nodes[size_t(index)].pos == pos))
-                            edit.moves.push_back({ index, pos, view.nodes[size_t(index)].pos });
-                    view.frameDrag = {};
+                    for (const auto& [index, before] : view.state.frameDrag.frames)
+                        if (index < (int)view.graph.frames.size() && !(view.graph.frames[size_t(index)] == before))
+                            edit.frameChanges.push_back({ index, before, view.graph.frames[size_t(index)] });
+                    for (const auto& [index, pos] : view.state.frameDrag.nodes)
+                        if (index < (int)view.graph.nodes.size() && !(view.graph.nodes[size_t(index)].pos == pos))
+                            edit.moves.push_back({ index, pos, view.graph.nodes[size_t(index)].pos });
+                    view.state.frameDrag = {};
                     CommitNodeViewEdit(view, edit);
                 };
 
@@ -1650,13 +1664,13 @@ namespace tachyon
                     VERIFY(windowRegistry.Add(headerRes.ref));
                     // A port's name: its node's title, and its pin's name when it has one. Built
                     // in the view's string, which Text has copied by the next one.
-                    auto portName = [&view](const std::vector<PropertyEndpoint>& ports, int r) -> std::string_view {
-                        std::string& text = view.portText;
+                    auto portName = [view](const std::vector<PropertyEndpoint>& ports, int r) -> std::string_view {
+                        std::string& text = view.state.portText;
                         text.clear();
                         if (r >= (int)ports.size())
                             return text;
                         const PropertyEndpoint e = ports[size_t(r)];
-                        const NodeModel& node = view.nodes[size_t(e.nodeIdx)];
+                        const NodeModel& node = view.graph.nodes[size_t(e.nodeIdx)];
                         const std::string& pin = node.properties[size_t(e.propIdx)].name;
                         text = node.title;
                         if (!pin.empty())
@@ -1681,10 +1695,10 @@ namespace tachyon
                 Element title
                 {
                     .id = titleID,
-                    .eventHandler = [this, &view, canvasID, frameID, titleID, frameIndex, press, restore, finish,
+                    .eventHandler = [this, view, canvasID, frameID, titleID, frameIndex, press, restore, finish,
                                      frameGrid, snap, chevron = styleManager.Px(28)](ElementEvent&& event) -> bool
                     {
-                        FrameDrag& drag = view.frameDrag;
+                        FrameDrag& drag = view.state.frameDrag;
                         switch (event.type)
                         {
                             case EventType::MouseDown:
@@ -1695,16 +1709,16 @@ namespace tachyon
                                 const int index = frameIndex(frameID);
                                 if (index < 0) return false;
                                 // The chevron at the title's left collapses or expands it.
-                                if (NodeViewScreenToCanvas(view, event.state.screenPos).x < float(view.frames[size_t(index)].pos.x + chevron))
+                                if (NodeViewScreenToCanvas(view, event.state.screenPos).x < float(view.graph.frames[size_t(index)].pos.x + chevron))
                                 {
-                                    CommitNodeViewEdit(view, CollapseFrameEdit(view, index, !view.frames[size_t(index)].collapsed));
+                                    CommitNodeViewEdit(view, CollapseFrameEdit(view, index, !view.graph.frames[size_t(index)].collapsed));
                                     return true;
                                 }
-                                if (view.frameDoubleClick.IsDoubleClick(frameID))
+                                if (view.state.frameDoubleClick.IsDoubleClick(frameID))
                                 {
-                                    view.renamingFrame = frameID;
-                                    view.renameText    = view.frames[size_t(index)].title;
-                                    view.renameFocused = false;
+                                    view.state.renamingFrame = frameID;
+                                    view.state.renameText    = view.graph.frames[size_t(index)].title;
+                                    view.state.renameFocused = false;
                                     return true;
                                 }
                                 // Selected as a node is: Shift adds it, Ctrl toggles it, a plain
@@ -1712,15 +1726,15 @@ namespace tachyon
                                 const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                                 const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
                                 if (shift)
-                                    view.selectedFrameIDs.insert(frameID);
+                                    view.state.selectedFrameIDs.insert(frameID);
                                 else if (ctrl)
                                 {
-                                    if (!view.selectedFrameIDs.erase(frameID)) view.selectedFrameIDs.insert(frameID);
+                                    if (!view.state.selectedFrameIDs.erase(frameID)) view.state.selectedFrameIDs.insert(frameID);
                                 }
-                                else if (!view.selectedFrameIDs.contains(frameID))
+                                else if (!view.state.selectedFrameIDs.contains(frameID))
                                 {
-                                    view.selectedNodeIDs.clear();
-                                    view.selectedFrameIDs = { frameID };
+                                    view.state.selectedNodeIDs.clear();
+                                    view.state.selectedFrameIDs = { frameID };
                                 }
                                 press(event, FrameEdges::None);
                                 return true;
@@ -1737,11 +1751,11 @@ namespace tachyon
                                                         : int2{ start.x + raw.x, start.y + raw.y };
                                 const int2 delta { to.x - start.x, to.y - start.y };
                                 for (const auto& [index, before] : drag.frames)
-                                    if (index < (int)view.frames.size())
-                                        view.frames[size_t(index)].pos = { before.pos.x + delta.x, before.pos.y + delta.y };
+                                    if (index < (int)view.graph.frames.size())
+                                        view.graph.frames[size_t(index)].pos = { before.pos.x + delta.x, before.pos.y + delta.y };
                                 for (const auto& [index, pos] : drag.nodes)
-                                    if (index < (int)view.nodes.size())
-                                        view.nodes[size_t(index)].pos = { pos.x + delta.x, pos.y + delta.y };
+                                    if (index < (int)view.graph.nodes.size())
+                                        view.graph.nodes[size_t(index)].pos = { pos.x + delta.x, pos.y + delta.y };
                                 return true;
                             }
                             case EventType::MouseUp:
@@ -1750,13 +1764,13 @@ namespace tachyon
                                 if (drag.press.Release(event) == PointerDrag::Ended::Drag)
                                     finish();
                                 else
-                                    view.frameDrag = {};
+                                    view.state.frameDrag = {};
                                 return true;
                             }
                             case EventType::KeyDown:
                                 if (!drag.press.Cancel(event, guiStateManager)) return false;
                                 restore();
-                                view.frameDrag = {};
+                                view.state.frameDrag = {};
                                 return true;
                             default: break;
                         }
@@ -1766,7 +1780,7 @@ namespace tachyon
                     .state    = state,
                 };
                 // The chevron before the title: down while expanded, right while collapsed.
-                if (view.renamingFrame != frameID)
+                if (view.state.renamingFrame != frameID)
                     title.textID = textSystem->RegisterText(titleID, frame.collapsed ? theme.treeArrowRight : theme.treeArrowDown,
                                                             frame.title, theme.nodeFrameTitleStyleRef, state);
                 auto titleRes = elementStorage.Add(std::move(title),
@@ -1776,18 +1790,18 @@ namespace tachyon
 
                 // With a menu for frames, a "..." button at the title bar's end opens it under the
                 // button, the frame selected as a right click does.
-                if (view.onFrameContextMenu && view.renamingFrame != frameID)
+                if (view.state.onFrameContextMenu && view.state.renamingFrame != frameID)
                 {
                     const int32_t size = std::min(styleManager.Px(18), frameBar);
                     const int32_t pad  = (frameBar - size) / 2;
                     if (box.w > 2 * size)
                     {
                         const ID menuButtonID = idManager.AllocateDynamicID("frame-menu-button");
-                        Button(menuButtonID, "...", [this, &view, frameID, menuButtonID, frameMenuID, openMenu] {
-                            if (!view.selectedFrameIDs.contains(frameID))
+                        Button(menuButtonID, "...", [this, view, frameID, menuButtonID, frameMenuID, openMenu] {
+                            if (!view.state.selectedFrameIDs.contains(frameID))
                             {
-                                view.selectedNodeIDs.clear();
-                                view.selectedFrameIDs = { frameID };
+                                view.state.selectedNodeIDs.clear();
+                                view.state.selectedFrameIDs = { frameID };
                             }
                             const IntRect at = elementStorage.ElementRectOnScreen(elementStorage.FindElementRefByID(menuButtonID));
                             openMenu(frameMenuID, int2{ at.x, at.y + at.h }, std::nullopt, std::nullopt, std::nullopt, frameID);
@@ -1798,18 +1812,18 @@ namespace tachyon
                     }
                 }
 
-                if (view.renamingFrame == frameID)
+                if (view.state.renamingFrame == frameID)
                 {
                     bool keep = false;
                     if (renameField("frame-rename", theme.nodeFrameRenameStyleRef, IntRect{ frame.pos.x, frame.pos.y, box.w, frameBar }, keep))
                     {
-                        if (keep && view.renameText != frame.title)
+                        if (keep && view.state.renameText != frame.title)
                         {
                             NodeFrame renamed = frame;
-                            renamed.title = view.renameText;
+                            renamed.title = view.state.renameText;
                             CommitNodeViewEdit(view, NodeViewEdit{ .frameChanges = { { f, frame, renamed } } });
                         }
-                        view.renamingFrame.reset();
+                        view.state.renamingFrame.reset();
                     }
                 }
 
@@ -1830,10 +1844,10 @@ namespace tachyon
                     Element gripElement
                     {
                         .id = gripID,
-                        .eventHandler = [this, &view, canvasID, gripID, edges, press, restore, finish,
+                        .eventHandler = [this, view, canvasID, gripID, edges, press, restore, finish,
                                          frameGrid, snap, minWidth, minHeight](ElementEvent&& event) -> bool
                         {
-                            FrameDrag& drag = view.frameDrag;
+                            FrameDrag& drag = view.state.frameDrag;
                             switch (event.type)
                             {
                                 case EventType::MouseDown:
@@ -1852,8 +1866,8 @@ namespace tachyon
                                     if (snap)
                                         size = { SnapToGrid(size.x, frameGrid), SnapToGrid(size.y, frameGrid) };
                                     const int index = drag.frames[0].first;
-                                    if (index < (int)view.frames.size())
-                                        view.frames[size_t(index)].size = { std::max(size.x, minWidth), std::max(size.y, minHeight) };
+                                    if (index < (int)view.graph.frames.size())
+                                        view.graph.frames[size_t(index)].size = { std::max(size.x, minWidth), std::max(size.y, minHeight) };
                                     return true;
                                 }
                                 case EventType::MouseUp:
@@ -1864,7 +1878,7 @@ namespace tachyon
                                 case EventType::KeyDown:
                                     if (!drag.press.Cancel(event, guiStateManager)) return false;
                                     restore();
-                                    view.frameDrag = {};
+                                    view.state.frameDrag = {};
                                     return true;
                                 default: break;
                             }
@@ -1877,7 +1891,7 @@ namespace tachyon
                     VERIFY(gripRes.status);
                     VERIFY(windowRegistry.Add(gripRes.ref));
                     // The resize cursor while hovered or dragged.
-                    if ((guiStateManager.GetCurrentState(gripID) & ElementState::Hover) != ElementState::None || view.frameDrag.press.IsPressed(gripID))
+                    if ((guiStateManager.GetCurrentState(gripID) & ElementState::Hover) != ElementState::None || view.state.frameDrag.press.IsPressed(gripID))
                         guiStateManager.Cursor().Request(gripCursors[g]);
                 }
                 if (pushed)
@@ -1912,18 +1926,18 @@ namespace tachyon
 
         // ---- Interior wire-segment drag handles ----
         // Invisible grab bands over draggable wire segments, from last frame's route pass
-        // (view.wireHandleCache, node.pos space). Emitted before the nodes so nodes win hits,
+        // (view.state.wireHandleCache, node.pos space). Emitted before the nodes so nodes win hits,
         // but above the canvas so a grab never starts a marquee. Uses mouse capture, not
         // DnD, so the requested resize cursor sticks.
         {
             // One ranged ID over the handle cache, scoped to the canvas; handle = sub-ID at its slot.
             [[maybe_unused]] bool pushedHandles = idManager.PushParent(canvasID);
             const int kGrab = styleManager.Px(5);   // grab-band half thickness (node.pos space)
-            const ID handleRange = view.wireHandleCache.empty() ? ID::Invalid()
-                : idManager.AllocateRangedID((uint32_t)view.wireHandleCache.size(), "wire-handle");
-            for (size_t hi = 0; hi < view.wireHandleCache.size(); ++hi)
+            const ID handleRange = view.state.wireHandleCache.empty() ? ID::Invalid()
+                : idManager.AllocateRangedID((uint32_t)view.state.wireHandleCache.size(), "wire-handle");
+            for (size_t hi = 0; hi < view.state.wireHandleCache.size(); ++hi)
             {
-                const CachedWireHandle& wh = view.wireHandleCache[hi];
+                const CachedWireHandle& wh = view.state.wireHandleCache[hi];
                 const int32_t xLo = std::min(wh.a.x, wh.b.x), xHi = std::max(wh.a.x, wh.b.x);
                 const int32_t yLo = std::min(wh.a.y, wh.b.y), yHi = std::max(wh.a.y, wh.b.y);
                 int32_t rx, ry, rw, rh;
@@ -1935,36 +1949,36 @@ namespace tachyon
                 if ((guiStateManager.GetCurrentState(handleID) & ElementState::Hover) != ElementState::None)
                     handleHoveredWire = wh.wireKey;
 
-                const bool dragging = view.wireDrag.press.IsHeld() &&
-                                      view.wireDrag.wireKey == wh.wireKey &&
-                                      view.wireDrag.role == wh.role;
+                const bool dragging = view.state.wireDrag.press.IsHeld() &&
+                                      view.state.wireDrag.wireKey == wh.wireKey &&
+                                      view.state.wireDrag.role == wh.role;
                 const int32_t startValue = wh.vertical ? wh.a.x : wh.a.y;
 
                 Element handle
                 {
                     .id = handleID,
-                    .eventHandler = [this, &view, canvasID, wireKey = wh.wireKey,
+                    .eventHandler = [this, view, canvasID, wireKey = wh.wireKey,
                                      role = wh.role, vertical = wh.vertical, startValue]
                                     (ElementEvent&& event) -> bool
                     {
-                        auto& drag = view.wireDrag;
+                        auto& drag = view.state.wireDrag;
                         const bool mine = drag.wireKey == wireKey && drag.role == role;
                         // The wire's lanes as they were before the drag (Escape puts them back).
                         auto restoreLanes = [&]
                         {
-                            if (drag.press.before == WireRouteOverrides{}) view.wireOverrides.erase(wireKey);
-                            else                                             view.wireOverrides[wireKey] = drag.press.before;
+                            if (drag.press.before == WireRouteOverrides{}) view.graph.wireOverrides.erase(wireKey);
+                            else                                             view.graph.wireOverrides[wireKey] = drag.press.before;
                         };
                         switch (event.type)
                         {
                             case EventType::MouseDown:
                             {
                                 if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
-                                const auto lanes = view.wireOverrides.find(wireKey);
+                                const auto lanes = view.graph.wireOverrides.find(wireKey);
                                 drag = WireSegmentDrag{ .wireKey = wireKey, .role = role, .vertical = vertical, .startValue = startValue };
                                 // The canvas has the focus; Escape comes here with the capture.
                                 drag.press.Press(event, elementStorage, guiStateManager,
-                                                 lanes != view.wireOverrides.end() ? lanes->second : WireRouteOverrides{},
+                                                 lanes != view.graph.wireOverrides.end() ? lanes->second : WireRouteOverrides{},
                                                  { .atOnce = true, .focusID = canvasID });
                                 return true;
                             }
@@ -1974,7 +1988,7 @@ namespace tachyon
                                 // The handle is inside the canvas: its layout space is node.pos space.
                                 const int2 d = drag.press.drag.LocalDelta(event, elementStorage);
                                 const int32_t newVal = drag.startValue + (vertical ? d.x : d.y);
-                                WireRouteOverrides& o = view.wireOverrides[wireKey];
+                                WireRouteOverrides& o = view.graph.wireOverrides[wireKey];
                                 switch (role)
                                 {
                                     case WireHandle::LaneX:  o.laneX  = newVal; break;
@@ -1989,8 +2003,8 @@ namespace tachyon
                             {
                                 if (mine && drag.press.Release(event) != PointerDrag::Ended::No)
                                 {
-                                    const auto lanes = view.wireOverrides.find(wireKey);
-                                    const WireRouteOverrides after = lanes != view.wireOverrides.end() ? lanes->second : WireRouteOverrides{};
+                                    const auto lanes = view.graph.wireOverrides.find(wireKey);
+                                    const WireRouteOverrides after = lanes != view.graph.wireOverrides.end() ? lanes->second : WireRouteOverrides{};
                                     NodeViewEdit edit;
                                     if (!(after == drag.press.before))
                                         edit.lanes.push_back({ wireKey, drag.press.before, after });
@@ -2034,12 +2048,12 @@ namespace tachyon
         // it each way, in node.pos space. Two tab targets of one ranged ID per stand-in keep
         // its place in the tab order: Tab lands on the first, Shift+Tab on the second, and
         // the node is then laid out and the focus moved onto its first or last control.
-        const bool virtualize = view.virtualizeLayout && view.lastInnerSize.x > 0 && view.lastInnerSize.y > 0;
+        const bool virtualize = view.state.virtualizeLayout && view.state.lastInnerSize.x > 0 && view.state.lastInnerSize.y > 0;
         tachyon::float2 inViewMin{}, inViewMax{};
         if (virtualize)
         {
-            const tachyon::float3x2 toCanvas = view.transform.Inverse();
-            const float w = float(view.lastInnerSize.x), h = float(view.lastInnerSize.y);
+            const tachyon::float3x2 toCanvas = view.state.transform.Inverse();
+            const float w = float(view.state.lastInnerSize.x), h = float(view.state.lastInnerSize.y);
             inViewMin = inViewMax = toCanvas.TransformPoint(tachyon::float2{ -w, -h });
             for (const tachyon::float2 corner : { tachyon::float2{ w, -h }, tachyon::float2{ -w, h }, tachyon::float2{ w, h } })
             {
@@ -2064,8 +2078,8 @@ namespace tachyon
         // ---- Render each node (back to front) ----
         for (int orderIdx = 0; orderIdx < nodeCount; ++orderIdx)
         {
-            const int n = view.ordering[orderIdx];
-            NodeModel& node = view.nodes[n];
+            const int n = view.graph.ordering[orderIdx];
+            NodeModel& node = view.graph.nodes[n];
 
             // Inside a collapsed frame: not shown. One with wires crossing the frame's edge
             // stands in as the frame's box, taking no input, its crossing sockets on the box's
@@ -2075,13 +2089,13 @@ namespace tachyon
                 if (hiddenPorts[size_t(n)].empty())
                     continue;
                 const IntRect box = hiddenBox[size_t(n)];
-                auto res = elementStorage.Add(Element{ .id = node.stableID, .styleRef = theme.emptyHorzStyleRef, .flags = ElementFlags::NoInput },
+                auto res = elementStorage.Add(Element{ .id = IDManager::ScopedID(canvasID, node.stableID), .styleRef = theme.emptyHorzStyleRef, .flags = ElementFlags::NoInput },
                                               LayoutOverride{}.FixedSize(Pixels{ box.w }, Pixels{ box.h }).Absolute(box.x, box.y));
                 VERIFY(res.status);
                 VERIFY(windowRegistry.Add(res.ref));
                 nodeRefs[n] = res.ref;
                 VERIFY(elementStorage.BeginChildren());
-                [[maybe_unused]] const bool pushedHidden = idManager.PushParent(node.stableID);
+                [[maybe_unused]] const bool pushedHidden = idManager.PushParent(IDManager::ScopedID(canvasID, node.stableID));
                 const int32_t pitch = 2 * std::max(1, theme.nodeGridSize);
                 for (const NodeHiddenPort& port : hiddenPorts[size_t(n)])
                     socketRefs[n][port.prop * 2 + (port.output ? 1 : 0)] = emitSocket(n, port.prop, port.output, /*readonly=*/true,
@@ -2096,7 +2110,7 @@ namespace tachyon
 
             // Snap the node's top-left onto the grid.
             const int32_t grid = theme.nodeGridSize;
-            if (grid > 0 && view.snapToGrid)
+            if (grid > 0 && view.graph.snapToGrid)
                 node.pos = { SnapToGrid(node.pos.x, grid), SnapToGrid(node.pos.y, grid) };
             // Width: last frame's content width rounded UP to whole grid cells (minimum on the first frame).
             const int32_t minNodeWidth = (grid > 0) ? grid * 6 : styleManager.Px(120);
@@ -2107,21 +2121,24 @@ namespace tachyon
             const int32_t reroutePitch = grid > 0 ? 2 * grid : styleManager.Px(24);
 
             // Outer .node element: click-drag moves the node, double-click toggles collapse.
-            // Uses the node's stable ID; a dynamic ID would change with z-order reshuffles.
-            const ID outerID = node.stableID;
+            // Its ID is its stable ID's in this canvas: a dynamic ID would change with z-order
+            // reshuffles, and another view of the graph has its own element for the node.
+            const ID outerID   = node.stableID;
+            const ID elementID = IDManager::ScopedID(canvasID, outerID);
             // Laid out whole: in view, holding the focus, tabbed into, or never laid out (its
             // size unknown); a reroute or a collapsed node is no more than its stand-in.
             const bool standIn = virtualize && !node.reroute && !node.collapsed
                 && node.lastSize.x > 0 && node.lastSize.y > 0
-                && n != enteredNode && outerID != view.focusedNodeID
+                && n != enteredNode && outerID != view.state.focusedNodeID
                 && (float(node.pos.x + node.lastSize.x) < inViewMin.x || float(node.pos.x) > inViewMax.x
                     || float(node.pos.y + node.lastSize.y) < inViewMin.y || float(node.pos.y) > inViewMax.y);
-            ElementState outerState = guiStateManager.GetCurrentState(outerID);
-            if (view.selectedNodeIDs.count(outerID)) outerState |= ElementState::Selected;
+            ElementState outerState = guiStateManager.GetCurrentState(elementID);
+            if (view.state.selectedNodeIDs.count(outerID)) outerState |= ElementState::Selected;
             Element outer
             {
-                .id = outerID,
-                .eventHandler = [this, &view, n, outerID, canvasID](ElementEvent&& event)->bool
+                .id = elementID,
+                // Fits std::function's small buffer: the element's ID is worked out, not kept.
+                .eventHandler = [this, view, n, outerID, canvasID](ElementEvent&& event)->bool
                 {
                     switch (event.type)
                     {
@@ -2130,83 +2147,83 @@ namespace tachyon
                             if (!event.state.LeftPressed() || PanDragButton(event.state) != MouseButtons::None) return false;
                             // A title or label being renamed is left: the focus goes back to the
                             // canvas, so its field keeps what was typed and closes.
-                            if (view.renamingFrame || view.renamingTransition)
+                            if (view.state.renamingFrame || view.state.renamingTransition)
                                 TakeFocus(guiStateManager, canvasID);
 
                             // A state: a click finishes a transition started from a menu; a
                             // double-click opens the machine it holds (states don't collapse).
                             // Transitions start on the band round it, the canvas's.
-                            if (view.kind == NodeViewKind::StateMachine)
+                            if (view.graph.kind == NodeViewKind::StateMachine)
                             {
-                                if (view.transitionPicking)
+                                if (view.state.transitionPicking)
                                 {
-                                    AddTransitionIfNew(view, view.transitionFrom, outerID, idManager);
-                                    view.transitionPicking = false;
-                                    view.transitionFrom    = ID::Invalid();
+                                    AddTransitionIfNew(view, view.state.transitionFrom, outerID, idManager);
+                                    view.state.transitionPicking = false;
+                                    view.state.transitionFrom    = ID::Invalid();
                                     return true;
                                 }
                                 if ((event.state.modifiers & (KeyModifier::Shift | KeyModifier::Control)) == KeyModifier::None)
-                                    view.selectedTransitionIDs.clear();
-                                if (view.nodeDoubleClick.IsDoubleClick(outerID))
+                                    view.state.selectedTransitionIDs.clear();
+                                if (view.state.nodeDoubleClick.IsDoubleClick(outerID))
                                 {
-                                    if (view.nodes[n].subMachine && view.onOpenState)
-                                        view.onOpenState(n);
+                                    if (view.graph.nodes[n].subMachine && view.state.onOpenState)
+                                        view.state.onOpenState(n);
                                     return true;
                                 }
                             }
-                            else if (view.nodeDoubleClick.IsDoubleClick(outerID) && !view.nodes[n].reroute)
+                            else if (view.state.nodeDoubleClick.IsDoubleClick(outerID) && !view.graph.nodes[n].reroute)
                             {
                                 NodeViewEdit edit;
-                                edit.collapses.push_back({ n, view.nodes[n].collapsed, !view.nodes[n].collapsed });
+                                edit.collapses.push_back({ n, view.graph.nodes[n].collapsed, !view.graph.nodes[n].collapsed });
                                 CommitNodeViewEdit(view, edit);
                                 return true;
                             }
 
                             const bool shift = (event.state.modifiers & KeyModifier::Shift)   != KeyModifier::None;
                             const bool ctrl  = (event.state.modifiers & KeyModifier::Control) != KeyModifier::None;
-                            const bool alreadySelected = view.selectedNodeIDs.count(outerID) > 0;
+                            const bool alreadySelected = view.state.selectedNodeIDs.count(outerID) > 0;
 
                             if (shift)
                             {
-                                view.selectedNodeIDs.insert(outerID);
+                                view.state.selectedNodeIDs.insert(outerID);
                             }
                             else if (ctrl)
                             {
-                                if (alreadySelected) view.selectedNodeIDs.erase(outerID);
-                                else                 view.selectedNodeIDs.insert(outerID);
+                                if (alreadySelected) view.state.selectedNodeIDs.erase(outerID);
+                                else                 view.state.selectedNodeIDs.insert(outerID);
                             }
                             else if (!alreadySelected)
                             {
-                                view.selectedNodeIDs.clear();
-                                view.selectedFrameIDs.clear();
-                                view.selectedNodeIDs.insert(outerID);
+                                view.state.selectedNodeIDs.clear();
+                                view.state.selectedFrameIDs.clear();
+                                view.state.selectedNodeIDs.insert(outerID);
                             }
-                            view.lastClickedNodeID = outerID;
+                            view.state.lastClickedNodeID = outerID;
 
                             // Bring to front in `ordering` (last slot draws on top).
-                            BringNodeToFront(view.ordering, n);
+                            BringNodeToFront(view.graph.ordering, n);
                             // Snapshot start positions of all moving nodes, always including
                             // the dragged one (ctrl-click may have just deselected it).
-                            for (auto& other : view.nodes)
+                            for (auto& other : view.graph.nodes)
                             {
-                                if (view.selectedNodeIDs.count(other.stableID) || other.stableID == outerID)
+                                if (view.state.selectedNodeIDs.count(other.stableID) || other.stableID == outerID)
                                     other.startPos = other.pos;
                             }
                             // The moves, the release and Escape come here wherever the pointer goes.
-                            view.nodeDrag.Press(event, elementStorage, guiStateManager, {}, { .focus = false });
+                            view.state.nodeDrag.Press(event, elementStorage, guiStateManager, {}, { .focus = false });
                             return true;
                         }
                         case EventType::MouseUp:
                         {
                             // The whole drag is one edit, to the grid-snapped positions; a click moves nothing.
-                            if (view.nodeDrag.Release(event) != PointerDrag::Ended::Drag) return true;
+                            if (view.state.nodeDrag.Release(event) != PointerDrag::Ended::Drag) return true;
                             const int32_t grid = theme.nodeGridSize;
                             NodeViewEdit edit;
-                            for (int i = 0; i < (int)view.nodes.size(); ++i)
+                            for (int i = 0; i < (int)view.graph.nodes.size(); ++i)
                             {
-                                const NodeModel& other = view.nodes[i];
-                                if (i != n && !view.selectedNodeIDs.count(other.stableID)) continue;
-                                const int2 to = grid > 0 && view.snapToGrid ? int2{ SnapToGrid(other.pos.x, grid), SnapToGrid(other.pos.y, grid) } : other.pos;
+                                const NodeModel& other = view.graph.nodes[i];
+                                if (i != n && !view.state.selectedNodeIDs.count(other.stableID)) continue;
+                                const int2 to = grid > 0 && view.graph.snapToGrid ? int2{ SnapToGrid(other.pos.x, grid), SnapToGrid(other.pos.y, grid) } : other.pos;
                                 if (to.x != other.startPos.x || to.y != other.startPos.y)
                                     edit.moves.push_back({ i, other.startPos, to });
                             }
@@ -2228,29 +2245,29 @@ namespace tachyon
                             if (event.type == EventType::Drop)
                                 FinishConnection(view, fromInput ? here : dragged, fromInput ? dragged : here);
                             else
-                                view.pendingConnection.target = here;
+                                view.state.pendingConnection.target = here;
                             return true;
                         }
                         case EventType::MouseMove:
                         {
-                            if (view.transitionPicking)
-                                view.transitionPointer = event.state.screenPos;
+                            if (view.state.transitionPicking)
+                                view.state.transitionPointer = event.state.screenPos;
                             // Inside a state is off its band.
-                            if (view.kind == NodeViewKind::StateMachine)
-                                view.stateEdgeHover.Track(AnyHeld(view.nodeDrag, view.marquee, view.transitionDrag), [] { return ID::Invalid(); });
-                            if (!view.nodeDrag.IsPressed(outerID)) return false;
-                            if (!view.nodeDrag.Move(event, styleManager.Px(kDragStartDistance))) return true;
+                            if (view.graph.kind == NodeViewKind::StateMachine)
+                                view.state.stateEdgeHover.Track(AnyHeld(view.state.nodeDrag, view.state.marquee, view.state.transitionDrag), [] { return ID::Invalid(); });
+                            if (!view.state.nodeDrag.IsPressed(IDManager::ScopedID(canvasID, outerID))) return false;
+                            if (!view.state.nodeDrag.Move(event, styleManager.Px(kDragStartDistance))) return true;
 
                             // The node is inside the canvas: its layout space is node.pos space.
-                            const int2 idelta = view.nodeDrag.drag.LocalDelta(event, elementStorage);
+                            const int2 idelta = view.state.nodeDrag.drag.LocalDelta(event, elementStorage);
                             // Move every node in the selection by the same delta;
                             // always include the dragged node (see MouseDown). Onto the grid here
                             // already, as the next layout would put them: what's drawn from their
                             // places meanwhile (a state machine's arrows) lands where they do.
-                            const int32_t grid = view.snapToGrid ? theme.nodeGridSize : 0;
-                            for (auto& other : view.nodes)
+                            const int32_t grid = view.graph.snapToGrid ? theme.nodeGridSize : 0;
+                            for (auto& other : view.graph.nodes)
                             {
-                                if (!view.selectedNodeIDs.count(other.stableID) && other.stableID != outerID)
+                                if (!view.state.selectedNodeIDs.count(other.stableID) && other.stableID != outerID)
                                     continue;
                                 other.pos = { other.startPos.x + idelta.x, other.startPos.y + idelta.y };
                                 if (grid > 0)
@@ -2261,9 +2278,9 @@ namespace tachyon
                         case EventType::KeyDown:
                         {
                             // Escape during a move puts the nodes back.
-                            if (!view.nodeDrag.Cancel(event, guiStateManager)) return false;
-                            for (auto& other : view.nodes)
-                                if (view.selectedNodeIDs.count(other.stableID) || other.stableID == outerID)
+                            if (!view.state.nodeDrag.Cancel(event, guiStateManager)) return false;
+                            for (auto& other : view.graph.nodes)
+                                if (view.state.selectedNodeIDs.count(other.stableID) || other.stableID == outerID)
                                     other.pos = other.startPos;
                             return true;
                         }
@@ -2286,16 +2303,16 @@ namespace tachyon
 
             // Cache the node's laid-out size for marquee hit-testing.
             VERIFY(elementStorage.AddPostLayout(outerRes.ref,
-                [&view, n, stableID = node.stableID](tachyon::PostLayoutContext& ctx)
+                [view, n, stableID = node.stableID](tachyon::PostLayoutContext& ctx)
                 {
-                    // The app may change view.nodes after this build and before layout.
-                    NodeModel* target = size_t(n) < view.nodes.size() && view.nodes[size_t(n)].stableID == stableID
-                        ? &view.nodes[size_t(n)] : nullptr;
+                    // The app may change view.graph.nodes after this build and before layout.
+                    NodeModel* target = size_t(n) < view.graph.nodes.size() && view.graph.nodes[size_t(n)].stableID == stableID
+                        ? &view.graph.nodes[size_t(n)] : nullptr;
                     if (!target)
                     {
-                        auto it = std::find_if(view.nodes.begin(), view.nodes.end(),
+                        auto it = std::find_if(view.graph.nodes.begin(), view.graph.nodes.end(),
                                                [&](const NodeModel& m) { return m.stableID == stableID; });
-                        if (it == view.nodes.end())
+                        if (it == view.graph.nodes.end())
                             return;
                         target = &*it;
                     }
@@ -2305,7 +2322,7 @@ namespace tachyon
 
             // Scope this node's dynamic IDs under its stable ID (BeginChildren doesn't push
             // an ID parent), so they don't change when z-order reshuffles the nodes.
-            [[maybe_unused]] bool pushed = idManager.PushParent(node.stableID);
+            [[maybe_unused]] bool pushed = idManager.PushParent(elementID);
 
             // A stand-in: its sockets where its rows would put them (the first and last pitch
             // of each), and its two tab targets.
@@ -2343,7 +2360,7 @@ namespace tachyon
             // the square moves it.
             if (node.reroute)
             {
-                const bool selected = view.selectedNodeIDs.count(outerID) > 0;
+                const bool selected = view.state.selectedNodeIDs.count(outerID) > 0;
                 const bool hovered  = (outerState & ElementState::Hover) != ElementState::None;
                 const int16_t y = static_cast<int16_t>(reroutePitch / 2 - kSocketSize / 2);
                 if (!node.properties.empty() && node.properties[0].input.has_value())
@@ -2355,8 +2372,8 @@ namespace tachyon
                 const NodeProperty* row = node.properties.empty() ? nullptr : &node.properties[0];
                 const PropertyEndpoint source = row && row->input ? *row->input : PropertyEndpoint{};
                 const tachyon::color4f wireColor = source.valid() && source.nodeIdx < nodeCount
-                    && source.propIdx < (int)view.nodes[size_t(source.nodeIdx)].properties.size()
-                    ? view.nodes[size_t(source.nodeIdx)].properties[size_t(source.propIdx)].socketColor
+                    && source.propIdx < (int)view.graph.nodes[size_t(source.nodeIdx)].properties.size()
+                    ? view.graph.nodes[size_t(source.nodeIdx)].properties[size_t(source.propIdx)].socketColor
                     : row ? row->socketColor : tachyon::color4f{ 0.9f, 0.9f, 0.9f, 1.0f };
                 VERIFY(elementStorage.AddCustomDraw(outerRes.ref,
                     [wireColor, selected, hovered, ringColor = theme.GetColor("--accent"), backColor = theme.GetColor("--bg-raised"),
@@ -2585,7 +2602,7 @@ namespace tachyon
             {
                 tabChainManager.EndSpan();
                 const ID onto = enteredFromAfter ? tabChainManager.SpanLast() : tabChainManager.SpanFirst();
-                guiStateManager.Interaction().SetFocusID(onto != ID::Invalid() ? onto : outerID);
+                guiStateManager.Interaction().SetFocusID(onto != ID::Invalid() ? onto : elementID);
             }
 
             [[maybe_unused]] bool popped = idManager.PopParent();
@@ -2599,35 +2616,35 @@ namespace tachyon
             const ID focusedID = interaction.GetFocusedID();
             // The node holding the focus is laid out whole next frame, a stand-in never.
             const std::vector<ID> around = focusedID != ID::Invalid() ? CollectPropagatedAncestors(elementStorage, focusedID) : std::vector<ID>{};
-            view.focusedNodeID = ID::Invalid();
+            view.state.focusedNodeID = ID::Invalid();
             for (int n = 0; n < nodeCount; ++n)
-                if (std::find(around.begin(), around.end(), view.nodes[n].stableID) != around.end())
-                    view.focusedNodeID = view.nodes[n].stableID;
-            if (focusedID != view.revealedFocusID && interaction.IsFocusVisible())
+                if (std::find(around.begin(), around.end(), IDManager::ScopedID(canvasID, view.graph.nodes[n].stableID)) != around.end())
+                    view.state.focusedNodeID = view.graph.nodes[n].stableID;
+            if (focusedID != view.state.revealedFocusID && interaction.IsFocusVisible())
             {
-                view.revealedFocusID = focusedID;
+                view.state.revealedFocusID = focusedID;
                 for (int n = 0; n < nodeCount; ++n)
-                    if (std::find(around.begin(), around.end(), view.nodes[n].stableID) != around.end())
+                    if (std::find(around.begin(), around.end(), IDManager::ScopedID(canvasID, view.graph.nodes[n].stableID)) != around.end())
                     {
                         ScrollNodeIntoView(view, n, theme.nodeGridSize);
                         elementStorage.SetContentTransform(canvasRes.ref,
-                            tachyon::float3x2::Translate(tachyon::float2{ (float)(view.lastInnerSize.x / 2),
-                                                                          (float)(view.lastInnerSize.y / 2) })
-                            * view.transform);
+                            tachyon::float3x2::Translate(tachyon::float2{ (float)(view.state.lastInnerSize.x / 2),
+                                                                          (float)(view.state.lastInnerSize.y / 2) })
+                            * view.state.transform);
                         break;
                     }
             }
         }
 
         VERIFY(elementStorage.AddPostLayout(canvasRes.ref,
-            [this, &view, canvasID, centeredFor = view.lastInnerSize](tachyon::PostLayoutContext& ctx)
+            [this, view, canvasID, centeredFor = view.state.lastInnerSize](tachyon::PostLayoutContext& ctx)
             {
-                view.lastInnerSize  = ctx.ElementInnerRect().size;
-                view.lastCanvasRect = ctx.ElementInnerRect();
-                view.lastGridOrigin = ctx.ElementRect().position - ctx.ElementInnerRect().position;
+                view.state.lastInnerSize  = ctx.ElementInnerRect().size;
+                view.state.lastCanvasRect = ctx.ElementInnerRect();
+                view.state.lastGridOrigin = ctx.ElementRect().position - ctx.ElementInnerRect().position;
                 // The nodes were centered for last frame's size. A cached panel around the
                 // view only rebuilds when its own size changes, so ask for the redraw.
-                if (view.lastInnerSize.x != centeredFor.x || view.lastInnerSize.y != centeredFor.y)
+                if (view.state.lastInnerSize.x != centeredFor.x || view.state.lastInnerSize.y != centeredFor.y)
                     RebuildCachedScopesAbove(canvasID);
             }));
 
@@ -2639,7 +2656,7 @@ namespace tachyon
         {
             const ID hoveredID = guiStateManager.Interaction().GetHoveredID();
             const bool onCanvas = hoveredID == canvasID;
-            bandLit = view.transitionDrag.IsHeld() || view.transitionPicking ? view.transitionFrom : view.stateEdgeHover.Shown(onCanvas);
+            bandLit = view.state.transitionDrag.IsHeld() || view.state.transitionPicking ? view.state.transitionFrom : view.state.stateEdgeHover.Shown(onCanvas);
             pointedState = bandLit;
             if (pointedState == ID::Invalid() && NodeIndex(view, hoveredID) >= 0)
                 pointedState = hoveredID;
@@ -2656,7 +2673,7 @@ namespace tachyon
         // Endpoints are CANVAS_LAY, so they pan/zoom with the sockets and clip to the viewport.
         VERIFY(elementStorage.AddCustomDraw(canvasRes.ref,
             // The socket and node refs are the view's, as built this frame.
-            [this, &view, &socketRefs, &nodeRefs, drawnFrames = std::move(drawnFrames),
+            [this, view, &socketRefs, &nodeRefs, drawnFrames = std::move(drawnFrames),
              transitionLabels = std::move(transitionLabels), stateMarks = std::move(stateMarks), transitionGap, transitionLoop, pointedState, bandLit, stateBand,
              canvasHovered = guiStateManager.Interaction().GetHoveredID() == canvasID,
              handleHoveredWire, mouseScreen = windowManager->GetScreenMousePos()](tachyon::CustomDrawContext& ctx)
@@ -2706,12 +2723,12 @@ namespace tachyon
                 }
 
                 // A state machine: transitions between the states in place of wires.
-                if (view.kind == NodeViewKind::StateMachine)
+                if (view.graph.kind == NodeViewKind::StateMachine)
                 {
                     DrawStateMachine(ctx, theme, styleManager, view, gridOrigin, transitionLabels, stateMarks, transitionGap, transitionLoop,
-                                     canvasHovered, ctx.ScreenToCurrent(view.transitionPointer), pointedState, bandLit,
+                                     canvasHovered, ctx.ScreenToCurrent(view.state.transitionPointer), pointedState, bandLit,
                                      int32_t(std::lround(stateBand * NodeViewZoom(view))));
-                    view.wireHandleCache.clear();
+                    view.state.wireHandleCache.clear();
                     return;
                 }
 
@@ -2729,16 +2746,16 @@ namespace tachyon
                 auto nodeRect = [&](int idx) -> tachyon::IntRect
                 {
                     const tachyon::IntRect rect = ctx.GetElementRect(nodeRefs[idx]);
-                    return view.nodes[size_t(idx)].reroute ? tachyon::IntRect{ rect.Center().x, rect.Center().y, 1, 1 } : rect;
+                    return view.graph.nodes[size_t(idx)].reroute ? tachyon::IntRect{ rect.Center().x, rect.Center().y, 1, 1 } : rect;
                 };
                 // Where a wire meets node `idx`'s socket `ref`: on a reroute, the dot's centre.
                 auto socketPoint = [&](int idx, const ElementRef& ref) -> tachyon::int2
                 {
-                    return view.nodes[size_t(idx)].reroute ? ctx.GetElementRect(nodeRefs[idx]).Center() : socketCenter(ref);
+                    return view.graph.nodes[size_t(idx)].reroute ? ctx.GetElementRect(nodeRefs[idx]).Center() : socketCenter(ref);
                 };
 
                 // Curved wires: their control points at least two rows out from the sockets.
-                const bool curved = view.wireShape == NodeWireShape::Curved;
+                const bool curved = view.graph.wireShape == NodeWireShape::Curved;
                 const int32_t curveReach = theme.nodeGridSize > 0 ? 4 * theme.nodeGridSize : styleManager.Px(48);
                 auto drawWire = [&](const std::vector<tachyon::int2>& points, bool isCurve, const tachyon::LineStyle& style)
                 {
@@ -2756,7 +2773,7 @@ namespace tachyon
                 // Wires between the same two nodes get their lanes spread apart, counting a
                 // dragged wire over an input as connected.
                 // The dragged wire as the connection it would make: its output and its input.
-                const PendingConnection& pending = view.pendingConnection;
+                const PendingConnection& pending = view.state.pendingConnection;
                 const PropertyEndpoint pendingOut = pending.fromInput ? pending.target : pending.source;
                 const PropertyEndpoint pendingIn  = pending.fromInput ? pending.source : pending.target;
                 const bool pendingConnects = pending.IsActive() && pending.target.valid();
@@ -2768,12 +2785,12 @@ namespace tachyon
                 std::vector<DrawnWire> drawn;
                 std::vector<tachyon::VisualColorStyleIndex> drawnColors;
 
-                // The nodes laid out this frame; the app may change view.nodes before this
+                // The nodes laid out this frame; the app may change view.graph.nodes before this
                 // draw runs (later in its frame), so only these are drawn and looked up.
-                const int nodeCount = (int)std::min({ view.nodes.size(), socketRefs.size(), nodeRefs.size() });
+                const int nodeCount = (int)std::min({ view.graph.nodes.size(), socketRefs.size(), nodeRefs.size() });
                 for (int n = 0; n < nodeCount; ++n)
                 {
-                    const auto& node = view.nodes[n];
+                    const auto& node = view.graph.nodes[n];
                     const int propCount = (int)node.properties.size();
                     for (int p = 0; p < propCount; ++p)
                     {
@@ -2791,15 +2808,15 @@ namespace tachyon
                         if (tgtInIdx < 0 || tgtInIdx >= (int)tgtRefs.size()) continue;
 
                         if (!srcRefs[srcOutIdx].IsValid() || !tgtRefs[tgtInIdx].IsValid()) continue;
-                        // The app may change view.nodes between the build and this draw.
-                        if (size_t(src.propIdx) >= view.nodes[size_t(src.nodeIdx)].properties.size()) continue;
+                        // The app may change view.graph.nodes between the build and this draw.
+                        if (size_t(src.propIdx) >= view.graph.nodes[size_t(src.nodeIdx)].properties.size()) continue;
 
                         // Per-wire lane overrides are stored in node.pos
                         // (border-box) space; shift into this draw's CONTENT-box
                         // space by gridOrigin before routing.
                         const uint32_t wireKey = WireKey(n, p);
                         WireRouteOverrides ov;
-                        if (auto it = view.wireOverrides.find(wireKey); it != view.wireOverrides.end())
+                        if (auto it = view.graph.wireOverrides.find(wireKey); it != view.graph.wireOverrides.end())
                         {
                             ov = it->second;
                             if (ov.laneX)  *ov.laneX  += gridOrigin.x;
@@ -2819,9 +2836,9 @@ namespace tachyon
                                              theme.nodeGridSize, gridOrigin, ov);
                         // Wire takes its source socket's colour (style cached above).
                         const tachyon::color4f srcColor =
-                            view.nodes[src.nodeIdx].properties[src.propIdx].socketColor;
+                            view.graph.nodes[src.nodeIdx].properties[src.propIdx].socketColor;
                         tachyon::VisualColorStyleIndex wireColorIdx = theme.lineYellowStyle;
-                        if (auto cit = view.wireColorStyles.find(PackColor(srcColor)); cit != view.wireColorStyles.end())
+                        if (auto cit = view.state.wireColorStyles.find(PackColor(srcColor)); cit != view.state.wireColorStyles.end())
                             wireColorIdx = cit->second;
                         drawn.push_back(DrawnWire{ .wireKey = wireKey, .points = route.points, .curved = route.curved });
                         drawnColors.push_back(wireColorIdx);
@@ -2841,10 +2858,10 @@ namespace tachyon
 
                 // The wire under the mouse: over a lane handle that handle's, over the bare
                 // canvas the nearest within a few pixels; none while something is dragged.
-                const bool held = view.pendingConnection.IsActive() || AnyHeld(view.wireDrag.press, view.marquee);
+                const bool held = view.state.pendingConnection.IsActive() || AnyHeld(view.state.wireDrag.press, view.state.marquee);
                 if (held)
-                    view.hoveredWire.Clear();
-                view.hoveredWire.Track(held, [&]() -> std::optional<uint32_t> {
+                    view.state.hoveredWire.Clear();
+                view.state.hoveredWire.Track(held, [&]() -> std::optional<uint32_t> {
                     if (handleHoveredWire)
                         return handleHoveredWire;
                     if (canvasHovered)
@@ -2853,7 +2870,7 @@ namespace tachyon
                 });
                 for (size_t w = 0; w < drawn.size(); ++w)
                 {
-                    const bool hovered = view.hoveredWire.part == drawn[w].wireKey;
+                    const bool hovered = view.state.hoveredWire.part == drawn[w].wireKey;
                     const tachyon::LineStyle wireStyle{ .colorStyleIndex = drawnColors[w],
                                                            .lineWidth = styleManager.Px(hovered ? 4.f : 2.f) };
                     drawWire(drawn[w].points, drawn[w].curved, wireStyle);
@@ -2911,9 +2928,9 @@ namespace tachyon
                             // The output's colour, as a wire has; the input's until there is one.
                             const PropertyEndpoint colorFrom = pendingOut.valid() && pendingOut.nodeIdx < nodeCount ? pendingOut : src;
                             const tachyon::color4f srcColor =
-                                view.nodes[colorFrom.nodeIdx].properties[colorFrom.propIdx].socketColor;
+                                view.graph.nodes[colorFrom.nodeIdx].properties[colorFrom.propIdx].socketColor;
                             tachyon::VisualColorStyleIndex wireColorIdx = theme.lineYellowStyle;
-                            if (auto cit = view.wireColorStyles.find(PackColor(srcColor)); cit != view.wireColorStyles.end())
+                            if (auto cit = view.state.wireColorStyles.find(PackColor(srcColor)); cit != view.state.wireColorStyles.end())
                                 wireColorIdx = cit->second;
                             const tachyon::LineStyle wireStyle{ .colorStyleIndex = wireColorIdx, .lineWidth = styleManager.Px(2.f),
                                                                    .dashSize = styleManager.Px(4.f) };
@@ -2922,13 +2939,13 @@ namespace tachyon
                     }
                 }
 
-                view.wireHandleCache = std::move(handleCache);
+                view.state.wireHandleCache = std::move(handleCache);
             }));
 
         // On the band round a state, over the states: a dot on the band's ring, nearest the
         // pointer, where a drag would draw a transition from, and a dashed stub on to the
         // pointer, which shows even where the cursor covers the dot. The ring is the band's middle, as DrawStateMachine draws it.
-        if (stateMachine && litRef.IsValid() && !view.transitionDrag.IsHeld() && !view.transitionPicking)
+        if (stateMachine && litRef.IsValid() && !view.state.transitionDrag.IsHeld() && !view.state.transitionPicking)
             VERIFY(elementStorage.AddCustomDrawAfter(canvasRes.ref,
                 [this, litRef, half = int32_t(std::lround(stateBand * NodeViewZoom(view))) / 2,
                  mouseScreen = windowManager->GetScreenMousePos()](tachyon::CustomDrawContext& ctx)
@@ -2956,15 +2973,15 @@ namespace tachyon
 
         // Marquee rectangle - drawn after the nodes so it sits on top of them.
         VERIFY(elementStorage.AddCustomDrawAfter(canvasRes.ref,
-            [this, &view](tachyon::CustomDrawContext& ctx)
+            [this, view](tachyon::CustomDrawContext& ctx)
             {
-                if (view.marquee.Phase() != GesturePhase::Dragging) return;
+                if (view.state.marquee.Phase() != GesturePhase::Dragging) return;
 
                 // Marquee corners are screen-space inputs; ScreenToCurrent brings them into
                 // the current (CANVAS_LAY) space so the rectangle tracks the cursor 1:1 at any zoom.
                 auto toLay = [&](int2 screen) { return ctx.ScreenToCurrent(screen); };
-                const int2 startLay   = toLay(view.marquee.drag.pressScreen);
-                const int2 currentLay = toLay(view.marqueeCurrentScreen);
+                const int2 startLay   = toLay(view.state.marquee.drag.pressScreen);
+                const int2 currentLay = toLay(view.state.marqueeCurrentScreen);
                 const int x0 = std::min(startLay.x, currentLay.x);
                 const int y0 = std::min(startLay.y, currentLay.y);
                 const int x1 = std::max(startLay.x, currentLay.x);
@@ -2985,17 +3002,17 @@ namespace tachyon
 
         // The selection, however it changed since the view last looked (a click, the marquee,
         // a key, a removed node, the app): once, with the frame's other changes made.
-        if (view.selectedNodeIDs != view.reportedSelection || view.selectedFrameIDs != view.reportedFrameSelection)
+        if (view.state.selectedNodeIDs != view.state.reportedSelection || view.state.selectedFrameIDs != view.state.reportedFrameSelection)
         {
-            view.reportedSelection      = view.selectedNodeIDs;
-            view.reportedFrameSelection = view.selectedFrameIDs;
-            ++view.selectionGeneration;
-            if (view.onSelectionChanged)
-                view.onSelectionChanged();
+            view.state.reportedSelection      = view.state.selectedNodeIDs;
+            view.state.reportedFrameSelection = view.state.selectedFrameIDs;
+            ++view.state.selectionGeneration;
+            if (view.state.onSelectionChanged)
+                view.state.onSelectionChanged();
         }
     }
 
-    void GUIApplication::EmitNodeViewOverlays(NodeView& view, ID canvasID)
+    void GUIApplication::EmitNodeViewOverlays(NodeViewRef view, ID canvasID)
     {
         // Siblings after the canvas, anchored to its corners: out of the canvas's
         // pan/zoom, and out of the parent's flow.
@@ -3004,12 +3021,12 @@ namespace tachyon
             return LayoutOverride{}.Anchored(canvasID, placement, dx, dy);
         };
 
-        if (!view.breadcrumb.empty())
-            Breadcrumb(idManager.AllocateDynamicID("node-view-breadcrumb"), view.breadcrumb, view.onBreadcrumb,
+        if (!view.state.breadcrumb.empty())
+            Breadcrumb(idManager.AllocateDynamicID("node-view-breadcrumb"), view.state.breadcrumb, view.state.onBreadcrumb,
                        theme.nodeViewOverlayStyleRef,
                        corner(AnchorPlacement::InsideLeft | AnchorPlacement::InsideTop, inset, inset));
 
-        if (view.showZoomControls)
+        if (view.state.showZoomControls)
         {
             const ID barID = idManager.AllocateDynamicID("node-view-zoom");
             if (BeginHorizontal(barID, theme.nodeViewOverlayStyleRef,
@@ -3018,44 +3035,44 @@ namespace tachyon
                 [[maybe_unused]] const bool pushed = idManager.PushParent(barID);
                 constexpr float kZoomStep = 1.25f;
                 const StyleRef button = theme.nodeViewOverlayButtonStyleRef;
-                Button(idManager.AllocateDynamicID(), "\u2212", [&view] { ZoomNodeView(view, 1.0f / kZoomStep); }, button);
+                Button(idManager.AllocateDynamicID(), "\u2212", [view] { ZoomNodeView(view, 1.0f / kZoomStep); }, button);
                 // The zoom; clicking it goes back to 100%.
                 const std::string percent = std::to_string(int(std::lround(NodeViewZoom(view) * 100.0f))) + "%";
-                Button(idManager.AllocateDynamicID(), percent, [&view] { ZoomNodeView(view, 1.0f / NodeViewZoom(view)); }, button);
-                Button(idManager.AllocateDynamicID(), "+", [&view] { ZoomNodeView(view, kZoomStep); }, button);
+                Button(idManager.AllocateDynamicID(), percent, [view] { ZoomNodeView(view, 1.0f / NodeViewZoom(view)); }, button);
+                Button(idManager.AllocateDynamicID(), "+", [view] { ZoomNodeView(view, kZoomStep); }, button);
                 RegisterElement(Element{ .id = idManager.AllocateDynamicID("divider"), .styleRef = theme.nodeViewOverlayDividerStyleRef,
                                          .flags = ElementFlags::NoInput }, LayoutOverride{});
-                Button(idManager.AllocateDynamicID(), "Fit", [&view] { FrameSelectedNodes(view); }, button);
+                Button(idManager.AllocateDynamicID(), "Fit", [view] { FrameSelectedNodes(view); }, button);
                 if (pushed)
                     (void)idManager.PopParent();
                 EndHorizontal();
             }
         }
 
-        if (view.showMinimap)
+        if (view.state.showMinimap)
         {
             // Clicking or dragging in the minimap centres the view there; Escape puts it back.
             const ID minimapID = idManager.AllocateDynamicID("node-view-minimap");
             Element minimap
             {
                 .id = minimapID,
-                .eventHandler = [this, &view](ElementEvent&& event) -> bool
+                .eventHandler = [this, view](ElementEvent&& event) -> bool
                 {
                     if (event.type == EventType::KeyDown)
                     {
-                        return view.minimapDrag.Cancel(event, guiStateManager, view.transform);
+                        return view.state.minimapDrag.Cancel(event, guiStateManager, view.state.transform);
                     }
-                    if (view.minimapDrag.Release(event) != PointerDrag::Ended::No)
+                    if (view.state.minimapDrag.Release(event) != PointerDrag::Ended::No)
                         return true;
-                    if (view.minimapScale <= 0.0f)
+                    if (view.state.minimapScale <= 0.0f)
                         return false;
                     // A press starts it (Escape comes here with the capture); a move goes on with it.
-                    if (!view.minimapDrag.Press(event, elementStorage, guiStateManager, view.transform, { .atOnce = true, .focus = false })
-                        && !view.minimapDrag.Move(event, 0))
+                    if (!view.state.minimapDrag.Press(event, elementStorage, guiStateManager, view.state.transform, { .atOnce = true, .focus = false })
+                        && !view.state.minimapDrag.Move(event, 0))
                         return false;
                     const int2 local = event.LocalCursor(elementStorage) - event.rect->innerRect.position;
-                    SetNodeViewCenter(view, float2{ view.minimapOrigin.x + float(local.x) / view.minimapScale,
-                                                    view.minimapOrigin.y + float(local.y) / view.minimapScale },
+                    SetNodeViewCenter(view, float2{ view.state.minimapOrigin.x + float(local.x) / view.state.minimapScale,
+                                                    view.state.minimapOrigin.y + float(local.y) / view.state.minimapScale },
                                       NodeViewZoom(view));
                     return true;
                 },
@@ -3067,23 +3084,23 @@ namespace tachyon
             VERIFY(res.status);
             VERIFY(windowRegistry.Add(res.ref));
             VERIFY(elementStorage.AddCustomDraw(res.ref,
-                [this, &view, nodeColor = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--line-strong"))),
+                [this, view, nodeColor = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--line-strong"))),
                  frameColor = styleManager.RegisterColorStyle(ColorStyle::Create(theme.GetColor("--frame-band"))),
                  pad = float(styleManager.Px(6))](CustomDrawContext& ctx)
                 {
                     // Bounds of the nodes and the visible area, in canvas coordinates.
-                    const float2 halfView{ float(view.lastInnerSize.x) * 0.5f, float(view.lastInnerSize.y) * 0.5f };
-                    const float3x2 toCanvas = view.transform.Inverse();
+                    const float2 halfView{ float(view.state.lastInnerSize.x) * 0.5f, float(view.state.lastInnerSize.y) * 0.5f };
+                    const float3x2 toCanvas = view.state.transform.Inverse();
                     const float2 v0 = toCanvas.TransformPoint({ -halfView.x, -halfView.y });
                     const float2 v1 = toCanvas.TransformPoint({  halfView.x,  halfView.y });
                     float2 bmin{ std::min(v0.x, v1.x), std::min(v0.y, v1.y) };
                     float2 bmax{ std::max(v0.x, v1.x), std::max(v0.y, v1.y) };
-                    for (const auto& node : view.nodes)
+                    for (const auto& node : view.graph.nodes)
                     {
                         bmin = { std::min(bmin.x, float(node.pos.x)), std::min(bmin.y, float(node.pos.y)) };
                         bmax = { std::max(bmax.x, float(node.pos.x + node.lastSize.x)), std::max(bmax.y, float(node.pos.y + node.lastSize.y)) };
                     }
-                    for (const auto& frame : view.frames)
+                    for (const auto& frame : view.graph.frames)
                     {
                         bmin = { std::min(bmin.x, float(frame.pos.x)), std::min(bmin.y, float(frame.pos.y)) };
                         bmax = { std::max(bmax.x, float(frame.pos.x + frame.size.x)), std::max(bmax.y, float(frame.pos.y + frame.size.y)) };
@@ -3095,28 +3112,28 @@ namespace tachyon
                     if (scale <= 0.0f)
                         return;
                     // Centred in the minimap; the mapping is kept for clicks.
-                    view.minimapScale  = scale;
-                    view.minimapOrigin = { bmin.x - (float(inner.w) / scale - bw) * 0.5f,
+                    view.state.minimapScale  = scale;
+                    view.state.minimapOrigin = { bmin.x - (float(inner.w) / scale - bw) * 0.5f,
                                            bmin.y - (float(inner.h) / scale - bh) * 0.5f };
                     auto toMap = [&](float x, float y) {
-                        return int2{ int(std::lround((x - view.minimapOrigin.x) * scale)),
-                                     int(std::lround((y - view.minimapOrigin.y) * scale)) };
+                        return int2{ int(std::lround((x - view.state.minimapOrigin.x) * scale)),
+                                     int(std::lround((y - view.state.minimapOrigin.y) * scale)) };
                     };
 
                     // The frames under the nodes, faint, as drawn: a collapsed one as its box.
-                    for (const IntRect& box : view.frameBoxes)
+                    for (const IntRect& box : view.state.frameBoxes)
                     {
                         if (box.w <= 0) continue;
                         const int2 a = toMap(float(box.x), float(box.y));
                         const int2 b = toMap(float(box.x + box.w), float(box.y + box.h));
                         ctx.RenderQuad(IntRect{ a.x, a.y, std::max(1, b.x - a.x), std::max(1, b.y - a.y) }, frameColor, 2.0f);
                     }
-                    for (const auto& node : view.nodes)
+                    for (const auto& node : view.graph.nodes)
                     {
                         if (node.hidden) continue;
                         const int2 a = toMap(float(node.pos.x), float(node.pos.y));
                         const int2 b = toMap(float(node.pos.x + node.lastSize.x), float(node.pos.y + node.lastSize.y));
-                        const bool selected = view.selectedNodeIDs.count(node.stableID) != 0;
+                        const bool selected = view.state.selectedNodeIDs.count(node.stableID) != 0;
                         ctx.RenderQuad(IntRect{ a.x, a.y, std::max(1, b.x - a.x), std::max(1, b.y - a.y) },
                                        selected ? theme.treeDropIndicatorStyle : nodeColor, 2.0f);
                     }
