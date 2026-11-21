@@ -794,5 +794,116 @@ namespace tachyon
             EXPECT_EQ(draws, 2);        // cached again
             app.Cleanup();
         }
+
+        // Two panels side by side, a button in each, and what each one's onChanged saw.
+        class PanelChangedTest : public ::testing::Test
+        {
+        protected:
+            HeadlessGUIApp          app;
+            tachyon::DockingLayout  layout;
+            tachyon::ID             containerID{}, left{}, right{}, leftButton{}, rightButton{}, field{};
+            int                     leftChanged = 0, rightChanged = 0, rightDraws = 0;
+            int                     shared = 0;   // what both panels show
+            std::string             text;
+            // Where the buttons and the field are, from the first frame, which builds them: a
+            // frame served from the cache has the panel's container alone.
+            tachyon::int2           leftAt{}, rightAt{}, fieldAt{};
+
+            void SetUp() override
+            {
+                ASSERT_TRUE(app.Initialize());
+                app.SetDrawCacheEnabled(true);   // as an app runs: cached panels drawn from their copies
+                app.InjectMouseMove({ 1900, 1000 });
+                containerID = app.idManager.CreateStaticID();
+                leftButton  = app.idManager.CreateStaticID();
+                rightButton = app.idManager.CreateStaticID();
+                field       = app.idManager.CreateStaticID();
+                left = app.CreatePanel(layout.panels, "Left", IconID::Invalid, [this] {
+                    app.Button(leftButton, std::to_string(shared), [this] { ++shared; });
+                    app.Field(field, text);
+                });
+                right = app.CreatePanel(layout.panels, "Right", IconID::Invalid, [this] {
+                    ++rightDraws;
+                    app.Button(rightButton, std::to_string(shared), [] {});
+                });
+                layout.panels[left].onChanged  = [this] { ++leftChanged; };
+                layout.panels[right].onChanged = [this] { ++rightChanged; };
+                layout.root = MakeSplit(tachyon::DockSplitMode::LeftPinned, 400, MakeLeaf({ left }), MakeLeaf({ right }));
+            }
+            void TearDown() override { app.Cleanup(); }
+
+            void Frame()
+            {
+                app.Frame([&] {
+                    app.BeginRootWindow();
+                    app.BeginDockingContainer(containerID, &layout, tachyon::LayoutOverride{}.Size(800, 600));
+                    app.EndDockingContainer();
+                    app.EndRootWindow();
+                });
+            }
+            void Frames() { Frame(); Frame(); Frame(); }
+            // A click, the pointer moved there a frame before, as a hand would: the panel under
+            // it is built while it's there.
+            void Click(tachyon::int2 at)
+            {
+                app.InjectMouseMove(at);
+                Frame();
+                app.ClickAt(at);
+            }
+            void Start()
+            {
+                Frame();
+                leftAt  = app.CenterOf(leftButton);
+                rightAt = app.CenterOf(rightButton);
+                fieldAt = app.CenterOf(field);
+                ASSERT_NE(leftAt, rightAt);
+                Frames();
+            }
+        };
+
+        // A click in one panel is reported for that panel alone; the pointer only passing over
+        // the other reports nothing.
+        TEST_F(PanelChangedTest, AClickInAPanelReportsThatPanelChanged)
+        {
+            Start();
+            app.InjectMouseMove(rightAt);
+            Frames();
+            EXPECT_EQ(rightChanged, 0) << "hovering isn't a change";
+
+            Click(leftAt);
+            Frames();
+            EXPECT_EQ(shared, 1);
+            EXPECT_GE(leftChanged, 1);
+            EXPECT_EQ(rightChanged, 0);
+        }
+
+        // Typing in a panel's focused field reports that panel.
+        TEST_F(PanelChangedTest, TypingInAPanelReportsThatPanelChanged)
+        {
+            Start();
+            Click(fieldAt);
+            Frames();
+            const int before = leftChanged;
+            app.InjectText("abc");
+            Frames();
+            EXPECT_GT(leftChanged, before);
+            EXPECT_EQ(rightChanged, 0);
+        }
+
+        // With onChanged invalidating the other panel, the other's cached copy catches up with
+        // what the first one changed.
+        TEST_F(PanelChangedTest, AnotherPanelCatchesUpThroughOnChanged)
+        {
+            layout.panels[left].onChanged = [this] { ++leftChanged; app.InvalidatePanel(right); };
+            Start();
+            const int drawn = rightDraws;
+            Frames();
+            ASSERT_EQ(rightDraws, drawn) << "cached while nothing changes";
+
+            Click(leftAt);
+            Frames();
+            EXPECT_EQ(shared, 1);
+            EXPECT_GT(rightDraws, drawn) << "built again, showing the new value";
+        }
     }
 }

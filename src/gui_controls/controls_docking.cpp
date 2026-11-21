@@ -1213,4 +1213,80 @@ namespace tachyon
         // m_dockingLayoutsThisFrame stays: onDragOut, run during input dispatch, reads it.
         // BeginDockingFrame clears it.
     }
+    void GUIApplication::DispatchInput(ID overID)
+    {
+        // What the user acts on, taken before the handlers move the focus or the capture.
+        std::vector<ID> actedOn = ActedOnIDs(overID);
+        if (inputManager)
+            inputManager->Process(guiStateManager, elementStorage, tabChainManager, textSystem, overID);
+        ReportChangedPanels(std::move(actedOn));
+    }
+
+    std::vector<ID> GUIApplication::ActedOnIDs(ID overID) const
+    {
+        std::vector<ID> ids;
+        if (!inputManager)
+            return ids;
+        bool pointer = false, keys = false;
+        for (const RecordedInputEvent& e : inputManager->GetRecordedEvents())
+            switch (e.type)
+            {
+                case EventType::MouseDown:
+                case EventType::MouseUp:
+                case EventType::MouseScroll:
+                    pointer = true;
+                    break;
+                case EventType::MouseMove:
+                    pointer |= e.state.buttons != MouseButtons::None;   // a drag, not a pass over
+                    break;
+                case EventType::KeyDown:
+                case EventType::KeyUp:
+                case EventType::TextInput:
+                    keys = true;
+                    break;
+                default:
+                    break;
+            }
+        const InteractionState& interaction = guiStateManager.Interaction();
+        auto add = [&ids](ID id) {
+            if (id != ID::Invalid() && std::find(ids.begin(), ids.end(), id) == ids.end())
+                ids.push_back(id);
+        };
+        if (pointer)
+        {
+            add(overID);
+            add(interaction.GetCaptureID());
+            add(interaction.GetActiveID());
+        }
+        if (keys)
+            add(interaction.GetFocusedID());
+        return ids;
+    }
+
+    void GUIApplication::ReportChangedPanels(std::vector<ID> actedOn)
+    {
+        if (actedOn.empty() || m_dockingLayoutsThisFrame.empty())
+            return;
+        // Each element's ancestors: a panel holds it when its content area is one of them.
+        std::vector<ID> ancestors;
+        for (const ID id : actedOn)
+            for (ElementRef r = elementStorage.FindElementRefByID(id); r != ElementRef::Invalid(); r = elementStorage.GetParentRef(r))
+                if (const Element* e = elementStorage.GetElementPtr(r))
+                    ancestors.push_back(e->id);
+        if (ancestors.empty())
+            return;
+        // Gathered first: an onChanged may change the layouts.
+        std::vector<std::function<void()>> calls;
+        for (DockingLayout* layout : m_dockingLayoutsThisFrame)
+            for (auto& [panelID, panel] : layout->panels)
+            {
+                if (!panel.onChanged)
+                    continue;
+                const ID* content = m_panelContentIDs.Find(panelID);
+                if (content && std::find(ancestors.begin(), ancestors.end(), *content) != ancestors.end())
+                    calls.push_back(panel.onChanged);
+            }
+        for (const std::function<void()>& call : calls)
+            call();
+    }
 }

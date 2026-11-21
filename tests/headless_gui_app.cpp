@@ -265,8 +265,8 @@ void HeadlessGUIApp::Frame(std::function<void()> onGuiFn)
     RunPressOutsideWatches();
     InvalidateCachedScopesForInput(overID);
 
-    // -- Dispatch the queued input events to element handlers.
-    inputManager->Process(guiStateManager, elementStorage, tabChainManager, textSystem, overID);
+    // -- Dispatch the queued input events to element handlers, and report the panels acted in.
+    DispatchInput(overID);
     DispatchFileDrops(frameInput);
 
     m_frame.RunStage(tachyon::FrameStage::PostInput, ctx);

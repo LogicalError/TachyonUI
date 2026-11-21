@@ -218,6 +218,25 @@ changes (see [BeginCached](windows-and-layout.md#begincached--endcached)). A pan
 layout.panels[log].cacheSignature = [this] { return std::optional<uint64_t>(logLines.size()); };
 ```
 
+A panel's `onChanged` runs after a frame in which the user acted in it, once its handlers
+have run:
+
+- It counts a press, a release or a drag of the mouse in the panel, the wheel over it, and
+  keys or text typed into its focused element.
+  - The pointer only passing over it doesn't count.
+- Use it when other panels show the same data, such as two Inspectors of one object.
+  - They're cached, so they don't see what changed in this one.
+  - Rebuild the ones that need it with `InvalidatePanel`.
+- Which panels need it is your app's to say: the library doesn't know what a panel shows.
+
+```cpp
+layout.panels[inspector].onChanged = [this, inspector] {
+    for (const ID other : inspectorPanels)
+        if (other != inspector)
+            InvalidatePanel(other);   // built again next frame, with the new values
+};
+```
+
 A tab group's "+" sits right after its last tab when the layout has a `newTabMenu`:
 
 - `newTabMenu(layout, leafNodeID)` builds the menu's items: the panels that can be added.

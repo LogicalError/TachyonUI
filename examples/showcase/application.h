@@ -924,7 +924,8 @@ namespace tachyon
         /// Saves a document (the showcase only marks it saved).
         void SaveShowcaseDocument(Document& document);
 
-        /// A panel the showcase knows by its title ("Viewport", "Inspector", ...), added to `layout`.
+        /// A panel the showcase knows by its title ("Viewport", "Inspector", ...), added to
+        /// `layout`. A change made in it rebuilds the other panels showing the same data.
         ID   CreateShowcasePanel(DockingLayout& layout, std::string_view title);
         /// Help > Show Notifications: a toast of each kind.
         void ShowDemoToasts();
@@ -984,6 +985,17 @@ namespace tachyon
         // The NodeView and StateMachine panels made: their shortcuts act on the one with the focus.
         std::vector<std::weak_ptr<NodeGraphPanel>>    m_nodeGraphPanels;
         std::vector<std::weak_ptr<StateMachinePanel>> m_stateMachinePanels;
+        /// A panel made by CreateShowcasePanel, by the data it shows. `alive` goes with the
+        /// panel (its onChanged holds it), so a closed one drops out.
+        struct PanelOnData
+        {
+            std::string        data;
+            ID                 id;
+            std::weak_ptr<int> alive;
+        };
+        std::vector<PanelOnData> m_panelsOnData;
+        /// The panel of `title`, made by its own Create...Panel.
+        ID   MakeShowcasePanel(DockingLayout& layout, std::string_view title);
         std::vector<std::string> m_startPanels;
         std::vector<std::string> m_floatPanels;   // --float: start in their own windows
         std::filesystem::path    m_filesRoot;     // --files

@@ -100,6 +100,20 @@ namespace tachyon
         /// lazily created resources.
         std::function<void()> onDisable;
 
+        /// Called after a frame in which the user acted in the panel: pressed, released or
+        /// dragged the mouse in it, scrolled over it, or typed in it (its focused element). The
+        /// handlers have run by then, so what they changed is changed. The pointer only passing
+        /// over it doesn't count.
+        ///
+        /// For panels that show the same data: the others are cached and don't see the change,
+        /// so rebuild the ones that need it. What needs it is the app's to say.
+        ///
+        ///     panel.onChanged = [this, id] {
+        ///         for (const ID other : inspectorPanels)
+        ///             if (other != id) InvalidatePanel(other);
+        ///     };
+        std::function<void()> onChanged;
+
         /// The panel's own view state, kept with its layout in the saved UI state (a pan and
         /// zoom, a camera, the page open), as text in a form of the panel's choosing. saveState
         /// runs as the state is saved; an empty string keeps nothing. restoreState gets that

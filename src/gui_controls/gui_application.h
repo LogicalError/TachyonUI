@@ -3366,6 +3366,15 @@ namespace tachyon
 
         /// Internal: called by the docking each frame.
         void        NotePanelContentID(ID panelId, ID contentID) { m_panelContentIDs[panelId] = contentID; }
+        /// Hands the frame's input to the element handlers, then calls onChanged of the docked
+        /// panels the user acted in.
+        void        DispatchInput(ID overID);
+        /// The elements the user acts on with this frame's input: under the pointer and the
+        /// one holding it for a press, a release, a drag or the wheel; the focused one for keys
+        /// and text. None for the pointer only moving.
+        std::vector<ID> ActedOnIDs(ID overID) const;
+        /// Calls onChanged of each docked panel holding one of `actedOn`, once each.
+        void        ReportChangedPanels(std::vector<ID> actedOn);
 
         /// Set by RenderNodeView around each renderBody; Start elsewhere.
         TextAlign nodeRowTextAlign = TextAlign::Start;
