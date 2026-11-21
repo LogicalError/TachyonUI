@@ -343,7 +343,9 @@ namespace tachyon
         // Shown for the focus after a Tab: the target's own text or its first part's.
         const bool byMouse = target == guiStateManager.Interaction().GetHoveredID();
 
-        std::vector<ElementRef> todo{ targetRef };
+        // Walked each frame: the list keeps its storage from the last.
+        std::vector<ElementRef>& todo = m_cutShortWalk;
+        todo.assign(1, targetRef);
         for (size_t visited = 0; !todo.empty() && visited < 256; ++visited)
         {
             const ElementRef ref = todo.back();

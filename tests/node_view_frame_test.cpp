@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include "gpu/allocation_count.h"
 #include "headless_gui_app.h"
 #include "skribidi_test_fixture.h"
 
@@ -62,6 +63,29 @@ namespace tachyon
                 };
             }
             void TearDown() override { app.Cleanup(); }
+
+            // `count` nodes in a chain, each fed by the one before, half of them in a collapsed
+            // frame.
+            void Chain(int count)
+            {
+                view = {};
+                view.transform = float3x2::Scale(1.0f);
+                NodeFrame frame{ .stableID = frameOuter, .title = "Held", .pos = { 0, 0 }, .size = { 40 * g, 40 * g }, .collapsed = true };
+                frame.members.emplace();
+                for (int n = 0; n < count; ++n)
+                {
+                    NodeModel node{};
+                    node.stableID = app.idManager.CreateStaticID();
+                    node.title    = "N";
+                    node.pos      = { (n % 10) * 20 * g, (n / 10) * 12 * g };
+                    node.properties.push_back(NodeProperty{ .input = n > 0 ? std::optional<PropertyEndpoint>(PropertyEndpoint{ n - 1, 1 }) : std::nullopt });
+                    node.properties.push_back(NodeProperty{ .output = true });
+                    if (n % 2 == 0)
+                        frame.members->push_back(node.stableID);
+                    view.nodes.push_back(std::move(node));
+                }
+                view.frames = { std::move(frame) };
+            }
 
             void Frame()
             {
@@ -147,6 +171,27 @@ namespace tachyon
                 Frame();
             }
         };
+
+        // A frame of a graph like the one before keeps the view's per-node working lists (socket
+        // refs, which nodes a collapsed frame hides and its ports, which outputs are wired) in
+        // the storage they had, and a pin's draw holds no allocation: a graph twice as big,
+        // half of it in a collapsed frame, makes no more allocations a frame.
+        TEST_F(NodeViewFrameTest, AFrameOfABiggerGraphAllocatesNoMore)
+        {
+            if (!AllocationCount::ScopedAllocationCount::Supported())
+                GTEST_SKIP() << "allocations are counted in Debug builds with MSVC's CRT";
+            const auto allocationsAFrame = [&](int count) {
+                Chain(count);
+                for (int i = 0; i < 6; ++i)
+                    Frame();
+                AllocationCount::ScopedAllocationCount allocations;
+                Frame();
+                return allocations.Count();
+            };
+            const uint64_t fewer = allocationsAFrame(40);
+            const uint64_t more  = allocationsAFrame(80);
+            EXPECT_EQ(more, fewer) << "allocations that grow with the graph";
+        }
 
         // The title bar is a row pitch high across the frame's top, where the frame is; the
         // rest of the box takes no input, so a press there is the canvas's.

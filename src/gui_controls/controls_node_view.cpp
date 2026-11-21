@@ -970,20 +970,28 @@ namespace tachyon
         // Socket box size, from the .node-socket CSS width; dot and border insets derive from it.
         const int kSocketSize = theme.socketSize;
 
-        // Per-frame socket refs for the wire pass. Index: [nodeIdx][propIdx * 2 + isOutput]
-        std::vector<std::vector<ElementRef>> socketRefs(nodeCount);
+        // This frame's socket refs for the wire pass. Index: [nodeIdx][propIdx * 2 + isOutput]
+        NodeLists<ElementRef>& socketRefs = view.socketRefs;
+        socketRefs.first.resize(size_t(nodeCount) + 1);
+        socketRefs.first[0] = 0;
         for (int n = 0; n < nodeCount; ++n)
-            socketRefs[n].assign(view.nodes[n].properties.size() * 2, ElementRef::Invalid());   // not ElementRef{}: that's the root
+            socketRefs.first[size_t(n) + 1] = socketRefs.first[size_t(n)] + uint32_t(view.nodes[n].properties.size() * 2);
+        socketRefs.items.assign(socketRefs.first.back(), ElementRef::Invalid());   // not ElementRef{}: that's the root
 
-        // Per-frame node refs; the wire pass routes around the node bodies.
-        std::vector<ElementRef> nodeRefs(static_cast<size_t>(nodeCount), ElementRef::Invalid());
+        // This frame's node refs; the wire pass routes around the node bodies.
+        std::vector<ElementRef>& nodeRefs = view.nodeRefs;
+        nodeRefs.assign(static_cast<size_t>(nodeCount), ElementRef::Invalid());
 
         // Outputs that drive at least one input, by WireKey of the output's endpoint.
-        std::unordered_set<uint32_t> drivenOutputs;
+        std::vector<uint32_t>& drivenOutputs = view.drivenOutputs;
+        drivenOutputs.clear();
         for (const auto& cnode : view.nodes)
             for (const auto& cprop : cnode.properties)
                 if (cprop.input.has_value() && cprop.input->valid())
-                    drivenOutputs.insert(WireKey(cprop.input->nodeIdx, cprop.input->propIdx));
+                    drivenOutputs.push_back(WireKey(cprop.input->nodeIdx, cprop.input->propIdx));
+        std::sort(drivenOutputs.begin(), drivenOutputs.end());
+        // The node's color behind a pin, looked up once for every socket.
+        const tachyon::color4f pinBackground = theme.GetColor("--bg-raised");
 
         // -------- Helper: emit one socket Element (circle + drag/drop handler) --------
         // `pinShown` false: the pin shows only while it's hovered or a drop target (a reroute's
@@ -1168,27 +1176,28 @@ namespace tachyon
             // A pin on the node's edge: filled when connected, a ring when not, with an
             // outline in the node's color. The hit region is the full element rect.
             const auto& socketProp = view.nodes[n].properties[propIdx];
-            const bool  connected  = isOutput ? drivenOutputs.contains(WireKey(n, propIdx))
+            const bool  connected  = isOutput ? std::binary_search(drivenOutputs.begin(), drivenOutputs.end(), WireKey(n, propIdx))
                                               : socketProp.input.has_value() && socketProp.input->valid();
             if (pinShown || highlight)
             {
+                // The radii worked out here: the callback holds only what it draws, small
+                // enough for std::function to keep without an allocation for every socket.
+                const float ring = styleManager.Px(2.0f);
+                const float pin  = (highlight ? styleManager.Px(1.0f) : 0.0f) + (float)kSocketSize - styleManager.Px(2.0f);
+                const float back = highlight ? pin + styleManager.Px(6.0f) : pin + 2.0f * ring;   // the halo, or the outline
+                const float hole = connected ? 0.0f : pin - 2.0f * ring;
                 VERIFY(elementStorage.AddCustomDraw(res.ref,
-                    [dotColor, highlight, connected, kSocketSize, nodeColor = theme.GetColor("--bg-raised"),
-                     inset = styleManager.Px(2.0f), ring = styleManager.Px(2.0f), halo = styleManager.Px(6.0f),
-                     grow = styleManager.Px(1.0f)](tachyon::CustomDrawContext& ctx)
+                    [dotColor, nodeColor = pinBackground, pin, back, hole, highlight](tachyon::CustomDrawContext& ctx)
                     {
                         const auto inner = ctx.ElementInnerRect();
                         // Socket centre. Rows are two grid cells tall and the socket is
                         // centred in the row, so this lands on the mid-row grid line.
                         const tachyon::float2 center{ inner.w * 0.5f, inner.h * 0.5f };
-                        const float pin = (highlight ? grow : 0.0f) + (float)kSocketSize - inset;
-                        if (highlight)   // soft white halo behind the pin
-                            ctx.RenderDot(center, pin + halo, tachyon::color4f{ 1.0f, 1.0f, 1.0f, 0.5f });
-                        else
-                            ctx.RenderDot(center, pin + 2.0f * ring, nodeColor);
+                        // A soft white halo behind a highlighted pin, else an outline in the node's color.
+                        ctx.RenderDot(center, back, highlight ? tachyon::color4f{ 1.0f, 1.0f, 1.0f, 0.5f } : nodeColor);
                         ctx.RenderDot(center, pin, dotColor);
-                        if (!connected)
-                            ctx.RenderDot(center, pin - 2.0f * ring, nodeColor);
+                        if (hole > 0.0f)   // not connected: a ring
+                            ctx.RenderDot(center, hole, nodeColor);
                     }));
             }
 
@@ -1386,10 +1395,13 @@ namespace tachyon
         std::vector<DrawnFrame> drawnFrames;
         // Nodes inside a collapsed frame: which frame (-1: none), and, for those with wires
         // crossing its edge, the box and their sockets on it (property, output, row).
-        struct HiddenPort { int prop; bool output; int row; };
-        std::vector<int>                     nodeHiddenBy(size_t(nodeCount), -1);
-        std::vector<IntRect>                 hiddenBox(static_cast<size_t>(nodeCount));
-        std::vector<std::vector<HiddenPort>> hiddenPorts(static_cast<size_t>(nodeCount));
+        std::vector<int>&           nodeHiddenBy = view.nodeHiddenBy;
+        std::vector<IntRect>&       hiddenBox    = view.hiddenBox;
+        NodeLists<NodeHiddenPort>&  hiddenPorts  = view.hiddenPorts;
+        nodeHiddenBy.assign(size_t(nodeCount), -1);
+        hiddenBox.assign(size_t(nodeCount), IntRect{});
+        hiddenPorts.items.clear();
+        hiddenPorts.first.assign(size_t(nodeCount) + 1, 0);
         {
             // Frames gone (the app's own edit, an undo) drop out of the selection and the drag.
             std::erase_if(view.selectedFrameIDs, [&view](ID id) {
@@ -1436,27 +1448,45 @@ namespace tachyon
             }
 
             // What the collapsed frames hide: the frames and nodes each holds, the outermost
-            // one standing for them (the largest first).
-            auto isMember = [](const NodeFrame& outer, ID id) {
-                return outer.members && std::find(outer.members->begin(), outer.members->end(), id) != outer.members->end();
-            };
-            std::vector<int> byArea(static_cast<size_t>(frameCount));
-            for (int f = 0; f < frameCount; ++f) byArea[size_t(f)] = f;
-            std::stable_sort(byArea.begin(), byArea.end(), [&view](int a, int b) {
-                const int2 sa = view.frames[size_t(a)].size, sb = view.frames[size_t(b)].size;
-                return int64_t(sa.x) * sa.y > int64_t(sb.x) * sb.y;
-            });
+            // one standing for them (the largest first). A member is found by its stableID in
+            // the nodes and frames sorted by it, not by a search of the members for each node.
             std::vector<int> frameHiddenBy(size_t(frameCount), -1);
-            for (const int f : byArea)
+            const bool anyCollapsed = std::any_of(view.frames.begin(), view.frames.end(), [](const NodeFrame& f) { return f.collapsed; });
+            if (anyCollapsed)
             {
-                const NodeFrame& outer = view.frames[size_t(f)];
-                if (!outer.collapsed || frameHiddenBy[size_t(f)] >= 0) continue;
-                for (int other = 0; other < frameCount; ++other)
-                    if (other != f && frameHiddenBy[size_t(other)] < 0 && isMember(outer, view.frames[size_t(other)].stableID))
-                        frameHiddenBy[size_t(other)] = f;
-                for (int n = 0; n < nodeCount; ++n)
-                    if (nodeHiddenBy[size_t(n)] < 0 && isMember(outer, view.nodes[size_t(n)].stableID))
-                        nodeHiddenBy[size_t(n)] = f;
+                auto byID = [](std::vector<std::pair<ID, int>>& table, const auto& items) {
+                    table.clear();
+                    for (int i = 0; i < (int)items.size(); ++i)
+                        table.push_back({ items[size_t(i)].stableID, i });
+                    std::sort(table.begin(), table.end());
+                };
+                byID(view.nodesByID, view.nodes);
+                byID(view.framesByID, view.frames);
+                auto find = [](const std::vector<std::pair<ID, int>>& table, ID id) {
+                    const auto it = std::lower_bound(table.begin(), table.end(), std::pair<ID, int>{ id, INT_MIN });
+                    return it != table.end() && it->first == id ? it->second : -1;
+                };
+                std::vector<int> byArea(static_cast<size_t>(frameCount));
+                for (int f = 0; f < frameCount; ++f) byArea[size_t(f)] = f;
+                std::stable_sort(byArea.begin(), byArea.end(), [&view](int a, int b) {
+                    const int2 sa = view.frames[size_t(a)].size, sb = view.frames[size_t(b)].size;
+                    return int64_t(sa.x) * sa.y > int64_t(sb.x) * sb.y;
+                });
+                for (const int f : byArea)
+                {
+                    const NodeFrame& outer = view.frames[size_t(f)];
+                    if (!outer.collapsed || !outer.members || frameHiddenBy[size_t(f)] >= 0) continue;
+                    for (const ID member : *outer.members)
+                    {
+                        if (const int n = find(view.nodesByID, member); n >= 0)
+                        {
+                            if (nodeHiddenBy[size_t(n)] < 0)
+                                nodeHiddenBy[size_t(n)] = f;
+                        }
+                        else if (const int other = find(view.framesByID, member); other >= 0 && other != f && frameHiddenBy[size_t(other)] < 0)
+                            frameHiddenBy[size_t(other)] = f;
+                    }
+                }
             }
             for (int n = 0; n < nodeCount; ++n)
             {
@@ -1468,7 +1498,14 @@ namespace tachyon
 
             // A collapsed frame's rows: an input for each wire coming in from outside it, an
             // output for each output inside it feeding a node outside, in node order.
-            std::vector<std::vector<PropertyEndpoint>> portsIn(static_cast<size_t>(frameCount)), portsOut(static_cast<size_t>(frameCount));
+            std::vector<std::vector<PropertyEndpoint>>& portsIn  = view.framePortsIn;
+            std::vector<std::vector<PropertyEndpoint>>& portsOut = view.framePortsOut;
+            for (auto* ports : { &portsIn, &portsOut })
+            {
+                ports->resize(size_t(frameCount));
+                for (std::vector<PropertyEndpoint>& list : *ports)
+                    list.clear();
+            }
             for (int n = 0; n < nodeCount; ++n)
             {
                 const int inside = nodeHiddenBy[size_t(n)];
@@ -1514,13 +1551,13 @@ namespace tachyon
                     {
                         const PropertyEndpoint e = portsIn[size_t(f)][size_t(r)];
                         hiddenBox[size_t(e.nodeIdx)] = box;
-                        hiddenPorts[size_t(e.nodeIdx)].push_back({ e.propIdx, false, r });
+                        hiddenPorts.items.push_back({ e.nodeIdx, e.propIdx, false, r });
                     }
                     for (int r = 0; r < (int)portsOut[size_t(f)].size(); ++r)
                     {
                         const PropertyEndpoint e = portsOut[size_t(f)][size_t(r)];
                         hiddenBox[size_t(e.nodeIdx)] = box;
-                        hiddenPorts[size_t(e.nodeIdx)].push_back({ e.propIdx, true, r });
+                        hiddenPorts.items.push_back({ e.nodeIdx, e.propIdx, true, r });
                     }
                 }
 
@@ -1611,11 +1648,20 @@ namespace tachyon
                                                         LayoutOverride{}.Height(Pixels{ std::max(1, frameBar - nodeTopChromeV) }));
                     VERIFY(headerRes.status);
                     VERIFY(windowRegistry.Add(headerRes.ref));
-                    // A port's name: its node's title, and its pin's name when it has one.
-                    auto portName = [&view](PropertyEndpoint e) {
+                    // A port's name: its node's title, and its pin's name when it has one. Built
+                    // in the view's string, which Text has copied by the next one.
+                    auto portName = [&view](const std::vector<PropertyEndpoint>& ports, int r) -> std::string_view {
+                        std::string& text = view.portText;
+                        text.clear();
+                        if (r >= (int)ports.size())
+                            return text;
+                        const PropertyEndpoint e = ports[size_t(r)];
                         const NodeModel& node = view.nodes[size_t(e.nodeIdx)];
                         const std::string& pin = node.properties[size_t(e.propIdx)].name;
-                        return pin.empty() ? node.title : node.title + "." + pin;
+                        text = node.title;
+                        if (!pin.empty())
+                            text.append(".").append(pin);
+                        return text;
                     };
                     for (int r = 0; r < rows; ++r)
                     {
@@ -1625,10 +1671,8 @@ namespace tachyon
                         VERIFY(rowRes.status);
                         VERIFY(windowRegistry.Add(rowRes.ref));
                         VERIFY(elementStorage.BeginChildren());
-                        const std::string in  = r < (int)portsIn[size_t(f)].size()  ? portName(portsIn[size_t(f)][size_t(r)])  : std::string();
-                        const std::string out = r < (int)portsOut[size_t(f)].size() ? portName(portsOut[size_t(f)][size_t(r)]) : std::string();
-                        Text(idManager.AllocateDynamicID("frame-port-in"), in, theme.nodeFramePortStyleRef, LayoutOverride{}.FlexGrow(1));
-                        Text(idManager.AllocateDynamicID("frame-port-out"), out, theme.nodeFramePortOutStyleRef, LayoutOverride{}.FlexGrow(1));
+                        Text(idManager.AllocateDynamicID("frame-port-in"), portName(portsIn[size_t(f)], r), theme.nodeFramePortStyleRef, LayoutOverride{}.FlexGrow(1));
+                        Text(idManager.AllocateDynamicID("frame-port-out"), portName(portsOut[size_t(f)], r), theme.nodeFramePortOutStyleRef, LayoutOverride{}.FlexGrow(1));
                         VERIFY(elementStorage.EndChildren());
                     }
                     VERIFY(elementStorage.EndChildren());
@@ -1855,6 +1899,14 @@ namespace tachyon
                 drawnFrames.push_back({ titleRes.ref, frame.size, state, fill, band, edge });
             }
         }
+        // The hidden nodes' sockets, gathered by frame, grouped by node (each places its own
+        // socket, so their order within a node doesn't matter; std::sort needs no buffer).
+        std::sort(hiddenPorts.items.begin(), hiddenPorts.items.end(),
+                  [](const NodeHiddenPort& a, const NodeHiddenPort& b) { return a.node < b.node; });
+        for (const NodeHiddenPort& port : hiddenPorts.items)
+            ++hiddenPorts.first[size_t(port.node) + 1];
+        for (size_t n = 1; n < hiddenPorts.first.size(); ++n)
+            hiddenPorts.first[n] += hiddenPorts.first[n - 1];
 
         std::optional<uint32_t> handleHoveredWire;   // the wire whose lane handle is under the mouse
 
@@ -2031,7 +2083,7 @@ namespace tachyon
                 VERIFY(elementStorage.BeginChildren());
                 [[maybe_unused]] const bool pushedHidden = idManager.PushParent(node.stableID);
                 const int32_t pitch = 2 * std::max(1, theme.nodeGridSize);
-                for (const HiddenPort& port : hiddenPorts[size_t(n)])
+                for (const NodeHiddenPort& port : hiddenPorts[size_t(n)])
                     socketRefs[n][port.prop * 2 + (port.output ? 1 : 0)] = emitSocket(n, port.prop, port.output, /*readonly=*/true,
                         LayoutOverride{}.FixedSize(Pixels{ kSocketSize }, Pixels{ kSocketSize })
                                        .Absolute(port.output ? box.w - kSocketSize / 2 : -kSocketSize / 2,
@@ -2603,7 +2655,8 @@ namespace tachyon
         // of the frontmost node - and is skipped with that node when it leaves view.
         // Endpoints are CANVAS_LAY, so they pan/zoom with the sockets and clip to the viewport.
         VERIFY(elementStorage.AddCustomDraw(canvasRes.ref,
-            [this, &view, socketRefs = std::move(socketRefs), nodeRefs = std::move(nodeRefs), drawnFrames = std::move(drawnFrames),
+            // The socket and node refs are the view's, as built this frame.
+            [this, &view, &socketRefs, &nodeRefs, drawnFrames = std::move(drawnFrames),
              transitionLabels = std::move(transitionLabels), stateMarks = std::move(stateMarks), transitionGap, transitionLoop, pointedState, bandLit, stateBand,
              canvasHovered = guiStateManager.Interaction().GetHoveredID() == canvasID,
              handleHoveredWire, mouseScreen = windowManager->GetScreenMousePos()](tachyon::CustomDrawContext& ctx)

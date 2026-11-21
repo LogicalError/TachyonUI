@@ -908,7 +908,13 @@ namespace tachyon
         /// Measures the font-dependent metrics above. Call after every LoadTheme.
         void ComputeRowMetrics(StyleManager& styleManager, ITextSystem& textSystem);
     private:
-        std::unordered_map<std::string, color4f> m_paletteColors;
+        /// Hashes a name as a string_view, so GetColor looks one up without making a string.
+        struct NameHash
+        {
+            using is_transparent = void;
+            size_t operator()(std::string_view name) const noexcept { return std::hash<std::string_view>{}(name); }
+        };
+        std::unordered_map<std::string, color4f, NameHash, std::equal_to<>> m_paletteColors;
         std::vector<CustomPropertyInfo>                 m_variables;
         std::unordered_map<std::string, CustomProperty> m_variableValues;
         std::unordered_map<std::string, uint16_t>       m_colorVariables;   ///< ColorStyle::variable of each

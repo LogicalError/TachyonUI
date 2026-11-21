@@ -3130,6 +3130,8 @@ namespace tachyon
         /// over itself.
         void ShowCutShortText();
         CutShortText m_cutShort{};
+        /// FindCutShortText's walk of the target's elements, kept for its storage.
+        mutable std::vector<ElementRef> m_cutShortWalk;
         bool OpenContextMenuWindow(ID targetID);
         bool OpenCached(ID id, StyleRef style, uint64_t signature, LayoutOverride&& constraints);
         static void ReportInvalidControlID(ID id);
