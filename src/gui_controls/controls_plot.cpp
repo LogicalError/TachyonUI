@@ -15,35 +15,35 @@ namespace tachyon
     namespace
     {
         // All of the x range, with room in it.
-        PlotRange DataX(const PlotView& view)
+        PlotRange DataX(ConstPlotViewRef view)
         {
-            float lo = view.xMin, hi = view.xMax;
+            float lo = view.data.xMin, hi = view.data.xMax;
             if (!std::isfinite(lo)) lo = 0.0f;
             if (!std::isfinite(hi) || !(hi > lo)) hi = lo + 1.0f;
             return { lo, hi };
         }
 
         // The part in view over `rect`.
-        PlotGrid::Frame FrameOf(const PlotView& view, IntRect rect)
+        PlotGrid::Frame FrameOf(ConstPlotViewRef view, IntRect rect)
         {
             const PlotRange x = PlotShownX(view), y = PlotShownY(view);
             return { rect, x.min, x.max, y.min, y.max };
         }
 
         // Shows [lo, lo + span] of the x range; all of it again once it's that wide.
-        void ShowX(PlotView& view, float lo, float span)
+        void ShowX(PlotViewRef view, float lo, float span)
         {
             const PlotRange data = DataX(view);
             const float full = data.max - data.min;
             span = std::max(span, full / 1000.0f);
             if (!std::isfinite(lo) || span >= full)
             {
-                view.shownSet = false;
+                view.state.shownSet = false;
                 return;
             }
-            view.shownXMin = std::clamp(lo, data.min, data.max - span);
-            view.shownXMax = view.shownXMin + span;
-            view.shownSet  = true;
+            view.state.shownXMin = std::clamp(lo, data.min, data.max - span);
+            view.state.shownXMax = view.state.shownXMin + span;
+            view.state.shownSet  = true;
         }
 
         // The polyline `points` cut to x in [lo, hi].
@@ -72,25 +72,25 @@ namespace tachyon
 
         // The handle under `pos`: the nearest within `reach` across, over the plot or the band
         // under it; -1 when none is.
-        int HitHandle(const PlotView& view, const PlotGrid::Frame& f, float2 pos, float reach, float band)
+        int HitHandle(ConstPlotViewRef view, const PlotGrid::Frame& f, float2 pos, float reach, float band)
         {
             if (pos.y < float(f.rect.y) || pos.y > float(f.rect.y + f.rect.h) + band)
                 return -1;
             int best = -1;
             float bestDistance = reach;
-            for (int h = 0; h < (int)view.handles.size(); ++h)
+            for (int h = 0; h < (int)view.data.handles.size(); ++h)
             {
-                const float d = std::fabs(f.X(view.handles[size_t(h)].x) - pos.x);
+                const float d = std::fabs(f.X(view.data.handles[size_t(h)].x) - pos.x);
                 // Ties go to the later one, so handles pushed together still come apart to the right.
                 if (d <= bestDistance) { best = h; bestDistance = d; }
             }
             return best;
         }
 
-        std::vector<float> HandleXs(const PlotView& view)
+        std::vector<float> HandleXs(ConstPlotViewRef view)
         {
             std::vector<float> xs;
-            for (const PlotHandle& h : view.handles)
+            for (const PlotHandle& h : view.data.handles)
                 xs.push_back(h.x);
             return xs;
         }
@@ -114,21 +114,21 @@ namespace tachyon
         }
     }
 
-    bool GUIApplication::Plot(ID id, PlotView& view, LayoutOverride&& constraints)
+    bool GUIApplication::Plot(ID id, PlotViewRef view, LayoutOverride&& constraints)
     {
-        PlotView* v = &view;
-        const int count = (int)view.series.size();
-        if (view.shownSeries >= count) view.shownSeries = -1;
-        view.activeHandle = view.handles.empty() ? 0 : std::clamp(view.activeHandle, 0, (int)view.handles.size() - 1);
+        PlotViewRef v = view;
+        const int count = (int)view.data.series.size();
+        if (view.state.shownSeries >= count) view.state.shownSeries = -1;
+        view.state.activeHandle = view.data.handles.empty() ? 0 : std::clamp(view.state.activeHandle, 0, (int)view.data.handles.size() - 1);
         const bool disabled = guiStateManager.Construction().IsDisabled();
-        if (disabled && v->handleDrag.IsHeld())
+        if (disabled && v.state.handleDrag.IsHeld())
         {
-            ApplyPlotEdit(view, PlotEdit{ v->handleDrag.before, v->handleDrag.before });
-            v->handleDrag.Reset();
+            ApplyPlotEdit(view.data, PlotEdit{ v.state.handleDrag.before, v.state.handleDrag.before });
+            v.state.handleDrag.Reset();
         }
 
-        const bool changed = view.revision != view.revisionSeen;
-        view.revisionSeen = view.revision;
+        const bool changed = view.state.edits != view.state.editsSeen;
+        view.state.editsSeen = view.state.edits;
 
         BeginVertical(id, theme.emptyVertStyleRef, std::move(constraints));
         const bool pushed = idManager.PushParent(id);
@@ -138,11 +138,11 @@ namespace tachyon
         {
             BeginHorizontal(idManager.AllocateDynamicID("plot_chips"), theme.plotToolbarStyleRef, LayoutOverride::Auto().NoShrink());
             auto chip = [&](int s, std::string_view text, VisualColorStyleIndex color) {
-                const bool picked = view.shownSeries == s;
+                const bool picked = view.state.shownSeries == s;
                 if (picked) BeginSelected();
                 const ElementRef ref = RegisterControl(
                     Element{ .id = idManager.AllocateDynamicID(s < 0 ? std::string("plot_all") : std::format("plot_series_{}", s)),
-                             .eventHandler = MakeButtonHandler([v, s]() { v->shownSeries = s; }),
+                             .eventHandler = MakeButtonHandler([v, s]() { v.state.shownSeries = s; }),
                              .styleRef = theme.plotChannelStyleRef },
                     color == VisualColorStyleIndex{} ? std::string(text) : "   " + std::string(text), LayoutOverride{});
                 if (picked) EndSelected();
@@ -158,7 +158,7 @@ namespace tachyon
             };
             chip(-1, "All", VisualColorStyleIndex{});
             for (int s = 0; s < count; ++s)
-                chip(s, view.series[size_t(s)].name, theme.curveChannelColors[size_t(view.series[size_t(s)].color)]);
+                chip(s, view.data.series[size_t(s)].name, theme.curveChannelColors[size_t(view.data.series[size_t(s)].color)]);
             EndHorizontal();
         }
 
@@ -167,8 +167,8 @@ namespace tachyon
         const ID plotID = idManager.AllocateDynamicID("plot_area");
         const ElementState plotState = guiStateManager.GetCurrentState(plotID);
         if ((plotState & ElementState::Hover) == ElementState::None)
-            view.hovered = false;
-        const PlotGrid::Frame last = FrameOf(view, view.plotRect);
+            view.state.hovered = false;
+        const PlotGrid::Frame last = FrameOf(view, view.state.plotRect);
         const int32_t px1 = std::max(1, styleManager.Px(1)), px4 = styleManager.Px(4);
         const float band = float(styleManager.Px(12));   // the handles' strip under the plot
 
@@ -177,26 +177,26 @@ namespace tachyon
         const float minGap = float(styleManager.Px(56)), minGapV = float(styleManager.Px(28));
         const float xStep = PlotGrid::NiceStep(last.XSpan(), float(last.rect.w), minGap);
         const float yStep = PlotGrid::NiceStep(last.YSpan(), float(last.rect.h), minGapV);
-        if (view.labels && last.rect.w > 0 && last.rect.h > 0)
+        if (view.data.labels && last.rect.w > 0 && last.rect.h > 0)
         {
             PlotGrid::AddLabels(*this, theme.plotLabelStyleRef, labels, last.xMin, last.xMax, xStep, /*onYAxis*/ false, "plot_x_labels");
-            if (view.yScale == PlotScale::Linear)
+            if (view.data.yScale == PlotScale::Linear)
                 PlotGrid::AddLabels(*this, theme.plotLabelStyleRef, labels, last.yMin, last.yMax, yStep, /*onYAxis*/ true, "plot_y_labels");
         }
 
         // What's under the pointer: x, and each shown series' value there.
         TextID readout = TextID::Invalid;
         int2 readoutSize {};
-        if (view.hovered && count > 0)
+        if (view.state.hovered && count > 0)
         {
-            std::string text = Number(view.hoverX);
+            std::string text = Number(view.state.hoverX);
             for (int s = 0; s < count; ++s)
             {
-                const PlotSeries& series = view.series[size_t(s)];
-                if (!series.visible || (view.shownSeries >= 0 && view.shownSeries != s))
+                const PlotSeries& series = view.data.series[size_t(s)];
+                if (!series.visible || (view.state.shownSeries >= 0 && view.state.shownSeries != s))
                     continue;
                 const PlotRange data = DataX(view);
-                const float value = ValueAt(series, view.hoverX, data.min, data.max);
+                const float value = ValueAt(series, view.state.hoverX, data.min, data.max);
                 if (std::isfinite(value))
                     text += series.name.empty() ? std::format(" \xC2\xB7 {}", Number(value))
                                                 : std::format(" \xC2\xB7 {} {}", series.name, Number(value));
@@ -216,25 +216,25 @@ namespace tachyon
             {
                 if (event.rect == nullptr)
                     return false;
-                const PlotGrid::Frame f = FrameOf(*v, event.rect->innerRect);
+                const PlotGrid::Frame f = FrameOf(v, event.rect->innerRect);
                 const int2 cursor = event.LocalCursor(es);
                 const float2 at{ float(cursor.x), float(cursor.y) };
                 auto dragTo = [v, &f](float px) {
-                    ApplyPlotEdit(*v, MovePlotHandleEdit(*v, v->activeHandle, f.AtX(px)));
+                    ApplyPlotEdit(v.data, MovePlotHandleEdit(v.data, v.state.activeHandle, f.AtX(px)));
                 };
                 switch (event.type)
                 {
                     case EventType::MouseMove:
                     {
-                        v->hovered = true;
-                        v->hoverX = std::clamp(f.AtX(at.x), f.xMin, f.xMax);
-                        if (v->panDrag.Move(event, 0))
+                        v.state.hovered = true;
+                        v.state.hoverX = std::clamp(f.AtX(at.x), f.xMin, f.xMax);
+                        if (v.state.panDrag.Move(event, 0))
                         {
                             const float span = f.xMax - f.xMin;
-                            ShowX(*v, v->panDrag.before - float(v->panDrag.drag.ScreenDelta(event.state).x) * span / float(std::max(1, f.rect.w)), span);
+                            ShowX(v, v.state.panDrag.before - float(v.state.panDrag.drag.ScreenDelta(event.state).x) * span / float(std::max(1, f.rect.w)), span);
                             return true;
                         }
-                        if (v->handleDrag.Move(event, 0))
+                        if (v.state.handleDrag.Move(event, 0))
                         {
                             dragTo(at.x);
                             return true;
@@ -246,19 +246,19 @@ namespace tachyon
                         // The middle button (or Alt + left) drags the view, over a handle too.
                         if (const MouseButtons panButton = PanDragButton(event.state); panButton != MouseButtons::None)
                         {
-                            v->panDrag.Press(event, es, gsm, f.xMin, { .button = panButton, .atOnce = true });
+                            v.state.panDrag.Press(event, es, gsm, f.xMin, { .button = panButton, .atOnce = true });
                             return true;
                         }
                         if (!event.state.LeftPressed())
                             return false;
-                        const int hit = HitHandle(*v, f, at, reach, band);
+                        const int hit = HitHandle(v, f, at, reach, band);
                         if (hit < 0)
                         {
                             TakeFocus(gsm, event.id);
                             return true;
                         }
-                        v->activeHandle = hit;
-                        v->handleDrag.Press(event, es, gsm, HandleXs(*v), { .atOnce = true });
+                        v.state.activeHandle = hit;
+                        v.state.handleDrag.Press(event, es, gsm, HandleXs(v), { .atOnce = true });
                         return true;
                     }
                     case EventType::MouseScroll:
@@ -273,29 +273,29 @@ namespace tachyon
                         {
                             const float pivot = std::clamp(f.AtX(at.x), f.xMin, f.xMax);
                             const float newSpan = span / nav.zoom;
-                            ShowX(*v, pivot - (pivot - f.xMin) * newSpan / span, newSpan);
+                            ShowX(v, pivot - (pivot - f.xMin) * newSpan / span, newSpan);
                         }
                         if (nav.pan.x != 0.0f)
                         {
-                            const PlotRange shown = PlotShownX(*v);
-                            ShowX(*v, shown.min + nav.pan.x * 0.1f * (shown.max - shown.min), shown.max - shown.min);
+                            const PlotRange shown = PlotShownX(v);
+                            ShowX(v, shown.min + nav.pan.x * 0.1f * (shown.max - shown.min), shown.max - shown.min);
                         }
                         return true;
                     }
                     case EventType::MouseUp:
                     {
-                        if (v->panDrag.IsPressed(event.id))
-                            return v->panDrag.Release(event) != PointerDrag::Ended::No;
-                        if (v->handleDrag.Release(event) == PointerDrag::Ended::No)
+                        if (v.state.panDrag.IsPressed(event.id))
+                            return v.state.panDrag.Release(event) != PointerDrag::Ended::No;
+                        if (v.state.handleDrag.Release(event) == PointerDrag::Ended::No)
                             return false;
                         // Already where it was dropped: the edit, for undo.
-                        const PlotEdit edit{ v->handleDrag.before, HandleXs(*v) };
-                        v->handleDrag.before.clear();
+                        const PlotEdit edit{ v.state.handleDrag.before, HandleXs(v) };
+                        v.state.handleDrag.before.clear();
                         if (!edit.empty())
                         {
-                            ++v->revision;
-                            if (v->onEdit)
-                                v->onEdit(edit);
+                            ++v.state.edits;
+                            if (v.data.onEdit)
+                                v.data.onEdit(edit);
                         }
                         return true;
                     }
@@ -304,30 +304,30 @@ namespace tachyon
                         if (gsm.Interaction().GetFocusedID() != event.id || event.state.consumed)
                             return false;
                         const KeyCode key = event.state.lastKey;
-                        if (v->panDrag.Cancel(event, gsm))
+                        if (v.state.panDrag.Cancel(event, gsm))
                         {
-                            ShowX(*v, v->panDrag.before, f.xMax - f.xMin);
+                            ShowX(v, v.state.panDrag.before, f.xMax - f.xMin);
                             return true;
                         }
                         if (key == KeyCode::KeyA && event.state.modifiers == KeyModifier::None)
                         {
-                            v->shownSet = false;   // all of it
+                            v.state.shownSet = false;   // all of it
                             return true;
                         }
-                        if (v->handleDrag.Cancel(event, gsm))
+                        if (v.state.handleDrag.Cancel(event, gsm))
                         {
-                            ApplyPlotEdit(*v, PlotEdit{ v->handleDrag.before, v->handleDrag.before });
-                            v->handleDrag.before.clear();
+                            ApplyPlotEdit(v.data, PlotEdit{ v.state.handleDrag.before, v.state.handleDrag.before });
+                            v.state.handleDrag.before.clear();
                             return true;
                         }
                         if (key == KeyCode::Escape)
                             return false;
-                        if ((key == KeyCode::Left || key == KeyCode::Right) && !v->handles.empty() && !v->handleDrag.IsHeld())
+                        if ((key == KeyCode::Left || key == KeyCode::Right) && !v.data.handles.empty() && !v.state.handleDrag.IsHeld())
                         {
                             const bool shift = (event.state.modifiers & KeyModifier::Shift) != KeyModifier::None;
                             const float step = (f.xMax - f.xMin) / (shift ? 10.0f : 100.0f) * (key == KeyCode::Left ? -1.0f : 1.0f);
-                            const int h = v->activeHandle;
-                            CommitPlotEdit(*v, MovePlotHandleEdit(*v, h, v->handles[size_t(h)].x + step));
+                            const int h = v.state.activeHandle;
+                            CommitPlotEdit(v, MovePlotHandleEdit(v.data, h, v.data.handles[size_t(h)].x + step));
                             return true;
                         }
                         return false;
@@ -341,7 +341,7 @@ namespace tachyon
         const ElementRef plotRef = RegisterControl(
             Element{ .id = plotID, .eventHandler = std::move(plotHandler), .styleRef = theme.plotStyleRef, .state = plotState },
             LayoutOverride::Auto().FlexGrow(1));
-        VERIFY(elementStorage.AddPostLayout(plotRef, [v](PostLayoutContext& ctx) { v->plotRect = ctx.ElementInnerRect(); }));
+        VERIFY(elementStorage.AddPostLayout(plotRef, [v](PostLayoutContext& ctx) { v.state.plotRect = ctx.ElementInnerRect(); }));
 
         const float lineWidth = float(px1) * 1.5f, shownWidth = float(px1) * 2.0f;
         const float handleSize = float(styleManager.Px(5));
@@ -349,42 +349,42 @@ namespace tachyon
         const int2 readoutPad{ styleManager.Px(6), styleManager.Px(2) };
         const int32_t labelBelow = int32_t(band) + px4;
         // Each handle's fill: its own color's style, kept while it's shown (alpha 0: the theme's).
-        std::vector<VisualColorStyleIndex> handleFills(view.handles.size(), theme.curveSelectedKeyColor);
-        if (!view.handles.empty())
+        std::vector<VisualColorStyleIndex> handleFills(view.data.handles.size(), theme.curveSelectedKeyColor);
+        if (!view.data.handles.empty())
         {
-            const ID fillsID = idManager.AllocateRangedID(uint32_t(view.handles.size()), "plot-handle-fills");
-            for (size_t h = 0; h < view.handles.size(); ++h)
-                if (view.handles[h].color.a > 0.0f)
-                    handleFills[h] = AppColorStyle(idManager.GetSubID(fillsID, uint32_t(h)), view.handles[h].color);
+            const ID fillsID = idManager.AllocateRangedID(uint32_t(view.data.handles.size()), "plot-handle-fills");
+            for (size_t h = 0; h < view.data.handles.size(); ++h)
+                if (view.data.handles[h].color.a > 0.0f)
+                    handleFills[h] = AppColorStyle(idManager.GetSubID(fillsID, uint32_t(h)), view.data.handles[h].color);
         }
         VERIFY(elementStorage.AddCustomDraw(plotRef, [=, this, handleFills = std::move(handleFills)](CustomDrawContext& ctx)
         {
             const IntRect inner = ctx.ElementInnerRect();
-            const PlotGrid::Frame f = FrameOf(*v, inner);
+            const PlotGrid::Frame f = FrameOf(v, inner);
 
             PlotGrid::DrawLines(ctx, f, PlotGrid::NiceStep(f.XSpan(), float(inner.w), minGap),
-                                v->yScale == PlotScale::Linear ? PlotGrid::NiceStep(f.YSpan(), float(inner.h), minGapV) : 0.0f,
+                                v.data.yScale == PlotScale::Linear ? PlotGrid::NiceStep(f.YSpan(), float(inner.h), minGapV) : 0.0f,
                                 { theme.curveGridColor, theme.curveGridMajorColor, theme.curveZeroColor }, px1);
             PlotGrid::DrawLabels(ctx, f, labels, px4, labelBelow);
 
             // The series: all overlaid and faded, or the one picked at full strength. Their
             // slots spread over all of the x range; the parts out of view aren't drawn.
-            const PlotRange data = DataX(*v);
+            const PlotRange data = DataX(v);
             const float left = float(inner.x), right = float(inner.x + inner.w);
-            const float baseY = f.Y(std::clamp(PlotScaleY(*v, 0.0f), f.yMin, f.yMax));
-            for (int s = 0; s < (int)v->series.size(); ++s)
+            const float baseY = f.Y(std::clamp(PlotScaleY(v.data, 0.0f), f.yMin, f.yMax));
+            for (int s = 0; s < (int)v.data.series.size(); ++s)
             {
-                const PlotSeries& series = v->series[size_t(s)];
+                const PlotSeries& series = v.data.series[size_t(s)];
                 const int n = (int)series.values.size();
-                if (!series.visible || n == 0 || (v->shownSeries >= 0 && v->shownSeries != s))
+                if (!series.visible || n == 0 || (v.state.shownSeries >= 0 && v.state.shownSeries != s))
                     continue;
-                const bool alone = v->shownSeries == s || v->series.size() == 1;
+                const bool alone = v.state.shownSeries == s || v.data.series.size() == 1;
                 const VisualColorStyleIndex full  = theme.curveChannelColors[size_t(series.color)];
                 const VisualColorStyleIndex faded = theme.curveChannelFadedColors[size_t(series.color)];
                 const float slot = (data.max - data.min) / float(n);
                 auto top = [&](int i) {
                     const float value = series.values[size_t(i)];
-                    return f.Y(std::clamp(PlotScaleY(*v, std::isfinite(value) ? value : 0.0f), f.yMin, f.yMax));
+                    return f.Y(std::clamp(PlotScaleY(v.data, std::isfinite(value) ? value : 0.0f), f.yMin, f.yMax));
                 };
                 switch (series.kind)
                 {
@@ -436,13 +436,13 @@ namespace tachyon
             }
 
             // The handles: a line through the plot, and a triangle under it pointing up.
-            for (int h = 0; h < (int)v->handles.size(); ++h)
+            for (int h = 0; h < (int)v.data.handles.size(); ++h)
             {
-                const PlotHandle& handle = v->handles[size_t(h)];
+                const PlotHandle& handle = v.data.handles[size_t(h)];
                 if (handle.x < f.xMin || handle.x > f.xMax)
                     continue;   // out of view
                 const float x = std::round(f.X(handle.x));
-                const bool active = h == v->activeHandle && (plotState & ElementState::Focused) != ElementState::None;
+                const bool active = h == v.state.activeHandle && (plotState & ElementState::Focused) != ElementState::None;
                 ctx.RenderQuad(IntRect{ int32_t(x), inner.y, px1, inner.h }, inner, theme.curveZeroColor);
                 const float y0 = float(inner.y + inner.h) + float(px1);
                 const float2 tip{ x, y0 }, baseL{ x - handleSize, y0 + handleSize * 1.7f }, baseR{ x + handleSize, y0 + handleSize * 1.7f };

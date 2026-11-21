@@ -757,7 +757,7 @@ Also:
 
   ```cpp
   v->hover.Track(AnyHeld(v->pan, v->keyDrag, v->tangentDrag, v->boxSelect), [&] {
-      CurveView::HoverTarget under;
+      CurveViewState::HoverTarget under;
       // ... the key, handle or curve under the pointer
       return under;
   });

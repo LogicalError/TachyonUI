@@ -167,7 +167,7 @@ The palette sets `--timeline-ready`, `--timeline-tick` and `--timeline-marker`.
 An animation editor: a toolbar over the track list and, beside it, the ruler and the lanes.
 
 ```cpp
-void TimelineEditor(ID id, TimelineView& view, LayoutOverride&& constraints = {});
+void TimelineEditor(ID id, TimelineViewRef view, LayoutOverride&& constraints = {});   // a TimelineView, or { data, state }
 ```
 
 - The toolbar:
@@ -186,27 +186,32 @@ It fills the room it's given: put it in a panel and it takes the panel.
 
 ### The view
 
-`TimelineView` is yours: keep it from frame to frame, as you would a `NodeView`.
+`TimelineView` is yours: keep it from frame to frame, as you would a `NodeView`. It's two
+parts in one, which you can also keep apart to show the tracks in several places (see
+[Several views of one timeline](#several-views-of-one-timeline)):
 
-| Field | What it's for |
-| --- | --- |
-| `tracks` | The rows, top to bottom |
-| `playback` | The playhead, as a `TimelineState` |
-| `duration`, `fps` | The length in seconds, and the frame rate |
-| `loopRange` | Where looping goes round; empty: the whole length |
-| `snap` | Whether drags land on frames |
-| `viewStart`, `viewLength` | The part in view; a `viewLength` of 0 shows it all |
-| `selectedTrack`, `selectedKeys` | What's selected: a track by `stableID`, keys and events by theirs |
-| `filter` | The track list shows the tracks whose name has it, with their groups |
+- `TimelineData`: the tracks themselves, the playhead, and their edits.
+- `TimelineViewState`: how one editor shows them, the part in view and the selection.
+
+| Field | On | What it's for |
+| --- | --- | --- |
+| `tracks` | `TimelineData` | The rows, top to bottom |
+| `playback` | `TimelineData` | The playhead, as a `TimelineState` |
+| `duration`, `fps` | `TimelineData` | The length in seconds, and the frame rate |
+| `loopRange` | `TimelineData` | Where looping goes round; empty: the whole length |
+| `snap` | `TimelineData` | Whether drags land on frames |
+| `viewStart`, `viewLength` | `TimelineViewState` | The part in view; a `viewLength` of 0 shows it all |
+| `selectedTrack`, `selectedKeys` | `TimelineViewState` | What's selected: a track by `stableID`, keys and events by theirs |
+| `filter` | `TimelineViewState` | The track list shows the tracks whose name has it, with their groups |
 
 And its callbacks:
 
-| Callback | When |
-| --- | --- |
-| `onEdit` | A change was made (already applied): put it on your undo history |
-| `onAddTrack` | The "+" over the track list; without it there's no "+" |
-| `onTrackContextMenu` | A right click on a row: build the menu with `MenuItem` and the like |
-| `onPlaybackChanged` | The user moved the playhead, or started or stopped playing |
+| Callback | On | When |
+| --- | --- | --- |
+| `onEdit` | `TimelineData` | A change was made (already applied): put it on your undo history |
+| `onPlaybackChanged` | `TimelineData` | The user moved the playhead, or started or stopped playing |
+| `onAddTrack` | `TimelineViewState` | The "+" over the track list; without it there's no "+" |
+| `onTrackContextMenu` | `TimelineViewState` | A right click on a row: build the menu with `MenuItem` and the like |
 
 ```cpp
 TimelineView animation;   // a member
@@ -261,13 +266,14 @@ Everything the user changes in the tracks or the loop range comes to `onEdit` as
 - `tracks`: tracks added or removed
 - `loopFrom`, `loopTo`: the loop range, when it changed
 
-`ApplyTimelineEdit(view, edit, undo)` does it again, or undoes it. To change the tracks from
-your own code as one undo step, make an edit and commit it:
+`ApplyTimelineEdit(data, edit, undo)` does it again, or undoes it. It takes the tracks alone,
+a `TimelineView` or a `TimelineData`. To change the tracks from your own code as one undo
+step, make an edit and commit it:
 
 | Helper | The edit it makes |
 | --- | --- |
 | `AddKeyEdit(view, track, time, keyID)` | A key on a property, on the nearest frame while snapping; none if one's there or the track is locked |
-| `DeleteSelectedKeysEdit(view)` | The selected keys and events gone, except on locked tracks |
+| `DeleteSelectedKeysEdit(view)` | A view's selected keys and events gone, except on locked tracks |
 | `AddTrackEdit(view, track, index)` | A track added at `index` (the end if out of range) |
 | `RemoveTrackEdit(view, track)` | A track removed; a group with its tracks |
 
@@ -278,6 +284,35 @@ CommitTimelineEdit(animation, AddKeyEdit(animation, track, animation.playback.ti
 - `CommitTimelineEdit` applies the edit and hands it to `onEdit`.
 - The playhead, the selection, the zoom and a group's `expanded` aren't edits: they change in
   the view directly.
+- A key, event or track that an edit removes leaves the selection the next time the editor
+  draws. To have it go at once, call `PruneTimelineSelection(view)`.
+
+### Several views of one timeline
+
+The tracks can show in more than one place at once, for example in two panels. Keep them
+once, as a `TimelineData`, and a `TimelineViewState` for each editor of them:
+
+```cpp
+TimelineData      animation;      // the tracks, the playhead, onEdit
+TimelineViewState top, bottom;    // each panel's: the part in view, the selection
+
+// Each frame, in each panel:
+TimelineEditor({ animation, top });
+TimelineEditor({ animation, bottom });
+```
+
+- Each editor zooms and selects on its own.
+  - For example, zooming `top` leaves `bottom` showing all of it.
+- An edit made in one shows in all of them.
+  - For example, a key dragged in `top` moves in `bottom` too.
+  - A track removed in one leaves the others' selections the next time they draw.
+- They share the playhead: playing shows in each.
+- Set `onAddTrack` and `onTrackContextMenu` on each view state; they act on what that view
+  has selected. `onEdit` and `onPlaybackChanged` go on the `TimelineData`.
+- Each editor has its own rows. To find a track's, for example in a test, use
+  `TimelineRowID(state, track.stableID)`.
+- `SaveViewState` and `RestoreViewState` take a `TimelineViewState`, to keep a panel's zoom
+  with its layout.
 
 ### Playing it
 

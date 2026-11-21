@@ -77,7 +77,7 @@ namespace tachyon
         return true;
     }
 
-    std::string SaveViewState(const TimelineView& view)
+    std::string SaveViewState(const TimelineViewState& view)
     {
         JsonValue state = JsonValue::MakeObject();
         state.Set("start", double(view.viewStart));
@@ -86,7 +86,7 @@ namespace tachyon
         return state.Write();
     }
 
-    bool RestoreViewState(TimelineView& view, std::string_view state)
+    bool RestoreViewState(TimelineViewState& view, std::string_view state)
     {
         const std::optional<JsonValue> object = ObjectOf(state);
         if (!object)
@@ -103,7 +103,7 @@ namespace tachyon
         return true;
     }
 
-    std::string SaveViewState(const CurveView& view)
+    std::string SaveViewState(const CurveViewState& view)
     {
         if (!view.shownSet)
             return {};
@@ -113,7 +113,7 @@ namespace tachyon
         return state.Write();
     }
 
-    bool RestoreViewState(CurveView& view, std::string_view state)
+    bool RestoreViewState(CurveViewState& view, std::string_view state)
     {
         const std::optional<JsonValue> object = ObjectOf(state);
         float r[4];

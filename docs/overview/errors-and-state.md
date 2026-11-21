@@ -83,9 +83,9 @@ A panel can keep its own view with its layout: a pan and zoom, a camera, the pag
   - in `RestoreUIState`, for a `PersistDocking` layout;
   - in `RestoreDocumentLayout`, for a document.
 - `gui_view_state.h` has `SaveViewState` and `RestoreViewState` for the library's views:
-  - a node view's pan and zoom (`NodeView`);
-  - the part of a timeline in view (`TimelineView`);
-  - the part of a curve plot in view (`CurveView`);
+  - a node view's pan and zoom (`NodeViewState`);
+  - the part of a timeline in view (`TimelineViewState`);
+  - the part of a curve plot in view (`CurveViewState`);
   - a viewport's camera (`ViewportCamera`);
   - the settings page open (`SettingsPanelState`), by its name.
 

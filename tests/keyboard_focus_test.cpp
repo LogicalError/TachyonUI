@@ -162,8 +162,8 @@ namespace tachyon
             BoxCorners corners = BoxCorners(4);          // linked
             BoxShadow  shadow  { .y = 4, .blur = 12, .color = { 0, 0, 0, 90 } };
             CurveView  curve;
-            PlotView   plot { .series = { PlotSeries{ .name = "R", .values = { 1, 2 } }, PlotSeries{ .name = "G", .values = { 2, 1 } } },
-                              .handles = { { "Black", 0.0f }, { "White", 1.0f } } };
+            PlotView   plot { PlotData{ .series = { PlotSeries{ .name = "R", .values = { 1, 2 } }, PlotSeries{ .name = "G", .values = { 2, 1 } } },
+                                        .handles = { { "Black", 0.0f }, { "White", 1.0f } } } };
         };
 
         TEST_F(KeyboardFocusTest, TabReachesEveryControlAndEachShowsTheFocus)

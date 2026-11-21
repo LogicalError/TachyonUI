@@ -26,12 +26,12 @@ namespace tachyon
     bool        RestoreViewState(NodeViewState& view, std::string_view state);
 
     /// The part of a timeline in view and its zoom slider.
-    std::string SaveViewState(const TimelineView& view);
-    bool        RestoreViewState(TimelineView& view, std::string_view state);
+    std::string SaveViewState(const TimelineViewState& view);
+    bool        RestoreViewState(TimelineViewState& view, std::string_view state);
 
     /// The part of a curve plot in view in its editor. Empty until the editor has shown it.
-    std::string SaveViewState(const CurveView& view);
-    bool        RestoreViewState(CurveView& view, std::string_view state);
+    std::string SaveViewState(const CurveViewState& view);
+    bool        RestoreViewState(CurveViewState& view, std::string_view state);
 
     /// A viewport's camera: where it looks, from how far and which way, its field of view and
     /// whether it's orthographic.

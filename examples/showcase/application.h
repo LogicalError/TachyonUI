@@ -321,11 +321,12 @@ namespace tachyon
         float            ImportElapsed();  // how far into the import, in seconds; -1 while there's none
         /// What the progress shown in a cached panel looks like now, for its cache signature.
         uint64_t         ProgressLook();
-        // The timeline editor demo: its tracks, set up the first time it's drawn.
-        TimelineView     animation;
+        // The timeline editor demo: its tracks, set up the first time it's drawn. Each Timeline
+        // panel shows them with a view of its own.
+        TimelineData     animation;
         bool             animationSeeded = false;
-        /// The Curves panel: the animated sphere's curves, its playhead the timeline's.
-        CurveView        animationCurves;
+        /// The Curves panels' curves: the animated sphere's, their playhead the timeline's.
+        CurveData        animationCurves;
         // The scene the Viewport panels show (each from its own camera): its shapes, the one
         // picked, and what draws them.
         std::vector<SceneObject> sceneObjects;
@@ -375,11 +376,12 @@ namespace tachyon
                 return g;
             }();
             // CurveField demos: a falloff, and a color's red, green and blue curves.
-            tachyon::CurveView demoCurve;
-            tachyon::CurveView demoColorCurves;
+            // Each Inspector shows them with views of its own.
+            tachyon::CurveData demoCurve;
+            tachyon::CurveData demoColorCurves;
             bool               curvesSeeded = false;
             // Plot demo: the demo image's levels, its R, G and B counted into 64 bins.
-            tachyon::PlotView  demoLevels;
+            tachyon::PlotData  demoLevels;
             int                demoLevelsKind = 1;      // a PlotSeriesKind: bars, area or line
             bool               demoLevelsLog = false;
             int listSelected = 0;
@@ -770,8 +772,8 @@ namespace tachyon
         // Dock-panel body renderers (one per panel_*.cpp), called each frame
         // while the panel is the active tab.
         void RenderReorderablePanel(ReorderablePanel& panel);
-        void RenderTimelinePanel();
-        void RenderCurvesPanel();
+        void RenderTimelinePanel(TimelineViewState& view);
+        void RenderCurvesPanel(CurveViewState& view);
         void RenderSketchPanel(SketchPanel& panel);
         void EraseSketchAt(float2 at, float radius);
         /// The Appearance page's theme editor: the theme's colors and sizes by category, each
@@ -781,8 +783,11 @@ namespace tachyon
         void ThemeVariableRow(const CustomPropertyInfo& info);
         /// The theme picker's row: Dark or Light, and Reset for the changes made to it.
         void RenderThemePicker(SettingsView::ThemeEditor& editor);
-        /// The timeline editor demo's tracks, keys, sound and events, and its callbacks.
+        /// The timeline editor demo's tracks, keys, sound and events, and its edits on the undo
+        /// history.
         void SeedAnimation();
+        /// A Timeline panel's view of the tracks: its first selection, "+" and the rows' menu.
+        void SetUpTimelineView(TimelineViewState& view);
         /// The Curves panel's channels: the sphere's position, rotation and scale.
         void SeedAnimationCurves();
         /// The Inspector's curves: a falloff, and a color's channels; their edits on the undo history.
