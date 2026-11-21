@@ -267,6 +267,11 @@ To change the layout from code:
 A closed panel gives its ID back when `CreatePanel` made it (the overload without an ID).
 One you gave `CreatePanel` stays yours to release.
 
+A panel can be closed from an input handler, such as a button in it. It's out of the
+layout at once, but its callbacks, and what they hold, are destroyed when the next frame
+starts. Until then, what the frame queued to draw (a viewport's scene, a custom draw) can
+still use them.
+
 ```cpp
 (void)FloatPanel(layout, log, int2{ styleManager.Px(200), styleManager.Px(200) });
 ```
