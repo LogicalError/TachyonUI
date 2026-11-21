@@ -97,8 +97,7 @@ namespace tachyon
             m_lastItemID = m_lastAddedID;
         m_childrenBegun = false;
 
-        if (!m_idIndexStale)
-            IndexElement(m_lastAddedID, newChildRef);
+        IndexElement(m_lastAddedID, newChildRef);
 
         m_elementCount++;
         if ((GetElementUnsafe(newChildRef).flags & ElementFlags::Animated) != ElementFlags::None)
@@ -393,11 +392,29 @@ namespace tachyon
         }
     }
 
+    void ElementStorage::RelinkChildrenOf(uint32_t depth, uint32_t begin, uint32_t end)
+    {
+        const auto& parents = m_depths[depth].hierarchy;
+        auto& children = m_depths[depth + 1].hierarchy;
+        for (uint32_t parent = begin; parent < end; ++parent)
+        {
+            const uint32_t childEnd = parents[parent].childOffset + parents[parent].childCount;
+            for (uint32_t child = parents[parent].childOffset; child < childEnd; ++child)
+            {
+                children[child].parentIndex = parent;
+                children[child].nextSiblingIndex = child + 1 < childEnd ? child + 1 : HierarchyInfo::kInvalidNextIndex;
+            }
+        }
+    }
+
     [[nodiscard]] ElementStorageResult ElementStorage::MoveChild(
         uint32_t childDepth, uint32_t rangeBegin,
-        uint32_t fromLocal, uint32_t toLocal,
-        ElementMove* outMove)
+        uint32_t fromLocal, uint32_t toLocal)
     {
+        ElementMove& move = m_lastMove;
+        move.rotations.clear();
+        move.childDepth = move.siblingsBegin = move.siblingsEnd = 0;
+
         if (!m_constructionModeActive) return ElementStorageResult::NotConstructing;
         if (fromLocal == toLocal) return ElementStorageResult::Success;
 
@@ -409,9 +426,9 @@ namespace tachyon
         if (childDepth >= m_usedDepthCount || hi >= m_depths[childDepth].Size())
             return ElementStorageResult::UnknownProblem;
 
-        m_idIndexStale = true; // elements are about to change slots
-
-        ElementMove move{ .childDepth = childDepth, .siblingsBegin = lo, .siblingsEnd = hi + 1 };
+        move.childDepth = childDepth;
+        move.siblingsBegin = lo;
+        move.siblingsEnd = hi + 1;
 
         // Block being moved and the affected sibling range, per depth level.
         uint32_t blockBegin = absFrom;
@@ -478,41 +495,24 @@ namespace tachyon
             absFrom = nextBlockBegin;
         }
 
-        // Rebuild parentIndex and nextSiblingIndex below childDepth.
-        for (uint32_t depth = childDepth; depth < m_usedDepthCount; depth++)
+        // Only the rotated slots hold other elements now. Their children are the next depth's
+        // rotated slots, or stayed where they were with these as their (moved) parents.
+        for (const ElementMove::Rotation& rotation : move.rotations)
         {
-            auto& parentDl = m_depths[depth];
-            uint32_t nextDepth = depth + 1;
-            if (nextDepth >= m_usedDepthCount) break;
-
-            auto& childDl = m_depths[nextDepth];
-            uint32_t parentCount = parentDl.Size();
-            for (uint32_t pi = 0; pi < parentCount; pi++)
-            {
-                auto& ph = parentDl.hierarchy[pi];
-                for (uint32_t ci = ph.childOffset; ci < ph.childOffset + ph.childCount; ci++)
-                {
-                    if (ci >= childDl.Size()) break;
-                    childDl.hierarchy[ci].parentIndex = pi;
-                    childDl.hierarchy[ci].nextSiblingIndex =
-                        (ci + 1 < ph.childOffset + ph.childCount) ? (ci + 1) : HierarchyInfo::kInvalidNextIndex;
-                }
-            }
+            if (rotation.depth + 1 < m_usedDepthCount)
+                RelinkChildrenOf(rotation.depth, rotation.begin, rotation.end);
+            ReindexSlots(rotation.depth, rotation.begin, rotation.end);
         }
 
-        // Sibling links at childDepth (all share one parent).
+        // Sibling links at childDepth (all share one parent), on to the siblings after the range.
         {
-            uint32_t itemLo = std::min(rangeBegin + fromLocal, rangeBegin + toLocal);
-            uint32_t itemHi = std::max(rangeBegin + fromLocal, rangeBegin + toLocal) + 1;
-            uint32_t parentIdx = m_depths[childDepth].hierarchy[itemLo].parentIndex;
-            RebuildSiblingLinks(childDepth, itemLo, itemHi, parentIdx);
-
-            if (itemLo > 0)
-            {
-                auto& prev = m_depths[childDepth].hierarchy[itemLo - 1];
-                if (prev.parentIndex == parentIdx)
-                    prev.nextSiblingIndex = itemLo;
-            }
+            auto& siblings = m_depths[childDepth].hierarchy;
+            const uint32_t parentIdx = siblings[lo].parentIndex;
+            RebuildSiblingLinks(childDepth, lo, hi + 1, parentIdx);
+            if (hi + 1 < siblings.size() && siblings[hi + 1].parentIndex == parentIdx)
+                siblings[hi].nextSiblingIndex = hi + 1;
+            if (lo > 0 && siblings[lo - 1].parentIndex == parentIdx)
+                siblings[lo - 1].nextSiblingIndex = lo;
         }
 
         // Stored refs follow their elements to the new slots.
@@ -527,9 +527,6 @@ namespace tachyon
         for (ParentStackEntry& entry : m_parentStack)
             if (entry.addedBefore.IsValid())
                 entry.addedBefore = move.Remap(entry.addedBefore);
-
-        if (outMove != nullptr)
-            *outMove = std::move(move);
         return ElementStorageResult::Success;
     }
 
@@ -604,7 +601,6 @@ namespace tachyon
         m_addedIDBeforeWindow = ID::Invalid();
         m_childrenBegunBeforeWindow = false;
         m_idIndex.Clear();
-        m_idIndexStale = false;
     }
 
 
@@ -625,7 +621,7 @@ namespace tachyon
     }
 
 
-    void ElementStorage::IndexElement(ID id, ElementRef ref) const
+    void ElementStorage::IndexElement(ID id, ElementRef ref)
     {
         if (id == ID::Invalid()) return;
         auto [held, inserted] = m_idIndex.TryEmplace(id, ref);
@@ -638,18 +634,28 @@ namespace tachyon
             *held = ref;
     }
 
+    void ElementStorage::ReindexSlots(uint32_t depth, uint32_t begin, uint32_t end)
+    {
+        const std::vector<Element>& elements = m_depths[depth].elements;
+        // First drop the entries that point into the range. A shared ID's entry stays with an
+        // element outside it, which a rotation can't pass, or goes to the earliest one inside.
+        for (uint32_t i = begin; i < end; ++i)
+        {
+            ElementRef* held = m_idIndex.Find(elements[i].id);
+            if (held != nullptr && held->depth == depth && held->index >= begin && held->index < end)
+                *held = ElementRef::Invalid();
+        }
+        for (uint32_t i = begin; i < end; ++i)
+        {
+            ElementRef* held = m_idIndex.Find(elements[i].id);
+            if (held != nullptr && !held->IsValid())
+                *held = ElementRef{ depth, i };
+        }
+    }
+
     ElementRef ElementStorage::FindElementRefByID(ID id) const
     {
         if (id == ID::Invalid() || Empty()) return ElementRef::Invalid();
-
-        if (m_idIndexStale)
-        {
-            m_idIndex.Clear();
-            for (uint32_t d = 0; d < m_usedDepthCount; ++d)
-                for (uint32_t i = 0; i < m_depths[d].Size(); ++i)
-                    IndexElement(m_depths[d].elements[i].id, ElementRef{ d, i });
-            m_idIndexStale = false;
-        }
 
         const ElementRef* found = m_idIndex.Find(id);
         return found == nullptr ? ElementRef::Invalid() : *found;

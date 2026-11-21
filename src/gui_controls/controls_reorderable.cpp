@@ -416,10 +416,9 @@ namespace tachyon
             {
                 uint32_t childDepth = m_reorderable->Construction().groupRef.depth + 1;
                 uint32_t rangeBegin = m_reorderable->Construction().itemRefs[0].index;
-                ElementMove move;
                 VERIFY(elementStorage.MoveChild(childDepth, rangeBegin,
-                    static_cast<uint32_t>(from), static_cast<uint32_t>(to), &move));
-                windowRegistry.ApplyElementMove(move);
+                    static_cast<uint32_t>(from), static_cast<uint32_t>(to)));
+                windowRegistry.ApplyElementMove(elementStorage.LastMove());
                 m_reorderable->Construction().reorderApplied = true;
             }
         }

@@ -6,6 +6,7 @@
 
 #include <gui_core/elements/gui_element_storage.h>
 #include <gui_core/windows/gui_window_registry.h>
+#include "gpu/allocation_count.h"
 #include <vector>
 
 namespace tachyon
@@ -914,16 +915,218 @@ namespace tachyon
         for (ElementRef ref : { aRef, a0.ref, bRef, b0Ref, b1Ref })
             ASSERT_TRUE(registry.Add(ref) == RegistryResult::Success);
 
-        ElementMove move;
-        ASSERT_TRUE(storage.MoveChild(1, aRef.index, 0, 1, &move) == ElementStorageResult::Success);
+        ASSERT_TRUE(storage.MoveChild(1, aRef.index, 0, 1) == ElementStorageResult::Success);
         ASSERT_TRUE(storage.EndChildren() == ElementStorageResult::Success);
-        registry.ApplyElementMove(move);
+        registry.ApplyElementMove(storage.LastMove());
 
         std::vector<uint64_t> order;
         for (const auto& node : *registry.GetWindowMembers(0))
             order.push_back(IdAt(node.ref));
         EXPECT_EQ(order, (std::vector<uint64_t>{ 101, 300, 301, 100, 200 }));
         ASSERT_TRUE(registry.EndWindowScope() == RegistryResult::Success);
+        ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
+    }
+
+
+    // W{ X{x0{x00}}, P{ A{a0{a00}}, B{b0, b1}, C }, Y{y0{y00}} }: the moves happen inside P,
+    // with whole subtrees before and after it at every depth.
+    class MoveChildTreeTest : public ElementStorageTest
+    {
+    protected:
+        void Put(uint64_t id)
+        {
+            ASSERT_TRUE(storage.Add(CreateElement(id, sharedFlags)));
+        }
+
+        /// Each id the only child of the one before it.
+        void Chain(std::initializer_list<uint64_t> ids)
+        {
+            uint32_t opened = 0;
+            for (uint64_t id : ids)
+            {
+                if (opened > 0)
+                    ASSERT_TRUE(storage.BeginChildren() == ElementStorageResult::Success);
+                Put(id);
+                ++opened;
+            }
+            for (uint32_t i = 1; i < opened; ++i)
+                ASSERT_TRUE(storage.EndChildren() == ElementStorageResult::Success);
+        }
+
+        void Build()
+        {
+            ASSERT_TRUE(storage.BeginConstruction() == ElementStorageResult::Success);
+            Put(1);
+            ASSERT_TRUE(storage.BeginChildren() == ElementStorageResult::Success);
+            Chain({ 10, 11, 12 });
+            Put(20);
+            ASSERT_TRUE(storage.BeginChildren() == ElementStorageResult::Success);
+            Chain({ 100, 200, 400 });
+            Put(101);
+            ASSERT_TRUE(storage.BeginChildren() == ElementStorageResult::Success);
+            Put(300);
+            Put(301);
+            ASSERT_TRUE(storage.EndChildren() == ElementStorageResult::Success);
+            Put(102);
+            ASSERT_TRUE(storage.EndChildren() == ElementStorageResult::Success);
+            Chain({ 30, 31, 32 });
+            ASSERT_TRUE(storage.EndChildren() == ElementStorageResult::Success);
+        }
+
+        /// Moves the child of `parentID` at `from` to `to`.
+        void Move(uint64_t parentID, uint32_t from, uint32_t to)
+        {
+            const ElementRef parent = storage.FindElementRefByID(CreateElement(parentID).id);
+            ASSERT_TRUE(storage.IsValidRef(parent));
+            const IndexRange children = storage.GetChildRange(parent);
+            ASSERT_TRUE(storage.MoveChild(parent.depth + 1, children.begin, from, to) == ElementStorageResult::Success);
+        }
+
+        /// Every child range is packed in parent order, and each child links back to its
+        /// parent and on to its next sibling.
+        void ExpectLinksConsistent()
+        {
+            for (uint32_t depth = 0; depth + 1 < storage.NumberOfDepthLevels(); ++depth)
+            {
+                uint32_t nextChild = 0;
+                for (uint32_t p = 0; p < storage.DepthSizeOf(depth); ++p)
+                {
+                    const ElementRef parent{ depth, p };
+                    const IndexRange children = storage.GetChildRange(parent);
+                    if (children.Empty())
+                        continue;
+                    EXPECT_EQ(children.begin, nextChild) << "children of " << IdAt(parent) << " are packed";
+                    nextChild = children.end;
+                    for (uint32_t c = children.begin; c < children.end; ++c)
+                    {
+                        const ElementRef child{ depth + 1, c };
+                        EXPECT_EQ(storage.GetParentRef(child), parent) << IdAt(child) << "'s parent";
+                        const ElementRef next = c + 1 < children.end ? ElementRef{ depth + 1, c + 1 } : ElementRef::Invalid();
+                        EXPECT_EQ(storage.GetNextSiblingRef(child), next) << IdAt(child) << "'s next sibling";
+                    }
+                }
+                EXPECT_EQ(nextChild, storage.DepthSizeOf(depth + 1)) << "every element at depth " << depth + 1 << " has a parent";
+            }
+        }
+
+        void ExpectEveryIDFound()
+        {
+            for (uint32_t depth = 0; depth < storage.NumberOfDepthLevels(); ++depth)
+                for (uint32_t i = 0; i < storage.DepthSizeOf(depth); ++i)
+                {
+                    const ElementRef ref{ depth, i };
+                    const ElementRef found = storage.FindElementRefByID(storage.GetElementUnsafe(ref).id);
+                    ASSERT_TRUE(storage.IsValidRef(found));
+                    EXPECT_EQ(IdAt(found), IdAt(ref)) << "lookup follows " << IdAt(ref);
+                }
+        }
+
+        uint64_t IdAt(ElementRef ref) { return storage.GetElementUnsafe(ref).id.Value(); }
+
+        ElementFlags sharedFlags = ElementFlags::None;   ///< flags for every element Put adds
+    };
+
+    TEST_F(MoveChildTreeTest, MovesKeepLinksAndLookupsAcrossTheTree)
+    {
+        Build();
+        Move(20, 0, 2);     // A{a0{a00}} behind C
+        EXPECT_EQ(CollectDepthFirstIDs(), (std::vector<uint64_t>{ 1, 10, 11, 12, 20, 101, 300, 301, 102, 100, 200, 400, 30, 31, 32 }));
+        ExpectLinksConsistent();
+        ExpectEveryIDFound();
+
+        Move(101, 1, 0);    // b1 before b0
+        Move(20, 2, 0);     // A back to the front
+        EXPECT_EQ(CollectDepthFirstIDs(), (std::vector<uint64_t>{ 1, 10, 11, 12, 20, 100, 200, 400, 101, 301, 300, 102, 30, 31, 32 }));
+        ExpectLinksConsistent();
+        ExpectEveryIDFound();
+
+        Move(1, 2, 0);      // Y{y0{y00}} before X
+        EXPECT_EQ(CollectDepthFirstIDs(), (std::vector<uint64_t>{ 1, 30, 31, 32, 10, 11, 12, 20, 100, 200, 400, 101, 301, 300, 102 }));
+        ExpectLinksConsistent();
+        ExpectEveryIDFound();
+        ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
+    }
+
+    // A move within some of the siblings: the moved range still links on to the ones after it.
+    TEST_F(MoveChildTreeTest, AMoveShortOfTheLastSiblingKeepsTheRestLinked)
+    {
+        Build();
+        Move(20, 0, 1);     // A behind B, C still last
+        EXPECT_EQ(CollectDepthFirstIDs(), (std::vector<uint64_t>{ 1, 10, 11, 12, 20, 101, 300, 301, 100, 200, 400, 102, 30, 31, 32 }));
+        ExpectLinksConsistent();
+
+        Move(1, 1, 0);      // P before X, Y still last
+        ExpectLinksConsistent();
+        ExpectEveryIDFound();
+        ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
+    }
+
+    // LastMove describes the last call only: a move to the same place leaves nothing to remap.
+    TEST_F(MoveChildTreeTest, LastMoveIsEmptyAfterAMoveThatMovedNothing)
+    {
+        Build();
+        Move(20, 0, 2);
+        EXPECT_FALSE(storage.LastMove().rotations.empty());
+        Move(20, 1, 1);
+        EXPECT_TRUE(storage.LastMove().rotations.empty());
+        EXPECT_EQ(storage.LastMove().Remap(ElementRef{ 2, 0 }), (ElementRef{ 2, 0 }));
+        ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
+    }
+
+    // Elements added after a move are found right away, like any other.
+    TEST_F(MoveChildTreeTest, ElementsAddedAfterAMoveAreFound)
+    {
+        Build();
+        Move(20, 0, 2);
+        const AddResult late = storage.Add(CreateElement(40));
+        EXPECT_EQ(storage.FindElementRefByID(CreateElement(40).id), late.ref);
+        ExpectEveryIDFound();
+        ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
+    }
+
+    // Elements sharing an ID: after a move, the lookup still finds the shallowest, then earliest.
+    TEST_F(MoveChildTreeTest, SharedIDsResolveToTheFirstAfterAMove)
+    {
+        sharedFlags = ElementFlags::SharesID;
+        ASSERT_TRUE(storage.BeginConstruction() == ElementStorageResult::Success);
+        Put(1);
+        ASSERT_TRUE(storage.BeginChildren() == ElementStorageResult::Success);
+        Chain({ 10, 7 });       // a 7 at depth 2, under the first child
+        Chain({ 20, 7 });       // and one under the second
+        Put(30);
+        ASSERT_TRUE(storage.EndChildren() == ElementStorageResult::Success);
+
+        Move(1, 0, 2);          // 20{7} comes first
+        ElementRef found = storage.FindElementRefByID(CreateElement(7).id);
+        EXPECT_EQ(found, (ElementRef{ 2, 0 }));
+        EXPECT_EQ(storage.GetParentRef(found), storage.FindElementRefByID(CreateElement(20).id));
+
+        Move(1, 2, 0);          // 10{7} first again
+        found = storage.FindElementRefByID(CreateElement(7).id);
+        EXPECT_EQ(found, (ElementRef{ 2, 0 }));
+        EXPECT_EQ(storage.GetParentRef(found), storage.FindElementRefByID(CreateElement(10).id));
+        ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
+    }
+
+    // Moving a child (as a dragged row or the toast stack does each frame) and looking up IDs
+    // after it reuse their room: no allocations once warm.
+    TEST_F(MoveChildTreeTest, AMoveAndTheLookupsAfterItDontAllocate)
+    {
+        if (!AllocationCount::ScopedAllocationCount::Supported())
+            GTEST_SKIP() << "allocation counting needs the debug CRT";
+        Build();
+        Move(20, 0, 2);
+        Move(20, 2, 0);
+        ExpectEveryIDFound();
+
+        AllocationCount::ScopedAllocationCount allocations;
+        Move(20, 0, 2);
+        const ElementMove& move = storage.LastMove();
+        const ElementRef a = storage.FindElementRefByID(CreateElement(100).id);
+        EXPECT_EQ(allocations.Count(), 0u);
+
+        EXPECT_EQ(move.childDepth, 2u);
+        EXPECT_EQ(IdAt(a), 100u);
         ASSERT_TRUE(storage.EndConstruction() == ElementStorageResult::Success);
     }
 

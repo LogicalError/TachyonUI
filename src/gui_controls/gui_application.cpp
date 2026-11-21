@@ -312,11 +312,10 @@ namespace tachyon
             const IndexRange siblings = elementStorage.GetChildRange(elementStorage.GetParentRef(stack));
             if (!siblings.Empty() && stack.index + 1 < siblings.end)
             {
-                ElementMove move;
                 if (elementStorage.MoveChild(stack.depth, siblings.begin, stack.index - siblings.begin,
-                                             siblings.end - 1 - siblings.begin, &move) == ElementStorageResult::Success)
+                                             siblings.end - 1 - siblings.begin) == ElementStorageResult::Success)
                 {
-                    windowRegistry.ApplyElementMove(move);
+                    windowRegistry.ApplyElementMove(elementStorage.LastMove());
                     stack = elementStorage.FindElementRefByID(m_toastStackID);
                 }
             }
