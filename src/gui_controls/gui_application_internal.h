@@ -48,6 +48,7 @@ namespace tachyon
         using GUIApplication::RegisterFrameHooks;
         using GUIApplication::ApplyPendingStyleReload;
         using GUIApplication::InvalidateCachedScopesForInput;
+        using GUIApplication::DispatchInput;
         using GUIApplication::CollectPropagatedAncestors;
         using GUIApplication::NoteTargetAncestors;
         using GUIApplication::NoteContextMenuOwner;

@@ -1962,11 +1962,7 @@ namespace tachyon
 
             InvalidateCachedScopesForInput(overID);
 
-            if (inputManager)
-            {
-                inputManager->Process(guiStateManager, elementStorage,
-                    tabChainManager, textSystem, overID);
-            }
+            DispatchInput(overID);
             DispatchFileDrops(frameInput);
 
             // Keep the IME candidate window next to the caret being typed at.

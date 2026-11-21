@@ -1591,6 +1591,28 @@ namespace tachyon
 
     ID Application::CreateShowcasePanel(DockingLayout& layout, std::string_view title)
     {
+        const ID id = MakeShowcasePanel(layout, title);
+        const auto panel = layout.panels.find(id);
+        if (panel == layout.panels.end())
+            return id;
+
+        // Panels of one kind show the same data (another Inspector's values, another
+        // Hierarchy's objects), and a Viewport and a Hierarchy both show the scene. The others
+        // are cached: a change made in this one rebuilds them, so they show it too.
+        const std::string data = title == "Viewport" || title == "Hierarchy" ? "scene" : std::string(title);
+        auto alive = std::make_shared<int>(0);
+        std::erase_if(m_panelsOnData, [](const PanelOnData& p) { return p.alive.expired(); });   // closed ones
+        m_panelsOnData.push_back({ data, id, alive });
+        panel->second.onChanged = [this, data, id, alive] {
+            for (const PanelOnData& other : m_panelsOnData)
+                if (other.data == data && other.id != id && !other.alive.expired())
+                    InvalidatePanel(other.id);
+        };
+        return id;
+    }
+
+    ID Application::MakeShowcasePanel(DockingLayout& layout, std::string_view title)
+    {
         auto& panels = layout.panels;
         const std::string name(title);
 
