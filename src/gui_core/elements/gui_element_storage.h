@@ -174,11 +174,13 @@ namespace tachyon
 
         /// Moves a child (with its subtree) to another sibling position, during construction.
         /// `fromLocal` / `toLocal` are relative to `rangeBegin`, the absolute index of the first
-        /// child at `childDepth`. Refs inside the storage follow; `outMove` lets other holders
-        /// remap theirs.
+        /// child at `childDepth`. Refs inside the storage follow; LastMove lets other holders
+        /// remap theirs. Only the slots that changed are relinked and re-indexed.
         [[nodiscard]] ElementStorageResult MoveChild(uint32_t childDepth, uint32_t rangeBegin,
-                                                     uint32_t fromLocal, uint32_t toLocal,
-                                                     ElementMove* outMove = nullptr);
+                                                     uint32_t fromLocal, uint32_t toLocal);
+
+        /// The slot rotations of the last MoveChild call, none when it moved nothing.
+        inline const ElementMove& LastMove() const { return m_lastMove; }
 
         // ------------------ Statistics -------------------
 
@@ -429,6 +431,8 @@ namespace tachyon
 
         /// Rotates all parallel arrays of a depth level.
         void RotateDepthLevel(uint32_t depth, uint32_t begin, uint32_t mid, uint32_t end);
+        /// Sets parentIndex and nextSiblingIndex of the children of parents [begin, end) at `depth`.
+        void RelinkChildrenOf(uint32_t depth, uint32_t begin, uint32_t end);
 
         void RebuildSiblingLinks(uint32_t depth, uint32_t rangeBegin, uint32_t rangeEnd, uint32_t parentIndex);
 
@@ -517,10 +521,13 @@ namespace tachyon
         StyleManager &m_styleManager;
         ElementDataStore* m_elementDataStore = nullptr;
 
-        /// Add keeps it current; MoveChild marks it stale and the next lookup rebuilds it.
-        mutable IDMap<ElementRef> m_idIndex;
-        mutable bool              m_idIndexStale = false;
-        void IndexElement(ID id, ElementRef ref) const;
+        /// Add and MoveChild keep it current.
+        IDMap<ElementRef> m_idIndex;
+        void IndexElement(ID id, ElementRef ref);
+        /// Points the index at the elements now in slots [begin, end) of `depth`.
+        void ReindexSlots(uint32_t depth, uint32_t begin, uint32_t end);
+
+        ElementMove m_lastMove;   ///< see LastMove
     };
 
 
