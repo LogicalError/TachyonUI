@@ -213,15 +213,11 @@ namespace tachyon
         }
         else
         {
-            // Normalized number
-            uint16_t hexp = uint16_t(newExp) << 10;
-            uint16_t hmant = uint16_t(mant >> 13);
-
-            // Round to nearest
-            if (mant & 0x1000)
-                hmant++;
-
-            return hsign | hexp | (hmant & 0x3FF);
+            // Normalized number, rounded to nearest. The rounding adds to exponent and
+            // mantissa together: past the largest mantissa it carries into the exponent (the
+            // next power of two), and past the largest exponent it gives infinity.
+            const uint16_t bitsOut = uint16_t((uint32_t(newExp) << 10) | (mant >> 13));
+            return hsign | uint16_t(bitsOut + ((mant & 0x1000) ? 1 : 0));
         }
     }
 
@@ -254,7 +250,8 @@ namespace tachyon
                 }
                 mant &= 0x3FF; // remove leading 1
 
-                fexp = (127 - 15 - shift) << 23;
+                // A subnormal half is mant * 2^-24: normalized, 1.m * 2^(-14 - shift).
+                fexp = (127 - 14 - shift) << 23;
                 fmant = mant << 13;
             }
         } else if (exp == 31)
