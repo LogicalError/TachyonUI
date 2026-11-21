@@ -431,8 +431,42 @@ namespace tachyon
             GUIApplication::Cleanup();
     }
 
+    void GUIApplication::ReleaseOwnIDs()
+    {
+        // Torn-off windows: their panels are hidden and destroyed with them, and their IDs and
+        // trees' go back.
+        while (!m_floatingDockWindows.empty())
+            CloseFloatingDockWindow(m_floatingDockWindows.size() - 1);
+
+        auto release = [this](ID& id) {
+            if (id != ID::Invalid() && id.GetMode() == IDMode::Static)
+                idManager.ReleaseStaticID(id);
+            id = ID::Invalid();
+        };
+        release(tooltipWindowID);
+        release(contextMenuWindowID);
+        release(tabDragGhostWindowID);
+        release(m_colorPickerSub->State().windowID);
+        release(m_gradientEditorSub->State().windowID);
+        for (ShownToast& toast : m_toasts)
+            release(toast.id);
+        m_toasts.clear();
+        release(m_toastStackID);
+        m_tasksPopovers.ForEach([&](ID, TasksPopover& popover) { release(popover.windowID); });
+        m_tasksPopovers.Clear();
+        m_autocomplete.ForEach([&](ID, AutocompleteState& state) { release(state.listWindowID); });
+        m_autocomplete.Clear();
+        for (RetiredWindow& retired : m_retiredWindows)
+            release(retired.id);
+        m_retiredWindows.clear();
+        menuManager.ReleaseWindowIDs(idManager);
+    }
+
     void GUIApplication::Cleanup()
     {
+        // The IDs it made for itself go back while what holds them is still here.
+        if (m_initialized)
+            ReleaseOwnIDs();
         // A theme switch still crossfading holds images of its windows.
         if (graphicsContext != nullptr)
             EndThemeCrossfade();

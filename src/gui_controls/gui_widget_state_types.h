@@ -36,7 +36,9 @@ namespace tachyon
         int         current = 0;                      ///< highlighted match, moved by Up / Down
         bool        focusRequested = false;           ///< set by FocusCommandSearch, taken next frame
         bool        ranCommand = false;               ///< a command ran since the last CommandSearch call
-        tachyon::ID listWindowID = tachyon::ID::Invalid();  ///< internal: the results popup
+        /// Internal: the results popup's window, made the first time it's shown. Yours to
+        /// release (IDManager::ReleaseStaticID) when the state goes.
+        tachyon::ID listWindowID = tachyon::ID::Invalid();
     };
 
     // ---- Drop position for tree reorder drops ----

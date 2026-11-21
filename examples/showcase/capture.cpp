@@ -629,9 +629,10 @@ namespace tachyon
             showcase.reloadDocument = nullptr;
             if (c.panelID != ID::Invalid())
             {
+                // Hidden, as it was shown, by hand; then closed for good, its ID with it.
                 if (Panel& panel = c.layout.panels[c.panelID]; panel.onDisable)
                     panel.onDisable();
-                c.layout.panels.erase(c.panelID);
+                ClosePanel(c.layout, c.panelID);
                 c.panelID = ID::Invalid();
             }
             c.frames = 0;

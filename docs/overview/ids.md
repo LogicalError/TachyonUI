@@ -67,6 +67,16 @@ idManager.ReleaseStaticID(windowID);   // when the thing it names is gone for go
 
 - `IsStaticIDValid(id)` says whether the ID is still current in its slot.
 - A released ID stays invalid even if its slot is reused.
+- The ones the library makes go back by themselves:
+  - a panel's, from `CreatePanel` without an ID, when the panel closes;
+  - a document's, and its dock tree's, when it closes (`CloseDocument`,
+    `CloseAllDocuments`);
+  - a layout's tree's and panels', with `ReleaseDockingLayout`;
+  - the application's own (its menus, tooltips, pickers, toasts and torn-off windows) at
+    `Cleanup`.
+- Some state of yours gets an ID from the control that shows it, the first time it's shown:
+  `CommandSearchState::listWindowID`, `CurveViewState::popupID`. Release those when the
+  state goes.
 
 ## Ranged IDs
 

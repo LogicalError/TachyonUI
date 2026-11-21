@@ -91,6 +91,8 @@ namespace tachyon
         uint64_t                 popupWindowUses = 0;
         /// The popup window ID of `triggerID`'s menu.
         ID PopupWindowFor(ID triggerID, IDManager& idManager);
+        /// Gives back the window IDs its levels and popups were given: at exit.
+        void ReleaseWindowIDs(IDManager& idManager);
 
         bool              buildingMenuBar = false;   ///< true while a menu bar is being built
         /// Menu-bar triggers in order, registered during construction for Left/Right navigation.

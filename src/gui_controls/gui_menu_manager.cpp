@@ -18,6 +18,7 @@
 #include <gui_core/gui_id_manager.h>
 
 #include <algorithm>
+#include <utility>
 #include <assert.h>
 
 namespace tachyon
@@ -36,6 +37,16 @@ namespace tachyon
         return level;
     }
 
+
+    void MenuManager::ReleaseWindowIDs(IDManager& idManager)
+    {
+        for (Level& level : levels)
+            if (level.windowID != ID::Invalid())
+                idManager.ReleaseStaticID(std::exchange(level.windowID, ID::Invalid()));
+        for (const PopupWindow& popup : popupWindows)
+            idManager.ReleaseStaticID(popup.windowID);
+        popupWindows.clear();
+    }
 
     ID MenuManager::PopupWindowFor(ID triggerID, IDManager& idManager)
     {

@@ -223,11 +223,16 @@ namespace tachyon
             ASSERT_GT(treeIDs, 0u) << "test setup: the floating tree was emitted";
             const size_t before = app.idManager.GetStaticIDCount();
 
-            window->layout.root->panelIds.clear();   // last tab dragged out
+            // Its last tab dragged out: the panel goes to another layout, as TransferPanel moves it.
+            DockingLayout elsewhere;
+            elsewhere.panels[floating] = std::move(window->layout.panels.at(floating));
+            window->layout.panels.erase(floating);
+            window->layout.root->panelIds.clear();
             frame();
 
             ASSERT_TRUE(app.m_floatingDockWindows.empty());
-            EXPECT_EQ(app.idManager.GetStaticIDCount(), before - 1 - treeIDs);
+            EXPECT_EQ(app.idManager.GetStaticIDCount(), before - 1 - treeIDs) << "the window's and its tree's (its panel moved out)";
+            EXPECT_TRUE(app.idManager.IsStaticIDValid(floating)) << "the panel keeps its own where it went";
         }
 
         // Closing a floating window closes its panels: each gets onDisable, the
@@ -257,7 +262,7 @@ namespace tachyon
 
             EXPECT_TRUE(app.m_floatingDockWindows.empty());
             EXPECT_EQ(disabled, 1) << "the panel is closed (onDisable), like closing its tab";
-            EXPECT_EQ(app.idManager.GetStaticIDCount(), before - 1 - treeIDs);
+            EXPECT_EQ(app.idManager.GetStaticIDCount(), before - 2 - treeIDs) << "the window's, its panel's and its tree's";
         }
 
         // Dock (the torn-off window's title-bar button) returns its panels as tabs to the

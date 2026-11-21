@@ -148,8 +148,14 @@ namespace tachyon
             });
             if (!root)
             {
+                // Never shown: only their IDs, when CreatePanel made them, to give back.
                 for (const ID id : made)
-                    layout.panels.erase(id);
+                    if (const auto it = layout.panels.find(id); it != layout.panels.end())
+                    {
+                        if (it->second.internal.ownsID)
+                            idManager.ReleaseStaticID(id);
+                        layout.panels.erase(it);
+                    }
                 return false;
             }
             std::vector<ID> all;
@@ -312,7 +318,7 @@ namespace tachyon
         if (!root)
         {
             for (const ID id : made)
-                layout.panels.erase(id);
+                ClosePanel(layout, id);
             return false;
         }
 
@@ -320,7 +326,7 @@ namespace tachyon
         std::vector<ID> all;
         for (const auto& [id, panel] : layout.panels) all.push_back(id);
         for (const ID id : UnplacedPanels(*root, all))
-            layout.panels.erase(id);
+            ClosePanel(layout, id);
         ReleaseDockTreeIDs(layout.root.get(), &idManager);
         layout.root = std::move(root);
         return true;

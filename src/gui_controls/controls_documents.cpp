@@ -145,6 +145,14 @@ namespace tachyon
         std::erase_if(m_persistDocks, [&](const PersistedDock& dock) { return dock.target == &layout; });
     }
 
+    void GUIApplication::ReleaseDockingLayout(DockingLayout& layout)
+    {
+        ForgetDockingLayout(layout);
+        ErasePanels(layout);
+        ReleaseDockTreeIDs(layout.root.get(), &idManager);
+        layout.root.reset();
+    }
+
     void GUIApplication::CloseDocument(DocumentSet& set, int index)
     {
         if (index < 0 || index >= int(set.documents.size()))
@@ -157,11 +165,9 @@ namespace tachyon
         if (m_documentMove && m_documentMove->document == &document)
             m_documentMove.reset();
 
-        // Its torn-off panels go with it; they would dock back into a layout that's gone.
-        ForgetDockingLayout(document.layout);
-
-        DisableAllPanels(document.layout);
-        ReleaseDockTreeIDs(document.layout.root.get(), &idManager);
+        // Its panels, and its torn-off ones, go with it; they would dock back into a layout
+        // that's gone.
+        ReleaseDockingLayout(document.layout);
         idManager.ReleaseStaticID(document.internal.dockID);
         if (document.id.GetMode() == IDMode::Static)
             idManager.ReleaseStaticID(document.id);
@@ -171,6 +177,12 @@ namespace tachyon
         if (set.active > index)
             --set.active;
         set.active = std::clamp(set.active, 0, std::max(0, int(set.documents.size()) - 1));
+    }
+
+    void GUIApplication::CloseAllDocuments(DocumentSet& set)
+    {
+        while (!set.documents.empty())
+            CloseDocument(set, int(set.documents.size()) - 1);
     }
 
     void GUIApplication::Documents(ID id, DocumentSet& set, LayoutOverride&& constraints)

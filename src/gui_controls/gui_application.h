@@ -316,7 +316,8 @@ namespace tachyon
                          std::function<void()> onEnable = {},
                          std::function<void()> onDisable = {});
 
-        /// As above, with a new static ID, which it returns.
+        /// As above, with a new static ID, which it returns. The ID goes back when the panel is
+        /// closed (its tab, its window, its document, or a layout applied without it).
         tachyon::ID CreatePanel(std::unordered_map<tachyon::ID, tachyon::Panel>& panels, std::string title, tachyon::IconID icon,
                             std::function<void()> onPanelGUI,
                             std::string panelType = {},
@@ -326,6 +327,7 @@ namespace tachyon
             ID id = idManager.CreateStaticID();
             CreatePanel(panels, id, std::move(title), icon, std::move(onPanelGUI),
                         std::move(panelType), std::move(onEnable), std::move(onDisable));
+            panels[id].internal.ownsID = true;
             return id;
         }
 
@@ -358,12 +360,20 @@ namespace tachyon
         /// Before an app destroys `layout`: closes the windows of the panels torn off it (they
         /// would dock back into it) and stops saving it.
         void ForgetDockingLayout(DockingLayout& layout);
+        /// Closes a layout for good, as ForgetDockingLayout does, and empties it: its panels are
+        /// hidden (onDisable) and destroyed, and the IDs CreatePanel made for them and its
+        /// tree's go back. Call it before the app destroys a layout it made, or at exit.
+        void ReleaseDockingLayout(DockingLayout& layout);
 
         /// Closes the window for good: its panels are disabled and destroyed.
         void CloseFloatingDockWindow(size_t index);
 
         /// Closes the panel at `tabIndex` of a docked leaf, as the tab's Close action does.
         void CloseDockedPanel(DockingLayout& layout, DockNode& leaf, int tabIndex);
+        /// Closes a panel of `layout` for good, wherever it is: out of its tree (its leaf
+        /// closing up when it empties), hidden first (onDisable) if it's shown, and destroyed,
+        /// its ID back when CreatePanel made it.
+        void ClosePanel(DockingLayout& layout, ID panelID);
 
         /// Adds a document at the end of `set`, with new static IDs and an empty layout, which
         /// the caller fills (CreatePanel, MakeLeaf). The first one added becomes the active one.
@@ -375,6 +385,8 @@ namespace tachyon
         /// active; when it's the one closed, the next one (else the one before) takes over.
         /// Call from OnGUI, not from an input handler.
         void CloseDocument(DocumentSet& set, int index);
+        /// Closes every document of `set`, as CloseDocument does each: at exit, say.
+        void CloseAllDocuments(DocumentSet& set);
 
         /// Moves a panel from sourceNode/sourceLayout to targetLayout, fixing up selectedTab.
         static void TransferPanel(tachyon::ID panelID, tachyon::DockNode* sourceNode,
@@ -3366,6 +3378,11 @@ namespace tachyon
 
         /// Internal: called by the docking each frame.
         void        NotePanelContentID(ID panelId, ID contentID) { m_panelContentIDs[panelId] = contentID; }
+        /// At Cleanup: gives back the static IDs the application made for itself (its popup,
+        /// tooltip, menu and picker windows, toasts) and closes its torn-off panel windows.
+        void        ReleaseOwnIDs();
+        /// Destroys every panel of `layout`, as ClosePanel does each, leaving its tree.
+        void        ErasePanels(DockingLayout& layout);
         /// Hands the frame's input to the element handlers, then calls onChanged of the docked
         /// panels the user acted in.
         void        DispatchInput(ID overID);

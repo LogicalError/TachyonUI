@@ -376,7 +376,7 @@ namespace tachyon
             ASSERT_NE(root->nodeID, ID::Invalid()) << "test setup: the tree was built";
             const size_t treeIDs = (root->nodeID.GetMode() == IDMode::Static) + (root->tabBarID.GetMode() == IDMode::Static);
             app.CloseDocument(set, 0);
-            EXPECT_EQ(app.idManager.GetStaticIDCount(), before - 2 - treeIDs) << "its own two, and its tree's";
+            EXPECT_EQ(app.idManager.GetStaticIDCount(), before - 3 - treeIDs) << "its own two, its panel's and its tree's";
         }
 
         TEST_F(DocumentsTest, AClosedDocumentsLayoutIsNoLongerSaved)

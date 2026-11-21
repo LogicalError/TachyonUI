@@ -107,6 +107,8 @@ tachyon::Result<void> HeadlessGUIApp::Initialize(const InitializeOptions& option
 
 void HeadlessGUIApp::Cleanup()
 {
+    // As GUIApplication::Cleanup: the IDs the application made for itself go back.
+    ReleaseOwnIDs();
     layoutEngine.reset();
     inputManager.reset();
     windowManager.reset();
