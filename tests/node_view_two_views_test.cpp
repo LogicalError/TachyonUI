@@ -122,6 +122,21 @@ namespace tachyon
             EXPECT_NE(NodeRect(right, nodeA).position, rightBefore.position) << "the other view shows where it went";
         }
 
+        // Two views with one shortcut mode: the mode is the focused view's, whichever of the two
+        // is built first, and it holds while the focus moves between them.
+        TEST_F(NodeViewTwoViewsTest, TheFocusedViewsShortcutModeHolds)
+        {
+            const CommandMode mode = app.commandManager.RegisterMode("Graph");
+            left.commandMode = right.commandMode = mode;
+            Settle();
+            app.ClickAt({ 600, 700 });   // the left view's empty canvas
+            Settle();
+            EXPECT_EQ(app.commandManager.GetMode(), mode) << "the left one focused, built before the right";
+            app.ClickAt({ 1400, 700 });  // the right one's
+            Settle();
+            EXPECT_EQ(app.commandManager.GetMode(), mode) << "the right one focused, built after the left";
+        }
+
         // A node removed through one view goes from the other's selection on its next build,
         // which reports the change.
         TEST_F(NodeViewTwoViewsTest, ANodeRemovedInOneViewLeavesTheOthersSelection)

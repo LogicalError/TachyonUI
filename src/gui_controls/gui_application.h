@@ -370,6 +370,13 @@ namespace tachyon
 
         /// Closes the panel at `tabIndex` of a docked leaf, as the tab's Close action does.
         void CloseDockedPanel(DockingLayout& layout, DockNode& leaf, int tabIndex);
+        /// For a control with shortcuts of its own (CommandManager::RegisterMode): while the
+        /// focus is within `owner`, the command mode is `mode`; once it's within none, Default
+        /// again. Call it as the control is built, every frame it is. The mode is set once a
+        /// frame, before input is handled, from where the focus is, so two controls of one mode
+        /// (two panels of a kind) don't undo each other. Default claims nothing.
+        void ClaimCommandMode(ID owner, CommandMode mode);
+
         /// Closes a panel of `layout` for good, wherever it is: out of its tree (its leaf
         /// closing up when it empties), hidden first (onDisable) if it's shown, its ID back when
         /// CreatePanel made it. Its callbacks, and what they hold, are destroyed when the next
@@ -3073,6 +3080,13 @@ namespace tachyon
         std::vector<DockingLayout*> m_dockingLayoutsThisFrame{};
         /// Panels closed this frame, kept until the next one starts (ClosePanel).
         std::vector<Panel> m_closedPanels;
+        /// The controls with a command mode of their own (ClaimCommandMode), by their ID, and
+        /// the frame each was last built in.
+        struct CommandModeClaim { CommandMode mode; uint64_t frame; };
+        std::unordered_map<ID, CommandModeClaim> m_commandModeClaims;
+        uint64_t    m_commandModeFrame = 0;
+        /// The mode a claim set, while it holds; Default when none does.
+        CommandMode m_claimedCommandMode = CommandMode::Default;
 
         /// Toolbar docks emitted this frame, walked by SyncToolbarDockRects (type in controls_toolbar_dock.h).
         std::vector<struct ToolbarDockState*> m_toolbarDocksThisFrame{};
@@ -3386,6 +3400,9 @@ namespace tachyon
         void        ReleaseOwnIDs();
         /// Destroys every panel of `layout`, as ClosePanel does each, leaving its tree.
         void        ErasePanels(DockingLayout& layout);
+        /// Sets the command mode from the claims (ClaimCommandMode) the focus is within, before
+        /// the frame's input is handled; drops claims no longer built that the focus isn't in.
+        void        ApplyClaimedCommandMode();
         /// Hands the frame's input to the element handlers, then calls onChanged of the docked
         /// panels the user acted in.
         void        DispatchInput(ID overID);

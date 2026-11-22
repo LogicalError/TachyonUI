@@ -1239,8 +1239,50 @@ namespace tachyon
         // m_dockingLayoutsThisFrame stays: onDragOut, run during input dispatch, reads it.
         // BeginDockingFrame clears it.
     }
+    void GUIApplication::ClaimCommandMode(ID owner, CommandMode mode)
+    {
+        if (owner == ID::Invalid() || mode == CommandMode::Default)
+            return;
+        m_commandModeClaims[owner] = { mode, m_commandModeFrame };
+    }
+
+    void GUIApplication::ApplyClaimedCommandMode()
+    {
+        // The claim the focus is in: the focused element's own, else one around it.
+        const InteractionState& interaction = guiStateManager.Interaction();
+        const ID focused = interaction.GetFocusedID();
+        std::optional<CommandMode> mode;
+        for (auto it = m_commandModeClaims.begin(); it != m_commandModeClaims.end(); )
+        {
+            const bool within = interaction.IsFocusWithin(it->first);
+            if (within && (!mode || it->first == focused))
+                mode = it->second.mode;
+            // Not built this frame, and not where the focus is: gone (a closed panel's).
+            if (!within && it->second.frame != m_commandModeFrame)
+                it = m_commandModeClaims.erase(it);
+            else
+                ++it;
+        }
+        ++m_commandModeFrame;
+
+        if (mode)
+        {
+            if (commandManager.GetMode() != *mode)
+                commandManager.SetMode(*mode);
+            m_claimedCommandMode = *mode;
+        }
+        else if (m_claimedCommandMode != CommandMode::Default)
+        {
+            // The focus left: Default again, unless the app set a mode of its own since.
+            if (commandManager.GetMode() == m_claimedCommandMode)
+                commandManager.SetMode(CommandMode::Default);
+            m_claimedCommandMode = CommandMode::Default;
+        }
+    }
+
     void GUIApplication::DispatchInput(ID overID)
     {
+        ApplyClaimedCommandMode();
         // What the user acts on, taken before the handlers move the focus or the capture.
         std::vector<ID> actedOn = ActedOnIDs(overID);
         if (inputManager)

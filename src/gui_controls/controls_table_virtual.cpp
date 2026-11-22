@@ -1554,17 +1554,8 @@ namespace tachyon
         m_tableEmit = std::move(m_outerTableEmits.back());
         m_outerTableEmits.pop_back();
 
-        // Its shortcuts while the focus is in it; Default again once it leaves.
-        if (state.commandMode != CommandMode::Default)
-        {
-            if (guiStateManager.Interaction().IsFocusWithin(id))
-            {
-                if (commandManager.GetMode() != state.commandMode)
-                    commandManager.SetMode(state.commandMode);
-            }
-            else if (commandManager.GetMode() == state.commandMode)
-                commandManager.SetMode(CommandMode::Default);
-        }
+        // Its shortcuts while the focus is in it.
+        ClaimCommandMode(id, state.commandMode);
 
         // The context menu: a shown row's, for that row; the sections' bodies', below the rows.
         if (state.contextMenu)
