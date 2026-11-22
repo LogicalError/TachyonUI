@@ -93,6 +93,9 @@ tableState.contextMenu = [this](int row) {
 Keyboard shortcuts that only work in the table: give it a `commandMode`.
 
 - The mode is on while the focus is in the table, and Default again once the focus leaves.
+- Two tables with one mode (two panels of a kind) don't undo each other: the mode is the
+  one the focus is in.
+- Your own controls can do the same with `ClaimCommandMode(id, mode)`, called as they're built.
 - Register the mode's commands once, with the `CommandManager`.
   - For example, Delete deletes the selected rows.
 - A key the table uses itself, such as the arrow keys, doesn't reach the commands.

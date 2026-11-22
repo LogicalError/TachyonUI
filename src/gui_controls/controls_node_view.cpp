@@ -474,15 +474,8 @@ namespace tachyon
                 view.state.transitionMenuTransition.reset();
         }
 
-        // Edit-mode wiring: while this canvas has focus, set the command
-        // manager to the view's mode; restore Default when focus leaves.
-        if (guiStateManager.Interaction().GetFocusedID() == canvasID)
-        {
-            if (commandManager.GetMode() != view.state.commandMode)
-                commandManager.SetMode(view.state.commandMode);
-        } else
-        if (commandManager.GetMode() == view.state.commandMode)
-            commandManager.SetMode(CommandMode::Default);
+        // Its shortcuts while the focus is on the canvas.
+        ClaimCommandMode(canvasID, view.state.commandMode);
 
         // ---- Canvas: pan/zoom + focus capture. Everything below renders as
         //      children of this element under the view's content transform.
