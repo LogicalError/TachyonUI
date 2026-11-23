@@ -41,6 +41,7 @@ namespace tachyon
                                bool branchesOpen = true)
             {
                 rows.clear();
+                state.openRows.clear();
                 int idCounter = 5000;
                 auto makeID = [&]() {
                     ID id{};
@@ -54,8 +55,9 @@ namespace tachyon
                     row.id     = makeID();
                     row.name   = "Branch";
                     row.depth  = 0;
-                    row.isOpen = branchesOpen;
                     rows.push_back(std::move(row));
+                    if (branchesOpen)
+                        state.openRows.insert(rows.back().id);
                     for (int c = 0; c < childrenPerNode; ++c)
                     {
                         tachyon::TreeViewRow child{};
@@ -77,6 +79,14 @@ namespace tachyon
                         StyleRef{}, LayoutOverride{}.Size(400, 300));
                     app.EndRootWindow();
                 });
+            }
+
+            // Whether this view has flat row lat open, and opening or closing it.
+            bool IsOpen(size_t flat) const { return state.openRows.contains(TreeViewRowKey(rows[flat], flat)); }
+            void SetOpen(size_t flat, bool open)
+            {
+                if (open) state.openRows.insert(TreeViewRowKey(rows[flat], flat));
+                else      state.openRows.erase(TreeViewRowKey(rows[flat], flat));
             }
 
             // Row backdrop ID for a visible row index (usable outside a frame).
@@ -104,13 +114,13 @@ namespace tachyon
 
             // Close the first branch - its two children should drop out
             // of the visible-index walk.
-            rows[0].isOpen = false;
+            SetOpen(0, false);
             RenderFrame();
             EXPECT_EQ(int(visibleIdx.size()), 4)
                 << "Branch0 closed → Branch0 + Branch1 + 2 children of Branch1";
 
             // Reopen.
-            rows[0].isOpen = true;
+            SetOpen(0, true);
             RenderFrame();
             EXPECT_EQ(int(visibleIdx.size()), 6);
         }
@@ -136,12 +146,12 @@ namespace tachyon
             RenderFrame();
             state.selectedRowID = RowIDAt(4);   // Branch1's first leaf (flat 4)
 
-            rows[0].isOpen = false;
+            SetOpen(0, false);
             RenderFrame();
             ASSERT_EQ(int(visibleIdx.size()), 4);
             EXPECT_EQ(state.selectedRowID, RowIDAt(2)) << "flat 4 is now visible row 2";
 
-            rows[0].isOpen = true;
+            SetOpen(0, true);
             RenderFrame();
             EXPECT_EQ(state.selectedRowID, RowIDAt(4));
         }
@@ -177,7 +187,7 @@ namespace tachyon
             RenderFrame();
             state.selectedRowID = RowIDAt(5);   // Branch1's second leaf
 
-            rows[3].isOpen = false;
+            SetOpen(3, false);
             RenderFrame();
             EXPECT_EQ(state.selectedRowID, RowIDAt(3)) << "selection moves to the collapsed branch";
         }
@@ -193,8 +203,8 @@ namespace tachyon
                     VirtualTableColumn cols[1];
                     cols[0].column = TableColumn{ .header = {} };
                     cols[0].generateCell = [&](int row) {
-                        TreeViewRow& r = rows[visibleIdx[row]];
-                        app.TreeCell(r.name, r.depth, r.HasChildren() ? &r.isOpen : nullptr);
+                        const size_t flat = size_t(visibleIdx[row]);
+                        app.TreeCell(rows[flat].name, rows[flat].depth, GUIApplication::TreeViewOpenRef(rows, flat, state));
                     };
                     app.VirtualTable(treeID, state, std::span<VirtualTableColumn>(cols, 1), int(visibleIdx.size()), 0,
                                      StyleRef{}, LayoutOverride{}.Size(400, 300));
@@ -204,7 +214,7 @@ namespace tachyon
             frame();
             state.selectedRowID = RowIDAt(4);   // Branch1's first leaf (flat 4)
 
-            rows[0].isOpen = false;
+            SetOpen(0, false);
             frame();
             EXPECT_EQ(state.selectedRowID, RowIDAt(2)) << "flat 4 is now visible row 2";
         }
@@ -218,7 +228,7 @@ namespace tachyon
             ms.selectedIDs = { RowIDAt(1), RowIDAt(4) };   // leaf under Branch0, leaf under Branch1
             ms.lastClickedID = RowIDAt(4);
 
-            rows[0].isOpen = false;
+            SetOpen(0, false);
             RenderFrame();
             EXPECT_EQ(ms.selectedIDs.size(), 1u) << "the hidden leaf drops out";
             EXPECT_EQ(ms.selectedIDs.count(RowIDAt(2)), 1u);
@@ -253,7 +263,7 @@ namespace tachyon
 
             ASSERT_EQ(doubleClicked.size(), 1u);
             EXPECT_EQ(doubleClicked[0], RowIDAt(0));
-            EXPECT_TRUE(rows[0].isOpen) << "the callback replaces the default toggle";
+            EXPECT_TRUE(IsOpen(0)) << "the callback replaces the default toggle";
         }
 
         // Double-clicking a branch's icon toggles the branch, like double-clicking
@@ -281,7 +291,7 @@ namespace tachyon
             RenderFrame();
             app.ClickAt(pt);
             RenderFrame();
-            EXPECT_FALSE(rows[0].isOpen);
+            EXPECT_FALSE(IsOpen(0));
         }
 
         // The row double-click tracker is per-table: a click on table A between
@@ -382,6 +392,50 @@ namespace tachyon
             EXPECT_EQ(over.position, TreeDropPosition::After);
         }
 
+        // Two views of the same rows, each with its own state, open and close on their own.
+        TEST_F(VirtualTreeViewTest, TwoViewsOfOneTreeOpenOnTheirOwn)
+        {
+            BuildFlatTree(/*n*/1, /*children*/2, /*open*/true);
+            const ID treeIDB = app.idManager.CreateStaticID();
+            std::vector<int> visibleIdxB;
+            TableState       stateB;   // nothing open
+            auto renderBoth = [&] {
+                app.BeginRootWindow();
+                app.VirtualTreeView(treeID,  rows, visibleIdx,  state,  StyleRef{}, LayoutOverride{}.Size(400, 150));
+                app.VirtualTreeView(treeIDB, rows, visibleIdxB, stateB, StyleRef{}, LayoutOverride{}.Size(400, 150));
+                app.EndRootWindow();
+            };
+            app.Frame(renderBoth);
+            EXPECT_EQ(visibleIdx.size(),  3u) << "the first view has the branch open";
+            EXPECT_EQ(visibleIdxB.size(), 1u) << "the second has it closed";
+
+            // A double-click on the second view's branch opens it there only.
+            const int2 branchB = app.CenterOf(stateB.RowIDForIndex(0));
+            app.ClickAt(branchB);
+            app.Frame(renderBoth);
+            app.ClickAt(branchB);
+            app.Frame(renderBoth);
+            app.Frame(renderBoth);
+            EXPECT_EQ(visibleIdxB.size(), 3u);
+            EXPECT_EQ(visibleIdx.size(),  3u);
+
+            // Closing it in the first view leaves the second as it is.
+            SetOpen(0, false);
+            app.Frame(renderBoth);
+            EXPECT_EQ(visibleIdx.size(),  1u);
+            EXPECT_EQ(visibleIdxB.size(), 3u);
+        }
+
+        // A row without an ID is open by its position.
+        TEST_F(VirtualTreeViewTest, ARowWithoutAnIDOpensByPosition)
+        {
+            BuildFlatTree(/*n*/2, /*children*/1, /*open*/false);
+            for (TreeViewRow& r : rows) r.id = ID::Invalid();
+            SetOpen(2, true);
+            RenderFrame();
+            EXPECT_EQ(visibleIdx, (std::vector<int>{ 0, 2, 3 }));
+        }
+
         TEST_F(VirtualTreeViewTest, DoubleClickToggleTrackerIsPerTableNotShared)
         {
             // Tree A = the fixture's tree: one open branch + one child.
@@ -401,7 +455,8 @@ namespace tachyon
                     return id;
                 };
                 tachyon::TreeViewRow branch{};
-                branch.id = makeID(); branch.name = "Branch"; branch.depth = 0; branch.isOpen = true;
+                branch.id = makeID(); branch.name = "Branch"; branch.depth = 0;
+                stateB.openRows.insert(branch.id);
                 rowsB.push_back(std::move(branch));
                 tachyon::TreeViewRow leaf{};
                 leaf.id = makeID(); leaf.name = "Leaf"; leaf.depth = 1;
@@ -428,7 +483,7 @@ namespace tachyon
             ASSERT_TRUE(ptA.x != ptB.x || ptA.y != ptB.y)
                 << "tree views overlap: A=(" << ptA.x << "," << ptA.y << ") "
                 << "B=(" << ptB.x << "," << ptB.y << ")";
-            ASSERT_TRUE(rowsB[0].isOpen);
+            ASSERT_TRUE(stateB.openRows.contains(rowsB[0].id));
 
             // B click 1 -> A click -> B click 2. A consumed MouseDown captures the mouse
             // until a frame after button-up, so each click settles before the next.
@@ -447,7 +502,7 @@ namespace tachyon
             ASSERT_EQ(state.selectedRowID, branchA)
                 << "interleaved click did not land on table A — test is vacuous";
 
-            EXPECT_FALSE(rowsB[0].isOpen)
+            EXPECT_FALSE(stateB.openRows.contains(rowsB[0].id))
                 << "B's double-click branch toggle was suppressed by an interleaved "
                    "click on table A — the double-click tracker is shared across tables.";
         }

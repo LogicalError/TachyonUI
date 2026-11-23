@@ -191,6 +191,7 @@ namespace tachyon
                 if (drop[i])
                 {
                     hiddenLeaves.erase(treeRows[i].id);
+                    treeViewState.openRows.erase(treeRows[i].id);
                     if (pendingSelect == treeRows[i].id) pendingSelect = tachyon::ID::Invalid();
                     if (ids) ids->ReleaseStaticID(treeRows[i].id);
                     continue;
@@ -265,10 +266,10 @@ namespace tachyon
                 auto it = p.idToFlat.find(parent);
                 if (it != p.idToFlat.end())
                 {
-                    TreeViewRow& under = p.treeRows[it->second];
-                    under.isOpen = true;
-                    row.depth    = under.depth + 1;
-                    at           = size_t(it->second + under.skipCount + 1);
+                    const TreeViewRow& under = p.treeRows[it->second];
+                    p.treeViewState.openRows.insert(under.id);
+                    row.depth = under.depth + 1;
+                    at        = size_t(it->second + under.skipCount + 1);
                 }
                 p.pendingSelect = row.id;
                 p.ClearSelection();   // its rows move: the selection is made again from pendingSelect
@@ -352,8 +353,9 @@ namespace tachyon
             r.name   = name;
             r.depth  = depth;
             r.icon   = icon;
-            r.isOpen = isOpen;
             r.renameBuffer = &p.renameBuffer;
+            if (isOpen)
+                p.treeViewState.openRows.insert(r.id);
             p.treeRows.push_back(std::move(r));
         };
         // An icon per kind: the scene, groups, meshes, the camera, lights and folders.
@@ -419,8 +421,11 @@ namespace tachyon
             if (targetVis < 0 || targetVis >= int(p.treeVisibleIdx.size())) return;
             const int srcDs = static_cast<int>(srcPayload);
             const int dstDs = p.treeVisibleIdx[targetVis];
+            const tachyon::ID target = dstDs >= 0 && dstDs < int(p.treeRows.size()) ? p.treeRows[size_t(dstDs)].id : tachyon::ID::Invalid();
             const int newFlatIdx = TreeUtils::ReorderTreeRow(p.treeRows, srcDs, dstDs, pos);
             if (newFlatIdx < 0) return;
+            if (pos == TreeDropPosition::Inside || pos == TreeDropPosition::InsideLast)
+                p.treeViewState.openRows.insert(target);   // it shows what went into it
             RebuildTreeViewIndex(p.treeRows);
             p.RebuildHierarchyIdToFlat();
             p.pendingSelect = p.treeRows[newFlatIdx].id;
@@ -470,11 +475,13 @@ namespace tachyon
             {
                 if (!keep[i]) continue;
                 TreeViewRow r  = p.treeRows[i];
-                r.isOpen       = true;
                 r.renameBuffer = nullptr; // copies don't write back - no rename
                 p.filteredRows.push_back(std::move(r));
             }
             RebuildTreeViewIndex(p.filteredRows);
+            p.filteredState.openRows.clear();
+            for (const TreeViewRow& r : p.filteredRows)
+                p.filteredState.openRows.insert(r.id);
             p.filteredState.multiSelect = &p.filteredMultiSelect;
             // A new copy: its rows aren't the old one's, so nothing of its selection carries over.
             p.filteredState.selectedRowID = tachyon::ID::Invalid();
@@ -503,7 +510,7 @@ namespace tachyon
             {
                 if (r.HasChildren()) anyExpandable = true;
                 if (r.icon == showcase.treeFolderOpenIcon || r.icon == showcase.treeFolderIcon)
-                    r.icon = (r.HasChildren() && r.isOpen) ? showcase.treeFolderOpenIcon : showcase.treeFolderIcon;
+                    r.icon = (r.HasChildren() && state.openRows.contains(r.id)) ? showcase.treeFolderOpenIcon : showcase.treeFolderIcon;
             }
 
             // Still loading at startup: the props' rows, and the terrain streaming in.
@@ -596,10 +603,11 @@ namespace tachyon
 
             // Col 1 - the tree (mirrors VirtualTreeView's single column).
             cols[1].column = TableColumn{ .header = {} };
-            cols[1].generateCell = [this, &p, &rows, &visibleIdx, anyExpandable, propsLoading](int rowIdx)
+            cols[1].generateCell = [this, &p, &rows, &visibleIdx, &state, anyExpandable, propsLoading](int rowIdx)
             {
                 if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
-                TreeViewRow& r = rows[visibleIdx[rowIdx]];
+                const size_t flat = size_t(visibleIdx[rowIdx]);
+                TreeViewRow& r = rows[flat];
                 // A row still loading: a placeholder where its icon and name will be, indented as
                 // its row will be.
                 if (propsLoading && p.loadingRows.contains(r.id))
@@ -618,7 +626,7 @@ namespace tachyon
                     return;
                 }
                 TreeCell(r.name, r.depth,
-                         r.HasChildren() ? &r.isOpen : nullptr,
+                         TreeViewOpenRef(rows, flat, state),
                          r.icon, r.ancestorLineMask, r.isLastSibling,
                          r.renameBuffer, anyExpandable);
             };

@@ -18,7 +18,8 @@ A single-column tree that builds only the rows on screen.
 void VirtualTreeView(ID id, std::vector<TreeViewRow>& rows, std::vector<int>& visibleIdx, TableState& state,
                      StyleRef style = {}, LayoutOverride&& constraints = {}, std::string_view header = {});
 static void RebuildTreeViewIndex(std::vector<TreeViewRow>& rows);
-static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows, std::vector<int>& visibleIdx);
+static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows, const std::unordered_set<ID>& openRows,
+                                   std::vector<int>& visibleIdx);
 static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows, std::vector<int>& visibleIdx, TableState& state);
 ID TreeDropTargetRow() const;
 ```
@@ -29,20 +30,28 @@ The rows:
   - `id`
   - `name`
   - `depth`: 0 for a top-level item, 1 for its children, and so on
-  - `isOpen`
   - `icon`
   - `renameBuffer`, to let the user rename the row in place
 - Keep the rows in depth-first order: each item comes right before its children.
 - Call `RebuildTreeViewIndex` after adding, removing or moving rows.
 
+Which rows are open belongs to the view, not the rows:
+
+- Each view's `TableState` keeps them in `openRows`.
+  - Two views of the same rows, each with its own `TableState`, open and close on their own.
+- A row is named there by `TreeViewRowKey(row, index)`: its `id`.
+  - A row without an `id` is named by its position, which changes when rows move.
+- Put a row in `openRows` to open it from code.
+
 ```cpp
 // members: std::vector<TreeViewRow> rows; std::vector<int> visibleIdx; TableState treeState
 rows = {
-    { .name = "Scene",  .depth = 0, .isOpen = true },
-    { .name = "Camera", .depth = 1 },
-    { .name = "Light",  .depth = 1 },
+    { .id = sceneID,  .name = "Scene",  .depth = 0 },
+    { .id = cameraID, .name = "Camera", .depth = 1 },
+    { .id = lightID,  .name = "Light",  .depth = 1 },
 };
 RebuildTreeViewIndex(rows);
+treeState.openRows.insert(sceneID);   // the scene starts open
 ```
 
 What the view gives back:

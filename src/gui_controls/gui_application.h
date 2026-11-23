@@ -1395,14 +1395,24 @@ namespace tachyon
         /// Call after any structural change. O(n^2) worst case.
         static void RebuildTreeViewIndex(std::vector<TreeViewRow>& rows);
 
-        /// Writes the flat indices of visible rows (honoring isOpen) to visibleIdx.
+        /// Writes the flat indices of the rows shown to visibleIdx: those under no closed
+        /// branch, the open ones being in `openRows` (by TreeViewRowKey).
         static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows,
+                                           const std::unordered_set<ID>& openRows,
                                            std::vector<int>& visibleIdx);
-        /// As above, for a tree drawn by a table with `state`: when rows were opened or closed,
-        /// its selection stays on the same rows (row IDs are visible positions). For a tree built
-        /// on VirtualTable directly; VirtualTreeView does this itself.
+        /// As above, for a tree drawn by a table with `state`, open as its openRows says: when
+        /// rows were opened or closed, its selection stays on the same rows (row IDs are
+        /// visible positions). For a tree built on VirtualTable directly; VirtualTreeView does
+        /// this itself.
         static void WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows,
                                            std::vector<int>& visibleIdx, TableState& state);
+        /// The TreeCell open state of flat row `flat` in the view with `state`: its key in
+        /// state.openRows, or nothing for a row without children.
+        static TreeOpenRef TreeViewOpenRef(const std::vector<TreeViewRow>& rows, size_t flat, TableState& state)
+        {
+            const TreeViewRow& row = rows[flat];
+            return row.HasChildren() ? TreeOpenRef{ .set = &state.openRows, .key = TreeViewRowKey(row, flat) } : TreeOpenRef{};
+        }
 
         /// Single-column virtualized tree view (a VirtualTable with one TreeCell column).
         /// A non-empty header shows the header row.
@@ -1605,7 +1615,9 @@ namespace tachyon
         /// Tree-style first column: [indent][arrow or spacer][optional icon][text].
         ///
         ///   depth              horizontal indent (pixels = depth * theme.treeTableIndent).
-        ///   isOpen             null for leaves (no arrow). Non-null toggles on click.
+        ///   isOpen             where the row's open state lives: empty for leaves (no
+        ///                      arrow), else a bool of yours or a view's open rows (see
+        ///                      TreeViewOpenRef). Clicks toggle it.
         ///   icon               optional leading icon rendered between arrow and text.
         ///   ancestorLineMask   bit d set iff the ancestor at depth d+1 has a next sibling
         ///                      (its guide line passes through this row at column d).
@@ -1614,12 +1626,20 @@ namespace tachyon
         ///   reserveExpander    false drops the arrow slot for leaves (for flat trees).
         ///
         /// Arrow clicks toggle without selecting; other clicks select the row.
-        void TreeCell(std::string_view text, int depth, bool* isOpen,
+        void TreeCell(std::string_view text, int depth, TreeOpenRef isOpen,
                       IconID icon = IconID::Invalid,
                       uint32_t ancestorLineMask = 0,
                       bool isLastSibling = true,
                       std::string* renameBuffer = nullptr,
                       bool reserveExpander = true);
+        /// As above, the open state a bool of yours; null for leaves.
+        inline void TreeCell(std::string_view text, int depth, bool* isOpen,
+                             IconID icon = IconID::Invalid,
+                             uint32_t ancestorLineMask = 0,
+                             bool isLastSibling = true,
+                             std::string* renameBuffer = nullptr,
+                             bool reserveExpander = true)
+            { TreeCell(text, depth, TreeOpenRef{ .flag = isOpen }, icon, ancestorLineMask, isLastSibling, renameBuffer, reserveExpander); }
 
         /// Virtual-scrolled table: emits only the visible rows, under one ranged ID.
         /// Frozen columns get their own body section (left / mid / right), scroll-synced.
@@ -3581,7 +3601,7 @@ namespace tachyon
                                 tachyon::StyleRef cellStyleRef, tachyon::EventHandler cellHandler,
                                 bool cellSelected,
                                 tachyon::TextID textID,
-                                int treeDepth, bool* treeIsOpen, IconID treeIcon,
+                                int treeDepth, TreeOpenRef treeIsOpen, IconID treeIcon,
                                 uint32_t treeAncestorMask, bool treeIsLastSibling,
                                 std::string* treeRenameBuffer, bool treeRenameActive,
                                 tachyon::ID treeBodyID, bool reserveExpander,

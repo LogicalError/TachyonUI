@@ -483,13 +483,13 @@ namespace tachyon
             // Branch row is registered with its isOpen pointer + depth.
             const auto* branchInfo = state.FindTreeRow(branchID);
             ASSERT_NE(branchInfo, nullptr);
-            EXPECT_EQ(branchInfo->isOpen, &branchOpen);
+            EXPECT_EQ(branchInfo->isOpen.flag, &branchOpen);
             EXPECT_EQ(branchInfo->depth, 1);
 
             // Leaf registers too, but with no isOpen pointer.
             const auto* leafInfo = state.FindTreeRow(leafID);
             ASSERT_NE(leafInfo, nullptr);
-            EXPECT_EQ(leafInfo->isOpen, nullptr);
+            EXPECT_FALSE(leafInfo->isOpen);
             EXPECT_EQ(leafInfo->depth, 2);
         }
 

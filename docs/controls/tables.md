@@ -263,31 +263,40 @@ one item of a tree in a table cell. It draws, from left to right:
 - an optional icon
 - the text
 
-Clicking the arrow toggles `*isOpen` without selecting the row. Clicking elsewhere selects
-the row.
+Clicking the arrow opens or closes the item without selecting the row. Clicking elsewhere
+selects the row.
 
 ```cpp
-void TreeCell(std::string_view text, int depth, bool* isOpen, IconID icon = IconID::Invalid,
+void TreeCell(std::string_view text, int depth, TreeOpenRef isOpen, IconID icon = IconID::Invalid,
               uint32_t ancestorLineMask = 0, bool isLastSibling = true,
               std::string* renameBuffer = nullptr, bool reserveExpander = true);
+void TreeCell(std::string_view text, int depth, bool* isOpen, ...);   // the rest as above
 ```
+
+`isOpen` says where the item's open state lives:
+
+- A bool of yours, as a `bool*`.
+- For `TreeViewRow`s, the table's own open rows: `TreeViewOpenRef(rows, index, tableState)`.
+  - Each table showing the rows then opens and closes them on its own (see
+    [Tree views](trees-and-grids.md#tree-views)).
+- Nothing on leaf rows, the rows without children: `nullptr`, or an empty `TreeOpenRef`.
 
 ```cpp
 WalkTreeViewVisibility(rows, visibleIdx, tableState);   // members: std::vector<TreeViewRow> rows; std::vector<int> visibleIdx
 std::vector<VirtualTableColumn> columns = {
     { .column = { .header = "Name", .initialWidth = 240 }, .generateCell = [this](int i) {
-          TreeViewRow& r = rows[visibleIdx[i]];
-          TreeCell(r.name, r.depth, r.HasChildren() ? &r.isOpen : nullptr, r.icon, r.ancestorLineMask, r.isLastSibling);
+          const size_t flat = size_t(visibleIdx[i]);
+          const TreeViewRow& r = rows[flat];
+          TreeCell(r.name, r.depth, TreeViewOpenRef(rows, flat, tableState), r.icon, r.ancestorLineMask, r.isLastSibling);
       } },
 };
 VirtualTable(tableID, tableState, columns, int(visibleIdx.size()), 0, {}, LayoutOverride{}.FlexGrow(1));
 ```
 
-- Pass the table's state to `WalkTreeViewVisibility`: then opening or closing an item keeps the
-  selection on the same items.
+- Pass the table's state to `WalkTreeViewVisibility`: it shows the rows its `openRows` has
+  open, and opening or closing an item keeps the selection on the same items.
   - Row IDs are visible positions, so without it closing an item above the selection would
     move the selection to another item.
-- `isOpen` is null on leaf rows, the rows without children.
 - `ancestorLineMask` and `isLastSibling` draw the guide lines that connect an item to its
   parent. `RebuildTreeViewIndex` computes them (see
   [Tree views](trees-and-grids.md#tree-views)).
@@ -299,8 +308,9 @@ VirtualTable(tableID, tableState, columns, int(visibleIdx.size()), 0, {}, Layout
 ```cpp
 columns = {
     { .column = { .header = "Name", .initialWidth = 240 }, .generateCell = [this](int i) {
-          TreeViewRow& r = rows[visibleIdx[i]];
-          TreeCell(r.name, r.depth, r.HasChildren() ? &r.isOpen : nullptr, r.icon, r.ancestorLineMask,
+          const size_t flat = size_t(visibleIdx[i]);
+          TreeViewRow& r = rows[flat];
+          TreeCell(r.name, r.depth, TreeViewOpenRef(rows, flat, tableState), r.icon, r.ancestorLineMask,
                    r.isLastSibling, &r.name);   // a rename writes the new name to r.name
       } },
 };

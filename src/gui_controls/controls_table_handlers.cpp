@@ -183,7 +183,7 @@ namespace tachyon
                             {
                                 const auto* info = statePtr->FindTreeRow(statePtr->selectedRowID);
                                 if (info && info->isOpen)
-                                    { *info->isOpen = !*info->isOpen; guiStateManager.Interaction().SuppressHover(); return true; }
+                                    { info->isOpen.Toggle(); guiStateManager.Interaction().SuppressHover(); return true; }
                             }
                             return false;
                         case tachyon::KeyCode::F2:
@@ -205,8 +205,8 @@ namespace tachyon
                             if (idx >= 0)
                             {
                                 const auto* info = statePtr->FindTreeRow(statePtr->selectedRowID);
-                                const bool isOpenBranch = (info && info->isOpen && *info->isOpen);
-                                if (isOpenBranch) { *info->isOpen = false; guiStateManager.Interaction().SuppressHover(); return true; }
+                                const bool isOpenBranch = (info && info->isOpen.IsOpen());
+                                if (isOpenBranch) { info->isOpen.SetOpen(false); guiStateManager.Interaction().SuppressHover(); return true; }
                                 if (info && info->depth > 0)
                                 {
                                     // Walk back to the parent (nearest shallower row);
@@ -230,7 +230,7 @@ namespace tachyon
                                 const auto* info = statePtr->FindTreeRow(statePtr->selectedRowID);
                                 if (info && info->isOpen)
                                 {
-                                    if (!*info->isOpen) { *info->isOpen = true; guiStateManager.Interaction().SuppressHover(); return true; }
+                                    if (!info->isOpen.IsOpen()) { info->isOpen.SetOpen(true); guiStateManager.Interaction().SuppressHover(); return true; }
                                     if (idx + 1 < totalRows)
                                     {
                                         const tachyon::ID childID = idManager.GetSubID(
@@ -463,7 +463,7 @@ namespace tachyon
                         //   top    -> Before
                         //   middle -> InsideLast (append child)
                         //   bottom -> Inside (prepend child) when open, After when closed
-                        const bool openBranch = info->isOpen && *info->isOpen;
+                        const bool openBranch = info->isOpen.IsOpen();
                         if (relY <  h / 3)      return TreeDropPosition::Before;
                         if (relY < (2 * h) / 3) return TreeDropPosition::InsideLast;
                         return openBranch ? TreeDropPosition::Inside
@@ -643,7 +643,7 @@ namespace tachyon
                 }
                 if (info && info->isOpen)
                 {
-                    *info->isOpen = !*info->isOpen;
+                    info->isOpen.Toggle();
                     state->internal.rowClickTracker.Reset();
                     if (!(*m_renameSub).firstFrame) (*m_renameSub).Cancel();
                     return true;

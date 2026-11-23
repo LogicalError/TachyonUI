@@ -19,19 +19,19 @@ namespace tachyon::TreeUtils
     /// @addtogroup controls_data
     /// @{
 
-    /// A flat tree row: the caller sets depth and isOpen; RebuildTreeIndex derives the rest.
+    /// A flat tree row: the caller sets depth; RebuildTreeIndex derives the rest. Whether a
+    /// row is open is the caller's too: a bool on the row (`isOpen`), or a view's set.
     template <typename Row>
     concept TreeRowLike = requires(Row r)
     {
         { r.depth }            -> std::convertible_to<int>;
         { r.skipCount }        -> std::convertible_to<int>;
-        { r.isOpen }           -> std::convertible_to<bool>;
         { r.ancestorLineMask } -> std::convertible_to<uint32_t>;
         { r.isLastSibling }    -> std::convertible_to<bool>;
     };
 
     /// Recomputes the derived fields (skipCount, ancestorLineMask, isLastSibling) from
-    /// each row's depth. Call once after structural edits; toggling isOpen needs no rebuild.
+    /// each row's depth. Call once after structural edits; opening a row needs no rebuild.
     /// One pass from the last row up, so a large tree (a virtualized view's) costs O(n).
     template <TreeRowLike Row>
     void RebuildTreeIndex(std::vector<Row>& rows)
@@ -71,7 +71,8 @@ namespace tachyon::TreeUtils
     }
 
     /// Moves the subtree rooted at flat index `srcDs` to `pos` relative to row `dstDs`,
-    /// shifting depths when the target depth differs; Inside/InsideLast open the target.
+    /// shifting depths when the target depth differs; Inside/InsideLast open the target when
+    /// its rows have an `isOpen` (open it in the view yourself when they don't).
     /// Rejects a drop on itself or into its own descendants. Call RebuildTreeIndex
     /// afterwards. Returns the moved row's new flat index, or -1 on rejection.
     template <TreeRowLike Row>
@@ -92,6 +93,10 @@ namespace tachyon::TreeUtils
 
         int targetBaseDepth = rows[dstDs].depth;
         int insertAt        = dstDs;
+        auto openTarget = [&] {
+            if constexpr (requires { rows[dstDs].isOpen = true; })
+                rows[dstDs].isOpen = true;
+        };
         switch (pos)
         {
             case tachyon::TreeDropPosition::Before:
@@ -102,13 +107,13 @@ namespace tachyon::TreeUtils
                 // First child: splice in right after the parent row.
                 insertAt        = dstDs + 1;
                 targetBaseDepth = rows[dstDs].depth + 1;
-                rows[dstDs].isOpen = true;
+                openTarget();
                 break;
             case tachyon::TreeDropPosition::InsideLast:
                 // Last child: splice in past the parent's whole subtree.
                 insertAt        = dstDs + 1 + rows[dstDs].skipCount;
                 targetBaseDepth = rows[dstDs].depth + 1;
-                rows[dstDs].isOpen = true;
+                openTarget();
                 break;
             case tachyon::TreeDropPosition::After:
                 insertAt        = dstDs + 1 + rows[dstDs].skipCount;

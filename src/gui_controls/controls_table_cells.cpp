@@ -18,10 +18,10 @@ namespace tachyon
 
     namespace
     {
-        // Double-click toggle for `*isOpen`. Cell mode only - in
+        // Double-click toggle for `isOpen`. Cell mode only - in
         // row mode the equivalent lives in BuildRowBackdropHandler (the
         // tree cell shares rowID with the backdrop, which catches dispatch first).
-        tachyon::EventHandler MakeTreeCellDoubleClickToggle(DoubleClickTracker* tracker, bool* isOpen, tachyon::EventHandler inner)
+        tachyon::EventHandler MakeTreeCellDoubleClickToggle(DoubleClickTracker* tracker, TreeOpenRef isOpen, tachyon::EventHandler inner)
         {
             return [tracker, isOpen, inner = std::move(inner)](tachyon::ElementEvent&& event) -> bool
             {
@@ -30,7 +30,7 @@ namespace tachyon
                     const auto r = tracker->Update(event.id);
                     if (r.sameAsPrevious && r.elapsedMs < DoubleClickMilliseconds() && isOpen)
                     {
-                        *isOpen = !*isOpen;
+                        isOpen.Toggle();
                         tracker->Reset();
                         return true;
                     }
@@ -78,10 +78,10 @@ namespace tachyon
         VERIFY(app.windowRegistry.Add(res.ref));
     }
 
-    // Arrow (branch, isOpen != nullptr) or invisible spacer (leaf).
+    // Arrow (branch, isOpen set) or invisible spacer (leaf).
     // Both use the arrow style's width so text-column X is the same on branch + leaf rows.
     // The arrow uses a flex wrapper + inner glyph for a larger hit target.
-    void EmitTreeCellArrowOrLeafSpacer(GUIApplication& app, bool* isOpen)
+    void EmitTreeCellArrowOrLeafSpacer(GUIApplication& app, TreeOpenRef isOpen)
     {
         if (isOpen)
         {
@@ -92,7 +92,7 @@ namespace tachyon
             arrow.state    = app.guiStateManager.GetCurrentState(arrowID);
             arrow.eventHandler = [isOpen](ElementEvent&& event) -> bool {
                 if (event.type == tachyon::EventType::MouseDown && event.state.LeftPressed())
-                    { *isOpen = !*isOpen; return true; }
+                    { isOpen.Toggle(); return true; }
                 return false;
             };
             auto res = app.elementStorage.Add(std::move(arrow), tachyon::LayoutOverride{});
@@ -111,7 +111,7 @@ namespace tachyon
                 const float glyphSize = static_cast<float>(app.theme.treeTableArrowGlyphSize);
                 tachyon::ContentRun arrowRun[] = {
                     { .type = tachyon::ContentRun::Icon,
-                      .iconID = (*isOpen ? app.theme.treeArrowDown : app.theme.treeArrowRight),
+                      .iconID = (isOpen.IsOpen() ? app.theme.treeArrowDown : app.theme.treeArrowRight),
                       .iconWidth = glyphSize, .iconHeight = glyphSize }
                 };
                 glyph.textID = app.textSystem->RegisterRichText(glyphID, arrowRun,
@@ -134,11 +134,11 @@ namespace tachyon
         }
     }
 
-    // Optional icon between arrow and text. On branches (isOpen != null) the
+    // Optional icon between arrow and text. On branches (isOpen set) the
     // icon is hittable: a double-click toggles the branch. Single
     // clicks return false so the row backdrop's selection / drag-prime still
     // sees them.
-    void EmitTreeCellIcon(GUIApplication& app, IconID icon, bool* isOpen,
+    void EmitTreeCellIcon(GUIApplication& app, IconID icon, TreeOpenRef isOpen,
                           tachyon::DoubleClickTracker* tracker)
     {
         if (icon == IconID::Invalid) return;
@@ -146,7 +146,7 @@ namespace tachyon
         tachyon::Element iconElem{};
         iconElem.id       = iconElemID;
         iconElem.styleRef = app.theme.treeTableIconStyleRef;
-        const bool hittable = (isOpen != nullptr);
+        const bool hittable = static_cast<bool>(isOpen);
         iconElem.state    = app.guiStateManager.GetCurrentState(iconElemID);
         if (!hittable) iconElem.flags |= tachyon::ElementFlags::NoInput;
         const float iconSize = static_cast<float>(app.theme.treeTableIconSize);
@@ -165,7 +165,7 @@ namespace tachyon
                 const auto r = tracker->Update(event.id);
                 if (r.sameAsPrevious && r.elapsedMs < DoubleClickMilliseconds())
                 {
-                    *isOpen = !*isOpen;
+                    isOpen.Toggle();
                     tracker->Reset();
                     return true;
                 }
@@ -280,7 +280,7 @@ namespace tachyon
     }
 
 
-    void GUIApplication::TreeCell(std::string_view text, int depth, bool* isOpen,
+    void GUIApplication::TreeCell(std::string_view text, int depth, TreeOpenRef isOpen,
                                   IconID icon, uint32_t ancestorLineMask,
                                   bool isLastSibling, std::string* renameBuffer,
                                   bool reserveExpander)
@@ -307,10 +307,10 @@ namespace tachyon
 
         // Tree-row metadata; slots are reused across frames (no steady-state allocation).
         auto& info = state->EnsureTreeRowInfo()[rowID];
-        info.isOpen      = isOpen;     // null for leaves
+        info.isOpen      = isOpen;     // empty for leaves
         info.depth       = depth;
         info.renameBuf   = renameBuffer;
-        info.hasChildren = (isOpen != nullptr);
+        info.hasChildren = static_cast<bool>(isOpen);
         if (renameBuffer != nullptr) info.renameSeed.assign(text);
         else                         info.renameSeed.clear();
 
@@ -352,7 +352,7 @@ namespace tachyon
             bodyID, text, textStyle, textState);
         // Branches always reserve the arrow / leaf-spacer column (the arrow lives
         // there); leaves only when reserveExpander is set.
-        const bool hasExpanderColumn = reserveExpander || (isOpen != nullptr);
+        const bool hasExpanderColumn = reserveExpander || static_cast<bool>(isOpen);
         info.expanderColumn = hasExpanderColumn;
         int32_t prefix = (depth > 0 ? depth * theme.treeTableIndent : 0)
                        + (hasExpanderColumn ? theme.treeTableExpanderWidth : 0)
@@ -444,7 +444,7 @@ namespace tachyon
                                             tachyon::StyleRef cellStyleRef, tachyon::EventHandler cellHandler,
                                             bool cellSelected,
                                             tachyon::TextID textID,
-                                            int treeDepth, bool* treeIsOpen, IconID treeIcon,
+                                            int treeDepth, TreeOpenRef treeIsOpen, IconID treeIcon,
                                             uint32_t treeAncestorMask, bool treeIsLastSibling,
                                             std::string* treeRenameBuffer, bool treeRenameActive,
                                             tachyon::ID treeBodyID, bool reserveExpander,
@@ -478,7 +478,7 @@ namespace tachyon
                 [depth          = treeDepth,
                  ancestorMask   = treeAncestorMask,
                  isLastSibling  = treeIsLastSibling,
-                 hasArrow       = (treeIsOpen != nullptr),
+                 hasArrow       = static_cast<bool>(treeIsOpen),
                  lineColor      = theme.treeGuideLineStyle,
                  treeIndent     = theme.treeTableIndent,
                  sm             = &styleManager,
@@ -522,7 +522,7 @@ namespace tachyon
         EmitTreeCellIndent(*this, treeDepth);
         // Branches always keep their arrow; leaves keep the spacer only when
         // the tree reserves an expander column (false for flat trees).
-        if (reserveExpander || treeIsOpen != nullptr)
+        if (reserveExpander || treeIsOpen)
             EmitTreeCellArrowOrLeafSpacer(*this, treeIsOpen);
         EmitTreeCellIcon(*this, treeIcon, treeIsOpen, &emit.userState->internal.treeCellClickTracker);
 
