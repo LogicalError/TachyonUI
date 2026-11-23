@@ -263,6 +263,10 @@ namespace tachyon
     void ApplyTimelineEdit(TimelineData& data, const TimelineEdit& edit, bool undo = false);
     /// Applies `edit` and hands it to `data.onEdit`; does nothing for an empty one.
     void CommitTimelineEdit(TimelineData& data, const TimelineEdit& edit);
+    /// Releases the static IDs of the tracks, keys and events only the side of `edit` not in
+    /// effect holds: done, what its undo would bring back; `undone`, what its redo would add.
+    /// For the edit's step leaving the undo history (UndoHistory::Step::drop).
+    void ReleaseTimelineEditIDs(IDManager& ids, const TimelineEdit& edit, bool undone);
     /// The element of track `track`'s row in a view: rows are scoped to their editor, so each
     /// view of the tracks has its own.
     inline ID TimelineRowID(const TimelineViewState& view, ID track) { return IDManager::ScopedID(view.editorID, track); }

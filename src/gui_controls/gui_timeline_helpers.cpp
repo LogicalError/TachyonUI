@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace tachyon
 {
@@ -58,6 +59,27 @@ namespace tachyon
         if (edit.loopTo)
             view.loopRange = undo ? edit.loopFrom.value_or(TimelineRange{}) : *edit.loopTo;
         ++view.revision;
+    }
+
+    void ReleaseTimelineEditIDs(IDManager& ids, const TimelineEdit& edit, bool undone)
+    {
+        // What the tracks hold before the edit and after it; the side not in effect goes,
+        // less what the other side holds too.
+        std::vector<ID> before, after;
+        auto collect = [](std::vector<ID>& out, const TimelineTrack& track) {
+            out.push_back(track.stableID);
+            for (const TimelineKey& key : track.keys)       out.push_back(key.stableID);
+            for (const TimelineEvent& event : track.events) out.push_back(event.stableID);
+        };
+        for (const TimelineEdit::Change& change : edit.changes)
+        {
+            collect(before, change.from);
+            collect(after,  change.to);
+        }
+        for (const TimelineEdit::Track& t : edit.tracks)
+            collect(t.added ? after : before, t.track);
+        if (undone) ids.ReleaseStaticIDsNotIn(after, before);
+        else        ids.ReleaseStaticIDsNotIn(before, after);
     }
 
     bool PruneTimelineSelection(TimelineViewRef view)

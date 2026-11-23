@@ -75,6 +75,11 @@ namespace tachyon
         /// is not the slot's current generation.
         public: bool ReleaseStaticID(ID id);
 
+        /// Releases each static ID in `ids` that isn't in `keep`: what one side of a change
+        /// holds and the other doesn't, such as the items an undo step would bring back. Sorts
+        /// both; skips repeats and IDs that aren't static.
+        public: void ReleaseStaticIDsNotIn(std::vector<ID>& ids, std::vector<ID>& keep);
+
         // Tests reach it through IDManagerTestAccess (defined in the tests).
         private: bool SetGenerationForSlot(uint32_t index, int32_t generation);
         friend struct IDManagerTestAccess;

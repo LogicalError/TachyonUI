@@ -852,6 +852,17 @@ namespace tachyon
         return best;
     }
 
+    void ReleaseNodeViewEditIDs(IDManager& ids, const NodeViewEdit& edit, bool undone)
+    {
+        // Only added and removed items hold IDs; the rest of an edit names them.
+        std::vector<ID> before, after;
+        for (const NodeViewEdit::Node& n : edit.nodes)             (n.added ? after : before).push_back(n.node.stableID);
+        for (const NodeViewEdit::Frame& f : edit.frames)           (f.added ? after : before).push_back(f.frame.stableID);
+        for (const NodeViewEdit::Transition& t : edit.transitions) (t.added ? after : before).push_back(t.transition.stableID);
+        if (undone) ids.ReleaseStaticIDsNotIn(after, before);
+        else        ids.ReleaseStaticIDsNotIn(before, after);
+    }
+
     void ApplyNodeViewEdit(NodeViewRef view, const NodeViewEdit& edit, bool undo)
     {
         // The graph's other views learn of it by its revision; this one is kept up to date here.

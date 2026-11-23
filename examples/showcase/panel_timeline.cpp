@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 //
 // The Timeline panel: the timeline editor with tracks of keys, a sound and events. The Curves
@@ -57,12 +58,15 @@ namespace tachyon
         events.events.push_back({ idManager.CreateStaticID(), 5.2f, "Explode" });
         view.tracks.push_back(std::move(events));
 
-        // Each change goes on the app's undo history.
+        // Each change goes on the app's undo history, which gives back the IDs of what it took
+        // away once it can no longer be undone.
         view.onEdit = [this](const TimelineEdit& edit)
         {
+            const auto shared = std::make_shared<const TimelineEdit>(edit);
             commandManager.History().Push({ .description = "Edit animation",
-                .undo = [this, edit] { ApplyTimelineEdit(animation, edit, /*undo*/ true); },
-                .redo = [this, edit] { ApplyTimelineEdit(animation, edit, /*undo*/ false); } });
+                .undo = [this, shared] { ApplyTimelineEdit(animation, *shared, /*undo*/ true); },
+                .redo = [this, shared] { ApplyTimelineEdit(animation, *shared, /*undo*/ false); },
+                .drop = [this, shared](bool undone) { ReleaseTimelineEditIDs(idManager, *shared, undone); } });
             commandManager.History().EndMerge();
         };
         SeedAnimationCurves();
@@ -138,9 +142,11 @@ namespace tachyon
 
         view.onEdit = [this](const CurveEdit& edit)
         {
+            const auto shared = std::make_shared<const CurveEdit>(edit);
             commandManager.History().Push({ .description = "Edit curves",
-                .undo = [this, edit] { ApplyCurveEdit(animationCurves, edit, /*undo*/ true); },
-                .redo = [this, edit] { ApplyCurveEdit(animationCurves, edit, /*undo*/ false); } });
+                .undo = [this, shared] { ApplyCurveEdit(animationCurves, *shared, /*undo*/ true); },
+                .redo = [this, shared] { ApplyCurveEdit(animationCurves, *shared, /*undo*/ false); },
+                .drop = [this, shared](bool undone) { ReleaseCurveEditIDs(idManager, *shared, undone); } });
             commandManager.History().EndMerge();
         };
         // Scrubbing the ruler moves the timeline's playhead, as scrubbing the timeline's does.

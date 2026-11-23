@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -100,9 +101,11 @@ namespace tachyon
         for (NodeGraph* machine : { &enemy, &combat })
             machine->onEdit = [this, machine](const NodeViewEdit& edit)
             {
+                const auto shared = std::make_shared<const NodeViewEdit>(edit);
                 commandManager.History().Push({ .description = "Edit state machine",
-                    .undo = [this, machine, edit] { ApplyNodeViewEdit({ *machine, showcase.noView }, edit, /*undo*/ true); },
-                    .redo = [this, machine, edit] { ApplyNodeViewEdit({ *machine, showcase.noView }, edit, /*undo*/ false); } });
+                    .undo = [this, machine, shared] { ApplyNodeViewEdit({ *machine, showcase.noView }, *shared, /*undo*/ true); },
+                    .redo = [this, machine, shared] { ApplyNodeViewEdit({ *machine, showcase.noView }, *shared, /*undo*/ false); },
+                    .drop = [this, shared](bool undone) { ReleaseNodeViewEditIDs(idManager, *shared, undone); } });
                 commandManager.History().EndMerge();
             };
     }

@@ -15,6 +15,8 @@
 
 namespace tachyon
 {
+    class IDManager;
+
     /// @addtogroup app
     /// @{
 
@@ -234,6 +236,10 @@ namespace tachyon
     /// Applies `edit`, lets go of what it took from the view's selection, and hands it to
     /// `view.data.onEdit`; does nothing for an empty one.
     void CommitCurveEdit(CurveViewRef view, const CurveEdit& edit);
+    /// Releases the static IDs of the keys only the side of `edit` not in effect holds: done,
+    /// what its undo would bring back; `undone`, what its redo would add. For the edit's step
+    /// leaving the undo history (UndoHistory::Step::drop).
+    void ReleaseCurveEditIDs(IDManager& ids, const CurveEdit& edit, bool undone);
     /// After an edit (through this view or another): lets go of the selected keys that are
     /// gone, and of what the view kept of them. The curve controls do it as they build;
     /// returns whether the curves had changed since.

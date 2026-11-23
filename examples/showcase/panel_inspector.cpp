@@ -3,6 +3,7 @@
 #include <gui_core/diagnostics/gui_logging.h>
 
 #include <algorithm>
+#include <memory>
 
 static constexpr tachyon::Diagnostics::LogCategory kLogShowcase = tachyon::Diagnostics::MakeLogCategory("showcase");
 
@@ -75,9 +76,11 @@ namespace tachyon
         };
         auto onEdit = [this](CurveData* view, const char* what) {
             return [this, view, what](const CurveEdit& edit) {
+                const auto shared = std::make_shared<const CurveEdit>(edit);
                 commandManager.History().Push({ .description = what,
-                    .undo = [view, edit] { ApplyCurveEdit(*view, edit, /*undo*/ true); },
-                    .redo = [view, edit] { ApplyCurveEdit(*view, edit, /*undo*/ false); } });
+                    .undo = [view, shared] { ApplyCurveEdit(*view, *shared, /*undo*/ true); },
+                    .redo = [view, shared] { ApplyCurveEdit(*view, *shared, /*undo*/ false); },
+                    .drop = [this, shared](bool undone) { ReleaseCurveEditIDs(idManager, *shared, undone); } });
                 commandManager.History().EndMerge();
             };
         };
