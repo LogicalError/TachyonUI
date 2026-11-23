@@ -395,7 +395,12 @@ namespace tachyon
                     const int32_t grid = std::max(1, theme.nodeGridSize);
                     const int2 at{ int32_t(std::lround(view.state.wireMenuPos.x)) - grid, int32_t(std::lround(view.state.wireMenuPos.y)) - grid };
                     const int2 pos = view.graph.snapToGrid ? int2{ GridLineNearest(at.x, 0, grid), GridLineNearest(at.y, 0, grid) } : at;
-                    CommitNodeViewEdit(view, RerouteWireEdit(view, wire, idManager.CreateStaticID(), pos));
+                    const ID reroute = idManager.CreateStaticID();
+                    const NodeViewEdit edit = RerouteWireEdit(view, wire, reroute, pos);
+                    if (edit.empty())
+                        idManager.ReleaseStaticID(reroute);   // the wire is gone
+                    else
+                        CommitNodeViewEdit(view, edit);
                 });
             }
             else

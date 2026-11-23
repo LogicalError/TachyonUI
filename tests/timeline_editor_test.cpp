@@ -938,6 +938,23 @@ namespace tachyon
             EXPECT_EQ(edits[0].changes.size(), 1u) << "only Position changed";
         }
 
+        // K where the selected track has a key already adds none, and the ID made for one goes
+        // back: pressing it again and again holds no more IDs.
+        TEST_F(TimelineEditorTest, AKeyThatIsntAddedGivesItsIDBack)
+        {
+            Settle();
+            Click(LanesPoint(2.0f, 1));
+            Key(KeyCode::Escape);   // none selected: K keys the selected track
+            view.selectedTrack = position;
+            view.playback.time = 2.0f;   // Position's key
+            Frame();
+            const size_t ids = app.idManager.GetStaticIDCount();
+            for (int i = 0; i < 3; ++i)
+                Key(KeyCode::KeyK);
+            EXPECT_EQ(view.tracks[1].keys.size(), 3u) << "nothing added";
+            EXPECT_EQ(app.idManager.GetStaticIDCount(), ids) << "no ID held for it";
+        }
+
         // Keys on the focused lanes.
         TEST_F(TimelineEditorTest, TheLanesTakeKeys)
         {
