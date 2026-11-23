@@ -100,13 +100,16 @@ Field(gain, TextEditBehavior::ContinuousUpdate, NumericFieldConfig<float>{ .deci
 
 - `onEdit`: gets each finished edit as a `NodeViewEdit`, for undo.
   - `ApplyNodeViewEdit` in `gui_node_view_helpers.h` applies or reverts one.
+  - `ReleaseNodeViewEditIDs` gives back the static IDs of deleted nodes, frames and
+    transitions once the history lets go of the edit's step, in its `drop`.
 
   ```cpp
   view.onEdit = [this](const NodeViewEdit& edit)
   {
       commandManager.History().Push({ .description = "Edit node graph",
           .undo = [this, edit] { ApplyNodeViewEdit(view, edit, true); },
-          .redo = [this, edit] { ApplyNodeViewEdit(view, edit, false); } });
+          .redo = [this, edit] { ApplyNodeViewEdit(view, edit, false); },
+          .drop = [this, edit](bool undone) { ReleaseNodeViewEditIDs(idManager, edit, undone); } });
       commandManager.History().EndMerge();
   };
   ```

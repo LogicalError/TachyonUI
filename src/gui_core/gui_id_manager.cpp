@@ -2,6 +2,7 @@
 #include <gui_core/gui_id_manager.h>
 #include <gui_core/gui_hash.h>
 
+#include <algorithm>
 #include <assert.h>
 #include <gui_core/diagnostics/gui_logging.h>
 #include <vector>
@@ -145,6 +146,20 @@ namespace tachyon
         m_static_free_list.push_back(index);
         m_static_id_count--;
         return true;
+    }
+
+    void IDManager::ReleaseStaticIDsNotIn(std::vector<ID>& ids, std::vector<ID>& keep)
+    {
+        std::sort(ids.begin(), ids.end());
+        std::sort(keep.begin(), keep.end());
+        auto k = keep.begin();
+        for (auto i = ids.begin(); i != ids.end(); ++i)
+        {
+            if (i != ids.begin() && *i == i[-1]) continue;
+            while (k != keep.end() && *k < *i) ++k;
+            if ((k == keep.end() || *k != *i) && i->GetMode() == IDMode::Static)
+                ReleaseStaticID(*i);
+        }
     }
 
     bool IDManager::SetGenerationForSlot(uint32_t index, int32_t generation)

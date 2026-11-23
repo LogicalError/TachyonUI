@@ -219,9 +219,16 @@ TimelineView animation;   // a member
 animation.onEdit = [this](const TimelineEdit& edit) {
     history.Push({ .description = "Edit animation",
                    .undo = [this, edit] { ApplyTimelineEdit(animation, edit, /*undo*/ true); },
-                   .redo = [this, edit] { ApplyTimelineEdit(animation, edit); } });
+                   .redo = [this, edit] { ApplyTimelineEdit(animation, edit); },
+                   .drop = [this, edit](bool undone) { ReleaseTimelineEditIDs(idManager, edit, undone); } });
 };
 ```
+
+- A deleted key, event or track keeps its static ID while its edit can still be undone.
+  - The step's `drop` runs when the history lets go of the step: a new edit replaces it after
+    an undo, or the history is cleared.
+  - `ReleaseTimelineEditIDs` then gives back the IDs that only the edit still holds.
+  - Clear the history before you exit to give back the rest: `history.Clear()`.
 
 ### Tracks
 

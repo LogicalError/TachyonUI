@@ -75,9 +75,16 @@ falloff.clampValues = true;
 falloff.onEdit = [this](const CurveEdit& edit) {
     history.Push({ .description = "Edit falloff",
                    .undo = [this, edit] { ApplyCurveEdit(falloff, edit, /*undo*/ true); },
-                   .redo = [this, edit] { ApplyCurveEdit(falloff, edit); } });
+                   .redo = [this, edit] { ApplyCurveEdit(falloff, edit); },
+                   .drop = [this, edit](bool undone) { ReleaseCurveEditIDs(idManager, edit, undone); } });
 };
 ```
+
+- A deleted key keeps its static ID while its edit can still be undone.
+  - The step's `drop` runs when the history lets go of the step: a new edit replaces it after
+    an undo, or the history is cleared.
+  - `ReleaseCurveEditIDs` then gives back the IDs that only the edit still holds, such as the
+    keys a preset replaced.
 
 ## Curves and keys
 

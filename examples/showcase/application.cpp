@@ -176,6 +176,9 @@ namespace tachyon
             CloseAllDocuments(window->documents);
         ReleaseDockingLayout(m_capture.layout);
 
+        // The undo history's steps give back the IDs of what only they still hold.
+        commandManager.History().Clear();
+
         // Every static ID the showcase made goes back.
         idManager.ReleaseStaticID(showcase.windowLayoutID1);
         idManager.ReleaseStaticID(showcase.windowLayoutID2);
@@ -615,14 +618,16 @@ namespace tachyon
             // with the text edits.
             showcase.nodeGraph.onEdit = [this](const NodeViewEdit& edit)
             {
+                const auto shared = std::make_shared<const NodeViewEdit>(edit);
                 commandManager.History().Push({ .description = "Edit node graph",
-                    .undo = [this, edit] { ApplyNodeViewEdit({ showcase.nodeGraph, showcase.noView }, edit, /*undo*/ true); },
-                    .redo = [this, edit] { ApplyNodeViewEdit({ showcase.nodeGraph, showcase.noView }, edit, /*undo*/ false); } });
+                    .undo = [this, shared] { ApplyNodeViewEdit({ showcase.nodeGraph, showcase.noView }, *shared, /*undo*/ true); },
+                    .redo = [this, shared] { ApplyNodeViewEdit({ showcase.nodeGraph, showcase.noView }, *shared, /*undo*/ false); },
+                    .drop = [this, shared](bool undone) { ReleaseNodeViewEditIDs(idManager, *shared, undone); } });
                 commandManager.History().EndMerge();
             };
 
             // Delete removes the selected nodes, their wires with them, as one edit. Their IDs
-            // stay taken while the edit can be undone (Cleanup releases the ones still shown).
+            // stay taken while the edit can be undone; its step gives them back once it can't.
             commandManager.RegisterCommand(nodeViewMode, showcase.deleteIcon, tachyon::KeyCode::Delete, tachyon::KeyModifier::None,
                                            [this]() { if (NodeViewState* view = FocusedGraphView()) DeleteSelectedNodes(*view); }, "Delete Nodes");
 

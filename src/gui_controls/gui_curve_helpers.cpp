@@ -1,7 +1,10 @@
 #include <gui_controls/gui_curve_types.h>
 
+#include <gui_core/gui_id_manager.h>
+
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 // Curves: evaluating them, the slopes the key modes work out, the presets, and the edits a
 // CurveField makes, each as the curves before and after so undo puts the old ones back.
@@ -194,6 +197,18 @@ namespace tachyon
             if (ValidChannel(data, change.channel))
                 data.channels[size_t(change.channel)].curve = undo ? change.from : change.to;
         ++data.revision;
+    }
+
+    void ReleaseCurveEditIDs(IDManager& ids, const CurveEdit& edit, bool undone)
+    {
+        std::vector<ID> before, after;
+        for (const CurveEdit::Change& change : edit.changes)
+        {
+            for (const CurveKey& key : change.from.keys) before.push_back(key.stableID);
+            for (const CurveKey& key : change.to.keys)   after.push_back(key.stableID);
+        }
+        if (undone) ids.ReleaseStaticIDsNotIn(after, before);
+        else        ids.ReleaseStaticIDsNotIn(before, after);
     }
 
     void CommitCurveEdit(CurveViewRef view, const CurveEdit& edit)

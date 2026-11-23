@@ -135,6 +135,10 @@ namespace tachyon
     void ApplyNodeViewEdit(NodeViewRef view, const NodeViewEdit& edit, bool undo = false);
     /// Applies `edit` and reports it to view.graph.onEdit.
     void CommitNodeViewEdit(NodeViewRef view, const NodeViewEdit& edit);
+    /// Releases the static IDs of the nodes, frames and transitions only the side of `edit`
+    /// not in effect holds: done, what its undo would bring back; `undone`, what its redo
+    /// would add. For the edit's step leaving the undo history (UndoHistory::Step::drop).
+    void ReleaseNodeViewEditIDs(IDManager& ids, const NodeViewEdit& edit, bool undone);
     /// An edit that wires `output` into `input`; the input's old wire goes, the output keeps
     /// its others.
     NodeViewEdit ConnectEdit(ConstNodeViewRef view, PropertyEndpoint output, PropertyEndpoint input);

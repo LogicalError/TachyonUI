@@ -140,6 +140,70 @@ namespace tachyon
             EXPECT_EQ(history.RedoCount(), 0u) << "the push dropped the undone step";
         }
 
+        // A step that notes in `dropped` how it left the history: "A undone", "A done".
+        UndoHistory::Step DropStep(std::string& dropped, std::string name, uint64_t mergeKey = 0)
+        {
+            return { .description = name,
+                     .undo = [] {}, .redo = [] {},
+                     .mergeKey = mergeKey,
+                     .drop = [&dropped, name](bool undone) { dropped += name + (undone ? " undone;" : " done;"); } };
+        }
+
+        TEST(UndoHistoryTest, APushDropsTheUndoneStepsAsUndone)
+        {
+            UndoHistory history;
+            std::string dropped;
+            history.Push(DropStep(dropped, "A")); history.EndMerge();
+            history.Push(DropStep(dropped, "B")); history.EndMerge();
+            history.Push(DropStep(dropped, "C")); history.EndMerge();
+            history.Undo();
+            history.Undo();
+            EXPECT_EQ(dropped, "") << "undone steps stay until something replaces them";
+
+            history.Push(DropStep(dropped, "D"));
+            EXPECT_EQ(dropped, "B undone;C undone;");
+        }
+
+        TEST(UndoHistoryTest, ClearDropsEachStepAsItIs)
+        {
+            UndoHistory history;
+            std::string dropped;
+            history.Push(DropStep(dropped, "A")); history.EndMerge();
+            history.Push(DropStep(dropped, "B")); history.EndMerge();
+            history.Undo();
+            history.Clear();
+            EXPECT_EQ(dropped, "A done;B undone;");
+            history.Clear();
+            EXPECT_EQ(dropped, "A done;B undone;") << "each step drops once";
+        }
+
+        // Merging throws away the later step's undo, and with it what that undo would give
+        // back, so a step that has a drop keeps to itself.
+        TEST(UndoHistoryTest, StepsWithADropDoNotMerge)
+        {
+            UndoHistory history;
+            std::string dropped;
+            history.Push(DropStep(dropped, "A", 7));
+            history.Push(DropStep(dropped, "B", 7));
+            EXPECT_EQ(history.UndoCount(), 2u);
+            EXPECT_EQ(dropped, "");
+        }
+
+        // A drop may push, clear or undo: the history is settled before it runs.
+        TEST(UndoHistoryTest, ADropThatClearsTheHistoryKeepsRunning)
+        {
+            UndoHistory history;
+            std::string dropped;
+            int value = 0;
+            history.Push({ .description = "Clears", .undo = [] {}, .redo = [] {},
+                           .drop = [&history, &dropped](bool) { history.Clear(); dropped += "cleared;"; } });
+            history.EndMerge();
+            history.Undo();
+            history.Push(SetStep(value, 0, 1));
+            EXPECT_EQ(dropped, "cleared;");
+            EXPECT_FALSE(history.CanUndo()) << "the drop cleared what the push left";
+        }
+
         TEST(UndoHistoryTest, ARedoThatClearsTheHistoryKeepsRunning)
         {
             UndoHistory history;
