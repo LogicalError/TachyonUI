@@ -154,6 +154,94 @@ namespace tachyon
                 << "dragging the split sizer right grows the pinned pane";
         }
 
+        // A point on a leaf's tab bar finds that leaf and its layout; elsewhere, none.
+        TEST_F(DockingTest, TheTabBarUnderAPointFindsItsLeaf)
+        {
+            Frame();
+            Frame();
+            DockNode* right = layout.root->second.get();
+            const IntRect bar = app.GetElementRect(right->tabBarID);
+            ASSERT_GT(bar.w, 0);
+
+            const DockLeafResult onBar = app.FindDockLeafAtScreenPos({ bar.x + bar.w / 2, bar.y + bar.h / 2 });
+            EXPECT_EQ(onBar.leaf, right);
+            EXPECT_EQ(onBar.layout, &layout);
+
+            const IntRect content = ContentRect(right);
+            const DockLeafResult inContent = app.FindDockLeafAtScreenPos({ content.x + content.w / 2, content.y + content.h / 2 });
+            EXPECT_EQ(inContent.leaf, nullptr) << "a leaf's content isn't its tab bar";
+            EXPECT_EQ(inContent.layout, nullptr);
+            EXPECT_EQ(app.FindDockLeafAtScreenPos({ 5000, 5000 }).leaf, nullptr);
+        }
+
+        // A point in a leaf's content finds that leaf and the part of it: an edge to split it
+        // at, or the middle. Off every leaf's content there's no target.
+        TEST_F(DockingTest, TheContentUnderAPointIsADropTarget)
+        {
+            Frame();
+            Frame();
+            DockNode* left  = layout.root->first.get();
+            DockNode* right = layout.root->second.get();
+            const IntRect c = right->cachedContentRect;
+            ASSERT_GT(c.w, 0);
+            ASSERT_GT(c.h, 0);
+
+            const DockDropResult middle = app.FindDockDropTargetAtScreenPos({ c.x + c.w / 2, c.y + c.h / 2 });
+            EXPECT_EQ(middle.target.leaf, right);
+            EXPECT_EQ(middle.target.zone, DockDropZone::Center);
+            EXPECT_EQ(middle.layout, &layout);
+
+            EXPECT_EQ(app.FindDockDropTargetAtScreenPos({ c.x + 2, c.y + c.h / 2 }).target.zone, DockDropZone::Left);
+            EXPECT_EQ(app.FindDockDropTargetAtScreenPos({ c.x + c.w - 3, c.y + c.h / 2 }).target.zone, DockDropZone::Right);
+            EXPECT_EQ(app.FindDockDropTargetAtScreenPos({ c.x + c.w / 2, c.y + 2 }).target.zone, DockDropZone::Top);
+            EXPECT_EQ(app.FindDockDropTargetAtScreenPos({ c.x + c.w / 2, c.y + c.h - 3 }).target.zone, DockDropZone::Bottom);
+
+            const IntRect l = left->cachedContentRect;
+            EXPECT_EQ(app.FindDockDropTargetAtScreenPos({ l.x + l.w / 2, l.y + l.h / 2 }).target.leaf, left);
+
+            const IntRect bar = app.GetElementRect(right->tabBarID);
+            EXPECT_EQ(app.FindDockDropTargetAtScreenPos({ bar.x + bar.w / 2, bar.y + bar.h / 2 }).target.leaf, nullptr)
+                << "tab bars are FindDockLeafAtScreenPos's";
+            const DockDropResult outside = app.FindDockDropTargetAtScreenPos({ 5000, 5000 });
+            EXPECT_EQ(outside.target.leaf, nullptr);
+            EXPECT_EQ(outside.layout, nullptr);
+        }
+
+        // A panel moved out of a leaf: the leaf keeps showing the tab it showed (or the one
+        // next to it), and between layouts the panel goes with it.
+        TEST_F(DockingTest, TransferPanelKeepsTheSelectedTabAndMovesThePanel)
+        {
+            DockNode& right = *layout.root->second;
+            right.selectedTab = 1;   // C
+            DockingLayout other;
+            GUIApplication::TransferPanel(panelB, &right, &layout, &other);
+            EXPECT_EQ(right.panelIds, (std::vector<ID>{ panelC }));
+            EXPECT_EQ(right.selectedTab, 0) << "C still, now first";
+            EXPECT_EQ(layout.panels.count(panelB), 0u);
+            ASSERT_EQ(other.panels.count(panelB), 1u);
+            EXPECT_EQ(other.panels[panelB].title, "B");
+
+            // The selected, last tab moved within the layout: the one before it shows.
+            right.panelIds = { panelC, panelA };
+            right.selectedTab = 1;
+            GUIApplication::TransferPanel(panelA, &right, &layout, &layout);
+            EXPECT_EQ(right.panelIds, (std::vector<ID>{ panelC }));
+            EXPECT_EQ(right.selectedTab, 0);
+            EXPECT_EQ(layout.panels.count(panelA), 1u) << "the same layout keeps it";
+
+            // The leaf's last panel: an empty leaf.
+            GUIApplication::TransferPanel(panelC, &right, &layout, nullptr);
+            EXPECT_TRUE(right.panelIds.empty());
+            EXPECT_EQ(right.selectedTab, 0);
+            EXPECT_EQ(layout.panels.count(panelC), 1u) << "no target layout: the panel stays";
+
+            // A panel the leaf doesn't hold leaves it as it is.
+            right.panelIds = { panelC };
+            GUIApplication::TransferPanel(panelA, &right, &layout, &layout);
+            EXPECT_EQ(right.panelIds, (std::vector<ID>{ panelC }));
+            layout.panels[panelB] = std::move(other.panels[panelB]);   // back, for the fixture to close
+        }
+
         // Split sizes are CSS pixels: at UI scale 2 the 250 split lays out 500 px,
         // and an 80 px drag moves it by 40.
         TEST_F(DockingTest, SplitSizeIsInCssPixels)

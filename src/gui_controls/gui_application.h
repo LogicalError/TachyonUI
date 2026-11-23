@@ -345,7 +345,9 @@ namespace tachyon
         /// TransferPanel for cross-layout drops). {nullptr, nullptr} on miss.
         DockLeafResult FindDockLeafAtScreenPos(tachyon::int2 screenPos);
 
-        /// Hit-tests leaf content areas; falls back to tab bars with zone=Center.
+        /// The leaf whose content (as last laid out) holds screenPos, the part of it the point
+        /// is in (an edge, or Center), and its layout; none off every leaf's content. Tab bars
+        /// aren't content: FindDockLeafAtScreenPos finds those.
         DockDropResult FindDockDropTargetAtScreenPos(tachyon::int2 screenPos);
 
         /// Call from OnGUI after the main docking container. Empty windows are closed.

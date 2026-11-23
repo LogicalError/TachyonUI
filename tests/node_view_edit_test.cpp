@@ -31,6 +31,29 @@ namespace
         return *view.nodes[size_t(node)].properties[size_t(prop)].input;
     }
 
+    // The grid lines at, below, above and nearest a value, on a grid that needn't start at 0,
+    // on both sides of 0.
+    TEST(NodeViewGrid, GridLinesAroundAValue)
+    {
+        EXPECT_EQ(GridLineLE(25, 0, 10), 20);
+        EXPECT_EQ(GridLineGE(25, 0, 10), 30);
+        EXPECT_EQ(GridLineLE(20, 0, 10), 20) << "on a line";
+        EXPECT_EQ(GridLineGE(20, 0, 10), 20);
+
+        EXPECT_EQ(GridLineLE(-5, 0, 10), -10) << "below 0 it still goes down";
+        EXPECT_EQ(GridLineGE(-5, 0, 10), 0);
+        EXPECT_EQ(GridLineLE(-10, 0, 10), -10);
+
+        EXPECT_EQ(GridLineLE(25, 3, 10), 23) << "lines at 3 + 10k";
+        EXPECT_EQ(GridLineGE(25, 3, 10), 33);
+
+        EXPECT_EQ(GridLineNearest(24, 0, 10), 20);
+        EXPECT_EQ(GridLineNearest(26, 0, 10), 30);
+        EXPECT_EQ(GridLineNearest(25, 0, 10), 20) << "a tie goes down";
+        EXPECT_EQ(GridLineNearest(-6, 0, 10), -10);
+        EXPECT_EQ(GridLineNearest(-5, 0, 10), -10) << "a tie goes down below 0 too";
+    }
+
     TEST(NodeViewEdit, UndoAndRedoAMove)
     {
         NodeView view = MakeView();
