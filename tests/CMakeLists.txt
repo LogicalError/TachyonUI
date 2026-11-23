@@ -70,6 +70,8 @@ list(APPEND GUI_CORE_TEST_FILES
   node_view_wire_edit_test.cpp
   node_view_edit_test.cpp
   edit_id_release_test.cpp
+  timeline_internal_test.cpp
+  popup_escape_test.cpp
   label_group_alignment_test.cpp
   drag_drop_test.cpp
   file_drop_test.cpp

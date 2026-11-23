@@ -80,6 +80,42 @@ namespace tachyon
         EXPECT_EQ(s.GetStyle("bar")->padding.top,  8u);
     }
 
+    // A grid track is auto, a number of fractions (fr), or pixels: with px or a bare number.
+    TEST(StyleSheet, GridTracks)
+    {
+        auto s = ParseStyleSheet(R"(
+            .auto  { -tachyon-grid-column-track: auto; }
+            .fr    { -tachyon-grid-column-track: 2fr; -tachyon-grid-row-track: 0.5fr; }
+            .px    { -tachyon-grid-row-track: 40px; }
+            .plain { -tachyon-grid-row-track: 24; }
+        )");
+        EXPECT_FALSE(s.HasErrors());
+        ASSERT_NE(s.GetStyle("auto"), nullptr);
+        EXPECT_EQ(s.GetStyle("auto")->layoutData.grid.column.track.type, GridTrack::Type::Auto);
+
+        ASSERT_NE(s.GetStyle("fr"), nullptr);
+        const auto& fr = s.GetStyle("fr")->layoutData.grid;
+        EXPECT_EQ(fr.column.track.type, GridTrack::Type::Fractional);
+        EXPECT_FLOAT_EQ(fr.column.track.value, 2.0f);
+        EXPECT_EQ(fr.row.track.type, GridTrack::Type::Fractional);
+        EXPECT_FLOAT_EQ(fr.row.track.value, 0.5f);
+
+        for (const char* name : { "px", "plain" })
+        {
+            ASSERT_NE(s.GetStyle(name), nullptr) << name;
+            const GridTrack& track = s.GetStyle(name)->layoutData.grid.row.track;
+            EXPECT_EQ(track.type, GridTrack::Type::Fixed) << name;
+        }
+        EXPECT_FLOAT_EQ(s.GetStyle("px")->layoutData.grid.row.track.value, 40.0f);
+        EXPECT_FLOAT_EQ(s.GetStyle("plain")->layoutData.grid.row.track.value, 24.0f);
+    }
+
+    TEST(StyleSheet, AGridTrackOfAnotherWordIsAnError)
+    {
+        EXPECT_TRUE(ParseStyleSheet(".a { -tachyon-grid-column-track: wide; }").HasErrors());
+        EXPECT_TRUE(ParseStyleSheet(".a { -tachyon-grid-row-track: #fff; }").HasErrors());
+    }
+
     TEST(StyleSheet, GetStyleReturnsNullForMissing)
     {
         auto s = ParseStyleSheet(".a { color: white; }");
