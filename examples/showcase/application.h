@@ -20,9 +20,11 @@ namespace tachyon
 {
     enum class CommandMode : uint32_t;
     struct FileEntry;
-    // Each panel's own data (panel_*.cpp): two panels of a kind don't share it.
+    class  MemoryFileSystem;
+    // Each panel's own view (panel_*.cpp): two panels of a kind don't share it.
     struct FilesPanel;
     struct HierarchyPanel;
+    struct HierarchyScene;   // the objects every Hierarchy panel shows
     struct InspectorPanel;
     struct LogPanel;
     struct ViewportPanel;
@@ -965,6 +967,9 @@ namespace tachyon
         void DisableFilesPanel(FilesPanel& panel);
         void RenderFilesPanel(FilesPanel& panel);
         void MoveFileInto(FilesPanel& panel, uintptr_t payload, const std::string& folder);
+        // A file or folder moved or was renamed: every Files panel's folder on view and open
+        // folders follow it.
+        void FolderMoved(const std::string& from, const std::string& to);
         void ApplyFileRenames(FilesPanel& panel);
         void AddDroppedFiles(FilesPanel& panel, const std::vector<std::string>& paths, const std::string& folder);
         IconID FileIcon(const FilesPanel& panel, std::string_view name, bool isFolder, bool open = false);
@@ -978,8 +983,13 @@ namespace tachyon
         void DisableInspectorPanel(InspectorPanel& panel);
         void EnableLogPanel(LogPanel& panel);
     private:
-        // The Files panels made, to let go of their icons before the text system goes.
+        // The Files panels made, to let go of their icons before the text system goes, and to
+        // tell each of a folder that moved.
         std::vector<std::weak_ptr<FilesPanel>> m_filesPanels;
+        // What every Files panel shows, and what every Hierarchy panel shows: made by the first
+        // one to show, kept while any of them is open.
+        std::weak_ptr<MemoryFileSystem> m_files;
+        std::weak_ptr<HierarchyScene>   m_hierarchyScene;
         // The Viewport panels made, whose torn-off toolbars are emitted each frame.
         std::vector<std::weak_ptr<ViewportPanel>> m_viewportPanels;
         // The NodeView and StateMachine panels made: their shortcuts act on the one with the focus.
