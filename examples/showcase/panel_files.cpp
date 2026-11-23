@@ -133,6 +133,12 @@ namespace tachyon
             return (visiblePos >= 0 && visiblePos < static_cast<int>(gridEntries.size())) ? &gridEntries[visiblePos] : nullptr;
         }
 
+        // Whether the folder tree has flat row `flat` open.
+        bool FolderOpen(size_t flat) const
+        {
+            return folderTreeState.openRows.contains(tachyon::TreeViewRowKey(folderRows[flat], flat));
+        }
+
         // The flat row index of a tree row's ID (-1 if not one of the rows).
         int RowFlat(tachyon::ID rowID) const
         {
@@ -173,8 +179,7 @@ namespace tachyon
                 tachyon::TreeViewRow row{};
                 row.name   = entry.name;
                 row.depth  = depth;
-                row.isOpen = openFolders.contains(child);
-                const bool open = row.isOpen;
+                const bool open = openFolders.contains(child);
                 folderRows.push_back(std::move(row));
                 folderPaths.push_back(child);
                 if (shown)
@@ -187,13 +192,17 @@ namespace tachyon
             folderRows.clear();
             folderPaths.clear();
             tachyon::TreeViewRow root{};
-            root.name   = rootName;
-            root.isOpen = openFolders.contains("");
-            const bool open = root.isOpen;
+            root.name = rootName;
             folderRows.push_back(std::move(root));
             folderPaths.push_back("");
-            AddFolderRows("", 1, open);
+            AddFolderRows("", 1, openFolders.contains(""));
             GUIApplication::RebuildTreeViewIndex(folderRows);
+            // The rows are named by position, which a rebuild changes: the tree opens what
+            // openFolders, by path, says.
+            folderTreeState.openRows.clear();
+            for (size_t i = 0; i < folderRows.size(); ++i)
+                if (openFolders.contains(folderPaths[i]))
+                    folderTreeState.openRows.insert(tachyon::TreeViewRowKey(folderRows[i], i));
             // Visible indices moved - the render pass re-selects currentFolder.
             folderTreeState.selectedRowID = tachyon::ID::Invalid();
         }
@@ -235,12 +244,14 @@ namespace tachyon
             {
                 if (!keep[i]) continue;
                 tachyon::TreeViewRow r = folderRows[i];
-                r.isOpen       = true;
                 r.renameBuffer = nullptr; // copies don't write back - no rename
                 filteredFolderRows.push_back(std::move(r));
                 filteredToMaster.push_back(i);
             }
             GUIApplication::RebuildTreeViewIndex(filteredFolderRows);
+            filteredFolderState.openRows.clear();
+            for (size_t i = 0; i < filteredFolderRows.size(); ++i)
+                filteredFolderState.openRows.insert(tachyon::TreeViewRowKey(filteredFolderRows[i], i));
         }
 
         // The path a drag payload stands for; false for none (the root doesn't move).
@@ -539,10 +550,10 @@ namespace tachyon
 
         // A folder opened or closed in the tree: its folders' rows are read in (or left).
         for (size_t i = 0; i < p.folderRows.size(); ++i)
-            if (p.folderRows[i].isOpen != p.openFolders.contains(p.folderPaths[i]))
+            if (const bool open = p.FolderOpen(i); open != p.openFolders.contains(p.folderPaths[i]))
             {
-                if (p.folderRows[i].isOpen) p.openFolders.insert(p.folderPaths[i]);
-                else                      p.openFolders.erase(p.folderPaths[i]);
+                if (open) p.openFolders.insert(p.folderPaths[i]);
+                else      p.openFolders.erase(p.folderPaths[i]);
                 p.treeDirty = true;
             }
 
@@ -624,7 +635,7 @@ namespace tachyon
             for (size_t i = 0; i < p.folderRows.size(); ++i)
             {
                 auto& row = p.folderRows[i];
-                row.icon = TreeFolderIcon((row.HasChildren() && row.isOpen) || int(i) == dropFlat ||
+                row.icon = TreeFolderIcon((row.HasChildren() && p.FolderOpen(i)) || int(i) == dropFlat ||
                                           (p.fileDropFolder && p.folderPaths[i] == *p.fileDropFolder));
                 row.renameBuffer = i == 0 ? nullptr : &row.name;
             }

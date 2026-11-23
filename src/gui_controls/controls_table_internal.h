@@ -84,7 +84,7 @@ namespace tachyon
     // Tree-cell flex-row children - emitted at drain time by EndTable's
     // body-section drain. Defined in controls_table_cells.cpp.
     void EmitTreeCellIndent(GUIApplication& app, int depth);
-    void EmitTreeCellArrowOrLeafSpacer(GUIApplication& app, bool* isOpen);
-    void EmitTreeCellIcon(GUIApplication& app, IconID icon, bool* isOpen,
+    void EmitTreeCellArrowOrLeafSpacer(GUIApplication& app, TreeOpenRef isOpen);
+    void EmitTreeCellIcon(GUIApplication& app, IconID icon, TreeOpenRef isOpen,
                           tachyon::DoubleClickTracker* tracker);
 }

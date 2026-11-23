@@ -548,14 +548,15 @@ namespace tachyon
     }
 
     void GUIApplication::WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows,
+                                                const std::unordered_set<tachyon::ID>& openRows,
                                                 std::vector<int>& visibleIdx)
     {
         visibleIdx.clear();
         for (size_t i = 0; i < rows.size(); )
         {
             visibleIdx.push_back(int(i));
-            if (rows[i].HasChildren() && !rows[i].isOpen)
-                i += 1 + rows[i].skipCount;
+            if (rows[i].HasChildren() && !openRows.contains(TreeViewRowKey(rows[i], i)))
+                i += 1 + size_t(rows[i].skipCount);
             else
                 i += 1;
         }
@@ -627,7 +628,7 @@ namespace tachyon
     void GUIApplication::WalkTreeViewVisibility(const std::vector<TreeViewRow>& rows,
                                                 std::vector<int>& visibleIdx, TableState& state)
     {
-        WalkTreeViewVisibility(rows, visibleIdx);
+        WalkTreeViewVisibility(rows, state.openRows, visibleIdx);
         // The rows shown, by their own IDs: a move or an insert can leave the positions as
         // they were and still put other rows there.
         std::vector<tachyon::ID>& shownIDs = state.internal.treeVisibleRowIDs;
@@ -664,11 +665,12 @@ namespace tachyon
         VirtualTableColumn cols[] = {
             {
                 { .header = header },
-                [this, &rows, &visibleIdx, anyExpandable](int rowIdx) {
+                [this, &rows, &visibleIdx, &state, anyExpandable](int rowIdx) {
                     if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
-                    TreeViewRow& r = rows[visibleIdx[rowIdx]];
+                    const size_t flat = size_t(visibleIdx[rowIdx]);
+                    TreeViewRow& r = rows[flat];
                     TreeCell(r.name, r.depth,
-                             r.HasChildren() ? &r.isOpen : nullptr,
+                             TreeViewOpenRef(rows, flat, state),
                              r.icon,
                              r.ancestorLineMask,
                              r.isLastSibling,

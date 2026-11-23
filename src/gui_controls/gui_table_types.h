@@ -19,6 +19,7 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 // Table widget data model: column descriptors, the user-owned persistent
@@ -134,6 +135,27 @@ namespace tachyon
     /// the selection only when it ends as a click. Internal.
     using PendingRowClick = Gesture<tachyon::KeyModifier>;
 
+    /// Where a tree row's open state lives: a bool of the caller's (`flag`), or the rows a view
+    /// has open (`set`, the row's `key` in it, as TableState::openRows keeps them). Neither:
+    /// a leaf, which can't open. Event handlers keep it, so both must outlive the frame.
+    struct TreeOpenRef
+    {
+        bool*                            flag = nullptr;
+        std::unordered_set<tachyon::ID>* set  = nullptr;
+        tachyon::ID                      key  = tachyon::ID::Invalid();
+
+        explicit operator bool() const { return flag != nullptr || set != nullptr; }
+        bool IsOpen() const { return flag ? *flag : set != nullptr && set->contains(key); }
+        void SetOpen(bool open) const
+        {
+            if (flag)      *flag = open;
+            else if (!set) return;
+            else if (open) set->insert(key);
+            else           set->erase(key);
+        }
+        void Toggle() const { SetOpen(!IsOpen()); }
+    };
+
     /// User-owned, persistent state of one table: column widths, selection, sort, options.
     /// Keep it alive across frames; its `internal` member is not part of the API.
     struct TableState
@@ -141,7 +163,7 @@ namespace tachyon
         /// Per-row metadata from TreeCell().
         struct TreeRowInfo
         {
-            bool*        isOpen      = nullptr;          ///< null for leaves
+            TreeOpenRef  isOpen;                         ///< empty for leaves
             int          depth       = 0;                ///< nesting level, 0 = root
             std::string* renameBuf   = nullptr;          ///< null when not renameable
             std::string  renameSeed;                     ///< original label, seeds rename Start()
@@ -229,6 +251,9 @@ namespace tachyon
         /// The command manager's mode while the focus is in the table, for its own shortcuts
         /// (Delete for the selected rows, say); Default: none of its own.
         CommandMode                  commandMode = CommandMode::Default;
+        /// VirtualTreeView and WalkTreeViewVisibility: the rows open in this view, by
+        /// TreeViewRowKey. Each view of the same rows opens and closes them on its own.
+        std::unordered_set<tachyon::ID> openRows;
 
         /// Written by the table each frame; not part of the API.
         struct Internal

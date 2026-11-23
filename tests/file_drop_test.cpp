@@ -306,11 +306,12 @@ namespace tachyon
             MultiSelectState multi;
             std::vector<ID> itemIDs(3);
             std::vector<TreeViewRow> rows(2);
-            rows[0].name = "Root"; rows[0].isOpen = true;
+            rows[0].name = "Root";
             rows[1].name = "Child"; rows[1].depth = 1;
             GUIApplication::RebuildTreeViewIndex(rows);
             std::vector<int> visibleIdx;
             TableState treeState;
+            treeState.openRows.insert(TreeViewRowKey(rows[0], 0));
             auto frame = [&] {
                 app.Frame([&] {
                     app.BeginRootWindow();

@@ -58,17 +58,18 @@ namespace tachyon
 
     // ---- TreeView (flat-data, virtualized) -----------------------------
     // Caller-owned flat rows shown through a VirtualTable. Call RebuildTreeViewIndex after
-    // structural changes. Selection, scroll and drag-drop live on the TableState; a row ID
-    // maps to its flat index via visibleIdx[rowID.value.subRangeParts.index].
+    // structural changes. Selection, scroll, drag-drop and which rows are open live on the
+    // TableState, one per view; a row ID maps to its flat index via
+    // visibleIdx[rowID.value.subRangeParts.index].
     /// One row of a flat-data tree view (VirtualTreeView); rows are in depth-first order.
     struct TreeViewRow
     {
-        /// The caller's own ID for the row. When set, the selection stays on the row as rows
-        /// are inserted, removed or moved above it; without it, on its position.
+        /// The caller's own ID for the row. When set, the selection and the open state stay
+        /// on the row as rows are inserted, removed or moved above it; without it, on its
+        /// position.
         tachyon::ID      id           = tachyon::ID::Invalid();
         std::string  name;                     ///< label
         int          depth        = 0;         ///< nesting level, 0 = root; defines the hierarchy
-        bool         isOpen       = false;     ///< expanded
         IconID       icon         = IconID::Invalid;
         std::string* renameBuffer = nullptr;   ///< null = not renameable
 
@@ -82,6 +83,18 @@ namespace tachyon
 
         bool HasChildren() const { return skipCount > 0; }
     };
+
+    /// How a view's TableState::openRows names the row at flat index `flat`: its own ID, or
+    /// for a row without one, its position (a SubRange ID of no range, so no element's).
+    inline tachyon::ID TreeViewRowKey(const TreeViewRow& row, size_t flat)
+    {
+        if (row.id != tachyon::ID::Invalid())
+            return row.id;
+        tachyon::ID key = tachyon::ID::Invalid();
+        key.value.subRangeParts.mode  = tachyon::IDMode::SubRange;
+        key.value.subRangeParts.index = flat;
+        return key;
+    }
 
     // ---- Virtualized GridView ----
     //
