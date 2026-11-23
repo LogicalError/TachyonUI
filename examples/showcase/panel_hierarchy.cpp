@@ -25,14 +25,13 @@ namespace tachyon
 
     } // namespace
 
-    // A Hierarchy panel's data: made the first time it shows, kept while it's hidden.
-    struct HierarchyPanel
+    // The scene's objects, which every Hierarchy panel shows: made when the first one shows,
+    // kept while any of them is open.
+    struct HierarchyScene
     {
         IDManager* ids = nullptr;   // the rows' static IDs come from it, and go back to it
-        std::weak_ptr<HierarchyPanel> self;   // what a question about it holds on to
-        tachyon::ID windowID = tachyon::ID::Invalid();   // the window it was last built in, which asks about it
 
-        ~HierarchyPanel()
+        ~HierarchyScene()
         {
             if (ids)
                 for (const tachyon::TreeViewRow& row : treeRows)
@@ -40,26 +39,10 @@ namespace tachyon
         }
 
         std::vector<tachyon::TreeViewRow> treeRows;
-        std::vector<int>                  treeVisibleIdx;
-        tachyon::TableState               treeViewState;
-        tachyon::MultiSelectState         treeMultiSelect;
         std::string                       renameBuffer; // TreeCell rename scratch
-
-        // Search: a filtered copy of treeRows (matches plus ancestors, forced open),
-        // rebuilt when the query changes. Rendered with its own state, no drag-drop
-        // or rename.
-        std::vector<tachyon::TreeViewRow> filteredRows;
-        std::vector<int>                  filteredVisibleIdx;
-        tachyon::TableState               filteredState;
-        tachyon::MultiSelectState         filteredMultiSelect;
-        std::string                       hierarchySearch;
-        bool                              filterDirty = true;
-
-        tachyon::ItemDragDropConfig hierDnD;
-        // A node to select once the tree shows it: one just moved or added. Its row ID only
-        // exists once the table has laid out its rows for the new row count.
-        tachyon::ID pendingSelect = tachyon::ID::Invalid();
-        bool        treeHasFocus  = false;
+        std::vector<tachyon::ID>          startOpen;    // the rows a new panel opens
+        // Raised by each change to the rows: a panel showing a filtered copy makes it again.
+        uint32_t                          revision = 0;
 
         // Loaded after the panel opens: rows still loading show as placeholders, and the row
         // streaming in says so at its end.
@@ -69,11 +52,19 @@ namespace tachyon
         // ---- Per-node visibility ("eye") state -----------------------------------
         // Only leaves store state (in hiddenLeaves == invisible); a branch's state
         // derives from its leaves. Keyed by static row ID so it survives reorders.
-        // idToFlat maps into the master treeRows, so it also works while filtered.
+        // idToFlat maps into treeRows, so it also works while a panel shows a filtered copy.
         std::unordered_set<tachyon::ID>      hiddenLeaves;
         std::unordered_map<tachyon::ID, int> idToFlat;
 
         enum class VizAgg { On, Off, Mixed };
+
+        // After rows were added, removed or moved.
+        void RowsChanged()
+        {
+            GUIApplication::RebuildTreeViewIndex(treeRows);
+            RebuildHierarchyIdToFlat();
+            ++revision;
+        }
 
         void RebuildHierarchyIdToFlat()
         {
@@ -120,9 +111,68 @@ namespace tachyon
             }
         }
 
+        // Deletes the nodes and everything under them; false when none of them is here.
+        bool DeleteNodes(std::span<const tachyon::ID> nodes)
+        {
+            std::vector<char> drop(treeRows.size(), 0);
+            for (tachyon::ID node : nodes)
+            {
+                auto it = idToFlat.find(node);
+                if (it == idToFlat.end()) continue;
+                const int last = std::min(it->second + treeRows[it->second].skipCount, int(treeRows.size()) - 1);
+                std::fill(drop.begin() + it->second, drop.begin() + last + 1, char(1));
+            }
+            size_t kept = 0;
+            for (size_t i = 0; i < treeRows.size(); ++i)
+            {
+                if (drop[i])
+                {
+                    hiddenLeaves.erase(treeRows[i].id);
+                    loadingRows.erase(treeRows[i].id);
+                    if (ids) ids->ReleaseStaticID(treeRows[i].id);
+                    continue;
+                }
+                if (kept != i) treeRows[kept] = std::move(treeRows[i]);
+                ++kept;
+            }
+            if (kept == treeRows.size()) return false;
+            treeRows.resize(kept);
+            RowsChanged();
+            return true;
+        }
+    };
+
+    // A Hierarchy panel: its view of the scene, with what it opened, selected and searched.
+    struct HierarchyPanel
+    {
+        std::shared_ptr<HierarchyScene> scene;
+        std::weak_ptr<HierarchyPanel> self;   // what a question about it holds on to
+        tachyon::ID windowID = tachyon::ID::Invalid();   // the window it was last built in, which asks about it
+
+        std::vector<int>                  treeVisibleIdx;
+        tachyon::TableState               treeViewState;
+        tachyon::MultiSelectState         treeMultiSelect;
+
+        // Search: a filtered copy of the scene's rows (matches plus ancestors, forced open),
+        // rebuilt when the query or the rows change. Rendered with its own state, no
+        // drag-drop or rename.
+        std::vector<tachyon::TreeViewRow> filteredRows;
+        std::vector<int>                  filteredVisibleIdx;
+        tachyon::TableState               filteredState;
+        tachyon::MultiSelectState         filteredMultiSelect;
+        std::string                       hierarchySearch;
+        bool                              filterDirty = true;
+        uint32_t                          seenRevision = 0;   // the scene's, when filteredRows was made
+
+        tachyon::ItemDragDropConfig hierDnD;
+        // A node to select once the tree shows it: one just moved or added. Its row ID only
+        // exists once the table has laid out its rows for the new row count.
+        tachyon::ID pendingSelect = tachyon::ID::Invalid();
+        bool        treeHasFocus  = false;
+
         // The tree on show: the filtered copy while searching. Both carry the nodes' IDs.
         bool Searching() const { return !hierarchySearch.empty(); }
-        std::vector<tachyon::TreeViewRow>& ShownRows()       { return Searching() ? filteredRows : treeRows; }
+        std::vector<tachyon::TreeViewRow>& ShownRows()       { return Searching() ? filteredRows : scene->treeRows; }
         std::vector<int>&                  ShownVisibleIdx() { return Searching() ? filteredVisibleIdx : treeVisibleIdx; }
         tachyon::TableState&               ShownState()      { return Searching() ? filteredState : treeViewState; }
 
@@ -174,37 +224,13 @@ namespace tachyon
             }
         }
 
-        // Deletes the nodes and everything under them.
+        // Deletes the nodes and everything under them from the scene.
         void DeleteNodes(std::span<const tachyon::ID> nodes)
         {
-            std::vector<char> drop(treeRows.size(), 0);
-            for (tachyon::ID node : nodes)
-            {
-                auto it = idToFlat.find(node);
-                if (it == idToFlat.end()) continue;
-                const int last = std::min(it->second + treeRows[it->second].skipCount, int(treeRows.size()) - 1);
-                std::fill(drop.begin() + it->second, drop.begin() + last + 1, char(1));
-            }
-            size_t kept = 0;
-            for (size_t i = 0; i < treeRows.size(); ++i)
-            {
-                if (drop[i])
-                {
-                    hiddenLeaves.erase(treeRows[i].id);
-                    treeViewState.openRows.erase(treeRows[i].id);
-                    if (pendingSelect == treeRows[i].id) pendingSelect = tachyon::ID::Invalid();
-                    if (ids) ids->ReleaseStaticID(treeRows[i].id);
-                    continue;
-                }
-                if (kept != i) treeRows[kept] = std::move(treeRows[i]);
-                ++kept;
-            }
-            if (kept == treeRows.size()) return;
-            treeRows.resize(kept);
-            GUIApplication::RebuildTreeViewIndex(treeRows);
-            RebuildHierarchyIdToFlat();
+            if (!scene->DeleteNodes(nodes))
+                return;
+            if (!scene->idToFlat.contains(pendingSelect)) pendingSelect = tachyon::ID::Invalid();
             ClearSelection();
-            filterDirty = true;
         }
 
         // Selects `node` in the shown tree if it's one of its rows this frame.
@@ -261,22 +287,21 @@ namespace tachyon
                 row.id           = idManager.CreateStaticID();
                 row.name         = name;
                 row.icon         = icon;
-                row.renameBuffer = &p.renameBuffer;
-                size_t at = p.treeRows.size();
-                auto it = p.idToFlat.find(parent);
-                if (it != p.idToFlat.end())
+                HierarchyScene& scene = *p.scene;
+                row.renameBuffer = &scene.renameBuffer;
+                size_t at = scene.treeRows.size();
+                auto it = scene.idToFlat.find(parent);
+                if (it != scene.idToFlat.end())
                 {
-                    const TreeViewRow& under = p.treeRows[it->second];
+                    const TreeViewRow& under = scene.treeRows[it->second];
                     p.treeViewState.openRows.insert(under.id);
                     row.depth = under.depth + 1;
                     at        = size_t(it->second + under.skipCount + 1);
                 }
                 p.pendingSelect = row.id;
                 p.ClearSelection();   // its rows move: the selection is made again from pendingSelect
-                p.treeRows.insert(p.treeRows.begin() + ptrdiff_t(at), std::move(row));
-                RebuildTreeViewIndex(p.treeRows);
-                p.RebuildHierarchyIdToFlat();
-                p.filterDirty = true;
+                scene.treeRows.insert(scene.treeRows.begin() + ptrdiff_t(at), std::move(row));
+                scene.RowsChanged();
             });
     }
 
@@ -295,8 +320,8 @@ namespace tachyon
         }
         showcase.deleteNames.clear();
         for (const ID node : nodes)
-            if (const auto it = p.idToFlat.find(node); it != p.idToFlat.end())
-                showcase.deleteNames.push_back(p.treeRows[size_t(it->second)].name);
+            if (const auto it = p.scene->idToFlat.find(node); it != p.scene->idToFlat.end())
+                showcase.deleteNames.push_back(p.scene->treeRows[size_t(it->second)].name);
         showcase.deleteNodes = std::move(nodes);
         showcase.deletePanel = p.self;
         showcase.deleteWindow = p.windowID;
@@ -342,49 +367,57 @@ namespace tachyon
 
     void Application::EnableHierarchyPanel(HierarchyPanel& p)
     {
-        if (!p.treeRows.empty())
-            return;   // made already: its order and what's hidden stay
-        p.ids = &idManager;
-
-        // ---- Dataset ------------------------------------------------------
-        auto add = [&](const char* name, int depth, IconID icon, bool isOpen) {
-            TreeViewRow r{};
-            r.id     = idManager.CreateStaticID();
-            r.name   = name;
-            r.depth  = depth;
-            r.icon   = icon;
-            r.renameBuffer = &p.renameBuffer;
-            if (isOpen)
-                p.treeViewState.openRows.insert(r.id);
-            p.treeRows.push_back(std::move(r));
-        };
-        // An icon per kind: the scene, groups, meshes, the camera, lights and folders.
-        add("Scene",     0, showcase.sceneIcon,      true);
-        add("Meshes",    1, showcase.groupIcon,      true);
-        add("Cube",      2, showcase.objectIcon,     false);
-        add("Meshes",    2, showcase.groupIcon,      true);
-        add("Cube",      3, showcase.objectIcon,     false);
-        add("Sphere",    3, showcase.objectIcon,     false);
-        add("Plane",     3, showcase.objectIcon,     false);
-        add("Sphere",    2, showcase.objectIcon,     false);
-        add("Plane",     2, showcase.objectIcon,     false);
-        add("Camera",    1, showcase.cameraIcon,     false);
-        add("Light",     1, showcase.lightIcon,      false);
-        add("Terrain",   1, showcase.groupIcon,      false);
-        p.streamingRow = p.treeRows.back().id;
-        add("Props",     1, showcase.groupIcon,      true);
-        for (const char* prop : { "Rock", "Crate", "Barrel", "Fence" })
+        if (p.scene)
+            return;   // made already: what it opened and selected stays
+        // The scene every Hierarchy shows: the first one to show makes it.
+        p.scene = m_hierarchyScene.lock();
+        if (!p.scene)
         {
-            add(prop, 2, showcase.objectIcon, false);
-            p.loadingRows.insert(p.treeRows.back().id);
+            p.scene = std::make_shared<HierarchyScene>();
+            m_hierarchyScene = p.scene;
+            HierarchyScene& scene = *p.scene;
+            scene.ids = &idManager;
+
+            // ---- Dataset ------------------------------------------------------
+            auto add = [&](const char* name, int depth, IconID icon, bool isOpen) {
+                TreeViewRow r{};
+                r.id     = idManager.CreateStaticID();
+                r.name   = name;
+                r.depth  = depth;
+                r.icon   = icon;
+                r.renameBuffer = &scene.renameBuffer;
+                if (isOpen)
+                    scene.startOpen.push_back(r.id);
+                scene.treeRows.push_back(std::move(r));
+            };
+            // An icon per kind: the scene, groups, meshes, the camera, lights and folders.
+            add("Scene",     0, showcase.sceneIcon,      true);
+            add("Meshes",    1, showcase.groupIcon,      true);
+            add("Cube",      2, showcase.objectIcon,     false);
+            add("Meshes",    2, showcase.groupIcon,      true);
+            add("Cube",      3, showcase.objectIcon,     false);
+            add("Sphere",    3, showcase.objectIcon,     false);
+            add("Plane",     3, showcase.objectIcon,     false);
+            add("Sphere",    2, showcase.objectIcon,     false);
+            add("Plane",     2, showcase.objectIcon,     false);
+            add("Camera",    1, showcase.cameraIcon,     false);
+            add("Light",     1, showcase.lightIcon,      false);
+            add("Terrain",   1, showcase.groupIcon,      false);
+            scene.streamingRow = scene.treeRows.back().id;
+            add("Props",     1, showcase.groupIcon,      true);
+            for (const char* prop : { "Rock", "Crate", "Barrel", "Fence" })
+            {
+                add(prop, 2, showcase.objectIcon, false);
+                scene.loadingRows.insert(scene.treeRows.back().id);
+            }
+            add("Materials", 0, showcase.treeFolderIcon, false);
+            add("Default",   1, showcase.objectIcon,     false);
+            add("Metal",     1, showcase.objectIcon,     false);
+            add("Glass",     1, showcase.objectIcon,     false);
+            add("Settings",  0, showcase.treeFolderIcon, false);
+            scene.RowsChanged();
         }
-        add("Materials", 0, showcase.treeFolderIcon, false);
-        add("Default",   1, showcase.objectIcon,     false);
-        add("Metal",     1, showcase.objectIcon,     false);
-        add("Glass",     1, showcase.objectIcon,     false);
-        add("Settings",  0, showcase.treeFolderIcon, false);
-        RebuildTreeViewIndex(p.treeRows);
-        p.RebuildHierarchyIdToFlat();
+        p.treeViewState.openRows.insert(p.scene->startOpen.begin(), p.scene->startOpen.end());
         p.treeViewState.multiSelect = &p.treeMultiSelect;
         p.filterDirty = true;
 
@@ -404,10 +437,11 @@ namespace tachyon
             if (visual.sourceID.GetMode() != tachyon::IDMode::SubRange) return;
             const int visIdx = static_cast<int>(visual.sourceID.value.subRangeParts.index);
             if (visIdx < 0 || visIdx >= int(p.treeVisibleIdx.size())) return;
+            const std::vector<TreeViewRow>& rows = p.scene->treeRows;
             const int flatIdx = p.treeVisibleIdx[visIdx];
-            if (flatIdx < 0 || flatIdx >= int(p.treeRows.size())) return;
-            const IconID icon = p.treeRows[flatIdx].icon != IconID::Invalid
-                ? p.treeRows[flatIdx].icon : showcase.circleIcon;
+            if (flatIdx < 0 || flatIdx >= int(rows.size())) return;
+            const IconID icon = rows[flatIdx].icon != IconID::Invalid
+                ? rows[flatIdx].icon : showcase.circleIcon;
             const int2 size{ theme.treeTableIconSize, theme.treeTableIconSize };
             if (BeginCursorGhostWindow(showcase.dragGhostWindowID, visual.screenPos, size))
                 AddGhostIcon(icon, size);
@@ -421,15 +455,14 @@ namespace tachyon
             if (targetVis < 0 || targetVis >= int(p.treeVisibleIdx.size())) return;
             const int srcDs = static_cast<int>(srcPayload);
             const int dstDs = p.treeVisibleIdx[targetVis];
-            const tachyon::ID target = dstDs >= 0 && dstDs < int(p.treeRows.size()) ? p.treeRows[size_t(dstDs)].id : tachyon::ID::Invalid();
-            const int newFlatIdx = TreeUtils::ReorderTreeRow(p.treeRows, srcDs, dstDs, pos);
+            HierarchyScene& scene = *p.scene;
+            const tachyon::ID target = dstDs >= 0 && dstDs < int(scene.treeRows.size()) ? scene.treeRows[size_t(dstDs)].id : tachyon::ID::Invalid();
+            const int newFlatIdx = TreeUtils::ReorderTreeRow(scene.treeRows, srcDs, dstDs, pos);
             if (newFlatIdx < 0) return;
             if (pos == TreeDropPosition::Inside || pos == TreeDropPosition::InsideLast)
                 p.treeViewState.openRows.insert(target);   // it shows what went into it
-            RebuildTreeViewIndex(p.treeRows);
-            p.RebuildHierarchyIdToFlat();
-            p.pendingSelect = p.treeRows[newFlatIdx].id;
-            p.filterDirty = true;
+            scene.RowsChanged();
+            p.pendingSelect = scene.treeRows[size_t(newFlatIdx)].id;
             p.ClearSelection();
             guiStateManager.Interaction().SetFocusID(tachyon::ID::Invalid());
             guiStateManager.TextEditorFocus().Clear();
@@ -458,23 +491,30 @@ namespace tachyon
         // Refilter on demand: matched rows plus all their ancestors, ancestors
         // forced open so matches under collapsed parents show. Depths are
         // preserved, so the copy is a valid forest for RebuildTreeViewIndex.
+        // Rows added, removed or moved, here or in another Hierarchy, make the copy again.
+        const std::vector<TreeViewRow>& sceneRows = p.scene->treeRows;
+        if (p.seenRevision != p.scene->revision)
+        {
+            p.seenRevision = p.scene->revision;
+            p.filterDirty  = true;
+        }
         if (searching && p.filterDirty)
         {
             const std::string q = SearchToLower(p.hierarchySearch);
-            std::vector<char> keep(p.treeRows.size(), 0);
+            std::vector<char> keep(sceneRows.size(), 0);
             std::vector<int>  chain; // chain[d] = index of the current ancestor at depth d
-            for (int i = 0; i < int(p.treeRows.size()); ++i)
+            for (int i = 0; i < int(sceneRows.size()); ++i)
             {
-                chain.resize(p.treeRows[i].depth);
+                chain.resize(sceneRows[i].depth);
                 chain.push_back(i);
-                if (SearchMatches(p.treeRows[i].name, q))
+                if (SearchMatches(sceneRows[i].name, q))
                     for (int a : chain) keep[a] = 1;
             }
             p.filteredRows.clear();
-            for (int i = 0; i < int(p.treeRows.size()); ++i)
+            for (int i = 0; i < int(sceneRows.size()); ++i)
             {
                 if (!keep[i]) continue;
-                TreeViewRow r  = p.treeRows[i];
+                TreeViewRow r  = sceneRows[i];
                 r.renameBuffer = nullptr; // copies don't write back - no rename
                 p.filteredRows.push_back(std::move(r));
             }
@@ -531,7 +571,7 @@ namespace tachyon
                 if (rowIdx < 0 || rowIdx >= int(visibleIdx.size())) return;
                 const tachyon::ID nodeId = rows[visibleIdx[rowIdx]].id;
                 const tachyon::ID rowID  = state.RowIDInRange(rowIdx);
-                const HierarchyPanel::VizAgg agg = p.HierComputeAgg(nodeId);
+                const HierarchyScene::VizAgg agg = p.scene->HierComputeAgg(nodeId);
                 Cell([this, &p, nodeId, rowID, agg, eyeHeight]()
                 {
                     // The column is interactiveContent, so the table makes this cell part of
@@ -554,9 +594,9 @@ namespace tachyon
                     tachyon::IconID icon = tachyon::IconID::Invalid;
                     switch (agg)
                     {
-                        case HierarchyPanel::VizAgg::On:    icon = hovered ? showcase.visibilityOnIcon : tachyon::IconID::Invalid; break;
-                        case HierarchyPanel::VizAgg::Off:   icon = showcase.visibilityOffIcon;   break;
-                        case HierarchyPanel::VizAgg::Mixed: icon = showcase.visibilityMixedIcon; break;
+                        case HierarchyScene::VizAgg::On:    icon = hovered ? showcase.visibilityOnIcon : tachyon::IconID::Invalid; break;
+                        case HierarchyScene::VizAgg::Off:   icon = showcase.visibilityOffIcon;   break;
+                        case HierarchyScene::VizAgg::Mixed: icon = showcase.visibilityMixedIcon; break;
                     }
                     tachyon::Element el{};
                     el.id       = vizID;
@@ -573,8 +613,8 @@ namespace tachyon
                             case tachyon::EventType::MouseDown:
                                 if (!ev.state.LeftPressed()) break;
                                 {
-                                    const bool makeVisible = (p.HierComputeAgg(nodeId) == HierarchyPanel::VizAgg::Off);
-                                    p.HierApplyViz(nodeId, makeVisible);
+                                    const bool makeVisible = (p.scene->HierComputeAgg(nodeId) == HierarchyScene::VizAgg::Off);
+                                    p.scene->HierApplyViz(nodeId, makeVisible);
                                     guiStateManager.Drag().Begin(ev.id, kVizPayloadType,
                                         makeVisible ? 1u : 0u, ev.state.screenPos);
                                 }
@@ -586,7 +626,7 @@ namespace tachyon
                             case tachyon::EventType::DragEnter:
                             case tachyon::EventType::DragOver:
                                 if (ev.state.dragPayloadType != kVizPayloadType) return false;
-                                p.HierApplyViz(nodeId, ev.state.dragPayloadValue != 0);
+                                p.scene->HierApplyViz(nodeId, ev.state.dragPayloadValue != 0);
                                 return true;
                             default: break;
                         }
@@ -610,7 +650,7 @@ namespace tachyon
                 TreeViewRow& r = rows[flat];
                 // A row still loading: a placeholder where its icon and name will be, indented as
                 // its row will be.
-                if (propsLoading && p.loadingRows.contains(r.id))
+                if (propsLoading && p.scene->loadingRows.contains(r.id))
                 {
                     const int32_t indent = r.depth * theme.treeTableIndent + (anyExpandable ? theme.treeTableExpanderWidth : 0);
                     const int32_t width  = styleManager.Px(70 + int((r.id.Value() * 37u) % 60u));
@@ -662,7 +702,7 @@ namespace tachyon
                 .maxWidth = streamingWidth, .sizing = ColumnSizing::Fixed };
             cols[2].generateCell = [this, &p, &rows, &visibleIdx](int rowIdx)
             {
-                const bool here = rowIdx >= 0 && rowIdx < int(visibleIdx.size()) && rows[visibleIdx[rowIdx]].id == p.streamingRow;
+                const bool here = rowIdx >= 0 && rowIdx < int(visibleIdx.size()) && rows[visibleIdx[rowIdx]].id == p.scene->streamingRow;
                 Cell([this, here] {
                     if (!here) return;
                     BeginHorizontal(idManager.AllocateDynamicID("streaming"), hierarchyStreamingStyleRef, LayoutOverride{}.FlexGrow(1));
@@ -683,7 +723,7 @@ namespace tachyon
         if (searching)
             renderTree(idManager.AllocateDynamicID(), p.filteredRows, p.filteredVisibleIdx, p.filteredState);
         else
-            renderTree(idManager.AllocateDynamicID(), p.treeRows, p.treeVisibleIdx, p.treeViewState);
+            renderTree(idManager.AllocateDynamicID(), p.scene->treeRows, p.treeVisibleIdx, p.treeViewState);
 
         // A node just moved or added is selected once its row shows; one the search hides
         // waits until it shows.

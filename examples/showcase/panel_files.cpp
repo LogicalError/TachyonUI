@@ -73,11 +73,12 @@ namespace tachyon
         return false;
     }
 
-    // A Files panel's data: made the first time it shows, kept while it's hidden but for the
-    // icons it made in the text system (DisableFilesPanel).
+    // A Files panel: its view of the files every Files panel shows (the folder on view, the
+    // open folders, the search), made the first time it shows, kept while it's hidden but for
+    // the icons it made in the text system (DisableFilesPanel).
     struct FilesPanel
     {
-        std::unique_ptr<MemoryFileSystem> files;
+        std::shared_ptr<MemoryFileSystem> files;   // shared with the other Files panels
         std::unique_ptr<FileIcons>        fileIcons;       // the OS's icons, where there are any
         std::unique_ptr<FileThumbnails>   fileThumbnails;  // and its pictures of what's in the files on the disk
         uint64_t                          filesGeneration = 0;
@@ -319,6 +320,13 @@ namespace tachyon
         return id;
     }
 
+    void Application::FolderMoved(const std::string& from, const std::string& to)
+    {
+        for (const std::weak_ptr<FilesPanel>& weak : m_filesPanels)
+            if (const std::shared_ptr<FilesPanel> panel = weak.lock())
+                panel->FolderMoved(from, to);
+    }
+
     void Application::MoveFileInto(FilesPanel& p, uintptr_t payload, const std::string& folder)
     {
         std::string path;
@@ -329,7 +337,7 @@ namespace tachyon
             ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Can't move \"" + std::string(FileName(path)) + "\"", .body = error });
             return;
         }
-        p.FolderMoved(path, JoinPath(folder, FileName(path)));
+        FolderMoved(path, JoinPath(folder, FileName(path)));
     }
 
     // Renames whose editors closed: a name that's changed goes to the file system; one it
@@ -347,7 +355,7 @@ namespace tachyon
         {
             std::string error;
             if (p.files->Rename(path, name, error))
-                p.FolderMoved(path, JoinPath(ParentPath(path), name));
+                FolderMoved(path, JoinPath(ParentPath(path), name));
             else
                 ShowToast(ToastDesc{ .severity = Severity::Error, .title = "Can't rename \"" + std::string(FileName(path)) + "\"", .body = error });
         }
@@ -380,11 +388,17 @@ namespace tachyon
         const std::u8string name = (root.has_filename() ? root.filename() : root).u8string();
         p.rootName = std::string(name.begin(), name.end());
 
-        p.files         = std::make_unique<MemoryFileSystem>(root);
-        // Some documents to open with a double-click, in the copy only.
-        if (m_filesRoot.empty())
-            for (const char* file : { "Forest.level", "Desert.level", "Canyon.level", "Terrain.mat", "Rock.prefab", "Walk.anim", "Hud.layout" })
-                (void)p.files->AddFile(std::string("documents/") + file);
+        // The files every Files panel shows: the first one to show reads them in.
+        p.files = m_files.lock();
+        if (!p.files)
+        {
+            p.files = std::make_shared<MemoryFileSystem>(root);
+            m_files = p.files;
+            // Some documents to open with a double-click, in the copy only.
+            if (m_filesRoot.empty())
+                for (const char* file : { "Forest.level", "Desert.level", "Canyon.level", "Terrain.mat", "Rock.prefab", "Walk.anim", "Hud.layout" })
+                    (void)p.files->AddFile(std::string("documents/") + file);
+        }
         p.openFolders   = { "" };
         p.currentFolder.clear();
         p.filesGeneration = p.files->Generation();
