@@ -683,7 +683,7 @@ namespace tachyon
         const int channelCount = (int)view.data.channels.size();
         view.state.activeChannel = channelCount > 0 ? std::clamp(view.state.activeChannel, 0, channelCount - 1) : 0;
         const bool disabled = guiStateManager.Construction().IsDisabled();
-        auto newKeyID = [this]() { return idManager.CreateStaticID(); };
+        IDManager* const ids = &idManager;   // new keys' IDs, given back when an edit adds none
 
         // With fps set, an animation editor: interpolation and tangents over the plot, frames
         // on a ruler with the playhead. With paths, the channels as a tree down the left.
@@ -852,7 +852,7 @@ namespace tachyon
             const float reach = float(styleManager.Px(7));
             const float handleLength = float(styleManager.Px(40));
             const int32_t dragDistance = styleManager.Px(kDragStartDistance);
-            plotHandler = [&gsm, &es, v, reach, handleLength, dragDistance, newKeyID, wheelMode = GetWheelMode()](ElementEvent&& event) -> bool
+            plotHandler = [&gsm, &es, v, reach, handleLength, dragDistance, ids, wheelMode = GetWheelMode()](ElementEvent&& event) -> bool
             {
                 if (event.rect == nullptr)
                     return false;
@@ -935,13 +935,15 @@ namespace tachyon
                             float value = plot.Value(at.y);
                             if (!curve.keys.empty() && std::fabs(plot.Y(EvaluateCurve(curve, time)) - at.y) <= reach)
                                 value = EvaluateCurve(curve, time);
-                            const ID keyID = newKeyID();
+                            const ID keyID = ids->CreateStaticID();
                             const CurveEdit edit = AddCurveKeyEdit(v.data, v.state.activeChannel, time, value, keyID);
                             if (!edit.empty())
                             {
                                 CommitCurveEdit(v, edit);
                                 v.state.selectedKeys = { keyID };
                             }
+                            else
+                                ids->ReleaseStaticID(keyID);
                             return true;
                         }
                         v.state.boxSelect.Press(event, es, gsm, (shift || ctrl) ? v.state.selectedKeys : std::unordered_set<ID>{});
@@ -1325,14 +1327,16 @@ namespace tachyon
             }
             else
             {
-                MenuItem("Add key", [v, newKeyID]() {
-                    const ID keyID = newKeyID();
+                MenuItem("Add key", [v, ids]() {
+                    const ID keyID = ids->CreateStaticID();
                     const CurveEdit edit = AddCurveKeyEdit(v.data, v.state.activeChannel, v.state.menuAt.x, v.state.menuAt.y, keyID);
                     if (!edit.empty())
                     {
                         CommitCurveEdit(v, edit);
                         v.state.selectedKeys = { keyID };
                     }
+                    else
+                        ids->ReleaseStaticID(keyID);
                 });
                 MenuItem("Frame all", [v]() { FrameAll(v); });
             }
@@ -1361,9 +1365,18 @@ namespace tachyon
         {
             const ElementRef presetRef = RegisterControl(
                 Element{ .id = idManager.AllocateDynamicID("curve_preset"),
-                         .eventHandler = disabled ? EventHandler{} : MakeButtonHandler([v, p, newKeyID]() {
-                             if (const CurvePreset* preset = PresetAt(v.data, p))
-                                 CommitCurveEdit(v, ApplyCurvePresetEdit(v.data, v.state.activeChannel, *preset, newKeyID));
+                         .eventHandler = disabled ? EventHandler{} : MakeButtonHandler([v, p, ids]() {
+                             const CurvePreset* preset = PresetAt(v.data, p);
+                             if (preset == nullptr)
+                                 return;
+                             std::vector<ID> made;
+                             const CurveEdit edit = ApplyCurvePresetEdit(v.data, v.state.activeChannel, *preset,
+                                                                         [&] { return made.emplace_back(ids->CreateStaticID()); });
+                             if (edit.empty())
+                                 for (const ID id : made)
+                                     ids->ReleaseStaticID(id);   // the curve is that preset already
+                             else
+                                 CommitCurveEdit(v, edit);
                          }),
                          .styleRef = theme.curvePresetStyleRef },
                 LayoutOverride{});

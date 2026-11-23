@@ -328,6 +328,23 @@ namespace tachyon
             EXPECT_TRUE(view.popupOpen) << "the drag ends, the editor stays";
         }
 
+        // A double click that adds no key (on a hidden channel's plot) holds no ID for one.
+        TEST_F(CurveFieldTest, ADoubleClickThatAddsNoKeyGivesItsIDBack)
+        {
+            Open();
+            view.channels[0].visible = false;
+            Frame();
+            const size_t ids = app.idManager.GetStaticIDCount();
+            const size_t keys = view.channels[0].curve.keys.size();
+            const int2 at = At(0.25f, 0.8f);
+            app.ClickAt(at);
+            Frame();
+            app.ClickAt(at);
+            Frame();
+            EXPECT_EQ(view.channels[0].curve.keys.size(), keys) << "nothing added";
+            EXPECT_EQ(app.idManager.GetStaticIDCount(), ids) << "no ID held for it";
+        }
+
         TEST_F(CurveFieldTest, ADoubleClickAddsAKey)
         {
             Open();

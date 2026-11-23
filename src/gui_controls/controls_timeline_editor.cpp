@@ -25,6 +25,21 @@ namespace tachyon
 
     namespace
     {
+        // A key on `track` at `time`, committed as one edit with a new ID: the ID, or Invalid,
+        // and the ID given back, when there's none to add (a key there already, a locked track).
+        ID CommitNewKey(IDManager& ids, TimelineViewRef v, int track, float time)
+        {
+            const ID keyID = ids.CreateStaticID();
+            const TimelineEdit edit = AddKeyEdit(v.data, track, time, keyID);
+            if (edit.empty())
+            {
+                ids.ReleaseStaticID(keyID);
+                return ID::Invalid();
+            }
+            CommitTimelineEdit(v.data, edit);
+            return keyID;
+        }
+
         constexpr float kWheelZoom = 1.25f;   // a wheel notch zooms by this much
 
         float LengthOf(ConstTimelineViewRef view)
@@ -746,7 +761,7 @@ namespace tachyon
                     Text(idManager.AllocateDynamicID("name"), track.name, theme.timelineTrackNameStyleRef);
                     if (locked) BeginDisabled();
                     Button(idManager.AllocateDynamicID("key"), GUIContent(theme.timelineKeyIcon, {}, "Key at the playhead"),
-                           [this, v, t] { CommitTimelineEdit(v.data, AddKeyEdit(v.data, t, v.data.playback.time, idManager.CreateStaticID())); },
+                           [this, v, t] { (void)CommitNewKey(idManager, v, t, v.data.playback.time); },
                            theme.timelineRowButtonStyleRef);
                     if (locked) EndDisabled();
                     break;
@@ -1108,7 +1123,7 @@ namespace tachyon
                             {
                                 for (int t = 0; t < (int)v.data.tracks.size(); ++t)
                                     if (v.data.tracks[size_t(t)].stableID == v.state.selectedTrack)
-                                        CommitTimelineEdit(v.data, AddKeyEdit(v.data, t, v.data.playback.time, idManager.CreateStaticID()));
+                                        (void)CommitNewKey(idManager, v, t, v.data.playback.time);
                                 return true;
                             }
                             case KeyCode::KeyI: case KeyCode::KeyO:
@@ -1200,12 +1215,8 @@ namespace tachyon
                     const bool locked = IsTrackLocked(view.data, t);   // shown, but it can't add one
                     if (locked) BeginDisabled();
                     MenuItem("Add key", [this, v, t] {
-                        const ID keyID = idManager.CreateStaticID();
-                        const TimelineEdit edit = AddKeyEdit(v.data, t, v.state.menuTime, keyID);
-                        if (edit.empty())
-                            return;
-                        CommitTimelineEdit(v.data, edit);
-                        v.state.selectedKeys = { keyID };
+                        if (const ID keyID = CommitNewKey(idManager, v, t, v.state.menuTime); keyID != ID::Invalid())
+                            v.state.selectedKeys = { keyID };
                     });
                     if (locked) EndDisabled();
                 }
