@@ -5,7 +5,7 @@
 #include <gui_core/input/gui_pointer_drag.h>
 
 #include "scene.h"
-#if TACHYON_VULKAN || TACHYON_D3D12 || TACHYON_SDLGPU
+#if TACHYON_VULKAN || TACHYON_D3D12 || TACHYON_SDLGPU || TACHYON_METAL
 #include "scene_renderer.h"
 #endif
 
@@ -333,7 +333,7 @@ namespace tachyon
         // picked, and what draws them.
         std::vector<SceneObject> sceneObjects;
         int              sceneSelected = -1;
-#if TACHYON_VULKAN || TACHYON_D3D12 || TACHYON_SDLGPU
+#if TACHYON_VULKAN || TACHYON_D3D12 || TACHYON_SDLGPU || TACHYON_METAL
         SceneRenderer    sceneRenderer;
 #endif
         // The sketch pad: strokes drawn with the pen (or the mouse), wider where it pressed harder.

@@ -2,11 +2,11 @@
 # (showcase.css, icons, the Noto fallback fonts) load from workdirectory/ through
 # SetResourceRoot(TACHYON_RESOURCE_DIR), so it runs from any folder.
 
-# The 3D scene's renderer and shaders, with the Vulkan, Direct3D 12 or SDL GPU backend: the
-# shaders compiled to SPIR-V and DXIL as the backends built in need, and built into the
-# showcase, as gui_core's are. Without any the Viewport panel has no scene drawn.
+# The 3D scene's renderer and shaders, with the Vulkan, Direct3D 12, Metal or SDL GPU backend:
+# the shaders compiled to SPIR-V, DXIL and Metal source as the backends built in need, and built
+# into the showcase, as gui_core's are. Without any the Viewport panel has no scene drawn.
 set(_showcase_scene_files "")
-if(TACHYON_VULKAN OR TACHYON_D3D12 OR TACHYON_SDLGPU)
+if(TACHYON_VULKAN OR TACHYON_D3D12 OR TACHYON_SDLGPU OR TACHYON_METAL)
   set(_showcase_slang "${CMAKE_CURRENT_SOURCE_DIR}/shaders/scene.slang")
   set(_showcase_shaders "")
   file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/shaders")
@@ -15,6 +15,9 @@ if(TACHYON_VULKAN OR TACHYON_D3D12 OR TACHYON_SDLGPU)
   endif()
   if(TACHYON_D3D12)
     tachyon_compile_slang("${_showcase_slang}" "${CMAKE_CURRENT_BINARY_DIR}/shaders" _showcase_shaders dxil)
+  endif()
+  if(TACHYON_METAL)
+    tachyon_compile_slang("${_showcase_slang}" "${CMAKE_CURRENT_BINARY_DIR}/shaders" _showcase_shaders metal)
   endif()
   if(TACHYON_SDLGPU)
     tachyon_compile_slang("${_showcase_slang}" "${CMAKE_CURRENT_BINARY_DIR}/shaders" _showcase_shaders sdl-spirv)
@@ -37,6 +40,10 @@ if(TACHYON_VULKAN OR TACHYON_D3D12 OR TACHYON_SDLGPU)
     COMMENT "Building the showcase's shaders in"
     VERBATIM)
   set(_showcase_scene_files scene_renderer.h scene_renderer.cpp "${_showcase_slang}" "${_showcase_shader_source}")
+  if(TACHYON_METAL)
+    # Its Metal path is Objective-C++.
+    set_source_files_properties(scene_renderer.cpp PROPERTIES LANGUAGE OBJCXX)
+  endif()
 endif()
 
 tachyon_add_example(showcase
@@ -74,6 +81,10 @@ tachyon_add_example(showcase
   "${PROJECT_SOURCE_DIR}/workdirectory/themes/showcase.css")
 
 tachyon_precompile_headers(showcase <gui_controls/gui_application.h>)
+if(TACHYON_METAL)
+  # For the whole target, so the Objective-C++ precompiled header matches scene_renderer.cpp.
+  target_compile_options(showcase PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+endif()
 if(TACHYON_D3D12)
   # The scene renderer's root signature (D3D12SerializeRootSignature).
   target_link_libraries(showcase PRIVATE d3d12)

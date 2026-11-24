@@ -14,6 +14,11 @@
 #include <gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h>
 #include <SDL3/SDL_gpu.h>
 #endif
+#if TACHYON_METAL
+// This file is compiled as Objective-C++ with Metal (examples/showcase/CMakeLists.txt).
+#include <gui_core/graphics/metal/metal_graphics_context.h>
+#import <Metal/Metal.h>
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -28,7 +33,7 @@ namespace tachyon::detail
 {
     /// The showcase's compiled shaders (scene.vert.spv and scene.frag.spv with Vulkan,
     /// scene.vert.dxil and scene.frag.dxil with Direct3D 12, scene.*.sdl.spv and scene.*.sdl.dxil
-    /// with SDL GPU), built in by CMake.
+    /// with SDL GPU, scene.vert.metal and scene.frag.metal with Metal), built in by CMake.
     std::span<const EmbeddedFile> ShowcaseShaderFiles();
 }
 
@@ -49,9 +54,9 @@ namespace tachyon
             VkDeviceAddress vertices;
         };
 #endif
-#if TACHYON_D3D12 || TACHYON_SDLGPU
-        // Direct3D 12's root constants (b0), SDL GPU's uniforms: Push's values, and the draw's
-        // first vertex.
+#if TACHYON_D3D12 || TACHYON_SDLGPU || TACHYON_METAL
+        // Direct3D 12's root constants (b0), SDL GPU's uniforms, Metal's buffer(0): Push's
+        // values, and the draw's first vertex.
         struct FirstVertexPush
         {
             float4x4 mvp;
@@ -559,5 +564,129 @@ namespace tachyon
     }
 #else
     void SceneRenderer::ReleaseSDLGPU() {}
+#endif
+
+#if TACHYON_METAL
+    namespace
+    {
+        // A Metal function from the showcase's built-in source.
+        id<MTLFunction> MetalFunction(id<MTLDevice> device, const char* file, NSString* entry)
+        {
+            const std::span<const std::byte> code = detail::FindEmbeddedFile(detail::ShowcaseShaderFiles(), file);
+            if (code.empty())
+                return nil;
+            NSString* source = [[NSString alloc] initWithBytes:code.data() length:code.size() encoding:NSUTF8StringEncoding];
+            NSError* error = nil;
+            id<MTLLibrary> library = [device newLibraryWithSource:source options:[MTLCompileOptions new] error:&error];
+            if (library == nil)
+            {
+                TACHYON_LOG_ERROR(kLogScene, "{}: {}", file, error != nil ? error.localizedDescription.UTF8String : "unknown error");
+                return nil;
+            }
+            id<MTLFunction> function = [library newFunctionWithName:entry];
+            return function != nil ? function : [library newFunctionWithName:library.functionNames.firstObject];
+        }
+
+        void ReleaseObject(void*& object)
+        {
+            if (object != nullptr)
+                CFBridgingRelease(object);
+            object = nullptr;
+        }
+    }
+
+    bool SceneRenderer::CreateMetal(const metal::MetalSceneRender& target)
+    {
+        id<MTLCommandBuffer> commandBuffer = (__bridge id<MTLCommandBuffer>)target.commandBuffer;
+        id<MTLDevice> device = commandBuffer.device;
+
+        // The meshes, in a shared buffer the vertex shader reads (buffer(1)).
+        const std::vector<Vertex> vertices = BuildMeshes();
+        id<MTLBuffer> buffer = [device newBufferWithBytes:vertices.data()
+                                                   length:vertices.size() * sizeof(Vertex)
+                                                  options:MTLResourceStorageModeShared];
+        id<MTLFunction> vs = MetalFunction(device, "scene.vert.metal", @"vertexMain");
+        id<MTLFunction> fs = MetalFunction(device, "scene.frag.metal", @"fragmentMain");
+        if (buffer == nil || vs == nil || fs == nil)
+            return false;
+        m_mtlVertices = (void*)CFBridgingRetain(buffer);
+
+        MTLRenderPipelineDescriptor* desc = [MTLRenderPipelineDescriptor new];
+        desc.vertexFunction                  = vs;
+        desc.fragmentFunction                = fs;
+        desc.colorAttachments[0].pixelFormat = MTLPixelFormat(target.colorFormat);
+        desc.depthAttachmentPixelFormat      = MTLPixelFormat(target.depthFormat);
+        NSError* error = nil;
+        id<MTLRenderPipelineState> shapes = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+        // The grid: alpha blended, over everything.
+        MTLRenderPipelineColorAttachmentDescriptor* color = desc.colorAttachments[0];
+        color.blendingEnabled             = YES;
+        color.sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
+        color.destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
+        color.sourceAlphaBlendFactor      = MTLBlendFactorOne;
+        color.destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+        id<MTLRenderPipelineState> lines = [device newRenderPipelineStateWithDescriptor:desc error:&error];
+        if (shapes == nil || lines == nil)
+        {
+            TACHYON_LOG_ERROR(kLogScene, "a scene pipeline failed: {}", error != nil ? error.localizedDescription.UTF8String : "unknown error");
+            return false;
+        }
+        m_mtlShapes = (void*)CFBridgingRetain(shapes);
+        m_mtlLines  = (void*)CFBridgingRetain(lines);
+
+        MTLDepthStencilDescriptor* depth = [MTLDepthStencilDescriptor new];
+        depth.depthCompareFunction = MTLCompareFunctionLessEqual;
+        depth.depthWriteEnabled    = YES;
+        m_mtlDepthShapes = (void*)CFBridgingRetain([device newDepthStencilStateWithDescriptor:depth]);
+        depth.depthCompareFunction = MTLCompareFunctionAlways;
+        depth.depthWriteEnabled    = NO;
+        m_mtlDepthLines  = (void*)CFBridgingRetain([device newDepthStencilStateWithDescriptor:depth]);
+        return true;
+    }
+
+    void SceneRenderer::Render(const metal::MetalSceneRender& target, const ViewportRenderContext& ctx,
+                               std::span<const SceneObject> objects, int selected)
+    {
+        if (m_failed)
+            return;
+        if (!m_created)
+        {
+            m_created = true;
+            if (!CreateMetal(target))
+            {
+                m_failed = true;
+                ReleaseMetal();
+                TACHYON_LOG_ERROR(kLogScene, "The scene's pipelines weren't made; the viewport shows its background only");
+                return;
+            }
+        }
+        id<MTLRenderCommandEncoder> encoder = (__bridge id<MTLRenderCommandEncoder>)target.encoder;
+        [encoder setCullMode:MTLCullModeNone];
+        [encoder setVertexBuffer:(__bridge id<MTLBuffer>)m_mtlVertices offset:0 atIndex:1];
+        MTLPrimitiveType primitive = MTLPrimitiveTypeTriangle;
+        Walk(ctx, objects, selected,
+            [&](bool lines) {
+                [encoder setRenderPipelineState:(__bridge id<MTLRenderPipelineState>)(lines ? m_mtlLines : m_mtlShapes)];
+                [encoder setDepthStencilState:(__bridge id<MTLDepthStencilState>)(lines ? m_mtlDepthLines : m_mtlDepthShapes)];
+                primitive = lines ? MTLPrimitiveTypeLine : MTLPrimitiveTypeTriangle;
+            },
+            [&](Range range, const float4x4& mvp, color4f color, float4 light) {
+                const FirstVertexPush push{ mvp, color, light, range.first };
+                [encoder setVertexBytes:&push length:sizeof(push) atIndex:0];
+                [encoder setFragmentBytes:&push length:sizeof(push) atIndex:0];
+                [encoder drawPrimitives:primitive vertexStart:0 vertexCount:range.count];
+            });
+    }
+
+    void SceneRenderer::ReleaseMetal()
+    {
+        ReleaseObject(m_mtlShapes);
+        ReleaseObject(m_mtlLines);
+        ReleaseObject(m_mtlDepthShapes);
+        ReleaseObject(m_mtlDepthLines);
+        ReleaseObject(m_mtlVertices);
+    }
+#else
+    void SceneRenderer::ReleaseMetal() {}
 #endif
 }

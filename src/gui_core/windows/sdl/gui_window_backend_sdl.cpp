@@ -28,6 +28,7 @@
 
 #if defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
+#include <gui_core/windows/sdl/gui_window_backend_sdl_cocoa.h>
 #endif
 
 #ifdef _WIN32
@@ -134,11 +135,21 @@ namespace tachyon
 
     SDLWindowBackend::~SDLWindowBackend()
     {
-        // Destroy any remaining windows
+        // Destroy any remaining windows. Every window is unhooked first: the app's input
+        // handlers and window contexts are gone by now, and closing one window makes the OS
+        // activate another (macOS makes the next window key), whose events would reach them.
+        SDL_RemoveEventWatch(&SDLWindowBackend::BackendEventWatch, this);
         for (auto sdl_window : m_windows)
         {
             if (!sdl_window) continue;
             SDL_RemoveEventWatch(m_eventWatch, sdl_window);
+            SDL_PropertiesID props = SDL_GetWindowProperties(sdl_window);
+            SDL_SetPointerProperty(props, "WindowContext", nullptr);
+            SDL_SetPointerProperty(props, "InputHandler", nullptr);
+        }
+        for (auto sdl_window : m_windows)
+        {
+            if (!sdl_window) continue;
             SDL_DestroyWindow(sdl_window);
         }
         m_windows.clear();
@@ -148,8 +159,6 @@ namespace tachyon
             if (cursor) SDL_DestroyCursor(cursor);
             cursor = nullptr;
         }
-
-        SDL_RemoveEventWatch(&SDLWindowBackend::BackendEventWatch, this);
 
         if (m_ownsSDL)
             SDL_Quit();
@@ -878,8 +887,10 @@ namespace tachyon
         bool isModal = (windowFlags & tachyon::WindowFlags::Modal) != tachyon::WindowFlags::None;
 
 
-        const Uint64 api_flags = m_graphicsContext != nullptr && m_graphicsContext->GetAPI() == GraphicsAPI::Vulkan
-            ? SDL_WINDOW_VULKAN : 0;
+        const GraphicsAPI api = m_graphicsContext != nullptr ? m_graphicsContext->GetAPI() : GraphicsAPI::None;
+        const Uint64 api_flags = api == GraphicsAPI::Vulkan ? SDL_WINDOW_VULKAN
+                               : api == GraphicsAPI::Metal  ? SDL_WINDOW_METAL
+                                                            : 0;
         
         Uint64 sd_window_flags = api_flags;
         
@@ -1003,6 +1014,17 @@ namespace tachyon
             SDL_SetWindowHitTest(sdlWindow, CustomTitleBarHitTest, nullptr);
 
         // OS parenting makes child popups receive input and position relative to the parent.
+#if defined(__APPLE__)
+        // On macOS an SDL parent makes a child window, which moves with its parent. A window
+        // the user places (a torn-off panel, a dialog that isn't modal) floats above the app's
+        // windows instead, and stays where it's put.
+        const bool placedByUser = (windowFlags & tachyon::WindowFlags::Moveable) != tachyon::WindowFlags::None
+                               && (windowFlags & tachyon::WindowFlags::PopupMenu) == tachyon::WindowFlags::None
+                               && !isModal && !isTransparent;
+        if (parentOSHandle != nullptr && placedByUser)
+            cocoa::FloatAboveAppWindows(SDL_GetPointerProperty(props, SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, nullptr));
+        else
+#endif
         if (parentOSHandle != nullptr)
         {
             SDL_Window* parent = ToSDL(parentOSHandle);
@@ -1605,6 +1627,23 @@ namespace tachyon
     {
         int osX = 0, osY = 0;
         SDL_GetWindowPosition(window, &osX, &osY);
+#if defined(__APPLE__)
+        // macOS gives the position against the window where it was when the mouse moved. A
+        // window the app moves with the mouse while a button is held (a panel dragged by its
+        // tab) has moved since: adding where it is now puts the mouse off by the last move,
+        // which the next move follows, and the window shakes. Then the mouse where it is now is
+        // taken, against where the window is now. Not for input a program sends itself
+        // (physicalButtons off), whose position is the event's.
+        if (m_options.physicalButtons)
+        {
+            float globalX = 0.0f, globalY = 0.0f;
+            if (SDL_GetGlobalMouseState(&globalX, &globalY) != 0)
+            {
+                x = globalX - float(osX);
+                y = globalY - float(osY);
+            }
+        }
+#endif
         const float k = OsPerPixel(window);
         return int2{ osX + int32_t(std::floor(x / k)), osY + int32_t(std::floor(y / k)) };
     }

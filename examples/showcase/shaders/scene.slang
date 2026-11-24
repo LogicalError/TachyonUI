@@ -2,7 +2,8 @@
 // the screen, in flat colors lit from one side with some light everywhere; the ground grid
 // unlit. Vulkan reads the buffer by address from the push constants; Direct3D 12 (TACHYON_D3D12)
 // gets the same values as root constants (b0) and the buffer as a root view (t0); SDL GPU
-// (TACHYON_SDLGPU) as uniforms and a storage buffer.
+// (TACHYON_SDLGPU) as uniforms and a storage buffer; Metal (TACHYON_METAL) as Direct3D 12 does,
+// the constants at buffer(0) and the vertices at buffer(1).
 
 struct Vertex
 {
@@ -21,6 +22,20 @@ struct Push
 };
 ConstantBuffer<Push>     push     : register(b0);
 StructuredBuffer<Vertex> vertices : register(t0);
+
+struct VertexInput { uint id : SV_VertexID; };
+Vertex ReadVertex(VertexInput input) { return vertices[input.id + push.firstVertex]; }
+#elif defined(TACHYON_METAL)
+// Metal: as Direct3D 12, without registers: slangc numbers the buffers in the order declared.
+struct Push
+{
+    float4 mvpRows[4];
+    float4 color;
+    float4 light;         // xyz: toward the light, in the object's space; w 0: unlit
+    uint   firstVertex;   // the draw's first vertex: SV_VertexID starts at 0
+};
+ConstantBuffer<Push>     push;       // buffer(0)
+StructuredBuffer<Vertex> vertices;   // buffer(1)
 
 struct VertexInput { uint id : SV_VertexID; };
 Vertex ReadVertex(VertexInput input) { return vertices[input.id + push.firstVertex]; }

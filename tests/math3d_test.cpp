@@ -87,6 +87,7 @@ namespace tachyon
             EXPECT_NEAR(inD3D12.x, inVulkan.x, 1e-6f) << "x as it is";
             EXPECT_NEAR(inD3D12.z, inVulkan.z, 1e-6f) << "depth 0 to 1 in both";
             EXPECT_EQ(ToClipSpace(vulkan, GraphicsAPI::SDLGPU), d3d12) << "SDL GPU's has y up on every driver, as Direct3D's";
+            EXPECT_EQ(ToClipSpace(vulkan, GraphicsAPI::Metal), d3d12) << "Metal's has y up, as Direct3D's";
         }
 
         TEST(Math3D, RaysMeetPlanesAndLines)

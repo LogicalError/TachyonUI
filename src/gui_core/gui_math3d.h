@@ -120,11 +120,11 @@ namespace tachyon
     }
 
     /// A projection to Vulkan's clip space (Perspective, Orthographic) made one to `api`'s:
-    /// Direct3D's and SDL GPU's (on every driver) have y up, so the y row is negated; depth
-    /// runs 0 to 1 in all.
+    /// Direct3D's, Metal's and SDL GPU's (on every driver) have y up, so the y row is negated;
+    /// depth runs 0 to 1 in all.
     inline float4x4 ToClipSpace(float4x4 projection, GraphicsAPI api)
     {
-        if (api == GraphicsAPI::D3D12 || api == GraphicsAPI::SDLGPU)
+        if (api == GraphicsAPI::D3D12 || api == GraphicsAPI::SDLGPU || api == GraphicsAPI::Metal)
             projection.r1 = float4{ -projection.r1.x, -projection.r1.y, -projection.r1.z, -projection.r1.w };
         return projection;
     }

@@ -1,8 +1,8 @@
 #pragma once
 
 // Draws the showcase's 3D scene (scene.h) into a Viewport's image, as an app's own renderer
-// would: with Vulkan, Direct3D 12 or SDL GPU, whichever the scene's recording state is. Built
-// with any of the backends.
+// would: with Vulkan, Direct3D 12, Metal or SDL GPU, whichever the scene's recording state is.
+// Built with any of the backends.
 
 #include "scene.h"
 
@@ -26,6 +26,7 @@ namespace tachyon
     namespace vulkan { class VulkanGraphicsContext; struct VulkanSceneRender; }
     namespace d3d12 { struct D3D12SceneRender; }
     namespace sdlgpu { struct SDLGPUSceneRender; }
+    namespace metal { struct MetalSceneRender; }
 
     class SceneRenderer
     {
@@ -33,7 +34,7 @@ namespace tachyon
         SceneRenderer() = default;
         SceneRenderer(const SceneRenderer&) = delete;
         SceneRenderer& operator=(const SceneRenderer&) = delete;
-        ~SceneRenderer() { ReleaseD3D12(); ReleaseSDLGPU(); }
+        ~SceneRenderer() { ReleaseD3D12(); ReleaseSDLGPU(); ReleaseMetal(); }
 
 #if TACHYON_VULKAN
         /// Draws the grid and `objects` into the viewport's image; `selected` lighter. Makes
@@ -53,12 +54,20 @@ namespace tachyon
         void Render(const sdlgpu::SDLGPUSceneRender& target, const ViewportRenderContext& ctx,
                     std::span<const SceneObject> objects, int selected);
 #endif
+#if TACHYON_METAL
+        /// As above on Metal, with the scene's encoder, on its command buffer's device. Its
+        /// objects stay until ReleaseMetal.
+        void Render(const metal::MetalSceneRender& target, const ViewportRenderContext& ctx,
+                    std::span<const SceneObject> objects, int selected);
+#endif
         /// Lets go of the Direct3D 12 objects. Call once the GPU is done with them, before the
         /// graphics backend is cleaned up.
         void ReleaseD3D12();
         /// Lets go of the SDL GPU objects (SDL frees them once the GPU is done with them). Call
         /// before the graphics backend is cleaned up.
         void ReleaseSDLGPU();
+        /// Lets go of the Metal objects (Metal keeps them while a command buffer uses them).
+        void ReleaseMetal();
 
         /// A mesh's vertex, as scene.slang reads it.
         struct Vertex
@@ -98,6 +107,16 @@ namespace tachyon
         ID3D12PipelineState* m_d3dShapes   = nullptr;
         ID3D12PipelineState* m_d3dLines    = nullptr;
         ID3D12Resource*      m_d3dVertices = nullptr;   ///< in an upload heap, read as t0
+#endif
+
+#if TACHYON_METAL
+        bool CreateMetal(const metal::MetalSceneRender& target);
+        // Objective-C objects, retained (CFBridgingRetain): this header is plain C++.
+        void* m_mtlShapes      = nullptr;   ///< id<MTLRenderPipelineState>, lit triangles
+        void* m_mtlLines       = nullptr;   ///< id<MTLRenderPipelineState>, the grid
+        void* m_mtlDepthShapes = nullptr;   ///< id<MTLDepthStencilState>
+        void* m_mtlDepthLines  = nullptr;   ///< id<MTLDepthStencilState>
+        void* m_mtlVertices    = nullptr;   ///< id<MTLBuffer>, read as buffer(1)
 #endif
 
 #if TACHYON_SDLGPU

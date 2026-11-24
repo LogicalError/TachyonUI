@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/version-0.1%20preview-A1660C" alt="Version 0.1 preview">
   <img src="https://img.shields.io/badge/C%2B%2B-20-2F6FCF" alt="C++20">
   <img src="https://img.shields.io/badge/Vulkan-1.3-A5262D" alt="Vulkan 1.3">
+  <img src="https://img.shields.io/badge/Metal-3-555555" alt="Metal 3">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2F6FCF" alt="MIT license"></a>
 </p>
 
@@ -27,8 +28,8 @@
 ![The showcase application: document tabs in the title bar, docked panels with a 3D viewport, a node graph, a state machine, the inspector, a file browser, a log and a build in progress](docs/screenshot.png)
 
 TachyonUI is for building tools: game and level editors, audio editors, image and 3D tools.
-It opens its own windows out of the box, and can also be embedded in an application that
-already has a Vulkan renderer.
+It opens its own windows out of the box, on Windows, Linux and macOS, and can also be embedded
+in an application that already has a Vulkan, Direct3D 12 or Metal renderer.
 
 ## Features
 
@@ -36,7 +37,7 @@ already has a Vulkan renderer.
 | --- | --- | --- |
 | Dock, tab and tear off panels into OS windows. Menus, tooltips, drag and drop. | Fields, sliders, color and gradient editors, tables, trees, list and grid views, node graphs. | Dark and light palettes, UI and font scaling, your own stylesheets, reloaded while the app runs. |
 | **Layout** | **Text** | **Standalone or embedded** |
-| Flexbox and grid, in CSS pixels scaled by the UI scale. | Shaping, bidi and font fallback for most scripts. | Its own windows by default, or inside your Vulkan renderer. |
+| Flexbox and grid, in CSS pixels scaled by the UI scale. | Shaping, bidi and font fallback for most scripts. | Its own windows by default, or inside your Vulkan, Direct3D 12 or Metal renderer. |
 
 ## Requirements
 
@@ -60,19 +61,23 @@ already has a Vulkan renderer.
 
 ### macOS
 
-Not tested on a Mac yet (help would be appreciated!). CI builds it and runs the tests that need no GPU.
+Renders with Metal by default. No Vulkan SDK is needed.
 
-- Apple Clang
-- CMake 3.22 or newer and Ninja
-- The [Vulkan SDK](https://vulkan.lunarg.com/) 1.4.341 or newer, or Homebrew's `vulkan-headers`,
-  `vulkan-loader` and `molten-vk` and a [Slang release](https://github.com/shader-slang/slang/releases) 2026.1 or newer
-- The build finds `slangc` through `VULKAN_SDK` or the `PATH`; set `SLANGC` to the executable to pick another
+- macOS 13.3 or newer, on Apple silicon or an Intel Mac with a Metal 3 GPU
+- Apple Clang: Xcode or just its Command Line Tools (`xcode-select --install`)
+- CMake 3.22 or newer and Ninja (`brew install cmake ninja git-lfs`)
+- A [Slang release](https://github.com/shader-slang/slang/releases) 2026.1 or newer for its `slangc`
+  (it's not in Homebrew): unpack it and put `slangc` on the `PATH`, or set `SLANGC` to it
 - Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
+- Optional: `-DTACHYON_VULKAN=ON` adds the Vulkan backend through MoltenVK (the Vulkan SDK, or
+  Homebrew's `vulkan-headers`, `vulkan-loader` and `molten-vk`); `--graphics vulkan` picks it in the showcase
 
 ### To run
 
-- A GPU driver with Vulkan 1.3 and the features listed by
+- Windows and Linux: a GPU driver with Vulkan 1.3 and the features listed by
   `VulkanDeviceContext::GetDeviceRequirements()`
+- macOS: a GPU of the Metal 3 family (every Apple silicon Mac; on Intel Macs, AMD Vega,
+  Radeon 5000/6000 or Intel UHD 630 and newer)
 
 ## Quick start
 
@@ -147,7 +152,8 @@ themes and system libraries are covered in [docs/integration.md](docs/integratio
 ## Embedding in your own renderer
 
 This part is optional: by default the library creates its own device and windows. If your
-application already renders with Vulkan, TachyonUI can work with it:
+application already renders with Vulkan, TachyonUI can work with it (Direct3D 12, SDL GPU and
+Metal hosts can share their device too):
 
 - **Share your Vulkan device.** One instance, device and queue; the GUI only destroys what it created.
 - **Show an image you render**, such as a 3D viewport, as a control.
@@ -158,7 +164,7 @@ The synchronization rules and code are in [Using your own Vulkan device](docs/in
 ## Status
 
 **0.1 preview.** The API will still change. Windows x64 and Linux x64 are built and tested in
-CI; macOS is built in CI but hasn't run on a Mac.
+CI. macOS (Apple silicon) runs on Metal; CI builds it and runs the tests that need no GPU.
 
 ---
 

@@ -42,9 +42,10 @@ Options (set before `add_subdirectory`):
 | `TACHYON_INSTALL` | on when top-level | Adds install rules and the CMake package. |
 | `TACHYON_INSTALL_THIRD_PARTY` | on | Bundles the third-party libraries into the install. |
 | `TACHYON_SDL` | on | Builds the SDL window backend and clipboard. Off builds without SDL. |
-| `TACHYON_VULKAN` | on | Builds the Vulkan graphics backend. Off builds without Vulkan (no Vulkan SDK needed): the app runs on the null backend and draws nothing. |
+| `TACHYON_VULKAN` | on (off on macOS) | Builds the Vulkan graphics backend (on macOS through MoltenVK). Off builds without Vulkan (no Vulkan SDK needed): the app runs on another backend built in, or on the null backend, which draws nothing. |
+| `TACHYON_METAL` | on (macOS only) | Builds the Metal backend, the default on macOS: the UI in OS and render-to-image windows, and the app's scenes. Needs a Metal 3 GPU and macOS 13.3 or newer; the shaders are built as Metal source and compiled when the app starts, so no Xcode is needed. |
 | `TACHYON_D3D12` | off | Windows only. Builds the Direct3D 12 backend: an app picks it with `InitializeOptions::graphicsAPI`. Brings D3D12 Memory Allocator. |
-| `TACHYON_SDLGPU` | off | Needs `TACHYON_SDL`. Builds the SDL GPU backend (SDL3's GPU API, over Vulkan or Direct3D 12): the UI in OS and render-to-image windows, and the app's scenes. Metal comes later. |
+| `TACHYON_SDLGPU` | off | Needs `TACHYON_SDL`. Builds the SDL GPU backend (SDL3's GPU API, over Vulkan or Direct3D 12): the UI in OS and render-to-image windows, and the app's scenes. On macOS use `TACHYON_METAL` instead. |
 | `TACHYON_GPU_TESTS_ON_D3D12` | off | With `TACHYON_D3D12`: runs the whole-app GPU tests (`gui_gpu_tests`) a second time, on Direct3D 12, as `D3D12.<test>`. |
 | `TACHYON_GPU_TESTS_ON_SDLGPU` | off | With `TACHYON_SDLGPU`: runs the whole-app GPU tests a second time, on SDL GPU, as `SDLGPU.<test>`. SDL picks the driver; set `SDL_GPU_DRIVER` to pick another. |
 | `TACHYON_SYSTEM_SDL` | off | Uses the host's SDL3. |
@@ -68,18 +69,21 @@ add_subdirectory(external/TachyonUI)
 ```
 
 - Code can check which graphics backends were built in:
-  - `gui_core` defines `TACHYON_VULKAN`, `TACHYON_D3D12` and `TACHYON_SDLGPU`, each `0` or `1`
+  - `gui_core` defines `TACHYON_VULKAN`, `TACHYON_D3D12`, `TACHYON_METAL` and `TACHYON_SDLGPU`,
+    each `0` or `1`
   - for example, `#if TACHYON_VULKAN` around code that uses `VulkanGraphicsContext`
-  - the CMake package sets `TachyonUI_VULKAN`, `TachyonUI_D3D12` and `TachyonUI_SDLGPU` the
-    same way
+  - the CMake package sets `TachyonUI_VULKAN`, `TachyonUI_D3D12`, `TachyonUI_METAL` and
+    `TachyonUI_SDLGPU` the same way
 
 ### Choosing the graphics backend
 
 With more than one backend built in, an app picks one when it starts:
 
 - Set `graphicsAPI` in the options you pass to `Initialize`:
-  - empty, the default: Vulkan
+  - empty, the default: Metal on macOS, Vulkan elsewhere
+  - `GraphicsAPI::Vulkan`: Vulkan (on macOS through MoltenVK, with `TACHYON_VULKAN` on)
   - `GraphicsAPI::D3D12`: Direct3D 12
+  - `GraphicsAPI::Metal`: Metal, on macOS
   - `GraphicsAPI::SDLGPU`: SDL3's GPU API, on the driver SDL picks (`SDLGPUGraphicsContext::SetDriver`
     picks one: `"vulkan"` or `"direct3d12"`)
   - `GraphicsAPI::None`: no GPU, the null backend, which draws nothing
@@ -209,11 +213,13 @@ add_custom_command(TARGET my_app POST_BUILD
   - the shaders are in `workdirectory/shaders`
     - they're written in [Slang](https://shader-slang.org/): one `*_shader.slang` file per
       primitive kind, with its `vertexMain` and `fragmentMain`
-    - each backend gets its own build of them: SPIR-V for Vulkan, DXIL for Direct3D 12
+    - each backend gets its own build of them: SPIR-V for Vulkan, DXIL for Direct3D 12, Metal
+      Shading Language source for Metal (`.metal`, compiled when the app starts)
     - for example, `box_shader.slang` builds into `box_shader.vert.spv` and
       `box_shader.frag.spv`, and with `TACHYON_D3D12` also `box_shader.vert.dxil` and
       `box_shader.frag.dxil`
-    - `TACHYON_D3D12` picks the Direct3D 12 bindings in them (`all_common.slang`)
+    - `TACHYON_D3D12` and `TACHYON_METAL` pick those APIs' bindings in them (`all_common.slang`,
+      `sdf_color.slang`)
 
 ---
 

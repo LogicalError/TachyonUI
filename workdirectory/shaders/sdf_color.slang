@@ -36,6 +36,41 @@ float4 SampleImage(uint index, float2 uv)
     return image.SampleLevel(nearestRepeat, uv, 0);
 }
 float4 FetchImage(uint index, int2 texel) { return Image(index).Load(int3(texel, 0)); }
+#elif defined(TACHYON_METAL)
+// Every registered image, by its ImageIndex: which sampler it uses (0 nearest repeat, 1 linear
+// repeat, 2 linear clamp to edge), one uint per image, and its texture, an MTLResourceID per
+// image (Metal 3's bindless textures). Declared after all_common.slang's buffers: buffer(8) and
+// buffer(9); the samplers are sampler(0) to sampler(2).
+// Metal takes no pointer to a texture, only to a struct holding one: an argument buffer.
+struct ImageEntry { DescriptorHandle<Texture2D> texture; };   // an MTLResourceID, 8 bytes
+ByteAddressBuffer            imageSamplers;
+StructuredBuffer<ImageEntry> images;
+SamplerState nearestRepeat;
+SamplerState linearRepeat;
+SamplerState linearClamp;
+
+// Metal indexes the handles as they are: no NonUniformResourceIndex.
+Texture2D Image(uint index) { return images[index].texture; }
+
+float2 ImageSize(uint index)
+{
+    uint width, height;
+    Image(index).GetDimensions(width, height);
+    return float2(width, height);
+}
+
+// The base level, as on the other APIs.
+float4 SampleImage(uint index, float2 uv)
+{
+    const Texture2D image   = Image(index);
+    const uint      sampler = imageSamplers.Load(index * 4);
+    if (sampler == 1)
+        return image.SampleLevel(linearRepeat, uv, 0);
+    if (sampler == 2)
+        return image.SampleLevel(linearClamp, uv, 0);
+    return image.SampleLevel(nearestRepeat, uv, 0);
+}
+float4 FetchImage(uint index, int2 texel) { return Image(index).Load(int3(texel, 0)); }
 #elif defined(TACHYON_SDLGPU)
 // SDL GPU binds 16 images a draw, each its own binding (set or space as all_common.slang says),
 // with its own sampler: the draw's images, whose image slots pc.imageSlots holds. An image

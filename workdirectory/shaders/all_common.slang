@@ -178,6 +178,47 @@ ColorStyle LoadColorStyle(int index) { return colorStyles.Load<ColorStyle>(uint(
 
 struct VertexInput { uint id : SV_VertexID; };
 int VertexIndex(VertexInput input) { return input.id + int(pc.firstVertex); }
+#elif defined(TACHYON_METAL)
+// Metal: as Direct3D 12's, the matrix, the time and the draw's first vertex as constants, and the
+// primitive and style buffers bound per draw, each at the offset its data starts. slangc numbers
+// Metal's buffers in the order they're declared, here and in sdf_color.slang: the backend binds
+// them by those numbers (metal_device.h, namespace binding), so keep the order.
+struct PushConstants
+{
+    float4 worldColumns[4];
+    float  elapsedTime;   // seconds since app start
+    uint   firstVertex;   // the draw's first vertex: SV_VertexID starts at 0
+    uint2  _pad;
+};
+ConstantBuffer<PushConstants> pc;   // buffer(0)
+
+ByteAddressBuffer boxBuffer;        // buffer(1)
+ByteAddressBuffer glyphBuffer;      // buffer(2)
+ByteAddressBuffer dotBuffer;        // buffer(3)
+ByteAddressBuffer lineBuffer;       // buffer(4)
+ByteAddressBuffer triangleBuffer;   // buffer(5)
+ByteAddressBuffer boxStyles;        // buffer(6)
+ByteAddressBuffer colorStyles;      // buffer(7)
+
+// The `index`-th primitive of type T in slot `slot`. Callers pass a constant slot, so the
+// switch folds away.
+T LoadPrimitive<T>(int slot, int index)
+{
+    const uint offset = uint(index) * sizeof(T);
+    switch (slot)
+    {
+    case kBoxSlot:   return boxBuffer.Load<T>(offset);
+    case kGlyphSlot: return glyphBuffer.Load<T>(offset);
+    case kDotSlot:   return dotBuffer.Load<T>(offset);
+    case kLineSlot:  return lineBuffer.Load<T>(offset);
+    default:         return triangleBuffer.Load<T>(offset);
+    }
+}
+BoxStyle   LoadBoxStyle(int index)   { return boxStyles.Load<BoxStyle>(uint(index) * sizeof(BoxStyle)); }
+ColorStyle LoadColorStyle(int index) { return colorStyles.Load<ColorStyle>(uint(index) * sizeof(ColorStyle)); }
+
+struct VertexInput { uint id : SV_VertexID; };
+int VertexIndex(VertexInput input) { return input.id + int(pc.firstVertex); }
 #elif defined(TACHYON_SDLGPU)
 // SDL GPU: each stage's resources where SDL puts them, the vertex stage's in set 0 / space0
 // (its uniforms set 1 / space1), the fragment stage's in set 2 / space2 (set 3 / space3). The
