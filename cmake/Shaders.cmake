@@ -1,6 +1,7 @@
 # Compiles the Slang shaders under workdirectory/shaders for each graphics backend built in, to
 # ${PROJECT_BINARY_DIR}/shaders (SHADER_BINARY_FILES), which gui_core compiles in: SPIR-V
-# (.spv) for Vulkan, DXIL (.dxil) for Direct3D 12, both again for SDL GPU (.sdl.spv, .sdl.dxil). Creates the `tachyon_shaders` custom target
+# (.spv) for Vulkan, DXIL (.dxil) for Direct3D 12, Metal Shading Language source (.metal) for Metal,
+# and again for SDL GPU (.sdl.spv, .sdl.dxil, .sdl.metal). Creates the `tachyon_shaders` custom target
 # that gui_core depends on; inside another project also `tachyon_resources`, which copies the
 # optional resources (themes, fonts, icons) into the build tree.
 
@@ -11,10 +12,16 @@ endif()
 if(TACHYON_D3D12)
   list(APPEND TACHYON_SHADER_TARGETS dxil)
 endif()
+if(TACHYON_METAL)
+  list(APPEND TACHYON_SHADER_TARGETS metal)
+endif()
 if(TACHYON_SDLGPU)
   list(APPEND TACHYON_SHADER_TARGETS sdl-spirv)
   if(WIN32)
     list(APPEND TACHYON_SHADER_TARGETS sdl-dxil)
+  endif()
+  if(APPLE)
+    list(APPEND TACHYON_SHADER_TARGETS sdl-metal)
   endif()
 endif()
 
@@ -22,7 +29,7 @@ if(TACHYON_SHADER_TARGETS)
   # Older Slang has no SV_VulkanVertexID, and its SV_VertexID differs between versions.
   set(TACHYON_SLANG_MIN_VERSION 2026.1)
   find_program(SLANGC slangc
-    HINTS $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/bin/ /usr/bin /usr/local/bin)
+    HINTS $ENV{VULKAN_SDK}/Bin/ $ENV{VULKAN_SDK}/bin/ /usr/bin /usr/local/bin /opt/homebrew/bin)
   if(NOT SLANGC)
     message(FATAL_ERROR
       "slangc not found. Install the Vulkan SDK (and set VULKAN_SDK) or a Slang release "
@@ -37,10 +44,10 @@ if(TACHYON_SHADER_TARGETS)
   endif()
 endif()
 
-# tachyon_compile_slang(<module.slang> <output dir> <list var> <spirv|dxil|sdl-spirv|sdl-dxil>
+# tachyon_compile_slang(<module.slang> <output dir> <list var> <spirv|dxil|metal|sdl-spirv|sdl-dxil|sdl-metal>
 #                       [DEPENDS <include>...])
 # Compiles the module's vertexMain and fragmentMain for a backend, to <output dir>/<name>.vert.spv
-# and <name>.frag.spv (.dxil, .sdl.spv, .sdl.dxil), and appends both to <list var>.
+# and <name>.frag.spv (.dxil, .metal, .sdl.spv, .sdl.dxil, .sdl.metal), and appends both to <list var>.
 function(tachyon_compile_slang SOURCE OUTPUT_DIR LIST_VAR SHADER_TARGET)
   cmake_parse_arguments(PARSE_ARGV 4 ARG "" "" "DEPENDS")
   if(SHADER_TARGET STREQUAL "spirv")
@@ -49,6 +56,8 @@ function(tachyon_compile_slang SOURCE OUTPUT_DIR LIST_VAR SHADER_TARGET)
     set(_extension sdl.spv)
   elseif(SHADER_TARGET STREQUAL "sdl-dxil")
     set(_extension sdl.dxil)
+  elseif(SHADER_TARGET STREQUAL "sdl-metal")
+    set(_extension sdl.metal)
   else()
     set(_extension ${SHADER_TARGET})
   endif()

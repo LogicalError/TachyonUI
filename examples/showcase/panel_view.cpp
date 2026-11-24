@@ -15,6 +15,9 @@
 #if TACHYON_SDLGPU
 #include <gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h>
 #endif
+#if TACHYON_METAL
+#include <gui_core/graphics/metal/metal_graphics_context.h>
+#endif
 
 //
 // Viewport panel: the scene through a camera of the panel's own, framed by a toolbar dock
@@ -135,6 +138,10 @@ namespace tachyon
 #endif
 #if TACHYON_SDLGPU
             if (const auto* state = ctx.scene.As<sdlgpu::SDLGPUSceneRender>())
+                sceneRenderer.Render(*state, ctx, sceneObjects, sceneSelected);
+#endif
+#if TACHYON_METAL
+            if (const auto* state = ctx.scene.As<metal::MetalSceneRender>())
                 sceneRenderer.Render(*state, ctx, sceneObjects, sceneSelected);
 #endif
             (void)ctx;

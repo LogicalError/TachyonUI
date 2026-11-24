@@ -9,17 +9,18 @@
 namespace tachyon
 {
     /// The graphics API a backend presents with; window backends create their
-    /// windows to match (SDL: SDL_WINDOW_VULKAN).
+    /// windows to match (SDL: SDL_WINDOW_VULKAN, SDL_WINDOW_METAL).
     enum class GraphicsAPI : uint8_t
     {
         None,       ///< nothing is presented (NullGraphicsContext)
         Vulkan,
         D3D12,      ///< Direct3D 12, on Windows
         SDLGPU,     ///< SDL3's GPU API, over Vulkan, Direct3D 12 or Metal as SDL picks
+        Metal,      ///< Metal, on macOS
     };
 
-    /// The API's name as shown to people: "Vulkan", "Direct3D 12", "SDL GPU", or "No GPU" for
-    /// None.
+    /// The API's name as shown to people: "Vulkan", "Direct3D 12", "SDL GPU", "Metal", or "No
+    /// GPU" for None.
     constexpr std::string_view GraphicsAPIName(GraphicsAPI api)
     {
         switch (api)
@@ -27,6 +28,7 @@ namespace tachyon
         case GraphicsAPI::Vulkan: return "Vulkan";
         case GraphicsAPI::D3D12:  return "Direct3D 12";
         case GraphicsAPI::SDLGPU: return "SDL GPU";
+        case GraphicsAPI::Metal:  return "Metal";
         default:                  return "No GPU";
         }
     }

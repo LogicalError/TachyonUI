@@ -11,6 +11,12 @@ if(POLICY CMP0147)
   cmake_policy(SET CMP0147 NEW)
 endif()
 
+# macOS 13.3 or newer: the Metal backend's bindless textures (MTLResourceID) are Metal 3's, and
+# std::to_chars for floating point is 13.3's.
+if(APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "The oldest macOS the programs run on")
+endif()
+
 set(TACHYON_VERSION 0.1.0)
 project(TachyonUI VERSION ${TACHYON_VERSION} LANGUAGES CXX)
 
@@ -66,24 +72,42 @@ option(TACHYON_FALLBACK_FONTS "Ship the optional Noto fallback fonts with the re
 # included) must call SetResourceRoot with a folder that holds themes/ and fonts/.
 option(TACHYON_EMBED_RESOURCES "Compile the default themes and fonts into the library" ON)
 
-# The graphics backends built in. Vulkan is the default; an app picks Direct3D 12 (Windows
-# only) or SDL GPU with InitializeOptions::graphicsAPI. With none, the app runs on the null
-# backend (no GPU, nothing drawn).
-option(TACHYON_VULKAN "Build the Vulkan graphics backend" ON)
+# The graphics backends built in. Vulkan is the default, and Metal on macOS; an app picks
+# another (Direct3D 12 on Windows, Vulkan through MoltenVK on macOS, SDL GPU) with
+# InitializeOptions::graphicsAPI. With none, the app runs on the null backend (no GPU, nothing
+# drawn).
+if(APPLE)
+  # Metal needs no SDK beyond Xcode's or the Command Line Tools'; Vulkan needs MoltenVK.
+  option(TACHYON_METAL "Build the Metal graphics backend (macOS)" ON)
+  option(TACHYON_VULKAN "Build the Vulkan graphics backend (through MoltenVK on macOS)" OFF)
+else()
+  set(TACHYON_METAL OFF)
+  option(TACHYON_VULKAN "Build the Vulkan graphics backend" ON)
+endif()
 if(WIN32)
   option(TACHYON_D3D12 "Build the Direct3D 12 graphics backend" OFF)
 else()
   set(TACHYON_D3D12 OFF)
 endif()
-# SDL3's GPU API, over Vulkan, Direct3D 12 or Metal. It's on its way: so far it starts its
-# device and presents its windows, without drawing the UI. It needs SDL (TACHYON_SDL).
-option(TACHYON_SDLGPU "Build the SDL GPU graphics backend (over Vulkan or Direct3D 12)" OFF)
+if(APPLE)
+  # The Metal backend and the SDL backend's macOS window code are Objective-C++ (.mm).
+  enable_language(OBJCXX)
+  set(CMAKE_OBJCXX_STANDARD 20)
+  set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+  set(CMAKE_OBJCXX_EXTENSIONS OFF)
+endif()
+# SDL3's GPU API, over Vulkan, Direct3D 12 or Metal. It needs SDL (TACHYON_SDL).
+option(TACHYON_SDLGPU "Build the SDL GPU graphics backend (over Vulkan, Direct3D 12 or Metal)" OFF)
 if(TACHYON_SDLGPU AND NOT TACHYON_SDL)
   message(FATAL_ERROR "TACHYON_SDLGPU needs TACHYON_SDL")
 endif()
 
-if(TACHYON_VULKAN OR TACHYON_SDLGPU)
+if(TACHYON_VULKAN)
   find_package(Vulkan REQUIRED)
+elseif(TACHYON_SDLGPU)
+  # SDL GPU names its Vulkan driver's options with Vulkan's structs: the headers only. Without
+  # the Vulkan SDK (macOS, on Metal) gui_core takes the copy SDL carries.
+  find_package(Vulkan QUIET)
 endif()
 
 include(CompilerOptions)

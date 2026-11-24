@@ -272,6 +272,19 @@ if(TACHYON_SDLGPU)
     gui_core/graphics/sdlgpu/sdlgpu_window_context.h)
 endif()
 
+# The Metal backend (TACHYON_METAL, macOS), in Objective-C++.
+if(TACHYON_METAL)
+  list(APPEND GUI_FILES
+    gui_core/graphics/metal/metal_device.h
+    gui_core/graphics/metal/metal_device.mm
+    gui_core/graphics/metal/metal_graphics_context.h
+    gui_core/graphics/metal/metal_graphics_context.mm
+    gui_core/graphics/metal/metal_rhi.h
+    gui_core/graphics/metal/metal_rhi.mm
+    gui_core/graphics/metal/metal_window_context.h
+    gui_core/graphics/metal/metal_window_context.mm)
+endif()
+
 # Create GUI static library
 # The SDL window backend and clipboard (TACHYON_SDL).
 if(TACHYON_SDL)
@@ -285,6 +298,11 @@ if(TACHYON_SDL)
     gui_core/windows/sdl/gui_window_backend_sdl.h
     gui_core/windows/sdl/gui_sdl_clipboard.cpp
     gui_core/windows/sdl/gui_sdl_clipboard.h)
+  if(APPLE)
+    list(APPEND GUI_FILES
+      gui_core/windows/sdl/gui_window_backend_sdl_cocoa.h
+      gui_core/windows/sdl/gui_window_backend_sdl_cocoa.mm)
+  endif()
 endif()
 
 # Files compiled into gui_core: the default themes and fonts (TACHYON_EMBED_RESOURCES), and
@@ -357,16 +375,32 @@ endif()
 if(TACHYON_D3D12)
   target_link_libraries(gui_core PRIVATE d3d12 dxgi d3d12ma)
 endif()
+if(APPLE)
+  # Automatic reference counting for the Objective-C objects (the Metal backend, the SDL
+  # backend's macOS windows). The frameworks are PUBLIC: the static library's users link them too.
+  target_compile_options(gui_core PRIVATE $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
+  target_link_libraries(gui_core PUBLIC "-framework AppKit" "-framework Foundation")
+endif()
+if(TACHYON_METAL)
+  target_link_libraries(gui_core PUBLIC "-framework Metal" "-framework QuartzCore")
+endif()
 if(TACHYON_SDLGPU)
   # Its Vulkan options (SDL_GPUVulkanOptions) are Vulkan's feature structs: the headers only.
   # SDL's headers are PUBLIC, as the public SDL GPU header holds SDL's types
   # (SDLGPUSceneRender, the host's device and textures).
-  target_link_libraries(gui_core PRIVATE Vulkan::Headers PUBLIC SDL3::Headers)
+  target_link_libraries(gui_core PUBLIC SDL3::Headers)
+  if(TARGET Vulkan::Headers)
+    target_link_libraries(gui_core PRIVATE Vulkan::Headers)
+  else()
+    target_include_directories(gui_core SYSTEM PRIVATE
+      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/SDL/src/video/khronos>)
+  endif()
 endif()
 # The graphics backends built in, 0 or 1 each, for code that uses one only when it's there.
 target_compile_definitions(gui_core PUBLIC
   TACHYON_VULKAN=$<BOOL:${TACHYON_VULKAN}>
   TACHYON_D3D12=$<BOOL:${TACHYON_D3D12}>
+  TACHYON_METAL=$<BOOL:${TACHYON_METAL}>
   TACHYON_SDLGPU=$<BOOL:${TACHYON_SDLGPU}>)
 # nanosvg is header-only, included from the third-party cache, whose headers the build
 # doesn't track: the one file that compiles it is rebuilt when the cache's copy changes.

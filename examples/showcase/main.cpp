@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
     //                     <folder>/<theme>/<Panel>.png, and quits.
     // --bench <frames>: draws every frame with the profiler on, prints each scope's mean
     //                   time per frame over <frames> frames, and quits.
-    // --graphics <api>: render with vulkan, d3d12, sdlgpu or none (no GPU); the default backend
+    // --graphics <api>: render with vulkan, d3d12, metal, sdlgpu or none (no GPU); the default backend
     //                   without it.
     tachyon::GUIApplication::InitializeOptions initializeOptions;
     for (int i = 1; i + 1 < argc; ++i)
@@ -65,6 +65,7 @@ int main(int argc, char* argv[])
             const std::string_view api = argv[i + 1];
             if (api == "vulkan")      initializeOptions.graphicsAPI = tachyon::GraphicsAPI::Vulkan;
             else if (api == "d3d12")  initializeOptions.graphicsAPI = tachyon::GraphicsAPI::D3D12;
+            else if (api == "metal")  initializeOptions.graphicsAPI = tachyon::GraphicsAPI::Metal;
             else if (api == "sdlgpu") initializeOptions.graphicsAPI = tachyon::GraphicsAPI::SDLGPU;
             else if (api == "none")   initializeOptions.graphicsAPI = tachyon::GraphicsAPI::None;
             else TACHYON_LOG_WARNING(kLogShowcase, "--graphics {}: not vulkan, d3d12, sdlgpu or none (ignored)", api);

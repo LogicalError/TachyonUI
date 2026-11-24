@@ -342,7 +342,8 @@ jobs:
           xvfb-run -a "${{ runner.temp }}/consumer/package_consumer"
 
   macos:
-    # Untested on a Mac (#60): builds against MoltenVK and runs the headless tests.
+    # Builds the Metal backend (the default on macOS) and runs the headless tests; the runner
+    # has no display for the GPU tests.
     runs-on: macos-15
     timeout-minutes: 90   # a hang fails here, not at the runner's 6 hours
     steps:
@@ -367,7 +368,7 @@ jobs:
           key: ${{ steps.lfs-cache.outputs.cache-primary-key }}
 
       - name: Packages
-        run: brew install ninja vulkan-headers vulkan-loader molten-vk
+        run: brew install ninja
 
       - id: slang-cache
         uses: actions/cache@v6.1.0
@@ -390,7 +391,8 @@ jobs:
           key: third-party-macos-${{ hashFiles('.submodules-id', 'third_party/CMakeLists.txt', 'third_party/nanosvg/CMakeLists.txt', 'cmake/ThirdPartyCache.cmake') }}
 
       - name: Configure
-        run: cmake -S . -B build -G "Ninja Multi-Config" "-DCMAKE_PREFIX_PATH=$(brew --prefix)" "-DSLANGC=$(find "${{ runner.temp }}/slang" -name slangc -type f | head -n 1)"
+        # SDL GPU too, so its Metal shaders (.sdl.metal) are built.
+        run: cmake -S . -B build -G "Ninja Multi-Config" -DTACHYON_SDLGPU=ON "-DCMAKE_PREFIX_PATH=$(brew --prefix)" "-DSLANGC=$(find "${{ runner.temp }}/slang" -name slangc -type f | head -n 1)"
       - if: steps.third-party-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6.1.0
         with:
@@ -402,7 +404,7 @@ jobs:
       - name: Build Release
         run: cmake --build build --config Release --parallel
 
-      # No GPU tests: the runner has no display, and the GUI is untested on a Mac.
+      # No GPU tests: the runner has no display.
       - name: Core tests (Debug)
         run: bin/Debug/gui_core_tests
       - name: Core tests (Release)

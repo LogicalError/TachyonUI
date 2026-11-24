@@ -261,7 +261,7 @@ function(tachyon_add_gpu_tests target)
   )
 endfunction()
 
-if(TACHYON_SDL AND (TACHYON_VULKAN OR TACHYON_D3D12))
+if(TACHYON_SDL AND (TACHYON_VULKAN OR TACHYON_D3D12 OR TACHYON_METAL))
   tachyon_add_gpu_tests(gui_gpu_tests
     gpu/gpu_device.h
     gpu/gpu_injected_input.h

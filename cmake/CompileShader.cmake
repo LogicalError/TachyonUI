@@ -3,16 +3,21 @@
 # and this script. Visual Studio runs custom build steps once per configuration and CI restores
 # compiled shaders from a cache; this keeps both from recompiling.
 #   cmake -DSLANGC=<slangc> -DSOURCE=<module.slang> -DOUTPUT_DIR=<dir> -DNAME=<name>
-#         -DSHADER_TARGET=<spirv|dxil|sdl-spirv|sdl-dxil> -DINCLUDES=<a|b|...> -P CompileShader.cmake
+#         -DSHADER_TARGET=<spirv|dxil|metal|sdl-spirv|sdl-dxil|sdl-metal> -DINCLUDES=<a|b|...> -P CompileShader.cmake
 #
 # spirv (Vulkan): SPIR-V 1.6, Vulkan 1.3's. Warning 41012 says the profile widens to every
 #   capability a texture's methods could need (sparse residency, min LOD, ...); only those the
 #   shader uses are emitted, so it is off.
 # dxil (Direct3D 12): Shader Model 6.6, for its descriptor heap indexing. D3D12 runs only signed
 #   DXIL, so an unsigned result (a compiler without a validator) fails the build.
+# metal (Metal): Metal Shading Language source, which the backend compiles when it starts
+#   (MTLDevice newLibraryWithSource), so the build needs no Xcode, only slangc.
 # sdl-spirv, sdl-dxil (SDL GPU, .sdl.spv and .sdl.dxil): the resources where SDL GPU binds them,
 #   the fragment stage's apart from the vertex stage's (TACHYON_SDLGPU_FRAGMENT). SPIR-V 1.3,
 #   the lowest Slang emits (Vulkan 1.1); Shader Model 6.2, the lowest with 16-bit types.
+# sdl-metal (SDL GPU on macOS, .sdl.metal): Metal Shading Language source with the resources in
+#   the slots SDL's Metal driver binds them to (TACHYON_SDLGPU_METAL), compiled by SDL when it
+#   makes the shader.
 
 if(SHADER_TARGET STREQUAL "spirv")
   set(_extension spv)
@@ -20,14 +25,20 @@ if(SHADER_TARGET STREQUAL "spirv")
 elseif(SHADER_TARGET STREQUAL "dxil")
   set(_extension dxil)
   set(_flags -target dxil -profile sm_6_6 -DTACHYON_D3D12)
+elseif(SHADER_TARGET STREQUAL "metal")
+  set(_extension metal)
+  set(_flags -target metal -DTACHYON_METAL)
 elseif(SHADER_TARGET STREQUAL "sdl-spirv")
   set(_extension sdl.spv)
   set(_flags -target spirv -profile spirv_1_3 -warnings-disable 41012 -DTACHYON_SDLGPU -DTACHYON_SDLGPU_SPIRV)
 elseif(SHADER_TARGET STREQUAL "sdl-dxil")
   set(_extension sdl.dxil)
   set(_flags -target dxil -profile sm_6_2 -DTACHYON_SDLGPU)
+elseif(SHADER_TARGET STREQUAL "sdl-metal")
+  set(_extension sdl.metal)
+  set(_flags -target metal -DTACHYON_SDLGPU -DTACHYON_SDLGPU_METAL)
 else()
-  message(FATAL_ERROR "CompileShader.cmake: SHADER_TARGET must be spirv, dxil, sdl-spirv or sdl-dxil, not '${SHADER_TARGET}'")
+  message(FATAL_ERROR "CompileShader.cmake: SHADER_TARGET must be spirv, dxil, metal, sdl-spirv, sdl-dxil or sdl-metal, not '${SHADER_TARGET}'")
 endif()
 
 string(REPLACE "|" ";" _includes "${INCLUDES}")

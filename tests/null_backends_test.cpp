@@ -79,9 +79,11 @@ namespace
 
     TEST(GraphicsAPIChoice, AnAPIThatIsntBuiltInFailsToStart)
     {
-        for (const tachyon::GraphicsAPI api : { tachyon::GraphicsAPI::Vulkan, tachyon::GraphicsAPI::D3D12 })
+        for (const tachyon::GraphicsAPI api : { tachyon::GraphicsAPI::Vulkan, tachyon::GraphicsAPI::D3D12, tachyon::GraphicsAPI::Metal })
         {
-            const bool builtIn = api == tachyon::GraphicsAPI::Vulkan ? TACHYON_VULKAN : TACHYON_D3D12;
+            const bool builtIn = api == tachyon::GraphicsAPI::Vulkan ? TACHYON_VULKAN
+                               : api == tachyon::GraphicsAPI::D3D12  ? TACHYON_D3D12
+                                                                     : TACHYON_METAL;
             EXPECT_EQ(tachyon::CreateGraphicsContext(api) != nullptr, builtIn) << tachyon::GraphicsAPIName(api);
             if (builtIn)
             {
@@ -95,8 +97,8 @@ namespace
             const tachyon::Result<void> result = app.Initialize(options);
             ASSERT_FALSE(result) << tachyon::GraphicsAPIName(api);
             EXPECT_EQ(result.GetError().code, tachyon::ErrorCode::Unsupported);
-            EXPECT_NE(result.GetError().message.find(api == tachyon::GraphicsAPI::Vulkan ? "TACHYON_VULKAN" : "TACHYON_D3D12"),
-                      std::string::npos) << result.GetError().message;
+            EXPECT_NE(result.GetError().message.find(tachyon::GraphicsAPIBuildOption(api)), std::string::npos)
+                << result.GetError().message;
             app.Cleanup();
         }
     }
@@ -107,6 +109,17 @@ namespace
         EXPECT_EQ(tachyon::GraphicsAPIName(tachyon::GraphicsAPI::None), "No GPU");
         EXPECT_EQ(tachyon::GraphicsAPIName(tachyon::GraphicsAPI::Vulkan), "Vulkan");
         EXPECT_EQ(tachyon::GraphicsAPIName(tachyon::GraphicsAPI::D3D12), "Direct3D 12");
+        EXPECT_EQ(tachyon::GraphicsAPIName(tachyon::GraphicsAPI::Metal), "Metal");
+        EXPECT_EQ(tachyon::GraphicsAPIBuildOption(tachyon::GraphicsAPI::Metal), "TACHYON_METAL");
+    }
+
+    // The default backend: Metal where it's built in (macOS), else Vulkan, else none.
+    TEST(GraphicsAPIChoice, TheDefaultIsMetalThenVulkan)
+    {
+        const tachyon::GraphicsAPI expected = TACHYON_METAL  ? tachyon::GraphicsAPI::Metal
+                                            : TACHYON_VULKAN ? tachyon::GraphicsAPI::Vulkan
+                                                             : tachyon::GraphicsAPI::None;
+        EXPECT_EQ(tachyon::CreateDefaultGraphicsContext()->GetAPI(), expected);
     }
 
     TEST(NullBackends, RunsTheApplicationWithoutAGPU)

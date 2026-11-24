@@ -18,15 +18,18 @@ options.graphicsAPI = tachyon::GraphicsAPI::SDLGPU;
 app.Initialize(options);
 ```
 
-- SDL picks the driver: Vulkan or Direct3D 12.
+- SDL picks the driver: Vulkan or Direct3D 12, or Metal on macOS.
   - `SDLGPUGraphicsContext::SetDriver("direct3d12")` asks for one, before `Initialize`.
   - So does SDL's `SDL_GPU_DRIVER` environment variable, for example `SDL_GPU_DRIVER=vulkan`.
-- Metal (macOS) isn't supported yet: the GUI's shaders aren't built for it.
+- On Metal the GUI's shaders are Metal source, which SDL compiles when it makes them. A host
+  device must accept `SDL_GPU_SHADERFORMAT_MSL` (`ApplyDeviceRequirements` asks for it on macOS).
+- On macOS the native Metal backend (`GraphicsAPI::Metal`) is the default; SDL GPU is for an app
+  that already renders with SDL GPU.
 
 ## Device requirements
 
-- The GUI's shaders are built as SPIR-V (for Vulkan) and, on Windows, DXIL (for Direct3D 12).
-  The device must take one of them.
+- The GUI's shaders are built as SPIR-V (for Vulkan), on Windows DXIL (for Direct3D 12), and on
+  macOS Metal source (MSL, for Metal). The device must take one of them.
 - On Vulkan, the shaders use features SDL doesn't turn on by itself:
   - 16-bit storage and 16-bit types
   - draw parameters

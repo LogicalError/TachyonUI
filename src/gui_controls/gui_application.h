@@ -171,8 +171,8 @@ namespace tachyon
         /// GPU's number in the log's list, or part of its name (GraphicsContext::SetGpuPreference).
         /// Empty: the backend's choice, a discrete GPU first. TACHYON_GPU takes its place when set.
         std::string_view gpu {};
-        /// The graphics API to render with. Empty: the default (Vulkan). GraphicsAPI::None:
-        /// no GPU, the null backend. An API that isn't built in fails Initialize; one whose
+        /// The graphics API to render with. Empty: the default (Metal on macOS, else Vulkan).
+        /// GraphicsAPI::None: no GPU, the null backend. An API that isn't built in fails Initialize; one whose
         /// device can't start (Direct3D 12 without its runtime) falls back to the default,
         /// with a warning. A backend set with SetGraphicsBackend takes its place.
         std::optional<GraphicsAPI> graphicsAPI {};

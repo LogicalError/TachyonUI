@@ -21,7 +21,8 @@ namespace tachyon::sdlgpu
         {
             const bool spirv = d.shaderFormat == SDL_GPU_SHADERFORMAT_SPIRV;
             const bool vertex = stage == SDL_GPU_SHADERSTAGE_VERTEX;
-            const std::string name = std::string(baseName) + (vertex ? ".vert" : ".frag") + (spirv ? ".sdl.spv" : ".sdl.dxil");
+            const char* extension = spirv ? ".sdl.spv" : d.shaderFormat == SDL_GPU_SHADERFORMAT_MSL ? ".sdl.metal" : ".sdl.dxil";
+            const std::string name = std::string(baseName) + (vertex ? ".vert" : ".frag") + extension;
             const std::span<const std::byte> code = detail::FindEmbeddedFile(detail::EmbeddedShaderFiles(), name);
             if (code.empty())
             {
@@ -31,7 +32,7 @@ namespace tachyon::sdlgpu
             SDL_GPUShaderCreateInfo info{};
             info.code_size           = code.size();
             info.code                = reinterpret_cast<const Uint8*>(code.data());
-            // Slang names SPIR-V's entry point main, and keeps DXIL's.
+            // Slang names SPIR-V's entry point main, and keeps DXIL's and Metal's.
             info.entrypoint          = spirv ? "main" : vertex ? "vertexMain" : "fragmentMain";
             info.format              = d.shaderFormat;
             info.stage               = stage;

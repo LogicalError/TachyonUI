@@ -11,6 +11,9 @@
 #if TACHYON_SDLGPU
 #include <gui_core/graphics/sdlgpu/sdlgpu_graphics_context.h>
 #endif
+#if TACHYON_METAL
+#include <gui_core/graphics/metal/metal_graphics_context.h>
+#endif
 
 namespace tachyon
 {
@@ -32,6 +35,10 @@ namespace tachyon
         case GraphicsAPI::SDLGPU:
             return std::make_unique<sdlgpu::SDLGPUGraphicsContext>();
 #endif
+#if TACHYON_METAL
+        case GraphicsAPI::Metal:
+            return std::make_unique<metal::MetalGraphicsContext>();
+#endif
         default:
             return nullptr;
         }
@@ -49,6 +56,7 @@ namespace tachyon
             case GraphicsAPI::Vulkan: return TACHYON_VULKAN != 0;
             case GraphicsAPI::D3D12:  return TACHYON_D3D12 != 0;
             case GraphicsAPI::SDLGPU: return TACHYON_SDLGPU != 0;
+            case GraphicsAPI::Metal:  return TACHYON_METAL != 0;
             default:                  return false;
             }
         }
@@ -56,7 +64,11 @@ namespace tachyon
 
     std::unique_ptr<GraphicsContext> CreateDefaultGraphicsContext()
     {
-        return CreateGraphicsContext(g_defaultOverride.value_or(TACHYON_VULKAN ? GraphicsAPI::Vulkan : GraphicsAPI::None));
+        // Metal where it's built in (macOS), then Vulkan.
+        constexpr GraphicsAPI kBuiltInDefault = TACHYON_METAL  ? GraphicsAPI::Metal
+                                              : TACHYON_VULKAN ? GraphicsAPI::Vulkan
+                                                               : GraphicsAPI::None;
+        return CreateGraphicsContext(g_defaultOverride.value_or(kBuiltInDefault));
     }
 
     bool SetDefaultGraphicsAPIOverride(std::optional<GraphicsAPI> api)
@@ -75,6 +87,7 @@ namespace tachyon
         case GraphicsAPI::Vulkan: return "TACHYON_VULKAN";
         case GraphicsAPI::D3D12:  return "TACHYON_D3D12";
         case GraphicsAPI::SDLGPU: return "TACHYON_SDLGPU";
+        case GraphicsAPI::Metal:  return "TACHYON_METAL";
         default:                  return {};
         }
     }
