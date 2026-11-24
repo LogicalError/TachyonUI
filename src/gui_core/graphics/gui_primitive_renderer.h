@@ -275,9 +275,10 @@ namespace tachyon
             return resizingTarget != nullptr;
         }
 
+        // The target may be gone already: the frame a live resize runs can close its window,
+        // and ReleaseTarget lets go of it then.
         void StopResizing() override
         {
-            assert(resizingTarget != nullptr);
             resizingTarget = nullptr;
         }
 

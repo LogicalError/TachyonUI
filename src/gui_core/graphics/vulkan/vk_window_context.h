@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <memory>
 
 #include <gui_core/windows/gui_window_backend.h>
 #include <gui_core/windows/gui_os_window_manager.h>
@@ -94,6 +95,9 @@ namespace tachyon::vulkan
         tachyon::OSWindowHandle      osHandle { nullptr };
         void*                    nativeHandle { nullptr };
         tachyon::OnGuiFunc           onGui{};
+        /// False once the context is deleted: a live resize's onGui runs a whole app frame,
+        /// which may close this very window (a drag preview whose drag ended).
+        std::shared_ptr<bool>        alive = std::make_shared<bool>(true);
 
         tachyon::WindowFlags         windowFlags = tachyon::WindowFlags::None;
                                  
@@ -184,6 +188,7 @@ namespace tachyon::vulkan
 
         static VulkanWindowContext* Create(tachyon::ID id, void* nativeHandle, tachyon::OSWindowHandle osHandle, tachyon::int2 size, tachyon::WindowFlags windowFlags, VulkanDeviceContext* deviceContext, tachyon::OnGuiFunc onGUI);
         void Destroy();
+        ~VulkanWindowContext() override { *alive = false; }
 
 
         tachyon::ID GetID() const override { return id; }
@@ -194,7 +199,8 @@ namespace tachyon::vulkan
         /// The last presented frame's wait on the swapchain, in seconds (PresentWindowFrame's).
         double LastSwapchainWaitSeconds() const { return lastSwapchainWaitSeconds; }
         bool NeedsRecord() const override { return resize_requested; }
-        void RecordFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing);
+        /// False when the frame a live resize ran deleted this context: nothing of it may be used then.
+        bool RecordFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing);
         
         void UpdateTransparentWindow() override;
 

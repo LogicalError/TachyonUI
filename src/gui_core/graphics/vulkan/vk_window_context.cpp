@@ -791,8 +791,8 @@ void VulkanWindowContext::UpdateTransparentWindow()
 
 void VulkanWindowContext::RenderWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing)
 {
-    RecordFrame(graphicsContext, rect, resizing);
-    PresentWindowFrame();
+    if (RecordFrame(graphicsContext, rect, resizing))
+        PresentWindowFrame();
 }
 
 void VulkanWindowContext::RecordWindowFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect)
@@ -800,7 +800,7 @@ void VulkanWindowContext::RecordWindowFrame(tachyon::GraphicsContext* graphicsCo
     RecordFrame(graphicsContext, rect, false);
 }
 
-void VulkanWindowContext::RecordFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing)
+bool VulkanWindowContext::RecordFrame(tachyon::GraphicsContext* graphicsContext, tachyon::IntRect rect, bool resizing)
 {
     // A frame recorded and not presented yet (a live-resize redraw in between) goes first,
     // or its acquired image is never given back.
@@ -831,20 +831,26 @@ void VulkanWindowContext::RecordFrame(tachyon::GraphicsContext* graphicsContext,
 
         if (resizing)
         {
+            // onGui runs a whole app frame, which may close this window and delete this
+            // context: only what outlives it is used after it, until `stillAlive` says it's there.
+            const std::shared_ptr<bool> stillAlive = alive;
+            const tachyon::OnGuiFunc    gui        = onGui;   // the context's own copy goes with it
             bool hasResizeTarget = vulkanGraphicsContext->StartResizing(id);
 
             // Resize must update layout immediately, even without a resize target.
             vulkanGraphicsContext->Reset();
 
-            onGui();
+            gui();
 
             // onGui() may have changed VisualColorStyles; re-upload before rendering.
-            vulkanGraphicsContext->RePrepareFrame();
+            if (*stillAlive)
+                vulkanGraphicsContext->RePrepareFrame();
 
+            // The renderer is the graphics context's: StartResizing is always balanced.
             if (hasResizeTarget)
-            {
                 vulkanGraphicsContext->StopResizing();
-            }
+            if (!*stillAlive)
+                return false;
         }
 
         // Resize must also run while frozen: restoring a minimized window is
@@ -891,6 +897,7 @@ void VulkanWindowContext::RecordFrame(tachyon::GraphicsContext* graphicsContext,
             }
         }
     }
+    return true;
 }
 
 VulkanWindowContext* VulkanWindowContext::Create(tachyon::ID id, void* nativeHandle, tachyon::OSWindowHandle osHandle, tachyon::int2 size, tachyon::WindowFlags windowFlags, VulkanDeviceContext* deviceContext, tachyon::OnGuiFunc onGUI)

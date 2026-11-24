@@ -151,8 +151,10 @@ namespace tachyon::metal
 
     void MetalWindowContext::RenderWindowFrame(GraphicsContext*, IntRect rect, bool resizing)
     {
+        const std::shared_ptr<bool> alive = m_alive;   // Record's resize frame may delete this context
         Record(rect, resizing);
-        PresentWindowFrame();
+        if (*alive)
+            PresentWindowFrame();
     }
 
     void MetalWindowContext::RecordWindowFrame(GraphicsContext*, IntRect rect)

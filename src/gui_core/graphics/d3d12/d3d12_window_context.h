@@ -12,6 +12,7 @@
 #include <gui_core/windows/gui_window_backend.h>
 
 #include <array>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -69,6 +70,9 @@ namespace tachyon::d3d12
         ID                          m_id;
         WindowFlags                 m_flags;
         OnGuiFunc                   m_onGui;
+        /// False once the context is deleted: a live resize's onGui runs a whole app frame,
+        /// which may close this very window (a drag preview whose drag ended).
+        std::shared_ptr<bool>       m_alive = std::make_shared<bool>(true);
 
         /// Render-to-image (WindowFlags::RenderToImage): no OS window; its frames are read back
         /// (ReadPixels).

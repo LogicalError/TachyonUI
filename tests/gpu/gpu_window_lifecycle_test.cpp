@@ -1,4 +1,5 @@
 #include "gpu_test_harness.h"
+#include "gpu_draw_app.h"
 #include <atomic>
 #include <string>
 #include <thread>
@@ -945,4 +946,9 @@ TEST_F(GpuTest, FrameBuildTimeIncludesRecordingTheFrame)
     EXPECT_GE(build - addSeconds, renderSeconds * 0.5)
         << "build " << build * 1000.0 << " ms, adding primitives " << addSeconds * 1000.0
         << " ms, recording " << renderSeconds * 1000.0 << " ms";
+}
+
+TEST(VulkanWindowContext, ARedrawThatClosesItsWindowStopsThere)
+{
+    GpuDrawApp::ExpectARedrawThatClosesItsWindowStopsThere(tachyon::GraphicsAPI::Vulkan);
 }
