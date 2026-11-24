@@ -309,6 +309,7 @@ endif()
 if(TACHYON_SDL AND TACHYON_VULKAN)
   tachyon_add_gpu_tests(gui_vulkan_tests
     gpu/gpu_test_harness.h
+    gpu/gpu_draw_app.h
     gpu/gpu_descriptor_test.cpp
     gpu/gpu_image_set_test.cpp
     gpu/gpu_window_lifecycle_test.cpp

@@ -27,3 +27,8 @@ TEST(D3D12Draw, TheUIDrawsAsOnVulkanWithNothingFromTheDebugLayer)
     EXPECT_TRUE(sink.Empty()) << sink.Dump();
     ExpectDrawnAsOnVulkan(drawn);
 }
+
+TEST(D3D12Draw, ARedrawThatClosesItsWindowStopsThere)
+{
+    ExpectARedrawThatClosesItsWindowStopsThere(GraphicsAPI::D3D12);
+}

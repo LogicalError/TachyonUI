@@ -68,6 +68,7 @@ namespace tachyon::sdlgpu
 
     SDLGPUWindowContext::~SDLGPUWindowContext()
     {
+        *m_alive = false;
         SDL_GPUDevice* device = m_device.device;
         if (!m_fences.empty())
         {
@@ -153,8 +154,10 @@ namespace tachyon::sdlgpu
 
     void SDLGPUWindowContext::RenderWindowFrame(GraphicsContext*, IntRect rect, bool resizing)
     {
+        const std::shared_ptr<bool> alive = m_alive;   // Record's resize frame may delete this context
         Record(rect, resizing);
-        PresentWindowFrame();
+        if (*alive)
+            PresentWindowFrame();
     }
 
     void SDLGPUWindowContext::RecordWindowFrame(GraphicsContext*, IntRect rect)
@@ -171,12 +174,20 @@ namespace tachyon::sdlgpu
         auto* renderer = static_cast<PrimitiveRenderer*>(m_graphics.guiRenderer);
         if (resizing && m_onGui && renderer != nullptr)
         {
+            // onGui runs a whole app frame, which may close this window and delete this
+            // context: only what outlives it is used after it, until `alive` says it's there.
+            SDLGPUGraphicsContext&      graphics = m_graphics;   // the backend outlives its windows
+            const std::shared_ptr<bool> alive    = m_alive;
+            const OnGuiFunc             onGui    = m_onGui;      // the context's own copy goes with it
             const bool hasTarget = renderer->StartResizing(m_id);
             renderer->Reset();
-            m_onGui();
-            m_graphics.RePrepareFrame();
+            onGui();
+            if (*alive)
+                graphics.RePrepareFrame();
             if (hasTarget)
-                renderer->StopResizing();
+                renderer->StopResizing();   // the renderer is the backend's: always balanced
+            if (!*alive)
+                return;
         }
         if (!EnsureTargets(uint32_t(rect.w), uint32_t(rect.h)))
             return;

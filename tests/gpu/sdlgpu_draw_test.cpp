@@ -34,5 +34,12 @@ TEST_P(SDLGPUDraw, TheUIDrawsAsOnVulkanWithNothingFromDebugMode)
     ExpectDrawnAsOnVulkan(drawn);
 }
 
+TEST_P(SDLGPUDraw, ARedrawThatClosesItsWindowStopsThere)
+{
+    auto backend = std::make_unique<sdlgpu::SDLGPUGraphicsContext>();
+    backend->SetDriver(GetParam());
+    ExpectARedrawThatClosesItsWindowStopsThere(GraphicsAPI::SDLGPU, std::move(backend));
+}
+
 INSTANTIATE_TEST_SUITE_P(Drivers, SDLGPUDraw, ::testing::ValuesIn(kDrivers),
                          [](const ::testing::TestParamInfo<const char*>& info) { return std::string(info.param); });

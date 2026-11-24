@@ -15,6 +15,7 @@
 #include <gui_core/graphics/sdlgpu/sdlgpu_rhi.h>
 #include <gui_core/windows/gui_window_backend.h>
 
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -60,6 +61,9 @@ namespace tachyon::sdlgpu
         ID                           m_id;
         WindowFlags                  m_flags;
         OnGuiFunc                    m_onGui;
+        /// False once the context is deleted: a live resize's onGui runs a whole app frame,
+        /// which may close this very window (a drag preview whose drag ended).
+        std::shared_ptr<bool>        m_alive = std::make_shared<bool>(true);
         void*                        m_nativeWindow;
         bool                         m_toImage;   ///< WindowFlags::RenderToImage: no OS window, frames read back
         bool                         m_layered;

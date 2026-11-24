@@ -121,6 +121,7 @@ namespace tachyon::d3d12
 
     D3D12WindowContext::~D3D12WindowContext()
     {
+        *m_alive = false;
         // The whole queue, not this window's last submit: a present still uses its buffer after it.
         m_device.WaitIdle();
         ReleaseSizedResources();
@@ -193,8 +194,10 @@ namespace tachyon::d3d12
 
     void D3D12WindowContext::RenderWindowFrame(GraphicsContext*, IntRect rect, bool resizing)
     {
+        const std::shared_ptr<bool> alive = m_alive;   // Record's resize frame may delete this context
         Record(rect, resizing);
-        PresentWindowFrame();
+        if (*alive)
+            PresentWindowFrame();
     }
 
     void D3D12WindowContext::RecordWindowFrame(GraphicsContext*, IntRect rect)
@@ -213,13 +216,21 @@ namespace tachyon::d3d12
         // A live resize lays the window out again at its new size, and its styles may change.
         if (resizing && m_onGui && m_graphics.guiRenderer != nullptr)
         {
-            auto* renderer = static_cast<PrimitiveRenderer*>(m_graphics.guiRenderer);
+            // onGui runs a whole app frame, which may close this window and delete this
+            // context: only what outlives it is used after it, until `alive` says it's there.
+            D3D12GraphicsContext&       graphics = m_graphics;   // the backend outlives its windows
+            auto*                       renderer = static_cast<PrimitiveRenderer*>(graphics.guiRenderer);
+            const std::shared_ptr<bool> alive    = m_alive;
+            const OnGuiFunc             onGui    = m_onGui;      // the context's own copy goes with it
             const bool hasTarget = renderer->StartResizing(m_id);
             renderer->Reset();
-            m_onGui();
-            m_graphics.RePrepareFrame();
+            onGui();
+            if (*alive)
+                graphics.RePrepareFrame();
             if (hasTarget)
-                renderer->StopResizing();
+                renderer->StopResizing();   // the renderer is the backend's: always balanced
+            if (!*alive)
+                return;
         }
 
         Frame& frame = m_frames[m_frameIndex];

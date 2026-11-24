@@ -79,6 +79,75 @@ namespace GpuDrawApp
         }
     };
 
+    // A window and a transparent one beside it, like a drag preview, which its OnGUI stops
+    // declaring once `closePreview` is set.
+    class PreviewApp : public GUIApplicationInternals
+    {
+    public:
+        ID   mainID = ID::Invalid(), previewID = ID::Invalid();
+        bool closePreview = false;
+
+        void OnGUI() override
+        {
+            if (BeginWindow(mainID, "Main", theme.windowStyleRef, LayoutOverride{}.Size(320, 160)))
+                Text(idManager.AllocateDynamicID("label"), "The main window");
+            EndWindow();
+            if (!closePreview)
+            {
+                if (BeginWindow(previewID, theme.windowStyleRef, LayoutOverride{}.Size(120, 40),
+                                ElementFlags::WindowNoCaption | ElementFlags::WindowIsTransparent))
+                    Text(idManager.AllocateDynamicID("preview"), "Preview");
+                EndWindow();
+            }
+        }
+
+        bool Start(GraphicsAPI api, std::unique_ptr<GraphicsContext> backend)
+        {
+            InitializeOptions options;
+            options.graphicsAPI = api;
+            if (backend)
+                SetGraphicsBackend(std::move(backend));
+            if (!Initialize(options) || graphicsContext->GetAPI() != api)
+                return false;
+            mainID    = idManager.CreateStaticID();
+            previewID = idManager.CreateStaticID();
+            transitionManager.SetEnabled(false);
+            SetRedrawMode(RedrawMode::Always);
+            return true;
+        }
+
+        void Frames(int count)
+        {
+            for (int i = 0; i < count && UpdateFrame(); ++i)
+                if (RecordFrame())
+                    PresentFrame();
+        }
+    };
+
+    // A window's live-resize redraw runs a whole app frame, which may close that very window
+    // (a drag preview whose drag ended in it) and delete its context: the redraw stops there,
+    // and the app goes on. Before, the context used itself after it was deleted.
+    inline void ExpectARedrawThatClosesItsWindowStopsThere(GraphicsAPI api, std::unique_ptr<GraphicsContext> backend = {})
+    {
+        PreviewApp app;
+        if (!app.Start(api, std::move(backend)))
+        {
+            app.Cleanup();
+            GTEST_SKIP() << "no window system, or no GPU runs this backend";
+        }
+        app.Frames(4);
+        IWindowContext* preview = app.windowManager->GetWindowContext(app.previewID);
+        ASSERT_NE(preview, nullptr) << "the preview window is open";
+
+        app.closePreview = true;
+        preview->RenderWindowFrame(app.graphicsContext, app.windowManager->GetWindowRect(app.previewID), /*resizing*/ true);
+        EXPECT_EQ(app.windowManager->GetWindowContext(app.previewID), nullptr) << "the frame closed the preview";
+
+        app.Frames(4);
+        EXPECT_NE(app.windowManager->GetWindowContext(app.mainID), nullptr) << "the main window draws on";
+        app.Cleanup();
+    }
+
     struct Rgb
     {
         int r, g, b;
