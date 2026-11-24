@@ -32,7 +32,7 @@ static constexpr tachyon::Diagnostics::LogCategory kLogScene = tachyon::Diagnost
 namespace tachyon::detail
 {
     /// The showcase's compiled shaders (scene.vert.spv and scene.frag.spv with Vulkan,
-    /// scene.vert.dxil and scene.frag.dxil with Direct3D 12, scene.*.sdl.spv and scene.*.sdl.dxil
+    /// scene.vert.dxil and scene.frag.dxil with Direct3D 12, scene.*.sdl.spv, .sdl.dxil and .sdl.metal
     /// with SDL GPU, scene.vert.metal and scene.frag.metal with Metal), built in by CMake.
     std::span<const EmbeddedFile> ShowcaseShaderFiles();
 }
@@ -426,18 +426,23 @@ namespace tachyon
     {
         SDL_GPUShader* SDLShader(SDL_GPUDevice* device, SDL_GPUShaderStage stage)
         {
-            const bool spirv  = (SDL_GetGPUShaderFormats(device) & SDL_GPU_SHADERFORMAT_SPIRV) != 0;
+            const SDL_GPUShaderFormat formats = SDL_GetGPUShaderFormats(device);
+            const SDL_GPUShaderFormat format  = (formats & SDL_GPU_SHADERFORMAT_SPIRV) != 0 ? SDL_GPU_SHADERFORMAT_SPIRV
+                                              : (formats & SDL_GPU_SHADERFORMAT_DXIL)  != 0 ? SDL_GPU_SHADERFORMAT_DXIL
+                                                                                             : SDL_GPU_SHADERFORMAT_MSL;
+            const bool spirv  = format == SDL_GPU_SHADERFORMAT_SPIRV;
             const bool vertex = stage == SDL_GPU_SHADERSTAGE_VERTEX;
-            const std::string name = std::string("scene") + (vertex ? ".vert" : ".frag") + (spirv ? ".sdl.spv" : ".sdl.dxil");
+            const char* extension = spirv ? ".sdl.spv" : format == SDL_GPU_SHADERFORMAT_MSL ? ".sdl.metal" : ".sdl.dxil";
+            const std::string name = std::string("scene") + (vertex ? ".vert" : ".frag") + extension;
             const std::span<const std::byte> code = detail::FindEmbeddedFile(detail::ShowcaseShaderFiles(), name);
             if (code.empty())
                 return nullptr;
             SDL_GPUShaderCreateInfo info{};
             info.code_size           = code.size();
             info.code                = reinterpret_cast<const Uint8*>(code.data());
-            // Slang names SPIR-V's entry point main, and keeps DXIL's.
+            // Slang names SPIR-V's entry point main, and keeps DXIL's and Metal's.
             info.entrypoint          = spirv ? "main" : vertex ? "vertexMain" : "fragmentMain";
-            info.format              = spirv ? SDL_GPU_SHADERFORMAT_SPIRV : SDL_GPU_SHADERFORMAT_DXIL;
+            info.format              = format;
             info.stage               = stage;
             info.num_storage_buffers = vertex ? 1 : 0;   // the vertices
             info.num_uniform_buffers = 1;

@@ -69,6 +69,8 @@ Renders with Metal by default. No Vulkan SDK is needed.
 - A [Slang release](https://github.com/shader-slang/slang/releases) 2026.1 or newer for its `slangc`
   (it's not in Homebrew): unpack it and put `slangc` on the `PATH`, or set `SLANGC` to it
 - Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
+- Optional: `-DTACHYON_SDLGPU=ON` adds the SDL GPU backend, on SDL's Metal driver (no extra
+  packages); `--graphics sdlgpu` picks it in the showcase
 - Optional: `-DTACHYON_VULKAN=ON` adds the Vulkan backend through MoltenVK (the Vulkan SDK, or
   Homebrew's `vulkan-headers`, `vulkan-loader` and `molten-vk`); `--graphics vulkan` picks it in the showcase
 

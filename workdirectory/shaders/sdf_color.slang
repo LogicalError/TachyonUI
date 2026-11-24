@@ -81,7 +81,8 @@ typealias SDLImage = Sampler2D;
 #define SDL_IMAGE(n) [[vk::binding(n, SDL_RESOURCES)]] Sampler2D image##n;
 #define SDL_GET_IMAGE(n) image##n
 #else
-// DXIL: the texture at t<n>, its sampler at s<n>, used as one.
+// DXIL: the texture at t<n>, its sampler at s<n>, used as one. Metal the same, at texture(n) and
+// sampler(n), numbered in the order declared.
 struct SDLImage
 {
     Texture2D    texture;
@@ -91,9 +92,15 @@ struct SDLImage
     float4 Load(int3 texel) { return texture.Load(texel); }
     void   GetDimensions(out uint width, out uint height) { texture.GetDimensions(width, height); }
 };
+#if defined(TACHYON_SDLGPU_METAL)
+#define SDL_IMAGE(n) \
+    Texture2D    imageTexture##n; \
+    SamplerState imageSampler##n;
+#else
 #define SDL_IMAGE(n) \
     Texture2D    imageTexture##n : register(t##n, SDL_RESOURCE_SPACE); \
     SamplerState imageSampler##n : register(s##n, SDL_RESOURCE_SPACE);
+#endif
 #define SDL_GET_IMAGE(n) SDLImage(imageTexture##n, imageSampler##n)
 #endif
 SDL_IMAGE(0)  SDL_IMAGE(1)  SDL_IMAGE(2)  SDL_IMAGE(3)  SDL_IMAGE(4)  SDL_IMAGE(5)  SDL_IMAGE(6)  SDL_IMAGE(7)

@@ -244,6 +244,19 @@ struct PushConstants
     uint4  primitiveOffsets[2];  // bytes into each slot's buffer: box, glyph, dot, line, triangle
     uint4  imageSlots[4];        // the image slot each of the draw's 16 images is; ~0 for none
 };
+#if defined(TACHYON_SDLGPU_METAL)
+// Metal: SDL binds a stage's uniform buffers first, then its storage buffers, each [[buffer]]
+// counting up from 0. slangc numbers the buffers in the order they're declared (a register
+// would put them all at 0): the uniforms at buffer(0), the storage buffers at buffer(1) to (7).
+ConstantBuffer<PushConstants> pc;
+ByteAddressBuffer boxBuffer;
+ByteAddressBuffer glyphBuffer;
+ByteAddressBuffer dotBuffer;
+ByteAddressBuffer lineBuffer;
+ByteAddressBuffer triangleBuffer;
+ByteAddressBuffer boxStyles;
+ByteAddressBuffer colorStyles;
+#else
 [[vk::binding(0, SDL_UNIFORMS)]] ConstantBuffer<PushConstants> pc : register(b0, SDL_UNIFORM_SPACE);
 
 [[vk::binding(16, SDL_RESOURCES)]] ByteAddressBuffer boxBuffer      : register(t16, SDL_RESOURCE_SPACE);
@@ -253,6 +266,7 @@ struct PushConstants
 [[vk::binding(20, SDL_RESOURCES)]] ByteAddressBuffer triangleBuffer : register(t20, SDL_RESOURCE_SPACE);
 [[vk::binding(21, SDL_RESOURCES)]] ByteAddressBuffer boxStyles      : register(t21, SDL_RESOURCE_SPACE);
 [[vk::binding(22, SDL_RESOURCES)]] ByteAddressBuffer colorStyles    : register(t22, SDL_RESOURCE_SPACE);
+#endif
 
 // The `index`-th primitive of type T in slot `slot`, from where the slot's data starts.
 T LoadPrimitive<T>(int slot, int index)

@@ -57,8 +57,14 @@ struct Push
     float4 light;         // xyz: toward the light, in the object's space; w 0: unlit
     uint   firstVertex;   // the draw's first vertex: SV_VertexID starts at 0
 };
+#if defined(TACHYON_SDLGPU_METAL)
+// Metal: the uniforms, then the storage buffer, at buffer(0) and buffer(1) in declaration order.
+ConstantBuffer<Push>     push;
+StructuredBuffer<Vertex> vertices;
+#else
 [[vk::binding(0, SCENE_UNIFORMS)]] ConstantBuffer<Push> push : register(b0, SCENE_UNIFORM_SPACE);
 [[vk::binding(0, 0)]] StructuredBuffer<Vertex> vertices : register(t0, space0);
+#endif
 
 struct VertexInput { uint id : SV_VertexID; };
 Vertex ReadVertex(VertexInput input) { return vertices[input.id + push.firstVertex]; }

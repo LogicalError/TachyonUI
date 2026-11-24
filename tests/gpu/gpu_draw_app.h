@@ -110,8 +110,9 @@ namespace GpuDrawApp
         return drawn;
     }
 
-    // What was drawn looks as it should, and as it does on Vulkan where Vulkan runs: the same
-    // pixels, but for rounding. Call once the app that drew it is cleaned up.
+    // What was drawn looks as it should, and as it does on Vulkan where Vulkan runs (else on the
+    // native Metal backend): the same pixels, but for rounding. Call once the app that drew it is
+    // cleaned up.
     inline void ExpectDrawnAsOnVulkan(const Drawn& drawn)
     {
         const std::vector<uint8_t>& pixels = drawn.pixels;
@@ -129,16 +130,26 @@ namespace GpuDrawApp
                 glyphPixels += std::abs(At(pixels, rect.w, window, x, y).Sum() - background.Sum()) > 60;
         EXPECT_GT(glyphPixels, 50) << "the label's glyphs are drawn";
 
-        // The same app on Vulkan, where it runs: the same pixels, but for rounding.
-        DrawApp vulkan;
-        if (!vulkan.Start(GraphicsAPI::Vulkan) || !vulkan.Run())
+        // The same app on Vulkan, where it runs: the same pixels, but for rounding. Without
+        // Vulkan (macOS), on the native Metal backend instead.
+        IntRect              vulkanRect{};
+        std::vector<uint8_t> expected;
+        for (const GraphicsAPI reference : { GraphicsAPI::Vulkan, GraphicsAPI::Metal })
         {
-            vulkan.Cleanup();
-            return;
+            if (reference == GraphicsAPI::Metal && !TACHYON_METAL)
+                continue;
+            DrawApp app;
+            if (app.Start(reference) && app.Run())
+                expected = app.Pixels(vulkanRect);
+            app.Cleanup();
+            if (!expected.empty())
+                break;
         }
-        IntRect vulkanRect{};
-        const std::vector<uint8_t> expected = vulkan.Pixels(vulkanRect);
-        vulkan.Cleanup();
+#if TACHYON_METAL
+        ASSERT_FALSE(expected.empty()) << "the native Metal backend draws the reference where it's built";
+#endif
+        if (expected.empty())
+            return;
         ASSERT_EQ(vulkanRect.w, rect.w);
         ASSERT_EQ(vulkanRect.h, rect.h);
         ASSERT_EQ(expected.size(), pixels.size());

@@ -192,6 +192,9 @@ namespace tachyon::sdlgpu
 #if defined(_WIN32)
         SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_DXIL_BOOLEAN, true);
 #endif
+#if defined(__APPLE__)
+        SDL_SetBooleanProperty(props, SDL_PROP_GPU_DEVICE_CREATE_SHADERS_MSL_BOOLEAN, true);
+#endif
     }
 
     bool SDLGPUGraphicsContext::CheckDeviceSupport(SDL_GPUDevice* device, std::string* problems)
@@ -205,6 +208,9 @@ namespace tachyon::sdlgpu
 #if defined(_WIN32)
             constexpr SDL_GPUShaderFormat built = SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL;
             constexpr const char* builtNames = "SPIR-V or DXIL";
+#elif defined(__APPLE__)
+            constexpr SDL_GPUShaderFormat built = SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_MSL;
+            constexpr const char* builtNames = "SPIR-V or MSL";
 #else
             constexpr SDL_GPUShaderFormat built = SDL_GPU_SHADERFORMAT_SPIRV;
             constexpr const char* builtNames = "SPIR-V";
@@ -275,7 +281,10 @@ namespace tachyon::sdlgpu
         d.deviceName = std::format("{} ({})", name != nullptr ? name : "unknown GPU", d.driver);
         TACHYON_LOG_INFO(kLogSDLGPU, "Using GPU: {}", d.deviceName);
         const SDL_GPUShaderFormat formats = SDL_GetGPUShaderFormats(d.device);
-        d.shaderFormat = (formats & SDL_GPU_SHADERFORMAT_SPIRV) != 0 ? SDL_GPU_SHADERFORMAT_SPIRV : SDL_GPU_SHADERFORMAT_DXIL;
+        // SPIR-V on Vulkan, DXIL on Direct3D 12, Metal source on Metal: each driver takes one.
+        d.shaderFormat = (formats & SDL_GPU_SHADERFORMAT_SPIRV) != 0 ? SDL_GPU_SHADERFORMAT_SPIRV
+                       : (formats & SDL_GPU_SHADERFORMAT_DXIL)  != 0 ? SDL_GPU_SHADERFORMAT_DXIL
+                                                                      : SDL_GPU_SHADERFORMAT_MSL;
 
         // The samplers, as SamplerFor picks them; what's bound where a draw has nothing.
         d.samplers = { MakeSampler(d.device, SDL_GPU_FILTER_NEAREST, SDL_GPU_SAMPLERADDRESSMODE_REPEAT),

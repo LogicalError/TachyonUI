@@ -388,7 +388,13 @@ if(TACHYON_SDLGPU)
   # Its Vulkan options (SDL_GPUVulkanOptions) are Vulkan's feature structs: the headers only.
   # SDL's headers are PUBLIC, as the public SDL GPU header holds SDL's types
   # (SDLGPUSceneRender, the host's device and textures).
-  target_link_libraries(gui_core PRIVATE Vulkan::Headers PUBLIC SDL3::Headers)
+  target_link_libraries(gui_core PUBLIC SDL3::Headers)
+  if(TARGET Vulkan::Headers)
+    target_link_libraries(gui_core PRIVATE Vulkan::Headers)
+  else()
+    target_include_directories(gui_core SYSTEM PRIVATE
+      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/SDL/src/video/khronos>)
+  endif()
 endif()
 # The graphics backends built in, 0 or 1 each, for code that uses one only when it's there.
 target_compile_definitions(gui_core PUBLIC

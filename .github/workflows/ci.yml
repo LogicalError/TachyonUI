@@ -391,7 +391,8 @@ jobs:
           key: third-party-macos-${{ hashFiles('.submodules-id', 'third_party/CMakeLists.txt', 'third_party/nanosvg/CMakeLists.txt', 'cmake/ThirdPartyCache.cmake') }}
 
       - name: Configure
-        run: cmake -S . -B build -G "Ninja Multi-Config" "-DCMAKE_PREFIX_PATH=$(brew --prefix)" "-DSLANGC=$(find "${{ runner.temp }}/slang" -name slangc -type f | head -n 1)"
+        # SDL GPU too, so its Metal shaders (.sdl.metal) are built.
+        run: cmake -S . -B build -G "Ninja Multi-Config" -DTACHYON_SDLGPU=ON "-DCMAKE_PREFIX_PATH=$(brew --prefix)" "-DSLANGC=$(find "${{ runner.temp }}/slang" -name slangc -type f | head -n 1)"
       - if: steps.third-party-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6.1.0
         with:

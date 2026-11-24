@@ -96,15 +96,18 @@ if(APPLE)
   set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
   set(CMAKE_OBJCXX_EXTENSIONS OFF)
 endif()
-# SDL3's GPU API, over Vulkan, Direct3D 12 or Metal. It's on its way: so far it starts its
-# device and presents its windows, without drawing the UI. It needs SDL (TACHYON_SDL).
-option(TACHYON_SDLGPU "Build the SDL GPU graphics backend (over Vulkan or Direct3D 12)" OFF)
+# SDL3's GPU API, over Vulkan, Direct3D 12 or Metal. It needs SDL (TACHYON_SDL).
+option(TACHYON_SDLGPU "Build the SDL GPU graphics backend (over Vulkan, Direct3D 12 or Metal)" OFF)
 if(TACHYON_SDLGPU AND NOT TACHYON_SDL)
   message(FATAL_ERROR "TACHYON_SDLGPU needs TACHYON_SDL")
 endif()
 
-if(TACHYON_VULKAN OR TACHYON_SDLGPU)
+if(TACHYON_VULKAN)
   find_package(Vulkan REQUIRED)
+elseif(TACHYON_SDLGPU)
+  # SDL GPU names its Vulkan driver's options with Vulkan's structs: the headers only. Without
+  # the Vulkan SDK (macOS, on Metal) gui_core takes the copy SDL carries.
+  find_package(Vulkan QUIET)
 endif()
 
 include(CompilerOptions)
