@@ -181,11 +181,6 @@ Metal hosts can share their device too):
 
 The synchronization rules and code are in [Using your own Vulkan device](docs/integration/vulkan-device.md).
 
-## Status
-
-**1.1.** Windows x64 and Linux x64 are built and tested in CI. macOS (Apple silicon) runs on
-Metal; CI builds it and runs the tests that need no GPU.
-
 ---
 
 [Contributing](CONTRIBUTING.md) | [Security](SECURITY.md) |
