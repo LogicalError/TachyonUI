@@ -14,6 +14,7 @@
 #include <skribidi/skb_rich_layout.h>
 #include <skribidi/skb_icon_collection.h>
 
+#include <algorithm>
 #include <cstring>
 
 static constexpr tachyon::Diagnostics::LogCategory kLogText = tachyon::Diagnostics::MakeLogCategory("text");
@@ -49,6 +50,40 @@ namespace tachyon
 			skb_image_atlas_set_texture_user_data(atlas, texture_idx, (uint32_t)textureIndex);
 		}
 
+	}
+
+	void SkribidiContext::ForgetStaleRunColors()
+	{
+		if (styleManager == nullptr || styleManager->Generation() == runColorStyleGeneration)
+			return;
+		// ClearAll freed them with every other style: nothing to give back.
+		runColors.clear();
+		runColorStyleGeneration = styleManager->Generation();
+	}
+
+	VisualColorStyleIndex SkribidiContext::RunColorStyle(color4b color)
+	{
+		ForgetStaleRunColors();
+		const uint32_t key = uint32_t(color.r) | (uint32_t(color.g) << 8) | (uint32_t(color.b) << 16) | (uint32_t(color.a) << 24);
+		auto [it, added] = runColors.try_emplace(key);
+		if (added)
+			it->second.style = styleManager->CreateColorStyle(ColorStyle::Create(color));
+		it->second.lastUsedFrame = frameNumber;
+		if (runColorRecorder != nullptr && std::ranges::find(runColorRecorder->runColors, key, &std::pair<uint32_t, VisualColorStyleIndex>::first)
+		                                   == runColorRecorder->runColors.end())
+			runColorRecorder->runColors.emplace_back(key, it->second.style);
+		return it->second.style;
+	}
+
+	void SkribidiContext::FreeUnusedRunColors()
+	{
+		ForgetStaleRunColors();
+		std::erase_if(runColors, [this](const auto& entry) {
+			if (frameNumber - entry.second.lastUsedFrame <= kRunColorFrames)
+				return false;
+			styleManager->DestroyColorStyle(entry.second.style);
+			return true;
+		});
 	}
 
 	void SkribidiContext::RegisterCaretColor()
@@ -148,6 +183,9 @@ namespace tachyon
 		}
 		m_registry.clear();
 		m_freeTextSlots.clear();
+		// Their styles are the style manager's, freed with it.
+		runColors.clear();
+		runColorRecorder = nullptr;
 
         editing_text_id = TextID::Invalid;
 
@@ -978,13 +1016,16 @@ namespace tachyon
 		record.touches.clear();
 		// What's recorded is looked up now, so it's intact for the rest of this epoch.
 		record.intactEpoch = glyphQuadEpoch;
+		record.runColors.clear();
 		atlasRecorder = &record.touches;
+		runColorRecorder = &record;
 		atlasRecorderKeys.clear();
 	}
 
 	void SkribidiContext::EndAtlasRecord()
 	{
 		atlasRecorder = nullptr;
+		runColorRecorder = nullptr;
 		atlasRecorderKeys.clear();
 	}
 
@@ -993,6 +1034,16 @@ namespace tachyon
 		auto it = atlasRecords.find(scopeId);
 		if (it == atlasRecords.end()) return false;
 		AtlasRecord& record = it->second;
+		// The run colors first: kept for as long as the capture is shown. One that went (unused
+		// too long, or a theme reload) may be another color's now: the scope draws again.
+		ForgetStaleRunColors();
+		for (const auto& [key, style] : record.runColors)
+		{
+			const auto color = runColors.find(key);
+			if (color == runColors.end() || color->second.style != style)
+				return false;
+			color->second.lastUsedFrame = frameNumber;
+		}
 		if (record.intactEpoch == glyphQuadEpoch)
 			return true;
 		bool intact = true;

@@ -66,10 +66,21 @@ namespace tachyon
 
             VisualColorStyleIndex ColorIndex(color4b c) { return styleManager.RegisterColorStyle(ColorStyle::Create(c)); }
 
-            static size_t CountColor(const std::vector<GlyphDraw>& draws, VisualColorStyleIndex color)
+            // Whether two color styles show the same: a run's color has a style of its own, which
+            // shows what a registered one of that color does (the same atlas texel).
+            bool SameColor(VisualColorStyleIndex a, VisualColorStyleIndex b) const
             {
-                return size_t(std::ranges::count_if(draws, [&](const GlyphDraw& d) { return d.color == color; }));
+                const VisualColorStyle* sa = styleManager.GetVisualColorStyle(a);
+                const VisualColorStyle* sb = styleManager.GetVisualColorStyle(b);
+                return sa != nullptr && sb != nullptr && *sa == *sb;
             }
+
+            size_t CountColor(const std::vector<GlyphDraw>& draws, VisualColorStyleIndex color) const
+            {
+                return size_t(std::ranges::count_if(draws, [&](const GlyphDraw& d) { return SameColor(d.color, color); }));
+            }
+
+            void NextFrame() { textSystem->BeginFrame(int2{}, MouseButtons{}, 0); }
         };
 
         // Text cut short ends in an ellipsis on the line, where a typed one sits, not raised
@@ -209,7 +220,7 @@ namespace tachyon
             const std::vector<GlyphDraw> glyphs = Render(id);
             const auto& quads = graphicsContext.Renderer().quads;
             ASSERT_EQ(quads.size(), 1u) << "one box, under the middle run";
-            EXPECT_EQ(quads[0].color, ColorIndex(kGreen));
+            EXPECT_TRUE(SameColor(quads[0].color, ColorIndex(kGreen)));
             // Under the four glyphs of "code", and no others.
             const IntRect box = quads[0].rect;
             const auto under = std::ranges::count_if(glyphs, [&](const GlyphDraw& g) {
@@ -232,6 +243,56 @@ namespace tachyon
             EXPECT_EQ(CountColor(glyphs, ColorIndex(kGreen)), 4u);
             EXPECT_EQ(CountColor(glyphs, ColorIndex(kGreen)) + CountColor(glyphs, ColorIndex(kBlue)), glyphs.size())
                 << "the other runs keep the element's color";
+        }
+
+        // A run whose color changes every frame (an animated one) doesn't add a style a frame: a
+        // run color's style is freed some frames after nothing draws with it.
+        TEST_F(TextPaintTest, ARunColorThatChangesEveryFrameDoesNotGrowTheStyles)
+        {
+            const StyleRef style = styleManager.Register(BaseStyle());
+            auto draw = [&](uint8_t red) {
+                ContentRun runs[] = {
+                    { .type = ContentRun::Text, .text = "Run " },
+                    { .type = ContentRun::Text, .text = "bold", .background = color4b{ 0, red, 0, 255 }, .color = color4b{ red, 0, 0, 255 } },
+                };
+                Render(textSystem->RegisterRichText(element, runs, style, ElementState::None));
+                NextFrame();
+            };
+            draw(0);
+            const size_t before = styleManager.VisualColorStyleCount();
+            for (int frame = 1; frame < 250; ++frame)
+                draw(uint8_t(frame));
+            EXPECT_LE(styleManager.VisualColorStyleCount(), before + 64) << "a style or two a frame, kept";
+        }
+
+        // A cached scope's text isn't drawn again while its capture is: replaying the capture keeps
+        // the run colors it was drawn with. One whose color went is drawn again.
+        TEST_F(TextPaintTest, ACachedScopeKeepsItsRunColorsUntilOneGoes)
+        {
+            const StyleRef style = styleManager.Register(BaseStyle());
+            const ID scope{ .value{ .integer = 91 } };
+            ContentRun runs[] = {
+                { .type = ContentRun::Text, .text = "Run " },
+                { .type = ContentRun::Text, .text = "bold", .color = kGreen },
+            };
+            textSystem->BeginAtlasRecord(scope);
+            const std::vector<GlyphDraw> captured = Render(textSystem->RegisterRichText(element, runs, style, ElementState::None));
+            textSystem->EndAtlasRecord();
+            ASSERT_EQ(CountColor(captured, ColorIndex(kGreen)), 4u);
+            const auto green = std::ranges::find_if(captured, [&](const GlyphDraw& d) { return SameColor(d.color, ColorIndex(kGreen)); });
+            const VisualColorStyleIndex runColor = green->color;
+
+            for (int frame = 0; frame < 200; ++frame)
+            {
+                NextFrame();
+                ASSERT_TRUE(textSystem->ReplayAtlasTouches(scope)) << "frame " << frame;
+            }
+            EXPECT_TRUE(SameColor(runColor, ColorIndex(kGreen))) << "kept while the capture is shown";
+
+            // Not shown for a while: the color is let go, and the capture can't be shown again.
+            for (int frame = 0; frame < 200; ++frame)
+                NextFrame();
+            EXPECT_FALSE(textSystem->ReplayAtlasTouches(scope));
         }
 
         TEST_F(TextPaintTest, ADecorationIsDrawnInTheTextColorUnlessItHasItsOwn)

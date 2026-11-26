@@ -149,6 +149,7 @@ namespace tachyon
 		constexpr uint32_t kSweepEveryFrames = 8;
 		if (ctx->frameNumber % kSweepEveryFrames != 0)
 			return;
+		ctx->FreeUnusedRunColors();
 
 		bool evicted = false;
 		for (size_t i = 0; i < ctx->m_registry.size(); ++i)
@@ -1037,13 +1038,12 @@ namespace tachyon
 				? SKB_PAINT_STATE_HOVER : SKB_PAINT_STATE_DEFAULT;
 			const skb_attribute_paint_t paint = skb_attributes_get_paint(SKB_PAINT_TEXT, paintState,
 				skb_layout_get_layout_run_attributes(layout, run), params->attribute_collection);
-			// A run with its own colour (a link, or ContentRun::color) renders in that colour,
-			// registered on demand: its index isn't kept.
+			// A run with its own colour (a link, or ContentRun::color) renders in that colour's
+			// run color style, which isn't kept with the glyphs.
 			VisualColorStyleIndex runColor = entry->textColorIndex;
 			if (paint.paint_tag == SKB_PAINT_TEXT && paint.color.a != 0)
 			{
-				const color4b c{ paint.color.r, paint.color.g, paint.color.b, paint.color.a };
-				runColor = ctx->styleManager->RegisterColorStyle(ColorStyle::Create(c), ImageIndex::Invalid);
+				runColor = ctx->RunColorStyle(color4b{ paint.color.r, paint.color.g, paint.color.b, paint.color.a });
 				reusable = false;
 			}
 			for (int32_t gi = run->glyph_range.start; gi < run->glyph_range.end; gi++)
@@ -1172,12 +1172,11 @@ namespace tachyon
 		for (int32_t ri = 0; ri < layout_runs_count; ri++)
 			hasIconRun = hasIconRun || layout_runs[ri].type == SKB_CONTENT_RUN_ICON;
 
-		// The renderer takes colour-style indices, so a run's own colour (e.g. a link)
-		// is registered on demand; RegisterColorStyle dedups.
+		// The renderer takes colour-style indices: a run's own colour (e.g. a link) is drawn in
+		// that colour's run color style.
 		auto runColorIndex = [&](const skb_attribute_paint_t& p) -> VisualColorStyleIndex
 		{
-			const color4b c{ p.color.r, p.color.g, p.color.b, p.color.a };
-			return m_skribidiContext->styleManager->RegisterColorStyle(ColorStyle::Create(c), ImageIndex::Invalid);
+			return m_skribidiContext->RunColorStyle(color4b{ p.color.r, p.color.g, p.color.b, p.color.a });
 		};
 
 		// Under everything, the boxes of runs with a background (inline code): rounded, and
