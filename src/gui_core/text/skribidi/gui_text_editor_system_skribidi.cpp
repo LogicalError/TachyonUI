@@ -196,8 +196,7 @@ namespace tachyon
         };
         auto runColorIndex = [&](const skb_attribute_paint_t& p) -> VisualColorStyleIndex
         {
-            const color4b c{ p.color.r, p.color.g, p.color.b, p.color.a };
-            return ctx->styleManager->RegisterColorStyle(ColorStyle::Create(c), ImageIndex::Invalid);
+            return ctx->RunColorStyle(color4b{ p.color.r, p.color.g, p.color.b, p.color.a });
         };
 
         float layout_height = 0.f;

@@ -346,6 +346,24 @@ namespace tachyon
 		// Registers the caret's color; again after the style manager drops its colors (a theme reload).
 		void RegisterCaretColor();
 
+		// A run's own color (ContentRun::color or background, a link's) as a color style: one of
+		// its own for each color, which the runs in that color share. A color nothing has drawn
+		// with, or replayed a capture with, for kRunColorFrames frames is let go, so a color that
+		// changes every frame doesn't add a style a frame.
+		VisualColorStyleIndex RunColorStyle(color4b color);
+		// Lets go of the run colors unused for kRunColorFrames frames (BeginFrame's sweep).
+		void FreeUnusedRunColors();
+		static constexpr uint32_t kRunColorFrames = 16;
+		struct RunColor
+		{
+			VisualColorStyleIndex style         = VisualColorStyleIndex::Invalid;
+			uint32_t              lastUsedFrame = 0;
+		};
+		std::unordered_map<uint32_t, RunColor> runColors;   // by the color's RGBA, packed
+		uint32_t                               runColorStyleGeneration = 0;   // StyleManager::Generation they're from
+		// Forgets the run colors when the style manager dropped its styles (their indices are gone).
+		void ForgetStaleRunColors();
+
 		GraphicsContext*		graphicsContext  = nullptr;   // makes the images of icons from pixels
 		GUIRenderer*			guiRenderer      = nullptr;
 		StyleManager*			styleManager     = nullptr;
@@ -464,13 +482,16 @@ namespace tachyon
 
 		/// A scope's atlas lookups, and the glyphQuadEpoch they were last found intact in: until
 		/// the atlas compacts again, nothing they found can go, so they needn't be looked up.
+		/// And the run colors it was drawn with (RunColorStyle): each replay keeps them.
 		struct AtlasRecord
 		{
 			std::vector<AtlasTouch> touches;
 			uint32_t                intactEpoch = 0;
+			std::vector<std::pair<uint32_t, VisualColorStyleIndex>> runColors;   // packed color, its style
 		};
 		std::unordered_map<ID, AtlasRecord> atlasRecords;
 		std::vector<AtlasTouch>*     atlasRecorder = nullptr;
+		AtlasRecord*                 runColorRecorder = nullptr;   // the record being made, for its run colors
 		std::unordered_set<uint64_t> atlasRecorderKeys;
 
 		// Per-frame OS snapshot, written by BeginFrame.
