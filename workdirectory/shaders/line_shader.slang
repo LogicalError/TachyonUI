@@ -36,10 +36,11 @@ VSOutput vertexMain(VertexInput vertex)
     // Transform all four control points to screen space, then AABB.
     // AABB-after-transform is the correct screen bounding box under any affine
     // transform; transform-after-AABB would tilt for non-axis-aligned cases.
-    float3 p0_t = ApplyTransform(line.transform0, line.transform1, float3(float2(line.p0), 1));
-    float3 p1_t = ApplyTransform(line.transform0, line.transform1, float3(float2(line.p1), 1));
-    float3 p2_t = ApplyTransform(line.transform0, line.transform1, float3(float2(line.p2), 1));
-    float3 p3_t = ApplyTransform(line.transform0, line.transform1, float3(float2(line.p3), 1));
+    const float2 lp0 = line.P0(), lp1 = line.P1(), lp2 = line.P2(), lp3 = line.P3();
+    float3 p0_t = ApplyTransform(line.transform0, line.transform1, float3(lp0, 1));
+    float3 p1_t = ApplyTransform(line.transform0, line.transform1, float3(lp1, 1));
+    float3 p2_t = ApplyTransform(line.transform0, line.transform1, float3(lp2, 1));
+    float3 p3_t = ApplyTransform(line.transform0, line.transform1, float3(lp3, 1));
     float2 p0s = p0_t.xy / p0_t.z;
     float2 p1s = p1_t.xy / p1_t.z;
     float2 p2s = p2_t.xy / p2_t.z;
@@ -52,8 +53,8 @@ VSOutput vertexMain(VertexInput vertex)
     // Axis-aligned only when all four control points share the coordinate (2-point
     // lines arrive as p0,p0,p1,p1); symmetric curves can match on endpoints and
     // midpoints alone and must not be flattened.
-    bool axisX = (line.p0.y == line.p1.y) && (line.p1.y == line.p2.y) && (line.p2.y == line.p3.y);
-    bool axisY = (line.p0.x == line.p1.x) && (line.p1.x == line.p2.x) && (line.p2.x == line.p3.x);
+    bool axisX = (lp0.y == lp1.y) && (lp1.y == lp2.y) && (lp2.y == lp3.y);
+    bool axisY = (lp0.x == lp1.x) && (lp1.x == lp2.x) && (lp2.x == lp3.x);
     if (axisX || axisY)
     {
         float effW       = max(line.lineWidth * scale, 1.0);

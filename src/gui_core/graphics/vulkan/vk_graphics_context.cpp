@@ -1150,17 +1150,12 @@ tachyon::vulkan::VulkanDeviceContext::DeviceRequirements tachyon::vulkan::Vulkan
     requirements.features12.descriptorBindingPartiallyBound = true;
     requirements.features12.descriptorBindingVariableDescriptorCount = true;
     requirements.features12.runtimeDescriptorArray = true;
-    requirements.features12.storageBuffer8BitAccess = true;
-    requirements.features12.uniformAndStorageBuffer8BitAccess = true;
     requirements.features12.shaderSampledImageArrayNonUniformIndexing = true;
-    requirements.features12.shaderInt8 = true;
-    requirements.features12.shaderFloat16 = true;
     requirements.features12.timelineSemaphore = true;   // AddFrameWait
 
+    // No 16- or 8-bit types: the shaders read packed fields as 32-bit words (all_common.slang).
     requirements.features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-    requirements.features11.storageBuffer16BitAccess = true;
 
-    requirements.features.shaderInt16 = true;
     requirements.features.shaderInt64 = true;   // the shaders' buffer addresses
     requirements.features.robustBufferAccess = true;
 
@@ -1201,15 +1196,9 @@ bool tachyon::vulkan::VulkanDeviceContext::CheckPhysicalDeviceSupport(VkPhysical
     TACHYON_REQUIRE_FEATURE(features12, descriptorBindingPartiallyBound);
     TACHYON_REQUIRE_FEATURE(features12, descriptorBindingVariableDescriptorCount);
     TACHYON_REQUIRE_FEATURE(features12, runtimeDescriptorArray);
-    TACHYON_REQUIRE_FEATURE(features12, storageBuffer8BitAccess);
-    TACHYON_REQUIRE_FEATURE(features12, uniformAndStorageBuffer8BitAccess);
     TACHYON_REQUIRE_FEATURE(features12, shaderSampledImageArrayNonUniformIndexing);
-    TACHYON_REQUIRE_FEATURE(features12, shaderInt8);
-    TACHYON_REQUIRE_FEATURE(features12, shaderFloat16);
     TACHYON_REQUIRE_FEATURE(features12, timelineSemaphore);
-    TACHYON_REQUIRE_FEATURE(features11, storageBuffer16BitAccess);
 #undef TACHYON_REQUIRE_FEATURE
-    if (required.features.shaderInt16 && !have.features.shaderInt16) missing("features.shaderInt16");
     if (required.features.shaderInt64 && !have.features.shaderInt64) missing("features.shaderInt64");
     if (required.features.robustBufferAccess && !have.features.robustBufferAccess) missing("features.robustBufferAccess");
 

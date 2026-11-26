@@ -45,7 +45,7 @@ target_link_libraries(my_app PRIVATE TachyonUI::gui_controls)
   the program.
 - As a subproject, TachyonUI builds only its libraries, not its examples or tests.
 - For an installed TachyonUI, replace `add_subdirectory` with
-  `find_package(TachyonUI 0.1 CONFIG REQUIRED)`; see
+  `find_package(TachyonUI 1.1 CONFIG REQUIRED)`; see
   [Adding the library to a build](../integration/build.md).
 
 ## Building

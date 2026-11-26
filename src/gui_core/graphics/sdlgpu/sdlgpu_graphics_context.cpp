@@ -162,27 +162,20 @@ namespace tachyon::sdlgpu
 
     void SDLGPUGraphicsContext::ApplyDeviceRequirements(SDL_PropertiesID props)
     {
-        // On Vulkan, what the shaders use that SDL's device doesn't enable by itself: the 16-bit
-        // types, and the draw parameters SV_VertexID is built from (VertexIndex - BaseVertex).
-        // SDL reads them when the device is made; they live as long as the program.
+        // On Vulkan, what the shaders use that SDL's device doesn't enable by itself: the draw
+        // parameters SV_VertexID is built from (VertexIndex - BaseVertex). SDL reads them when the
+        // device is made; they live as long as the program.
         struct Vulkan
         {
-            VkPhysicalDeviceVulkan12Features features12{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
             VkPhysicalDeviceVulkan11Features features11{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
-            VkPhysicalDeviceFeatures         features10{};
             SDL_GPUVulkanOptions             options{};
 
             Vulkan()
             {
-                features12.shaderFloat16                      = VK_TRUE;
-                features11.pNext                              = &features12;
-                features11.shaderDrawParameters               = VK_TRUE;
-                features11.storageBuffer16BitAccess           = VK_TRUE;
-                features11.uniformAndStorageBuffer16BitAccess = VK_TRUE;
-                features10.shaderInt16                        = VK_TRUE;
-                options.vulkan_api_version                 = VK_API_VERSION_1_2;
-                options.feature_list                       = &features11;
-                options.vulkan_10_physical_device_features = &features10;
+                features11.shaderDrawParameters = VK_TRUE;
+                // The Vulkan 1.1 features struct is Vulkan 1.2's.
+                options.vulkan_api_version = VK_API_VERSION_1_2;
+                options.feature_list       = &features11;
             }
         };
         static Vulkan vulkan;

@@ -30,9 +30,7 @@ app.Initialize(options);
 
 - The GUI's shaders are built as SPIR-V (for Vulkan), on Windows DXIL (for Direct3D 12), and on
   macOS Metal source (MSL, for Metal). The device must take one of them.
-- On Vulkan, the shaders use features SDL doesn't turn on by itself:
-  - 16-bit storage and 16-bit types
-  - draw parameters
+- On Vulkan, the shaders use a feature SDL doesn't turn on by itself: draw parameters.
 - `SDLGPUGraphicsContext::ApplyDeviceRequirements(props)` sets all of that on the properties
   you create the device with:
 
@@ -47,12 +45,8 @@ SDL_DestroyProperties(props);
 ```
 
 - It sets the Vulkan options property (`SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER`).
-  - If you set Vulkan options of your own, they replace it. Then turn these on in yours, with
-    Vulkan 1.2:
-    - `storageBuffer16BitAccess`, `uniformAndStorageBuffer16BitAccess` and
-      `shaderDrawParameters` (Vulkan 1.1 features)
-    - `shaderFloat16` (Vulkan 1.2)
-    - `shaderInt16` (Vulkan 1.0)
+  - If you set Vulkan options of your own, they replace it. Then turn on `shaderDrawParameters`
+    (a Vulkan 1.1 feature) in yours, with Vulkan 1.2.
 - `SDLGPUGraphicsContext::CheckDeviceSupport(device, &problems)` checks a device. It lists what
   the device lacks, one line each:
 

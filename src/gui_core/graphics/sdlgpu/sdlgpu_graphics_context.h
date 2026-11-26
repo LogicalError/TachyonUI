@@ -64,12 +64,10 @@ namespace tachyon::sdlgpu
 
         /// Sets on `props` what the GUI's shaders need of a device a host makes with
         /// SDL_CreateGPUDeviceWithProperties: the shader formats they're built in (SPIR-V, and
-        /// DXIL on Windows), and on Vulkan the features they use (16-bit storage and types,
-        /// draw parameters), as SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER. Options of
-        /// the host's own replace those: then enable storageBuffer16BitAccess,
-        /// uniformAndStorageBuffer16BitAccess and shaderDrawParameters (Vulkan 1.1),
-        /// shaderFloat16 (1.2) and shaderInt16 (1.0) in them, with Vulkan 1.2. What it points to
-        /// lives as long as the program.
+        /// DXIL on Windows), and on Vulkan the feature they use (draw parameters), as
+        /// SDL_PROP_GPU_DEVICE_CREATE_VULKAN_OPTIONS_POINTER. Options of the host's own replace
+        /// those: then enable shaderDrawParameters (Vulkan 1.1) in them, with Vulkan 1.2. What it
+        /// points to lives as long as the program.
         static void ApplyDeviceRequirements(SDL_PropertiesID props);
         /// Whether `device` takes the GUI's shaders; what it lacks, one line each, in
         /// `problems`. SDL can't tell which Vulkan features a device has: one made without

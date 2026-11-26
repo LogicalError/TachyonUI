@@ -197,14 +197,15 @@ float4 getSDFColor(int colorStyleIndex, float2 pos, float2 size, float edgeDepth
     textureIndex = textureIndex >= 1 ? max(0, textureIndex - 1) : max(0, colorStyle.textureIndex - 1);
 
     // Its UV transform's rows: transformationX.xyz, transformationY.xyz, (0, 0, 1).
-    const float4 uvRow0 = float4(colorStyle.transformationX);
-    const float4 uvRow1 = float4(colorStyle.transformationY);
-    uint2 colorPixelPos = uint2(colorStyle.colorUV_type.xy);
-    uint colorType = colorStyle.colorUV_type.z; // type
+    const float4 uvRow0 = colorStyle.TransformationX();
+    const float4 uvRow1 = colorStyle.TransformationY();
+    const uint4  colorUV_type = colorStyle.ColorUVType();
+    uint2 colorPixelPos = colorUV_type.xy;
+    uint colorType = colorUV_type.z; // type
 
     // colorUV_type.w holds the 0-based physical bindless slot of the gradient-atlas
     // page; every atlas fetch for this style uses it.
-    uint gradientPageIdx = colorStyle.colorUV_type.w;
+    uint gradientPageIdx = colorUV_type.w;
 
     // The one image the type reads, and its size: the texture for the texture types, the gradient
     // page for the rest. Each type works out where to read it, then it's read in one place: on SDL
@@ -213,7 +214,7 @@ float4 getSDFColor(int colorStyleIndex, float2 pos, float2 size, float edgeDepth
     const float2 imageSize  = ImageSize(imageIndex);
     float2 colorPos = float2(colorPixelPos) / imageSize;
 
-    float2 animOffset = float2(colorStyle.animSpeed) * pc.elapsedTime;
+    float2 animOffset = colorStyle.AnimSpeed() * pc.elapsedTime;
 
     if (colorType == 7 || colorType == 8) // InterpolatedTriangle, InterpolatedBox
     {

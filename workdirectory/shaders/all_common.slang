@@ -2,28 +2,61 @@
 // the push constants, and the color helpers. Structs read through a buffer address use Slang's
 // natural layout, so every padding std430 would add is written out: offsets and sizes match the
 // C++ structs.
+//
+// The C++ structs pack some fields in 16 bits (half, int16_t, uint16_t). Here those are read as
+// the 32-bit words holding them, two to a word (the first in the low half), and unpacked with
+// 32-bit operations: the shaders need no 16-bit types, which some GPUs (GeForce GTX 900 and 10,
+// Radeon RX 400 and 500) can't run. The values are widened before any math in either case.
+
+// Two halves, the first in the low 16 bits, as floats. SPIR-V has an instruction for it that
+// needs no 16-bit type, where Slang's f16tof32 goes through one; DXIL's f16tof32 needs none.
+float2 UnpackHalf2(uint bits)
+{
+    __target_switch
+    {
+    case spirv:
+        return spirv_asm { result:$$float2 = OpExtInst glsl450 UnpackHalf2x16 $bits };
+    default:
+        return f16tof32(uint2(bits & 0xFFFFu, bits >> 16));
+    }
+}
+float4 UnpackHalf4(uint2 bits) { return float4(UnpackHalf2(bits.x), UnpackHalf2(bits.y)); }
+// Two uint16_t, the first in the low 16 bits.
+uint2 UnpackUint16x2(uint bits) { return uint2(bits & 0xFFFFu, bits >> 16); }
+uint4 UnpackUint16x4(uint2 bits) { return uint4(UnpackUint16x2(bits.x), UnpackUint16x2(bits.y)); }
+// Two int16_t, the first in the low 16 bits, sign-extended.
+int2 UnpackInt16x2(uint bits) { return int2(int(bits << 16) >> 16, int(bits) >> 16); }
+int4 UnpackInt16x4(uint2 bits) { return int4(UnpackInt16x2(bits.x), UnpackInt16x2(bits.y)); }
 
 struct ColorStyle
 {
-    half4     transformationX;
-    half4     transformationY;
+    uint2 transformationXBits;   // half4
+    uint2 transformationYBits;   // half4
+    uint2 colorUVTypeBits;       // uint16_t4 colorUV_type
 
-    uint16_t4 colorUV_type;
+    int   textureIndex;
+    uint  animSpeedBits;         // half2: x = U/gradient scroll speed, y = V scroll speed (textures only)
 
-    int       textureIndex;
-    half2     animSpeed;      // x = U/gradient scroll speed, y = V scroll speed (textures only)
+    float4 TransformationX() { return UnpackHalf4(transformationXBits); }
+    float4 TransformationY() { return UnpackHalf4(transformationYBits); }
+    uint4  ColorUVType()     { return UnpackUint16x4(colorUVTypeBits); }
+    float2 AnimSpeed()       { return UnpackHalf2(animSpeedBits); }
 };
 
 struct BoxStyle // aka 'StyleState'
 {
-    uint16_t4 borderWidth;
-    uint16_t4 cornerRadius;
+    uint2 borderWidthBits;        // uint16_t4
+    uint2 cornerRadiusBits;       // uint16_t4
+    uint2 borderColorIndexBits;   // int16_t4, per edge: x=top, y=right, z=bottom, w=left
+    uint  backgroundAndDashSize;  // int16_t backgroundColorIndex, uint16_t borderDashSize (pixels per dash, 0 = solid)
+    uint  dashOffsetAndShadow;    // uint16_t borderDashOffset (pixel start into the pattern), uint16_t shadowIndex (CPU only)
 
-    int16_t4  borderColorIndex;    // per-edge: x=top, y=right, z=bottom, w=left
-    int16_t   backgroundColorIndex;
-    uint16_t  borderDashSize;      // pixels per dash (0 = solid)
-    uint16_t  borderDashOffset;    // pixel start offset into dash pattern
-    uint16_t  shadowIndex;         // CPU only
+    float4 BorderWidth()          { return float4(UnpackUint16x4(borderWidthBits)); }
+    float4 CornerRadius()         { return float4(UnpackUint16x4(cornerRadiusBits)); }
+    int4   BorderColorIndex()     { return UnpackInt16x4(borderColorIndexBits); }
+    int    BackgroundColorIndex() { return UnpackInt16x2(backgroundAndDashSize).x; }
+    float  BorderDashSize()       { return float(backgroundAndDashSize >> 16); }
+    float  BorderDashOffset()     { return float(dashOffsetAndShadow & 0xFFFFu); }
 };
 
 struct Box
@@ -37,10 +70,12 @@ struct Box
     int2     size;
 
     int      textureIndex;
-    int16_t  colorIndex;   // Per-element ColorStyle override (0 = use box style's background); supports gradients.
-    int16_t  _pad3;
-    uint     styles[4];    // up to four state styles mixed: GPU style index in the low 24 bits, share (of 255) in the top 8
-    int16_t4 snappedPx;    // window pixels {x0,y0,x1,y1} snapped to the parent; all 0 = snap here
+    uint     colorIndexBits;   // int16_t colorIndex, then padding: a ColorStyle override (0 = the box style's background); supports gradients
+    uint     styles[4];        // up to four state styles mixed: GPU style index in the low 24 bits, share (of 255) in the top 8
+    uint2    snappedPxBits;    // int16_t4: window pixels {x0,y0,x1,y1} snapped to the parent; all 0 = snap here
+
+    int  ColorIndex() { return UnpackInt16x2(colorIndexBits).x; }
+    int4 SnappedPx()  { return UnpackInt16x4(snappedPxBits); }
 };
 
 struct Glyph
@@ -57,11 +92,15 @@ struct Glyph
     float2    uvMax;
 
     float     scale;
-    uint16_t2 glyph_type;
+    uint      glyphTypeBits;    // uint16_t2 glyph_type
 
-    int       textureIndex;   // Glyph atlas, not to be confused with ColorStyle texture index
-    int16_t   textColorIndex; // ColorStyle index for text color (1-based, 0 = invalid)
-    int16_t   shadowBlur;     // -1: the glyph itself; 0 and up: a text shadow blurred by this many 1/8 pixels
+    int       textureIndex;     // Glyph atlas, not to be confused with ColorStyle texture index
+    uint      colorAndBlurBits; // int16_t textColorIndex (1-based, 0 = invalid), int16_t shadowBlur
+                                // (-1: the glyph itself; 0 and up: a text shadow blurred by this many 1/8 pixels)
+
+    uint2 GlyphType()      { return UnpackUint16x2(glyphTypeBits); }
+    int   TextColorIndex() { return UnpackInt16x2(colorAndBlurBits).x; }
+    int   ShadowBlur()     { return UnpackInt16x2(colorAndBlurBits).y; }
 };
 
 struct Dot
@@ -93,8 +132,13 @@ struct Line
     float    gradientOffset;
     float    gradientScale;
 
-    int16_t2 p0, p1, p2, p3;
+    uint     p0Bits, p1Bits, p2Bits, p3Bits;   // int16_t2 each
     int2     _padTo96;     // std430 rounds the struct up to 16 bytes
+
+    float2 P0() { return float2(UnpackInt16x2(p0Bits)); }
+    float2 P1() { return float2(UnpackInt16x2(p1Bits)); }
+    float2 P2() { return float2(UnpackInt16x2(p2Bits)); }
+    float2 P3() { return float2(UnpackInt16x2(p3Bits)); }
 };
 
 struct Triangle
@@ -110,8 +154,10 @@ struct Triangle
 
     int     textureIndex;
 
-    int16_t colorIndex;
-    int16_t hardEdges;   // bit 0: p0-p1, 1: p1-p2, 2: p2-p0, drawn without a soft edge
+    uint    colorAndEdgesBits;   // int16_t colorIndex, int16_t hardEdges (bit 0: p0-p1, 1: p1-p2, 2: p2-p0, drawn without a soft edge)
+
+    int ColorIndex() { return UnpackInt16x2(colorAndEdgesBits).x; }
+    int HardEdges()  { return UnpackInt16x2(colorAndEdgesBits).y; }
 };
 
 struct Quad
@@ -125,12 +171,14 @@ struct Quad
     int2    size;
 
     int     textureIndex;
-    int16_t colorIndex;
-    int16_t blur;         // pixels; a shadow: the rect includes the blur on every side
+    uint    colorAndBlurBits;   // int16_t colorIndex, int16_t blur (pixels; a shadow: the rect includes the blur on every side)
     float   cornerRadius;
     uint    displayFlags; // ImageDisplay: 3 bits a channel's source (red first), bit 12 sRGB-encode, bit 31 on
     float4  uvRect;       // the texture's part a StretchedTexture stretches over the quad: min.xy, max.zw
     float4  tint;         // multiplies the color
+
+    int ColorIndex() { return UnpackInt16x2(colorAndBlurBits).x; }
+    int Blur()       { return UnpackInt16x2(colorAndBlurBits).y; }
 };
 
 static const int kBoxSlot      = 0;
