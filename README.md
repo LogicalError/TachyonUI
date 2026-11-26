@@ -54,14 +54,19 @@ Renders with Vulkan by default.
   - NVIDIA GeForce GTX 750 or 900 series, or newer
   - AMD Radeon RX 400 series, or newer
   - Intel HD or UHD Graphics 500 or 600 (6th-gen Core), Iris Xe or Arc, or newer
-- Optional: `-DTACHYON_D3D12=ON` adds the Direct3D 12 backend (no extra packages);
-  `--graphics d3d12` picks it in the showcase. It needs one of these GPUs, on a current driver:
-  - NVIDIA GeForce GTX 900 series, or newer
-  - AMD Radeon R9 285, R9 380 or R9 Fury, Radeon RX 400 series, or newer
-  - Intel Iris Plus (10th-gen Core "Ice Lake"), Iris Xe or Arc, or newer; not the HD or UHD
-    Graphics of 6th to 10th-gen Core
-- Optional: `-DTACHYON_SDLGPU=ON` adds the SDL GPU backend, on SDL's Vulkan or Direct3D 12
-  driver (no extra packages); `--graphics sdlgpu` picks it in the showcase
+- Optional: the Direct3D 12 backend (no extra packages)
+  - Build it in with the CMake option `-DTACHYON_D3D12=ON`
+  - Pick it in your app with `InitializeOptions::graphicsAPI = GraphicsAPI::D3D12`; in the
+    showcase, with `--graphics d3d12`
+  - It needs one of these GPUs, on a current driver:
+    - NVIDIA GeForce GTX 900 series, or newer
+    - AMD Radeon R9 285, R9 380 or R9 Fury, Radeon RX 400 series, or newer
+    - Intel Iris Plus (10th-gen Core "Ice Lake"), Iris Xe or Arc, or newer; not the HD or UHD
+      Graphics of 6th to 10th-gen Core
+- Optional: the SDL GPU backend, on SDL's Vulkan or Direct3D 12 driver (no extra packages)
+  - Build it in with the CMake option `-DTACHYON_SDLGPU=ON`
+  - Pick it in your app with `InitializeOptions::graphicsAPI = GraphicsAPI::SDLGPU`; in the
+    showcase, with `--graphics sdlgpu`
 
 ### Linux
 
@@ -78,8 +83,10 @@ Renders with Vulkan by default.
   - NVIDIA GeForce GTX 750 or 900 series, or newer, on NVIDIA's driver
   - AMD Radeon RX 400 series, or newer, on Mesa
   - Intel HD or UHD Graphics 500 or 600 (6th-gen Core), Iris Xe or Arc, or newer, on Mesa
-- Optional: `-DTACHYON_SDLGPU=ON` adds the SDL GPU backend, on SDL's Vulkan driver (no extra
-  packages); `--graphics sdlgpu` picks it in the showcase
+- Optional: the SDL GPU backend, on SDL's Vulkan driver (no extra packages)
+  - Build it in with the CMake option `-DTACHYON_SDLGPU=ON`
+  - Pick it in your app with `InitializeOptions::graphicsAPI = GraphicsAPI::SDLGPU`; in the
+    showcase, with `--graphics sdlgpu`
 
 ### macOS
 
@@ -94,10 +101,15 @@ Renders with Metal by default.
 - A GPU with Metal 3:
   - every Apple silicon Mac
   - on an Intel Mac: AMD Radeon Vega, Radeon 5000 or 6000 series, or Intel UHD Graphics 630, or newer
-- Optional: `-DTACHYON_SDLGPU=ON` adds the SDL GPU backend, on SDL's Metal driver (no extra
-  packages); `--graphics sdlgpu` picks it in the showcase
-- Optional: `-DTACHYON_VULKAN=ON` adds the Vulkan backend through MoltenVK (the Vulkan SDK, or
-  Homebrew's `vulkan-headers`, `vulkan-loader` and `molten-vk`); `--graphics vulkan` picks it in the showcase
+- Optional: the SDL GPU backend, on SDL's Metal driver (no extra packages)
+  - Build it in with the CMake option `-DTACHYON_SDLGPU=ON`
+  - Pick it in your app with `InitializeOptions::graphicsAPI = GraphicsAPI::SDLGPU`; in the
+    showcase, with `--graphics sdlgpu`
+- Optional: the Vulkan backend, through MoltenVK (the Vulkan SDK, or Homebrew's
+  `vulkan-headers`, `vulkan-loader` and `molten-vk`)
+  - Build it in with the CMake option `-DTACHYON_VULKAN=ON`
+  - Pick it in your app with `InitializeOptions::graphicsAPI = GraphicsAPI::Vulkan`; in the
+    showcase, with `--graphics vulkan`
 
 ## Quick start
 
