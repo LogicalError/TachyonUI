@@ -61,7 +61,7 @@ in an application that already has a Vulkan, Direct3D 12 or Metal renderer.
 
 ### macOS
 
-Renders with Metal by default. No Vulkan SDK is needed.
+Renders with Metal by default. 
 
 - macOS 13.3 or newer, on Apple silicon or an Intel Mac with a Metal 3 GPU
 - Apple Clang: Xcode or just its Command Line Tools (`xcode-select --install`)
