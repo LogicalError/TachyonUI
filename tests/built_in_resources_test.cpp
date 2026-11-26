@@ -89,6 +89,67 @@ namespace
         EXPECT_EQ(dxil, std::size(kPrimitiveSpecs) * 2 * backends);
     }
 
+    // The shaders keep their 16-bit fields packed in 32-bit words and do their math in 32 bits,
+    // so they run on GPUs without 16-bit shader types: SPIR-V declares no 16- or 8-bit capability.
+    TEST(BuiltInShaders, TheSPIRVNeedsNo16Or8BitTypes)
+    {
+        constexpr uint32_t kMagic = 0x07230203, kOpCapability = 17;
+        // Float16, Int16, Int8; 16-bit storage (buffer, uniform, push constant, in/out); 8-bit storage.
+        constexpr uint32_t kNarrow[] = { 9, 22, 39, 4433, 4434, 4435, 4436, 4448, 4449, 4450 };
+        size_t modules = 0;
+        for (const detail::EmbeddedFile& file : detail::EmbeddedShaderFiles())
+        {
+            if (!file.key.ends_with(".spv"))
+                continue;
+            ++modules;
+            std::vector<uint32_t> words(file.data.size() / 4);
+            std::memcpy(words.data(), file.data.data(), words.size() * 4);
+            ASSERT_GT(words.size(), 5u) << file.key;
+            ASSERT_EQ(words[0], kMagic) << file.key;
+            for (size_t i = 5; i < words.size();)
+            {
+                const uint32_t opcode = words[i] & 0xFFFFu, count = words[i] >> 16;
+                ASSERT_GT(count, 0u) << file.key;
+                if (opcode == kOpCapability && count == 2)
+                    EXPECT_EQ(std::ranges::count(kNarrow, words[i + 1]), 0) << file.key << " declares capability " << words[i + 1];
+                i += count;
+            }
+        }
+        if (modules == 0) GTEST_SKIP() << "built without a backend that runs SPIR-V";
+    }
+
+    // Nor does the DXIL ask for native 16-bit operations (the "SFI0" part's feature flags).
+    TEST(BuiltInShaders, TheDXILNeedsNoNative16BitOps)
+    {
+        constexpr uint64_t kNative16BitOps = 0x40000;   // D3D_SHADER_REQUIRES_NATIVE_16BIT_OPS
+        size_t modules = 0;
+        for (const detail::EmbeddedFile& file : detail::EmbeddedShaderFiles())
+        {
+            if (!file.key.ends_with(".dxil"))
+                continue;
+            ++modules;
+            auto read32 = [&](size_t at) { uint32_t v = 0; std::memcpy(&v, file.data.data() + at, 4); return v; };
+            // DXBC, a 16-byte hash, a version, the container's size, the part count, then each
+            // part's offset; a part is its four letters, its size and its data.
+            ASSERT_GE(file.data.size(), 32u) << file.key;
+            const uint32_t parts = read32(28);
+            bool found = false;
+            for (uint32_t p = 0; p < parts; ++p)
+            {
+                const uint32_t at = read32(32 + 4 * p);
+                ASSERT_LE(size_t(at) + 16, file.data.size()) << file.key;
+                if (std::memcmp(file.data.data() + at, "SFI0", 4) != 0)
+                    continue;
+                uint64_t flags = 0;
+                std::memcpy(&flags, file.data.data() + at + 8, 8);
+                EXPECT_EQ(flags & kNative16BitOps, 0u) << file.key << " needs native 16-bit operations";
+                found = true;
+            }
+            (void)found;   // a shader that needs nothing extra has no SFI0 part
+        }
+        if (modules == 0) GTEST_SKIP() << "built without a backend that runs DXIL";
+    }
+
     TEST(BuiltInResources, OnlyAtAFolderBoundary)
     {
         EXPECT_TRUE(FindBuiltInResource("styles.css").empty());

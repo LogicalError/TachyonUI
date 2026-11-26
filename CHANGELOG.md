@@ -3,9 +3,7 @@
 Notable changes per release. Releases are tagged `vX.Y.Z`; the version lives in
 `CMakeLists.txt` and is available in code from `gui_core/gui_version.h`.
 
-## [Unreleased] — 0.1.0
-
-First public preview. The API is not stable yet.
+## [Unreleased] — 1.1.0
 
 - Immediate-mode style GUI library for C++20 on Vulkan and SDL3 (`gui_core`, `gui_controls`).
 - CSS-like styling with a dark and a light theme; text shaping, bidi and font fallback through skribidi.
@@ -305,4 +303,5 @@ First public preview. The API is not stable yet.
 - Showcase: every Hierarchy panel shows one scene, and every Files panel one set of files. An object added, deleted or moved in one Hierarchy, or a file moved or renamed in one Files panel, shows in the others; what each one opened, selected and searched stays its own.
 - Fixed: a window that closed in the frame its own redraw ran, while it was resized or shown again, crashed the app: dragging a docked panel by its tab and dropping it could close the drag preview that way. The Vulkan, Direct3D 12, SDL GPU and Metal window contexts stop that redraw once the frame has closed their window, and don't present it.
 - Fixed: a rich-text run's own color (`ContentRun::color` or `background`, a link's) was registered as a color style that was never let go, so a run whose color changed every frame added a style a frame. A run's color now has a style of its own, shared by the runs in that color and let go some frames after nothing draws with it. A cached panel's replay keeps the colors its text was drawn with, and one that went makes the panel draw again.
+- Runs on GPUs without 16-bit shader types: GeForce GTX 750, 900 and 10 series and Radeon RX 400 and 500 series on Vulkan; GeForce GTX 900 and 10 series and Radeon R9 285, 380 and Fury and RX 400 and 500 series on Direct3D 12. The shaders read the primitives' and styles' 16-bit fields from the 32-bit words holding them, with 32-bit operations; the data and what's drawn are unchanged. The Vulkan backend no longer requires `shaderFloat16`, `shaderInt16`, `shaderInt8` or 8- and 16-bit storage, and SDL GPU's device no longer asks for the 16-bit ones.
 - SDL GPU: the shaders read each color style's image once, not once for each color type, so they hold far less code. SDL GPU can't index its images, so each read is a case for every image a draw binds. A driver that compiles shaders when they're first drawn with no longer stalls: lavapipe on Windows took 15 s to draw a first frame, and now takes under 3.

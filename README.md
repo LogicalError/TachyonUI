@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://github.com/LogicalError/TachyonUI/actions/workflows/ci.yml"><img src="https://github.com/LogicalError/TachyonUI/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://logicalerror.github.io/TachyonUI/"><img src="https://github.com/LogicalError/TachyonUI/actions/workflows/docs.yml/badge.svg" alt="Docs"></a>
-  <img src="https://img.shields.io/badge/version-0.1%20preview-A1660C" alt="Version 0.1 preview">
+  <img src="https://img.shields.io/badge/version-1.1-A1660C" alt="Version 1.1">
   <img src="https://img.shields.io/badge/C%2B%2B-20-2F6FCF" alt="C++20">
   <img src="https://img.shields.io/badge/Vulkan-1.3-A5262D" alt="Vulkan 1.3">
   <img src="https://img.shields.io/badge/Metal-3-555555" alt="Metal 3">
@@ -43,13 +43,29 @@ in an application that already has a Vulkan, Direct3D 12 or Metal renderer.
 
 ### Windows
 
+Renders with Vulkan by default.
+
 - Windows x64
 - Visual Studio 2026 with CMake 4.2 or newer, or Visual Studio 2022 with CMake 3.22 or newer
 - The [Vulkan SDK](https://vulkan.lunarg.com/) 1.4.341 or newer, for its Slang shader compiler
   (or an older SDK and a [Slang release](https://github.com/shader-slang/slang/releases) 2026.1 or newer)
 - Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
+- A GPU with Vulkan 1.3, on a current driver:
+  - NVIDIA GeForce GTX 750 or 900 series, or newer
+  - AMD Radeon RX 400 series, or newer
+  - Intel HD or UHD Graphics 500 or 600 (6th-gen Core), Iris Xe or Arc, or newer
+- Optional: `-DTACHYON_D3D12=ON` adds the Direct3D 12 backend (no extra packages);
+  `--graphics d3d12` picks it in the showcase. It needs one of these GPUs, on a current driver:
+  - NVIDIA GeForce GTX 900 series, or newer
+  - AMD Radeon R9 285, R9 380 or R9 Fury, Radeon RX 400 series, or newer
+  - Intel Iris Plus (10th-gen Core "Ice Lake"), Iris Xe or Arc, or newer; not the HD or UHD
+    Graphics of 6th to 10th-gen Core
+- Optional: `-DTACHYON_SDLGPU=ON` adds the SDL GPU backend, on SDL's Vulkan or Direct3D 12
+  driver (no extra packages); `--graphics sdlgpu` picks it in the showcase
 
 ### Linux
+
+Renders with Vulkan by default.
 
 - Linux x64
 - GCC 13 or newer, or Clang 17 or newer
@@ -58,28 +74,30 @@ in an application that already has a Vulkan, Direct3D 12 or Metal renderer.
 - The [Vulkan SDK](https://vulkan.lunarg.com/) 1.4.341 or newer, or your distribution's Vulkan
   packages and a [Slang release](https://github.com/shader-slang/slang/releases) 2026.1 or newer
 - Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
+- A GPU with Vulkan 1.3, on a current driver:
+  - NVIDIA GeForce GTX 750 or 900 series, or newer, on NVIDIA's driver
+  - AMD Radeon RX 400 series, or newer, on Mesa
+  - Intel HD or UHD Graphics 500 or 600 (6th-gen Core), Iris Xe or Arc, or newer, on Mesa
+- Optional: `-DTACHYON_SDLGPU=ON` adds the SDL GPU backend, on SDL's Vulkan driver (no extra
+  packages); `--graphics sdlgpu` picks it in the showcase
 
 ### macOS
 
-Renders with Metal by default. No Vulkan SDK is needed.
+Renders with Metal by default.
 
-- macOS 13.3 or newer, on Apple silicon or an Intel Mac with a Metal 3 GPU
+- macOS 13.3 or newer
 - Apple Clang: Xcode or just its Command Line Tools (`xcode-select --install`)
 - CMake 3.22 or newer and Ninja (`brew install cmake ninja git-lfs`)
 - A [Slang release](https://github.com/shader-slang/slang/releases) 2026.1 or newer for its `slangc`
   (it's not in Homebrew): unpack it and put `slangc` on the `PATH`, or set `SLANGC` to it
 - Git with [Git LFS](https://git-lfs.com/) (the fonts are stored in LFS)
+- A GPU with Metal 3:
+  - every Apple silicon Mac
+  - on an Intel Mac: AMD Radeon Vega, Radeon 5000 or 6000 series, or Intel UHD Graphics 630, or newer
 - Optional: `-DTACHYON_SDLGPU=ON` adds the SDL GPU backend, on SDL's Metal driver (no extra
   packages); `--graphics sdlgpu` picks it in the showcase
 - Optional: `-DTACHYON_VULKAN=ON` adds the Vulkan backend through MoltenVK (the Vulkan SDK, or
   Homebrew's `vulkan-headers`, `vulkan-loader` and `molten-vk`); `--graphics vulkan` picks it in the showcase
-
-### To run
-
-- Windows and Linux: a GPU driver with Vulkan 1.3 and the features listed by
-  `VulkanDeviceContext::GetDeviceRequirements()`
-- macOS: a GPU of the Metal 3 family (every Apple silicon Mac; on Intel Macs, AMD Vega,
-  Radeon 5000/6000 or Intel UHD 630 and newer)
 
 ## Quick start
 
@@ -142,7 +160,7 @@ If you're new to TachyonUI, the [tutorial](docs/tutorial.md) goes from an empty 
 app with docked panels, buttons and fields.
 
 ```cmake
-find_package(TachyonUI 0.1 CONFIG REQUIRED)       # after cmake --install
+find_package(TachyonUI 1.1 CONFIG REQUIRED)       # after cmake --install
 # or: add_subdirectory(external/TachyonUI)
 target_link_libraries(my_app PRIVATE TachyonUI::gui_controls)
 ```
@@ -165,8 +183,8 @@ The synchronization rules and code are in [Using your own Vulkan device](docs/in
 
 ## Status
 
-**0.1 preview.** The API will still change. Windows x64 and Linux x64 are built and tested in
-CI. macOS (Apple silicon) runs on Metal; CI builds it and runs the tests that need no GPU.
+**1.1.** Windows x64 and Linux x64 are built and tested in CI. macOS (Apple silicon) runs on
+Metal; CI builds it and runs the tests that need no GPU.
 
 ---
 

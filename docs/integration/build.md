@@ -131,7 +131,7 @@ cmake --install build --config Release --prefix <prefix>
 A program using the package then needs no TachyonUI source or build tree:
 
 ```cmake
-find_package(TachyonUI 0.1 CONFIG REQUIRED)
+find_package(TachyonUI 1.1 CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE TachyonUI::gui_controls)
 ```
 
@@ -144,7 +144,7 @@ target_link_libraries(my_app PRIVATE TachyonUI::gui_controls)
   ```cmake
   set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
   set(CMAKE_MAP_IMPORTED_CONFIG_MINSIZEREL     Release)
-  find_package(TachyonUI 0.1 CONFIG REQUIRED)
+  find_package(TachyonUI 1.1 CONFIG REQUIRED)
   ```
 
 - A minimal program using the package: `tests/package_consumer`.

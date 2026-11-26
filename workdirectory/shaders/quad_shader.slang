@@ -105,12 +105,12 @@ float4 fragmentMain(VSOutput input) : SV_Target
     // drop shadow fade from the edge instead of sampling one fixed point.
     float cornerRadius = input.cornerRadius * input.transformScale * pixelrange;
     // A shadow's quad extends its shape by the blur on every side.
-    float  blurPx = float(quad.blur) * input.transformScale;
+    float  blurPx = float(quad.Blur()) * input.transformScale;
     float2 shape  = max(uvsize - float2(blurPx * pixelrange), float2(0.0));
     float  dist   = sdf_roundedBox(uv, shape, min(cornerRadius, min(shape.x, shape.y)));
 
     // In units of the quad's smaller side: its middle is half a unit deep.
-    float4 color = getSDFColor(int(quad.colorIndex), uv, uvsize, saturate(-dist * 2.0),
+    float4 color = getSDFColor(quad.ColorIndex(), uv, uvsize, saturate(-dist * 2.0),
                                input.textureIndex, input.boxSize, weights, quad.uvRect);
     color = applyImageDisplay(color, quad.displayFlags) * quad.tint;
 

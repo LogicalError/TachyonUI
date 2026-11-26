@@ -54,10 +54,12 @@ VSOutput vertexMain(VertexInput vertex)
     output.uv             = uv;
     output.textureIndex   = max(0, glyph.textureIndex - 1);
     output.scale          = glyph.scale;
-    output.bpp            = glyph.glyph_type.x;
-    output.mode           = glyph.glyph_type.y;
-    output.textColorIndex = int(glyph.textColorIndex);
-    output.shadowBlur     = glyph.shadowBlur < 0 ? -1.0 : float(glyph.shadowBlur) / 8.0;
+    const uint2 glyphType = glyph.GlyphType();
+    const int   blur      = glyph.ShadowBlur();
+    output.bpp            = glyphType.x;
+    output.mode           = glyphType.y;
+    output.textColorIndex = glyph.TextColorIndex();
+    output.shadowBlur     = blur < 0 ? -1.0 : float(blur) / 8.0;
     output.position       = PrimitivePosition(position, glyph.transform0.w);
     output.opacity        = PrimitiveOpacity(glyph.transform1);
     return output;

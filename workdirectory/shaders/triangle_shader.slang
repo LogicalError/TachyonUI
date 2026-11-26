@@ -92,7 +92,7 @@ float4 fragmentMain(VSOutput input) : SV_Target
 
     // A hard edge (shared with a neighbour) cuts straight; only the others are soft.
     // (A pixel's middle right on it is kept on both sides, despite rounding.)
-    int hard = int(triangle.hardEdges);
+    int hard = triangle.HardEdges();
     const float onEdge = -1e-4;
     if (((hard & 1) != 0 && w0 < onEdge) || ((hard & 2) != 0 && w1 < onEdge) || ((hard & 4) != 0 && w2 < onEdge))
         discard;
@@ -121,7 +121,7 @@ float4 fragmentMain(VSOutput input) : SV_Target
     float perimeter = length(p1 - p0) + length(p2 - p1) + length(p0 - p2);
     float inradius  = abs(area) / max(perimeter, 0.0001);
     float depth     = saturate(-signedDistance / max(inradius, 0.0001));
-    float4 color = getSDFColor(int(triangle.colorIndex), localPos, triHalfSize, depth, input.textureIndex, boxSize, weights);
+    float4 color = getSDFColor(triangle.ColorIndex(), localPos, triHalfSize, depth, input.textureIndex, boxSize, weights);
 
     color.a *= opacity;
     if (color.a <= (1.0 / 512.0))

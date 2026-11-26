@@ -2,7 +2,7 @@
 
 # TachyonUI: C++ GUI library (gui_core, gui_controls).
 #
-#   find_package(TachyonUI 0.1 CONFIG REQUIRED)
+#   find_package(TachyonUI 1.1 CONFIG REQUIRED)
 #   target_link_libraries(my_app PRIVATE TachyonUI::gui_controls)
 #
 # Provides:

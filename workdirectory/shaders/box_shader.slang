@@ -35,7 +35,7 @@ VSOutput vertexMain(VertexInput vertex)
     // The drawn box in whole pixels: snapped relative to its parent when the CPU
     // supplies it (gui_pixel_snap.h), else each edge to the nearest pixel (half up).
     // A non-empty box keeps at least one pixel.
-    int4   parentSnapped = int4(box.snappedPx);
+    int4   parentSnapped = box.SnappedPx();
     bool   hasSnapped    = parentSnapped.z > parentSnapped.x || parentSnapped.w > parentSnapped.y;
     float2 snappedMin    = hasSnapped ? float2(parentSnapped.xy) : floor(pos + 0.5);
     float2 snappedMax    = hasSnapped ? float2(parentSnapped.zw) : floor(pos + size + 0.5);
@@ -64,7 +64,7 @@ VSOutput vertexMain(VertexInput vertex)
         output.blendFactors[i] = float(box.styles[i] >> 24) / 255.0;
     }
     output.textureIndex = box.textureIndex;
-    output.colorIndex   = int(box.colorIndex);
+    output.colorIndex   = box.ColorIndex();
     output.position     = PrimitivePosition(position, box.transform0.w);
     output.opacity      = PrimitiveOpacity(box.transform1);
     return output;
@@ -140,10 +140,10 @@ void AddPreStyle(inout CurrentStyle currentStyle, float weight, int styleIndex)
     if (styleIndex < 0) return;
     BoxStyle boxStyle = LoadBoxStyle(styleIndex);
 
-    currentStyle.cornerRadius += weight * float4(boxStyle.cornerRadius);
-    currentStyle.borderWidth  += weight * float4(boxStyle.borderWidth);
-    currentStyle.dashSize     += weight * float(boxStyle.borderDashSize);
-    currentStyle.dashOffset   += weight * float(boxStyle.borderDashOffset);
+    currentStyle.cornerRadius += weight * boxStyle.CornerRadius();
+    currentStyle.borderWidth  += weight * boxStyle.BorderWidth();
+    currentStyle.dashSize     += weight * boxStyle.BorderDashSize();
+    currentStyle.dashOffset   += weight * boxStyle.BorderDashOffset();
 }
 
 // A state's border and background colors at this fragment, straight (not premultiplied).
@@ -158,17 +158,18 @@ void StateColors(float2 uv, float2 sdfUv, float2 uvsize, float edgeDepth, int st
     // Select border color based on which edge the fragment is closest to.
     // Regions are divided by diagonals from the center (same convention as CSS):
     //   uv.y > 0 = top, uv.y < 0 = bottom, uv.x > 0 = right, uv.x < 0 = left.
-    int16_t edgeColorIndex;
+    const int4 borderColorIndex = boxStyle.BorderColorIndex();
+    int edgeColorIndex;
     float2 side = sdfUv / uvsize; // -1..1 from the center, y up
     if (abs(side.y) >= abs(side.x))
-        edgeColorIndex = (side.y >= 0.0) ? boxStyle.borderColorIndex.x   // top
-                                         : boxStyle.borderColorIndex.z;  // bottom
+        edgeColorIndex = (side.y >= 0.0) ? borderColorIndex.x   // top
+                                         : borderColorIndex.z;  // bottom
     else
-        edgeColorIndex = (side.x > 0.0)  ? boxStyle.borderColorIndex.y   // right
-                                         : boxStyle.borderColorIndex.w;  // left
+        edgeColorIndex = (side.x > 0.0)  ? borderColorIndex.y   // right
+                                         : borderColorIndex.w;  // left
 
-    border     = getSDFColor(int(edgeColorIndex), uv, uvsize, edgeDepth, textureIndex, boxSize, weights);
-    background = getSDFColor(int(boxStyle.backgroundColorIndex), uv, uvsize, edgeDepth, textureIndex, boxSize, weights);
+    border     = getSDFColor(edgeColorIndex, uv, uvsize, edgeDepth, textureIndex, boxSize, weights);
+    background = getSDFColor(boxStyle.BackgroundColorIndex(), uv, uvsize, edgeDepth, textureIndex, boxSize, weights);
 }
 
 // Depth is only tested here (occluders wrote it), so test it before shading.
