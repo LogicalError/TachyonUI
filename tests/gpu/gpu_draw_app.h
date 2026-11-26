@@ -1,12 +1,13 @@
 #pragma once
 
-// A window with a button, a label and a cached scope, drawn by a graphics backend and compared
-// with Vulkan's drawing of it: for the tests of the other backends.
+// Windows drawn by a graphics backend and compared with Vulkan's drawing of them, for the tests of
+// the other backends: one with a button, a label and a cached scope, and one with every color type.
 
 #include <gui_controls/gui_application_internal.h>
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <memory>
 #include <vector>
@@ -76,6 +77,107 @@ namespace GpuDrawApp
             if (pixels.empty() || !ReadWindowPixels(windowID, pixels))
                 pixels.clear();
             return pixels;
+        }
+    };
+
+    // A window with a shape for each color type the shaders resolve: the gradients, read from the
+    // gradient atlas, the interpolated box and triangle, and an image stretched and repeated.
+    class ColorTypesApp : public GUIApplicationInternals
+    {
+    public:
+        ID  windowID = ID::Invalid(), areaID = ID::Invalid();
+        int frame = 0;
+        static constexpr int kFrames = 3;
+
+        void OnGUI() override
+        {
+            if (BeginWindow(windowID, "Colors", theme.windowStyleRef, LayoutOverride{}.Size(360, 160)))
+            {
+                BeginArea(areaID, LayoutOverride::FixedSize(tachyon::Pixels{ 352 }, tachyon::Pixels{ 96 }));
+                (void)elementStorage.AddCustomDrawAfter(elementStorage.FindElementRefByID(areaID),
+                                                        [this](CustomDrawContext& c) { Draw(c); });
+                EndArea();
+            }
+            EndWindow();
+            if (++frame >= kFrames)
+                applicationQuit = true;
+        }
+
+        // False when no window system or no GPU runs `api` (the app fell back to another).
+        bool Start(GraphicsAPI api, std::unique_ptr<GraphicsContext> backend = {})
+        {
+            InitializeOptions options;
+            options.graphicsAPI = api;
+            if (backend)
+                SetGraphicsBackend(std::move(backend));
+            if (!Initialize(options) || graphicsContext->GetAPI() != api)
+                return false;
+            windowID = idManager.CreateStaticID();
+            areaID   = idManager.CreateStaticID();
+
+            const color4b red{ 255, 0, 0, 255 }, green{ 0, 255, 0, 255 }, blue{ 0, 0, 255, 255 }, white{ 255, 255, 255, 255 };
+            for (const ColorType type : { ColorType::LinearGradient, ColorType::CircularAngularGradient,
+                                          ColorType::EllipsoidAngularGradient, ColorType::RadialGradient, ColorType::SDFGradient })
+                m_quads.push_back(styleManager.RegisterColorStyle(ColorStyle::Create(red, blue, type)));
+            m_quads.push_back(styleManager.RegisterColorStyle(ColorStyle::Create(green)));
+            m_quads.push_back(styleManager.RegisterColorStyle(ColorStyle::Create(red, green, blue, white, ColorType::InterpolatedBox)));
+            m_triangle  = styleManager.RegisterColorStyle(ColorStyle::Create(red, green, blue, ColorType::InterpolatedTriangle));
+            m_stretched = styleManager.RegisterColorStyle(ColorStyle::Create(white, white, ColorType::StretchedTexture));
+            m_repeated  = styleManager.RegisterColorStyle(ColorStyle::Create(white, white, ColorType::RepeatedTexture));
+
+            // A 4x4 image, its texels each a different color (RGBA).
+            uint32_t pixels[16];
+            for (uint32_t i = 0; i < 16; ++i)
+                pixels[i] = 0xff000000u | (i * 16u) | ((255u - i * 16u) << 8) | ((i & 3u) * 80u << 16);
+            m_created = graphicsContext->CreateImage(pixels, uint2{ 4, 4 }, ImageFormat::R8G8B8A8, Sampler::NearestRepeat);
+            m_image   = m_created != nullptr ? graphicsContext->RegisterImage(m_created) : ImageIndex::Invalid;
+            if (m_image == ImageIndex::Invalid)
+                return false;
+            transitionManager.SetEnabled(false);
+            SetRedrawMode(RedrawMode::Always);
+            return true;
+        }
+
+        void Release()
+        {
+            if (m_created != nullptr && graphicsContext != nullptr)
+                graphicsContext->DestroyImageAtEnd(m_created, DeviceScope::Application);
+            m_created = nullptr;
+            Cleanup();
+        }
+
+        // The window's last frame, BGRA; empty when it can't be read.
+        std::vector<uint8_t> Pixels(IntRect& rect)
+        {
+            rect = windowManager->GetWindowRect(windowID);
+            std::vector<uint8_t> pixels(size_t(std::max(rect.w, 0)) * std::max(rect.h, 0) * 4);
+            if (pixels.empty() || !ReadWindowPixels(windowID, pixels))
+                pixels.clear();
+            return pixels;
+        }
+
+    private:
+        std::vector<VisualColorStyleIndex> m_quads;
+        VisualColorStyleIndex m_triangle{}, m_stretched{}, m_repeated{};
+        tachyon::Image*       m_created = nullptr;   // qualified: Image is also the app's control
+        ImageIndex            m_image   = ImageIndex::Invalid;
+
+        // Rows of seven 40-pixel cells, 4 pixels apart.
+        void Draw(CustomDrawContext& c) const
+        {
+            int cell = 0;
+            auto next = [&cell] {
+                const IntRect r{ .position = { 4 + (cell % 7) * 44, 4 + (cell / 7) * 44 }, .size = { 40, 40 } };
+                ++cell;
+                return r;
+            };
+            for (const VisualColorStyleIndex style : m_quads)
+                c.RenderQuad(next(), style);
+            const IntRect t = next();
+            c.RenderTriangle(float2{ float(t.x), float(t.y + t.h) }, float2{ float(t.x + t.w), float(t.y + t.h) },
+                             float2{ float(t.x) + float(t.w) * 0.5f, float(t.y) }, m_triangle);
+            c.RenderQuad(next(), m_stretched, 0.0f, m_image);
+            c.RenderQuad(next(), m_repeated, 0.0f, m_image);
         }
     };
 
@@ -179,38 +281,25 @@ namespace GpuDrawApp
         return drawn;
     }
 
-    // What was drawn looks as it should, and as it does on Vulkan where Vulkan runs (else on the
-    // native Metal backend): the same pixels, but for rounding. Call once the app that drew it is
-    // cleaned up.
-    inline void ExpectDrawnAsOnVulkan(const Drawn& drawn)
+    // `pixels`, a frame `rect` in size, as an App (DrawApp, ColorTypesApp) draws them on Vulkan
+    // where Vulkan runs, else on the native Metal backend: the same, but for rounding. Call once
+    // the app that drew them is cleaned up.
+    template <class App>
+    void ExpectSameAsOnVulkan(const std::vector<uint8_t>& pixels, IntRect rect)
     {
-        const std::vector<uint8_t>& pixels = drawn.pixels;
-        ASSERT_FALSE(pixels.empty());
-        const IntRect rect = drawn.rect, window = drawn.window, button = drawn.button, label = drawn.label;
-
-        // The window's background is drawn, the button stands out from it, and the label has glyphs.
-        const Rgb background = At(pixels, rect.w, window, window.x + window.w - 4, window.y + window.h - 4);
-        EXPECT_GT(background.Sum(), 0) << "the window's background is drawn";
-        const Rgb buttonFill = At(pixels, rect.w, window, button.x + 4, button.y + button.h / 2);
-        EXPECT_GT(std::abs(buttonFill.Sum() - background.Sum()), 9) << "the button stands out";
-        int glyphPixels = 0;
-        for (int y = label.y; y < label.y + label.h; ++y)
-            for (int x = label.x; x < label.x + label.w; ++x)
-                glyphPixels += std::abs(At(pixels, rect.w, window, x, y).Sum() - background.Sum()) > 60;
-        EXPECT_GT(glyphPixels, 50) << "the label's glyphs are drawn";
-
-        // The same app on Vulkan, where it runs: the same pixels, but for rounding. Without
-        // Vulkan (macOS), on the native Metal backend instead.
         IntRect              vulkanRect{};
         std::vector<uint8_t> expected;
         for (const GraphicsAPI reference : { GraphicsAPI::Vulkan, GraphicsAPI::Metal })
         {
             if (reference == GraphicsAPI::Metal && !TACHYON_METAL)
                 continue;
-            DrawApp app;
+            App app;
             if (app.Start(reference) && app.Run())
                 expected = app.Pixels(vulkanRect);
-            app.Cleanup();
+            if constexpr (requires { app.Release(); })
+                app.Release();
+            else
+                app.Cleanup();
             if (!expected.empty())
                 break;
         }
@@ -231,5 +320,50 @@ namespace GpuDrawApp
                     break;
                 }
         EXPECT_EQ(differing, 0u) << "pixels that differ from Vulkan's, of " << pixels.size() / 4;
+    }
+
+    // What was drawn looks as it should, and as it does on Vulkan where Vulkan runs (else on the
+    // native Metal backend): the same pixels, but for rounding. Call once the app that drew it is
+    // cleaned up.
+    inline void ExpectDrawnAsOnVulkan(const Drawn& drawn)
+    {
+        const std::vector<uint8_t>& pixels = drawn.pixels;
+        ASSERT_FALSE(pixels.empty());
+        const IntRect rect = drawn.rect, window = drawn.window, button = drawn.button, label = drawn.label;
+
+        // The window's background is drawn, the button stands out from it, and the label has glyphs.
+        const Rgb background = At(pixels, rect.w, window, window.x + window.w - 4, window.y + window.h - 4);
+        EXPECT_GT(background.Sum(), 0) << "the window's background is drawn";
+        const Rgb buttonFill = At(pixels, rect.w, window, button.x + 4, button.y + button.h / 2);
+        EXPECT_GT(std::abs(buttonFill.Sum() - background.Sum()), 9) << "the button stands out";
+        int glyphPixels = 0;
+        for (int y = label.y; y < label.y + label.h; ++y)
+            for (int x = label.x; x < label.x + label.w; ++x)
+                glyphPixels += std::abs(At(pixels, rect.w, window, x, y).Sum() - background.Sum()) > 60;
+        EXPECT_GT(glyphPixels, 50) << "the label's glyphs are drawn";
+        ExpectSameAsOnVulkan<DrawApp>(pixels, rect);
+    }
+
+    // Every color type draws on the backend `api` as it does on Vulkan.
+    inline void ExpectColorTypesAsOnVulkan(GraphicsAPI api, std::unique_ptr<GraphicsContext> backend = {})
+    {
+        ColorTypesApp app;
+        if (!app.Start(api, std::move(backend)))
+        {
+            app.Release();
+            GTEST_SKIP() << "no window system, or no GPU runs this backend";
+        }
+        ASSERT_TRUE(app.Run());
+        IntRect rect{};
+        const std::vector<uint8_t> pixels = app.Pixels(rect);
+        app.Release();
+        ASSERT_FALSE(pixels.empty());
+
+        // The shapes are drawn: their colors are strong, the window's background gray.
+        size_t colored = 0;
+        for (size_t i = 0; i < pixels.size(); i += 4)
+            colored += std::max({ pixels[i], pixels[i + 1], pixels[i + 2] }) - std::min({ pixels[i], pixels[i + 1], pixels[i + 2] }) > 100;
+        EXPECT_GT(colored, 8000u) << "pixels in a strong color";
+        ExpectSameAsOnVulkan<ColorTypesApp>(pixels, rect);
     }
 }
