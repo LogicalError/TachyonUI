@@ -28,6 +28,11 @@ TEST(D3D12Draw, TheUIDrawsAsOnVulkanWithNothingFromTheDebugLayer)
     ExpectDrawnAsOnVulkan(drawn);
 }
 
+TEST(D3D12Draw, EveryColorTypeDrawsAsOnVulkan)
+{
+    ExpectColorTypesAsOnVulkan(GraphicsAPI::D3D12);
+}
+
 TEST(D3D12Draw, ARedrawThatClosesItsWindowStopsThere)
 {
     ExpectARedrawThatClosesItsWindowStopsThere(GraphicsAPI::D3D12);

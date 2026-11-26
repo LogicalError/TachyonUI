@@ -34,6 +34,13 @@ TEST_P(SDLGPUDraw, TheUIDrawsAsOnVulkanWithNothingFromDebugMode)
     ExpectDrawnAsOnVulkan(drawn);
 }
 
+TEST_P(SDLGPUDraw, EveryColorTypeDrawsAsOnVulkan)
+{
+    auto backend = std::make_unique<sdlgpu::SDLGPUGraphicsContext>();
+    backend->SetDriver(GetParam());
+    ExpectColorTypesAsOnVulkan(GraphicsAPI::SDLGPU, std::move(backend));
+}
+
 TEST_P(SDLGPUDraw, ARedrawThatClosesItsWindowStopsThere)
 {
     auto backend = std::make_unique<sdlgpu::SDLGPUGraphicsContext>();

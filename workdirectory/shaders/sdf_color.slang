@@ -136,10 +136,18 @@ float2 SizeOf(SDLImage image)
     return float2(width, height);
 }
 
+// Four texels in a row, from `texel` right, the last no further right than `lastX`.
+float4x4 LoadRow(SDLImage image, int2 texel, int lastX)
+{
+    return float4x4(image.Load(int3(texel, 0)), image.Load(int3(texel.x + 1, texel.y, 0)),
+                    image.Load(int3(texel.x + 2, texel.y, 0)), image.Load(int3(min(texel.x + 3, lastX), texel.y, 0)));
+}
+
 float2 ImageSize(uint index) { SDL_ON_IMAGE(BoundImage(index), SizeOf(image), float2(1, 1)) }
 // The base level, as on the other APIs.
 float4 SampleImage(uint index, float2 uv) { SDL_ON_IMAGE(BoundImage(index), image.SampleLevel(uv, 0), float4(0, 0, 0, 0)) }
 float4 FetchImage(uint index, int2 texel) { SDL_ON_IMAGE(BoundImage(index), image.Load(int3(texel, 0)), float4(0, 0, 0, 0)) }
+float4x4 FetchImageRow(uint index, int2 texel, int lastX) { SDL_ON_IMAGE(BoundImage(index), LoadRow(image, texel, lastX), float4x4(0)) }
 #else
 // Every registered image, by its ImageIndex (set 0, binding 0), with its own sampler.
 [[vk::binding(0, 0)]] Sampler2D allTextures[];
@@ -155,11 +163,15 @@ float4 SampleImage(uint index, float2 uv) { return allTextures[NonUniformResourc
 float4 FetchImage(uint index, int2 texel) { return allTextures[NonUniformResourceIndex(index)].Load(int3(texel, 0)); }
 #endif
 
-float4 getGradientColor(uint gradientPageIdx, float2 texSize, float offset, float gradientIndex)
+#if !defined(TACHYON_SDLGPU)
+// Four texels in a row, from `texel` right, the last no further right than `lastX`. SDL GPU has
+// its own, one case for each bound image rather than four.
+float4x4 FetchImageRow(uint index, int2 texel, int lastX)
 {
-    offset = clamp(offset * texSize.x, 0, texSize.x - 1) / texSize.x;
-    return SampleImage(gradientPageIdx, float2(offset, gradientIndex));
+    return float4x4(FetchImage(index, texel), FetchImage(index, int2(texel.x + 1, texel.y)),
+                    FetchImage(index, int2(texel.x + 2, texel.y)), FetchImage(index, int2(min(texel.x + 3, lastX), texel.y)));
 }
+#endif
 
 float cross2(float2 a, float2 b)
 {
@@ -194,25 +206,38 @@ float4 getSDFColor(int colorStyleIndex, float2 pos, float2 size, float edgeDepth
     // page; every atlas fetch for this style uses it.
     uint gradientPageIdx = colorStyle.colorUV_type.w;
 
-    float2 defaultTextureSize = ImageSize(gradientPageIdx);
-    float2 colorPos = float2(colorPixelPos) / defaultTextureSize;
-
-    float4 color;
+    // The one image the type reads, and its size: the texture for the texture types, the gradient
+    // page for the rest. Each type works out where to read it, then it's read in one place: on SDL
+    // GPU every image read is a case for each bound image, so there are as few as there can be.
+    const uint   imageIndex = (colorType == 1 || colorType == 2) ? textureIndex : gradientPageIdx;
+    const float2 imageSize  = ImageSize(imageIndex);
+    float2 colorPos = float2(colorPixelPos) / imageSize;
 
     float2 animOffset = float2(colorStyle.animSpeed) * pc.elapsedTime;
 
+    if (colorType == 7 || colorType == 8) // InterpolatedTriangle, InterpolatedBox
+    {
+        // The corners' colors side by side: a triangle's three, a box's four (top-left,
+        // top-right, bottom-left, bottom-right).
+        const float4x4 c = FetchImageRow(gradientPageIdx, int2(colorPixelPos), int(imageSize.x) - 1);
+        float4 color = (c[0] * weights.x) +
+                       (c[1] * weights.y) +
+                       (c[2] * weights.z);
+        if (colorType == 8)
+            color += c[3] * weights.w;
+        return color;
+    }
+
+    float2 uv;
     if (colorType == 1) // StretchedTexture
     {
-        float2 normalizedUV = lerp(uvRect.xy, uvRect.zw, frac((pos / (size * 2)) + 0.5 + animOffset));
-        color = SampleImage(textureIndex, normalizedUV.xy);
+        uv = lerp(uvRect.xy, uvRect.zw, frac((pos / (size * 2)) + 0.5 + animOffset));
     }
 
     else if (colorType == 2) // RepeatedTexture
     {
-        float2 displayTextureSize = ImageSize(textureIndex);
-        float2 uv = ((pos / size) + 1.0) * 0.5 * boxSize;
-        float2 repeatedUV = (uv / displayTextureSize) + animOffset;
-        color = SampleImage(textureIndex, repeatedUV.xy);
+        float2 boxUV = ((pos / size) + 1.0) * 0.5 * boxSize;
+        uv = (boxUV / imageSize) + animOffset;
     }
 
     else if (colorType == 3) // LinearGradient
@@ -221,18 +246,18 @@ float4 getSDFColor(int colorStyleIndex, float2 pos, float2 size, float edgeDepth
         float2 normalizedUV = (pos / (size * 2)) + 0.5;
         float3 transformedUV = ApplyTransform(uvRow0, uvRow1, float3(normalizedUV, 1));
         normalizedUV = transformedUV.xy / transformedUV.z;
-        float gradient = min(abs(dot(gradient_vector, normalizedUV)), 1 - (1.0 / defaultTextureSize.x));
+        float gradient = min(abs(dot(gradient_vector, normalizedUV)), 1 - (1.0 / imageSize.x));
         float animGradient = clamp(frac(gradient + animOffset.x), 0, 1);
-        color = SampleImage(gradientPageIdx, float2(animGradient, colorPos.y));
+        uv = float2(animGradient, colorPos.y);
     }
 
     else if (colorType == 4) // CircularAngularGradient
     {
         float3 transformedUV = ApplyTransform(uvRow0, uvRow1, float3(pos, 1));
         pos = transformedUV.xy / transformedUV.z;
-        float gradient = min(length(pos), 1 - (1.0 / defaultTextureSize.x));
+        float gradient = min(length(pos), 1 - (1.0 / imageSize.x));
         float animGradient = frac(gradient + animOffset.x);
-        color = SampleImage(gradientPageIdx, float2(animGradient, colorPos.y));
+        uv = float2(animGradient, colorPos.y);
     }
 
     else if (colorType == 5) // EllipsoidAngularGradient
@@ -240,9 +265,9 @@ float4 getSDFColor(int colorStyleIndex, float2 pos, float2 size, float edgeDepth
         float2 normalizedUV = pos / size;
         float3 transformedUV = ApplyTransform(uvRow0, uvRow1, float3(normalizedUV, 1));
         normalizedUV = transformedUV.xy / transformedUV.z;
-        float gradient = min(length(normalizedUV), 1 - (1.0 / defaultTextureSize.x));
+        float gradient = min(length(normalizedUV), 1 - (1.0 / imageSize.x));
         float animGradient = frac(gradient + animOffset.x);
-        color = SampleImage(gradientPageIdx, float2(animGradient, colorPos.y));
+        uv = float2(animGradient, colorPos.y);
     }
 
     else if (colorType == 6) // RadialGradient
@@ -256,44 +281,20 @@ float4 getSDFColor(int colorStyleIndex, float2 pos, float2 size, float edgeDepth
         float side = (from.x * to.y) - (from.y * to.x);
         float signed_angle = glslMod((((side < 0) ? -1 : 1) * angle) + 1, 1);
 
-        float gradient = min(abs(signed_angle), 1 - (1.0 / defaultTextureSize.x));
+        float gradient = min(abs(signed_angle), 1 - (1.0 / imageSize.x));
         float animGradient = frac(gradient + animOffset.x);
-        color = SampleImage(gradientPageIdx, float2(animGradient, colorPos.y));
-    }
-
-    else if (colorType == 7) // InterpolatedTriangle
-    {
-        float4 c0 = FetchImage(gradientPageIdx, int2(colorPixelPos.x + 0, colorPixelPos.y));
-        float4 c1 = FetchImage(gradientPageIdx, int2(colorPixelPos.x + 1, colorPixelPos.y));
-        float4 c2 = FetchImage(gradientPageIdx, int2(colorPixelPos.x + 2, colorPixelPos.y));
-
-        color = (c0 * weights.x) +
-                (c1 * weights.y) +
-                (c2 * weights.z);
-    }
-
-    else if (colorType == 8) // InterpolatedBox
-    {
-        float4 c00 = FetchImage(gradientPageIdx, int2(colorPixelPos.x + 0, colorPixelPos.y)); // top-left
-        float4 c01 = FetchImage(gradientPageIdx, int2(colorPixelPos.x + 1, colorPixelPos.y)); // top-right
-        float4 c11 = FetchImage(gradientPageIdx, int2(colorPixelPos.x + 2, colorPixelPos.y)); // bottom-left
-        float4 c10 = FetchImage(gradientPageIdx, int2(colorPixelPos.x + 3, colorPixelPos.y)); // bottom-right
-
-        color = (c00 * weights.x) +
-                (c01 * weights.y) +
-                (c11 * weights.z) +
-                (c10 * weights.w);
+        uv = float2(animGradient, colorPos.y);
     }
 
     else if (colorType == 9) // SDFGradient: the ramp by edge depth, mapped by the first row
     {
         float t = ApplyTransform(uvRow0, uvRow1, float3(edgeDepth, 0, 1)).x;
-        color = getGradientColor(gradientPageIdx, defaultTextureSize, t, colorPos.y);
+        uv = float2(clamp(t * imageSize.x, 0, imageSize.x - 1) / imageSize.x, colorPos.y);
     }
 
     else // SolidColor (default)
     {
-        color = SampleImage(gradientPageIdx, colorPos);
+        uv = colorPos;
     }
-    return color;
+    return SampleImage(imageIndex, uv);
 }
